@@ -50,11 +50,22 @@ const IngresoScreen = () => {
                         {solicitudes.map(s => (
                             <tr key={s.id}>
                                 <td>{s.id}</td>
-                                <td>{s.estado}</td>
+                                <td style={{ fontWeight: 'bold', color: s.estado === 'Tratada' ? '#27ae60' : '#f39c12' }}>
+                                    {s.estado}
+                                </td>
                                 <td>{s.solicitante}</td>
                                 <td>{s.origen}</td>
                                 <td>
-                                    <button onClick={() => navigate('/tratamiento', { state: s })}>Tratar</button>
+                                    {/* Aquí unificamos todo: 
+                  1. Usamos 's' que es la variable del map.
+                  2. El texto cambia según el estado.
+                */}
+                                    <button
+                                        onClick={() => navigate('/tratamiento', { state: s })}
+                                        style={s.estado === 'Tratada' ? styles.btnEdit : styles.btnTratar}
+                                    >
+                                        {s.estado === 'Tratada' ? '📝 Editar OT' : '⚙️ Tratar'}
+                                    </button>
                                 </td>
                             </tr>
                         ))}
