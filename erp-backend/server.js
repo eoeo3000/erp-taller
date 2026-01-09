@@ -22,16 +22,12 @@ if (!db.recursos) {
     ];
 }
 
-// Log de depuración para ver qué entra al servidor
 app.use((req, res, next) => {
     console.log(`${req.method} ${req.url}`);
     next();
 });
-
-// Ruta de datos global
 app.get('/api/data', (req, res) => res.json(db));
 
-// Ruta de solicitudes
 app.post('/api/solicitudes', (req, res) => {
     const nueva = { id: db.solicitudes.length + 1, estado: 'Pendiente', fecha: new Date().toLocaleDateString(), ...req.body };
     db.solicitudes.push(nueva);
@@ -52,7 +48,6 @@ app.post('/api/recursos/:id/ausencia', (req, res) => {
     }
 });
 
-// server.js
 app.post('/api/convertir-ot', (req, res) => {
     const { solicitudId, tareas, componentes, esEdicion } = req.body;
 
@@ -86,8 +81,6 @@ app.post('/api/convertir-ot', (req, res) => {
     res.json({ success: true });
 });
 
-
-
 app.get('/api/recursos', (req, res) => res.json(db.recursos));
 
 app.get('/api/recursos', (req, res) => {
@@ -104,8 +97,6 @@ app.post('/api/recursos', (req, res) => {
     db.recursos.push(nuevo);
     res.json(nuevo);
 });
-// server.js
-// Asegúrate de que esto esté después de declarar 'app' y 'db'
 
 app.delete('/api/ots/:id', (req, res) => {
     const { id } = req.params;
@@ -128,7 +119,6 @@ app.delete('/api/ots/:id', (req, res) => {
     }
 });
 
-// Rutas para gestionar personal
 app.get('/api/personal', (req, res) => res.json(db.personal));
 
 app.post('/api/personal/ausencia', (req, res) => {
@@ -137,6 +127,17 @@ app.post('/api/personal/ausencia', (req, res) => {
     if (empleado) {
         empleado.disponibilidad.push({ fechaInicio, fechaFin, motivo });
         res.json({ success: true });
+    }
+});
+app.put('/api/recursos/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { calendarioId } = req.body;
+        // Aquí actualizas en tu DB (ejemplo con un array local o Mongoose)
+        // const actualizado = await Recurso.findByIdAndUpdate(id, { calendarioId }, { new: true });
+        res.json({ message: "Recurso actualizado", id, calendarioId });
+    } catch (error) {
+        res.status(500).send("Error interno");
     }
 });
 

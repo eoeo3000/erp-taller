@@ -43,7 +43,8 @@ const IngresoScreen = () => {
                 <table width="100%" style={{ borderCollapse: 'collapse' }}>
                     <thead>
                         <tr>
-                            <th>N°</th><th>Estado</th><th>Solicitante</th><th>Origen</th><th>Acción</th>
+                            <th>N°</th><th>Estado</th><th>Solicitante</th><th>Origen</th>
+                            <th>Presupuesto + Gantt</th><th>Duracion</th><th>Enviar</th><th>Acción</th><th>Informe/Enviar</th>
                         </tr>
                     </thead>
                     <tbody>
