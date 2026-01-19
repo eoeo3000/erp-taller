@@ -3,3 +3,8 @@ node_modules
 build
 dist
 .DS_Store
+erp-backend/uploads/*.pdf
+erp-backend/uploads/*.jpg
+erp-backend/uploads/*.png
+node_modules/
+.env
