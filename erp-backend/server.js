@@ -1,150 +1,118 @@
+require('dotenv').config();
 const express = require('express');
+const mongoose = require('mongoose');
 const cors = require('cors');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
+
+// 1. IMPORTACIONES DE MODELOS (Para la ruta /api/data)
+const OT = require('./src/models/OT');
+const Recurso = require('./src/models/Recurso');
+const Calendario = require('./src/models/Calendario'); // <--- Descomentado
+const Solicitud = require('./src/models/Solicitud');
+
+// 2. IMPORTACIONES DE RUTAS (Una sola vez cada una)
+const otRoutes = require('./src/routes/otRoutes');
+const recursosRoutes = require('./src/routes/recursosRoutes');
+const calendarioRoutes = require('./src/routes/calendarioRoutes'); // <--- Solo una vez aquí
+const solicitudRoutes = require('./src/routes/solicitudRoutes');
+
 const app = express();
 
+// Middlewares
 app.use(cors());
 app.use(express.json());
 
-let db = {
-    solicitudes: [],
-    ots: [],
-    // Nueva sección de personal
-    personal: [
-        { id: 1, nombre: "Pedro", puesto: "Mecánico", disponibilidad: [] },
-        { id: 2, nombre: "Juan", puesto: "Mecánico", disponibilidad: [] },
-        { id: 3, nombre: "Luis", puesto: "Eléctrico", disponibilidad: [] },
-    ]
-};
-
-if (!db.recursos) {
-    db.recursos = [
-        { id: 1, nombre: "Juan Mecánico", tipo: "Humano", especialidad: "Mecánico", disponibilidad: [] }
-    ];
-}
-
+// Logger
 app.use((req, res, next) => {
-    console.log(`${req.method} ${req.url}`);
     next();
 });
-app.get('/api/data', (req, res) => res.json(db));
 
-app.post('/api/solicitudes', (req, res) => {
-    const nueva = { id: db.solicitudes.length + 1, estado: 'Pendiente', fecha: new Date().toLocaleDateString(), ...req.body };
-    db.solicitudes.push(nueva);
-    res.json(nueva);
-});
+// --- CONEXIÓN A MONGODB ---
+const MONGO_URI = process.env.MONGO_URI;
+mongoose.connect(MONGO_URI)
+    .then(() => console.log("✅ CONECTADO A MONGODB ATLAS"))
+    .catch((err) => console.error("❌ ERROR CONECTANDO A MONGO:", err));
 
-app.post('/api/recursos/:id/ausencia', (req, res) => {
-    const { id } = req.params;
-    const { fecha, motivo } = req.body;
-
-    const recurso = db.recursos.find(r => r.id === parseInt(id));
-    if (recurso) {
-        if (!recurso.disponibilidad) recurso.disponibilidad = [];
-        recurso.disponibilidad.push({ fecha, motivo });
-        res.json({ success: true });
-    } else {
-        res.status(404).send("Recurso no encontrado");
-    }
-});
-
-app.post('/api/convertir-ot', (req, res) => {
-    const { solicitudId, tareas, componentes, esEdicion } = req.body;
-
-    if (esEdicion) {
-        // --- MODO EDICIÓN ---
-        const indexOT = db.ots.findIndex(ot => ot.id === solicitudId);
-        if (indexOT !== -1) {
-            // Actualizamos solo las tareas y componentes, manteniendo el resto igual
-            db.ots[indexOT].tareas = tareas;
-            db.ots[indexOT].componentes = componentes;
-            console.log(`📝 OT #${solicitudId} actualizada`);
-        }
-    } else {
-        // --- MODO NUEVO ---
-        const solicitudOriginal = db.solicitudes.find(s => s.id === solicitudId);
-        if (solicitudOriginal) {
-            solicitudOriginal.estado = 'Tratada';
-
-            const nuevaOT = {
-                id: solicitudId,
-                cliente: solicitudOriginal.solicitante,
-                descripcion: solicitudOriginal.descripcion,
-                tareas: tareas,
-                componentes: componentes,
-                fechaCreacion: new Date().toISOString()
-            };
-            db.ots.push(nuevaOT);
-            console.log(`✅ Nueva OT #${solicitudId} creada`);
-        }
-    }
-    res.json({ success: true });
-});
-
-app.get('/api/recursos', (req, res) => res.json(db.recursos));
-
-app.get('/api/recursos', (req, res) => {
-    console.log("Enviando lista de recursos...");
-    res.json(db.recursos || []);
-});
-
-app.post('/api/recursos', (req, res) => {
-    const nuevo = {
-        id: Date.now(),
-        ...req.body,
-        disponibilidad: []
-    };
-    db.recursos.push(nuevo);
-    res.json(nuevo);
-});
-
-app.delete('/api/ots/:id', (req, res) => {
-    const { id } = req.params;
-
-    // Buscamos si la OT existe
-    const existe = db.ots.find(ot => ot.id === parseInt(id));
-
-    if (existe) {
-        // Filtramos para eliminarla
-        db.ots = db.ots.filter(ot => ot.id !== parseInt(id));
-
-        // OPCIONAL: Si quieres que la solicitud vuelva a estar "Pendiente" al borrar la OT:
-        const solicitud = db.solicitudes.find(s => s.id === parseInt(id));
-        if (solicitud) solicitud.estado = 'Pendiente';
-
-        console.log(`🗑️ OT #${id} eliminada correctamente`);
-        res.status(200).json({ message: "Eliminado con éxito" });
-    } else {
-        res.status(404).json({ message: "OT no encontrada" });
-    }
-});
-
-app.get('/api/personal', (req, res) => res.json(db.personal));
-
-app.post('/api/personal/ausencia', (req, res) => {
-    const { empleadoId, fechaInicio, fechaFin, motivo } = req.body;
-    const empleado = db.personal.find(p => p.id === empleadoId);
-    if (empleado) {
-        empleado.disponibilidad.push({ fechaInicio, fechaFin, motivo });
-        res.json({ success: true });
-    }
-});
-app.put('/api/recursos/:id', async (req, res) => {
+// --- RUTA MAESTRA DE DATOS (Sincronización global) ---
+// --- RUTA MAESTRA DE DATOS (Sincronización global) ---
+app.get('/api/data', async (req, res) => {
     try {
-        const { id } = req.params;
-        const { calendarioId } = req.body;
-        // Aquí actualizas en tu DB (ejemplo con un array local o Mongoose)
-        // const actualizado = await Recurso.findByIdAndUpdate(id, { calendarioId }, { new: true });
-        res.json({ message: "Recurso actualizado", id, calendarioId });
+        // Verificamos que la conexión esté abierta (1 = conectado)
+        if (mongoose.connection.readyState !== 1) {
+            return res.status(503).json({ error: "Base de datos conectando..." });
+        }
+
+        // Consultas limpias sin comandos de diagnóstico que causan errores
+        const [ots, solicitudes, recursos, calendarios] = await Promise.all([
+            OT.find().sort({ createdAt: -1 }),
+            Solicitud.find().sort({ createdAt: -1 }),
+            Recurso.find(),
+            Calendario.find()
+        ]);
+
+        res.json({
+            ots: ots || [],
+            solicitudes: solicitudes || [],
+            recursos: recursos || [],
+            calendarios: calendarios || []
+        });
     } catch (error) {
-        res.status(500).send("Error interno");
+        console.error("❌ Error en sincronización:", error);
+        res.status(500).json({ error: "Error en la sincronización con Atlas" });
     }
 });
 
-const PORT = 5000;
+const dir = './uploads';
+if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir);
+}
+
+// Configuración de dónde y cómo se guardan los archivos
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        cb(null, 'uploads/'); // Ahora estamos seguros de que existe
+    },
+    filename: (req, file, cb) => {
+        cb(null, Date.now() + path.extname(file.originalname));
+    }
+});
+
+const upload = multer({ storage });
+
+// Ruta para recibir la solicitud con archivo
+// 'archivo' es el nombre del campo que enviará el frontend
+app.post('/api/solicitudes', upload.single('archivo'), async (req, res) => {
+    try {
+        // req.body ya contiene los campos sueltos gracias a Multer
+        // No necesitamos JSON.parse()
+        const datosRecibidos = { ...req.body };
+
+        // Si se subió un archivo, lo asignamos al campo adjuntos
+        if (req.file) {
+            datosRecibidos.adjuntos = `/uploads/${req.file.filename}`;
+        }
+
+        const solicitud = new Solicitud(datosRecibidos);
+        await solicitud.save();
+
+        res.status(201).json(solicitud);
+    } catch (error) {
+        console.error("❌ Error en POST /api/solicitudes:", error.message);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// --- RUTAS POR MÓDULO ---
+//app.use('/api/solicitudes', solicitudRoutes); // Ahora usa su propia lógica
+app.use('/api/ots', otRoutes);
+app.use('/api/recursos', recursosRoutes);
+app.use('/api/calendarios', calendarioRoutes);
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+// En server.js
+const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
-    console.log(`=========================================`);
-    console.log(`SERVIDOR ERP ACTIVO EN PUERTO: ${PORT}`);
-    console.log(`RUTA POST: http://localhost:${PORT}/api/convertir-ot`);
-    console.log(`=========================================`);
+    console.log(`🚀 SERVIDOR ERP CORRIENDO EN PUERTO: ${PORT}`);
 });

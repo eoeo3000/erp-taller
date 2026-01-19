@@ -1,138 +1,241 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 
-const RecursosScreen = () => {
-    const [recursos, setRecursos] = useState([]);
+// Estado para el calendario que se está creando o editando
+// 3. Objeto inicial limpio para resetear formularios
+const estadoInicialCalendario = {
+    nombre: '',
+    tipo: 'semanal', // 'semanal' o 'rotativo'
+    cicloDias: 7, // Solo para tipo 'rotativo'
+    config: [
+        { dia: 'lun', activo: true, bloques: [] },
+        { dia: 'mar', activo: true, bloques: [] },
+        { dia: 'mié', activo: true, bloques: [] },
+        { dia: 'jue', activo: true, bloques: [] },
+        { dia: 'vie', activo: true, bloques: [] },
+        { dia: 'sáb', activo: false, bloques: [] },
+        { dia: 'dom', activo: false, bloques: [] }
+    ]
+};
+
+const RecursosScreen = (
+    { recursos = [],
+        calendarios = [],
+        setRecursos,
+        actualizarAjusteRecurso,
+        actualizarRecurso,
+        eliminarRecurso,
+        crearRecurso,
+        guardarCalendarioGlobal,
+        obtenerHorasParaDia,
+        asignarCalendario,
+        guardarCambioManualGlobal,
+        eliminarCalendarioMaestro
+    }) => {
+
     const [nuevoRecurso, setNuevoRecurso] = useState({ nombre: '', tipo: 'Humano', especialidad: '', calendarioId: '' });
     const [editandoId, setEditandoId] = useState(null); // null = creando, id = editando
     const [modalAbierto, setModalAbierto] = useState(false);
     const [modalRecursoAbierto, setModalRecursoAbierto] = useState(false);
     const [modalMaestroAbierto, setModalMaestroAbierto] = useState(false);
     const [ajusteManual, setAjusteManual] = useState(null); // { recursoId, dia, horas }
+    //const [calendarios, setCalendarios] = useState([]); // <-- Déjalo ASÍ, vacío.
+    const [nuevoCal, setNuevoCal] = useState(estadoInicialCalendario);
+    const [mostrarModalPersonal, setMostrarModalPersonal] = useState(false);
+    const [recursoEnEdicion, setRecursoEnEdicion] = useState(null); // Almacena el ID de la fila activa
+    const [datosTemporales, setDatosTemporales] = useState({ nombre: '', puesto: '' });
+    // Añadir esto cerca de tus otros hooks
+
+    useEffect(() => {
+        if (editandoId && modalMaestroAbierto) {
+            const calOriginal = calendarios.find(c => c._id === editandoId);
+            if (calOriginal && (!nuevoCal.nombre || nuevoCal.nombre !== calOriginal.nombre)) {
+                setNuevoCal(JSON.parse(JSON.stringify(calOriginal)));
+            }
+        }
+    }, [editandoId, modalMaestroAbierto, calendarios]);
+
     const prepararEdicion = (cal) => {
-        // 1. Cargamos el ID que estamos editando
-        setEditandoId(cal.id);
+        // 1. Guardamos el ID para que el botón "Guardar" sepa que es un PUT y no un POST
+        setEditandoId(cal._id);
 
-        // 2. Cargamos los datos en el formulario (Copia profunda para no romper el original)
-        setNuevoCal(JSON.parse(JSON.stringify(cal)));
+        // 2. Creamos una copia profunda para no modificar el objeto original por referencia
+        const copiaCal = JSON.parse(JSON.stringify(cal));
 
-        // 3. ¡IMPORTANTE! Abrimos la ventana
-        setModalAbierto(true);
-    };
+        // 3. Verificación de seguridad: si no tiene config, le ponemos la base
+        if (!copiaCal.config || copiaCal.config.length === 0) {
+            copiaCal.config = JSON.parse(JSON.stringify(estadoInicialCalendario.config));
+        }
 
-    // Estado para el calendario que se está creando o editando
-    const [nuevoCal, setNuevoCal] = useState({
-        nombre: '',
-        config: [
-            { dia: 'lun', activo: true, bloques: [{ inicio: '08:00', fin: '12:00' }, { inicio: '14:00', fin: '18:00' }] },
-            { dia: 'mar', activo: true, bloques: [{ inicio: '08:00', fin: '12:00' }, { inicio: '14:00', fin: '18:00' }] },
-            { dia: 'mié', activo: true, bloques: [{ inicio: '08:00', fin: '12:00' }, { inicio: '14:00', fin: '18:00' }] },
-            { dia: 'jue', activo: true, bloques: [{ inicio: '08:00', fin: '12:00' }, { inicio: '14:00', fin: '18:00' }] },
-            { dia: 'vie', activo: true, bloques: [{ inicio: '08:00', fin: '12:00' }, { inicio: '14:00', fin: '17:00' }] },
-            { dia: 'sáb', activo: false, bloques: [{ inicio: '', fin: '' }, { inicio: '', fin: '' }] },
-            { dia: 'dom', activo: false, bloques: [{ inicio: '', fin: '' }, { inicio: '', fin: '' }] }
-        ]
-    });
-
-
-    const abrirNuevoMaestro = () => {
-        setEditandoId(null);
-        setNuevoCal(estadoInicialCalendario); // Asegúrate de tener tu objeto base limpio
+        // 4. Cargamos el estado que alimenta al formulario
+        setNuevoCal(copiaCal);
+        // 5. Abrimos el modal
         setModalMaestroAbierto(true);
     };
 
+    const abrirNuevoMaestro = () => {
+        setEditandoId(null);
+        // Usamos JSON.parse/stringify para crear una copia física real
+        // y que no arrastre datos del calendario anterior
+        setNuevoCal(JSON.parse(JSON.stringify(estadoInicialCalendario)));
+        setModalMaestroAbierto(true);
+    };
 
-    const guardarCambioManual = async (recursoId, dia, nuevasHoras) => {
-        // Aquí podrías enviar un PATCH a una tabla de "excepciones" o "asistencias"
-        console.log(`Cambiando recurso ${recursoId} el día ${dia} a ${nuevasHoras}h`);
-        // Lógica para actualizar en BD...
+    const actualizarDiasCiclo = (nuevoTotal) => {
+        // Validamos que no sea NaN y sea al menos 1
+        const total = isNaN(nuevoTotal) || nuevoTotal < 1 ? 1 : nuevoTotal;
+
+        setNuevoCal(prev => {
+            let nuevaConfig = [...prev.config];
+
+            if (total > nuevaConfig.length) {
+                // Añadir días faltantes
+                const diasAAgregar = total - nuevaConfig.length;
+                const nuevosDias = Array.from({ length: diasAAgregar }, (_, i) => ({
+                    dia: `Día ${nuevaConfig.length + i + 1}`,
+                    activo: true,
+                    bloques: []
+                }));
+                nuevaConfig = [...nuevaConfig, ...nuevosDias];
+            } else {
+                // Recortar días sobrantes
+                nuevaConfig = nuevaConfig.slice(0, total);
+            }
+
+            return {
+                ...prev,
+                cicloDias: total,
+                config: nuevaConfig,
+                // Si es rotativo, renombramos los labels a "Día X" para no confundir
+                tipo: prev.tipo === 'semanal' && total !== 7 ? 'rotativo' : prev.tipo
+            };
+        });
+    };
+
+    // En RecursosScreen (suponiendo que recibes las props)
+    /*
+    const guardarCambioManual = (recursoId, dia, nuevasHoras) => {
+        // Usamos la función central de App.js
+        actualizarAjusteRecurso(recursoId, dia, nuevasHoras);
         setAjusteManual(null);
-    };
+    };*/
     // Estado para saber si estamos editando un calendario existente
-    const [editandoCalId, setEditandoCalId] = useState(null);
-    const guardarCalendario = () => {
-        if (editandoId) {
-            // ACTUALIZAR EXISTENTE
-            setCalendarios(prev => prev.map(c => c.id === editandoId ? { ...nuevoCal, id: editandoId } : c));
+
+    // RecursosScreen.jsx
+    const guardarCalendario = async () => {
+        // 1. Log prioritario para ver qué estamos enviando realmente
+
+        // 2. Llamamos a la función del padre UNA SOLA VEZ
+        const exito = await guardarCalendarioGlobal(nuevoCal, editandoId);
+
+        if (exito) {
+            // 3. Si el servidor respondió OK, cerramos y limpiamos
+            setModalMaestroAbierto(false);
             setEditandoId(null);
+            // Usamos JSON.parse para asegurar una copia limpia del estado inicial
+            setNuevoCal(JSON.parse(JSON.stringify(estadoInicialCalendario)));
+
         } else {
-            // CREAR NUEVO
-            const idGenerado = `cal_${Date.now()}`;
-            setCalendarios([...calendarios, { ...nuevoCal, id: idGenerado }]);
+            alert("Error al guardar en el servidor");
         }
-        // Limpiar formulario
-        setNuevoCal({ nombre: '', config: [/* ...configuración inicial vacía... */] });
+
+        // BORRAMOS las líneas extra que tenías aquí abajo que causaban el error
     };
 
-    // 1. ESTADO DE CALENDARIOS (Plantillas)
-    const [calendarios, setCalendarios] = useState([
-        {
-            id: 'cal_1',
-            nombre: 'Turno Normal Oficina',
-            config: [
-                { dia: 'lun', activo: true, bloques: [{ inicio: '08:00', fin: '12:00' }, { inicio: '14:00', fin: '18:00' }] },
-                { dia: 'mar', activo: true, bloques: [{ inicio: '08:00', fin: '12:00' }, { inicio: '14:00', fin: '18:00' }] },
-                { dia: 'mié', activo: true, bloques: [{ inicio: '08:00', fin: '12:00' }, { inicio: '14:00', fin: '18:00' }] },
-                { dia: 'jue', activo: true, bloques: [{ inicio: '08:00', fin: '12:00' }, { inicio: '14:00', fin: '18:00' }] },
-                { dia: 'vie', activo: true, bloques: [{ inicio: '08:00', fin: '12:00' }, { inicio: '14:00', fin: '17:00' }] },
-                { dia: 'sáb', activo: false, bloques: [] },
-                { dia: 'dom', activo: false, bloques: [] }
-            ]
-        }
-    ]);
-
-    const [anio] = useState(2026);
-    const [mes] = useState(0); // Enero
+    // Busca estas líneas y cámbialas por:
+    const [anio, setAnio] = useState(new Date().getFullYear());
+    const [mes, setMes] = useState(new Date().getMonth()); // 0 = Enero, 1 = Febrero...
 
     // Generar días del mes con manejo de errores
-    const diasDelMes = Array.from({ length: 31 }, (_, i) => {
-        try {
-            const fecha = new Date(anio, mes, i + 1);
-            const nombre = new Intl.DateTimeFormat('es-ES', { weekday: 'short' }).format(fecha);
-            return {
-                numero: i + 1,
-                nombreDia: nombre.toLowerCase().replace('.', ''),
-                esFinde: fecha.getDay() === 0 || fecha.getDay() === 6
-            };
-        } catch (e) {
-            return { numero: i + 1, nombreDia: '', esFinde: false };
-        }
+    // Esto se recalcula automáticamente cada vez que mes o anio cambian
+    const cantidadDias = new Date(anio, mes + 1, 0).getDate();
+
+    const diasDelMes = Array.from({ length: cantidadDias }, (_, i) => {
+        const fecha = new Date(anio, mes, i + 1);
+        const nombre = new Intl.DateTimeFormat('es-ES', { weekday: 'short' }).format(fecha);
+
+        return {
+            numero: i + 1,
+            nombreDia: nombre.toLowerCase().replace('.', ''),
+            esFinde: fecha.getDay() === 0 || fecha.getDay() === 6,
+            fechaCompleta: fecha // <--- CLAVE para el cálculo rotativo
+        };
     });
 
-    useEffect(() => { fetchRecursos(); }, []);
+    const actualizarHora = (diaIdx, bloqueIdx, campo, valor) => {
+        setNuevoCal(prev => {
+            // 1. Copia profunda del estado anterior
+            const copia = JSON.parse(JSON.stringify(prev));
 
-    const fetchRecursos = async () => {
-        try {
-            const res = await axios.get('http://localhost:5000/api/recursos');
-            // Validamos que res.data sea un array antes de setearlo
-            setRecursos(Array.isArray(res.data) ? res.data : []);
-        } catch (e) {
-            console.error("Error al traer recursos", e);
-            setRecursos([]); // Fallback a array vacío
+            // 2. Accedemos con seguridad al bloque y actualizamos el valor
+            if (copia.config[diaIdx] && copia.config[diaIdx].bloques[bloqueIdx]) {
+                copia.config[diaIdx].bloques[bloqueIdx][campo] = valor;
+            }
+
+            return copia;
+        });
+    };
+
+
+
+
+
+    const agregarBloque = (diaIdx) => {
+        setNuevoCal(prev => {
+            const copia = JSON.parse(JSON.stringify(prev));
+            // Aseguramos que bloques sea un array antes de hacer push
+            if (!copia.config[diaIdx].bloques) copia.config[diaIdx].bloques = [];
+
+            copia.config[diaIdx].bloques.push({ inicio: "08:00", fin: "17:00" });
+            return copia;
+        });
+    };
+
+    const eliminarBloque = (diaIdx, bloqueIdx) => {
+        const copia = { ...nuevoCal };
+        copia.config[diaIdx].bloques.splice(bloqueIdx, 1);
+        setNuevoCal(copia);
+    };
+
+    useEffect(() => {
+        if (modalMaestroAbierto) {
+        }
+    }, [nuevoCal, modalMaestroAbierto]);
+
+    const manejarGuardar = async (id) => {
+        const datosActualizados = {
+            nombre: nombreInput, // El estado de tu input de nombre
+            puesto: puestoInput  // El estado de tu select de puesto
+        };
+
+        const resultado = await actualizarRecurso(id, datosActualizados);
+
+        if (resultado.success) {
+            setEditandoId(null); // Sale del modo edición
+            // No necesitas hacer nada más, App.js ya actualizó la lista y las OTs
+        } else {
+            alert("Hubo un error al guardar los cambios.");
         }
     };
 
-    const calcularHorasDia = (bloques) => {
-        if (!bloques || !Array.isArray(bloques)) return 0;
-        return bloques.reduce((total, bloque) => {
-            if (!bloque.inicio || !bloque.fin) return total;
-            const [hInicio, mInicio] = bloque.inicio.split(':').map(Number);
-            const [hFin, mFin] = bloque.fin.split(':').map(Number);
-            const minutos = (hFin * 60 + mFin) - (hInicio * 60 + mInicio);
-            return total + (minutos / 60);
-        }, 0);
+    const prepararEdicionRecurso = (recurso) => {
+        // Cargamos los datos en el estado que usa el formulario de creación
+        setNuevoRecurso({
+            _id: recurso._id, // Identificador para saber que es edición
+            nombre: recurso.nombre,
+            calendarioId: recurso.calendarioId || '',
+            especialidad: recurso.puesto || recurso.especialidad || '',
+            fechaInicioCiclo: recurso.fechaInicioCiclo ? recurso.fechaInicioCiclo.split('T')[0] : ''
+        });
+
+        // Cerramos el listado y abrimos el formulario de "Crear" (que ahora será de editar)
+        setMostrarModalPersonal(false);
+        setModalRecursoAbierto(true);
     };
 
-    const asignarCalendario = async (recursoId, calId) => {
-        try {
-            // Actualización local inmediata (Optimistic UI)
-            setRecursos(prev => prev.map(r => r.id === recursoId ? { ...r, calendarioId: calId } : r));
-            await axios.put(`http://localhost:5000/api/recursos/${recursoId}`, { calendarioId: calId });
-        } catch (e) {
-            console.error("Error al asignar calendario", e);
-            fetchRecursos(); // Revertir si falla
-        }
-    };
+    // Este log se disparará cada vez que el modal se intente abrir
+    if (modalRecursoAbierto) {
+    }
 
     return (
         <div style={styles.container}>
@@ -148,6 +251,14 @@ const RecursosScreen = () => {
                         👤 Crear personal
                     </button>
 
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '20px' }}>
+                    <button
+                        onClick={() => setMostrarModalPersonal(true)}
+                        style={{ ...styles.btnGestion, backgroundColor: '#34495e', color: 'white', padding: '10px 20px', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}
+                    >
+                        👥 Editar Recursos
+                    </button>
                 </div>
                 <div style={styles.layoutCalendarios}>
                     {/* FORMULARIO (IZQUIERDA) */}
@@ -170,9 +281,15 @@ const RecursosScreen = () => {
                     <div style={styles.listaCal}>
                         <h4>Plantillas Disponibles</h4>
                         {calendarios.map(cal => (
-                            <div key={cal.id} style={styles.calItem}>
+                            <div key={cal._id} style={styles.calItem}>
                                 <span>{cal.nombre}</span>
                                 <button onClick={() => prepararEdicion(cal)} style={styles.btnIcon}>✏️</button>
+                                <button
+                                    onClick={() => eliminarCalendarioMaestro(cal._id)}
+                                    style={styles.btnEliminar}
+                                >
+                                    🗑️
+                                </button>
                             </div>
                         ))}
                     </div>
@@ -180,55 +297,122 @@ const RecursosScreen = () => {
 
 
                 <div style={styles.ganttContainer}>
+                    <div style={styles.selectorMesContainer}>
+                        <button style={styles.btnSecundario} onClick={() => {
+                            if (mes === 0) { setMes(11); setAnio(anio - 1); }
+                            else { setMes(mes - 1); }
+                        }}> ◀ Anterior </button>
+
+                        <div style={styles.mesTextoLabel}>
+                            {new Intl.DateTimeFormat('es-ES', { month: 'long', year: 'numeric' }).format(new Date(anio, mes))}
+                        </div>
+
+                        <button style={styles.btnSecundario} onClick={() => {
+                            if (mes === 11) { setMes(0); setAnio(anio + 1); }
+                            else { setMes(mes + 1); }
+                        }}> Siguiente ▶ </button>
+
+                        <select
+                            value={anio}
+                            onChange={(e) => setAnio(parseInt(e.target.value))}
+                            style={styles.miniSelectAnio}
+                        >
+                            {[2024, 2025, 2026, 2027, 2028].map(a => <option key={a} value={a}>{a}</option>)}
+                        </select>
+                    </div>
                     <table style={styles.ganttTable}>
                         <thead>
-                            <tr style={{ background: '#2c3e50', color: 'white' }}>
-                                <th style={styles.recursoColHeader}>Recurso / Calendario</th>
-                                {diasDelMes.map(d => (
-                                    <th key={d.numero} translate="no" style={{
-                                        ...styles.diaCol,
-                                        backgroundColor: d.esFinde ? '#34495e' : '#2c3e50'
-                                    }}>
-                                        <div style={{ fontSize: '9px' }}>{d.nombreDia}</div>
-                                        <div>{d.numero}</div>
-                                    </th>
-                                ))}
+                            <tr>
+                                {/* Celda vacía sobre los nombres de los operarios */}
+                                <th style={styles.thNombre}>Recurso</th>
+
+                                {/* Generación de los días */}
+                                {diasDelMes.map((d, index) => {
+                                    const fecha = new Date(d.fechaCompleta);
+                                    const diasSemana = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+                                    const nombreDia = diasSemana[fecha.getDay()];
+                                    const esFinDeSemana = fecha.getDay() === 0 || fecha.getDay() === 6;
+
+                                    return (
+                                        <th
+                                            key={index}
+                                            style={{
+                                                ...styles.thDia,
+                                                backgroundColor: esFinDeSemana ? '#f5f5f5' : '#fff', // Gris claro si es finde
+                                                color: esFinDeSemana ? '#999' : '#333',
+                                                minWidth: '45px',
+                                                padding: '8px 4px'
+                                            }}
+                                        >
+                                            <div style={{ display: 'flex', flexDirection: 'column', fontSize: '10px' }}>
+                                                {/* El nombre del día arriba (Lun, Mar...) */}
+                                                <span style={{ fontWeight: 'normal', marginBottom: '2px' }}>{nombreDia}</span>
+                                                {/* El número del día abajo (1, 2, 3...) */}
+                                                <span style={{ fontSize: '14px', fontWeight: 'bold' }}>{fecha.getDate()}</span>
+                                            </div>
+                                        </th>
+                                    );
+                                })}
                             </tr>
                         </thead>
+
                         <tbody>
-                            {recursos.map(r => {
-                                const calAsignado = calendarios.find(c => String(c.id) === String(r.calendarioId));
+                            {/* 1. Iniciamos el mapeo de recursos. Aquí 'r' comienza a existir */}
+                            {(recursos || []).map(r => {
+                                const calAsignado = (calendarios || []).find(c => String(c._id) === String(r.calendarioId));
+
                                 return (
-                                    <tr key={r.id} translate="no">
+                                    <tr key={r._id} translate="no">
                                         <td style={styles.recursoName}>
                                             <div style={{ fontWeight: 'bold' }}>{r.nombre}</div>
                                             <select
                                                 style={styles.miniSelect}
                                                 value={r.calendarioId || ''}
-                                                onChange={(e) => asignarCalendario(r.id, e.target.value)}
+                                                onChange={(e) => asignarCalendario(r._id, e.target.value)}
                                             >
                                                 <option value="">Sin Turno</option>
-                                                {calendarios.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+                                                {(calendarios || []).map(c => (
+                                                    <option key={c._id} value={c._id}>{c.nombre}</option>
+                                                ))}
                                             </select>
                                         </td>
-                                        {diasDelMes.map(d => {
-                                            const configDia = calAsignado?.config?.find(c => c.dia === d.nombreDia);
-                                            const horasBase = configDia ? calcularHorasDia(configDia.bloques) : 0;
 
+                                        {/* 2. Mapeamos los días PARA ESTE recurso 'r' específico */}
+                                        {(diasDelMes || []).map((d) => {
+                                            // 1. Calculamos las horas automáticas según el calendario
+                                            const horasBase = obtenerHorasParaDia(r, d);
+
+                                            // 2. Buscamos si hay un ajuste manual (sobreescritura)
+                                            const diaKey = d.fechaCompleta.toISOString().split('T')[0];
+                                            const ajusteExistente = r.ajustes && r.ajustes[diaKey];
+
+                                            // 3. PRIORIDAD: Si hay ajuste manual (incluso si es 0), manda el ajuste. 
+                                            // Si no, mandan las horas del calendario.
+                                            const horasFinales = ajusteExistente !== undefined ? ajusteExistente : horasBase;
                                             return (
                                                 <td
-                                                    key={d.numero} translate="no"
-                                                    onClick={() => setAjusteManual({ recursoId: r.id, nombre: r.nombre, dia: d.numero, horas: horasBase })}
+                                                    key={`${r._id}-${diaKey}`}
+                                                    onClick={() => setAjusteManual({
+                                                        recursoId: r._id,
+                                                        nombre: r.nombre,
+                                                        dia: diaKey,
+                                                        horas: horasFinales
+                                                    })}
                                                     style={{
                                                         ...styles.celdaDia,
-                                                        backgroundColor: d.esFinde ? '#f9f9f9' : (horasBase > 0 ? '#e8f5e9' : '#fff'),
-                                                        cursor: 'pointer', // Indica que es editable
-                                                        transition: 'background 0.2s'
+                                                        backgroundColor: horasFinales > 0 ? '#e3f2fd' : '#fff',
+                                                        color: horasFinales > 0 ? '#1976d2' : '#ccc',
+                                                        fontWeight: horasFinales > 0 ? 'bold' : 'normal',
+                                                        textAlign: 'center',
+                                                        cursor: 'pointer',
+                                                        // Opcional: Borde diferente si es un ajuste manual
+                                                        border: r.ajustes && r.ajustes[diaKey] !== undefined ? '2px solid #ff9800' : '1px solid #eee'
                                                     }}
-                                                    onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#d1f2eb'}
-                                                    onMouseOut={(e) => e.currentTarget.style.backgroundColor = d.esFinde ? '#f9f9f9' : (horasBase > 0 ? '#e8f5e9' : '#fff')}
                                                 >
-                                                    {horasBase > 0 && <span style={styles.horaBadge}>{horasBase}h</span>}
+                                                    {/* CORRECCIÓN: Validamos que sea un número antes de usar toFixed */}
+                                                    {typeof horasFinales === 'number' && horasFinales > 0
+                                                        ? horasFinales.toFixed(1)
+                                                        : '-'}
                                                 </td>
                                             );
                                         })}
@@ -264,7 +448,7 @@ const RecursosScreen = () => {
                                 Cancelar
                             </button>
                             <button
-                                onClick={() => guardarCambioManual(ajusteManual.recursoId, ajusteManual.dia, ajusteManual.horas)}
+                                onClick={() => guardarCambioManualGlobal(ajusteManual.recursoId, ajusteManual.dia, ajusteManual.horas)}
                                 style={styles.btnPrimary}
                             >
                                 Confirmar
@@ -273,71 +457,7 @@ const RecursosScreen = () => {
                     </div>
                 </div>
             )}
-            {modalAbierto && (
-                <div style={styles.overlay}>
-                    <div style={styles.modal}>
-                        <div style={styles.modalHeader}>
-                            <h3>📝 Editar Plantilla: {nuevoCal.nombre}</h3>
-                            <button onClick={() => setModalAbierto(false)} style={styles.btnClose}>&times;</button>
-                        </div>
 
-                        <div style={styles.modalBody}>
-                            <label style={{ fontWeight: 'bold', display: 'block', marginBottom: '5px' }}>Nombre del Turno</label>
-                            <input
-                                style={styles.input}
-                                value={nuevoCal.nombre}
-                                onChange={e => setNuevoCal({ ...nuevoCal, nombre: e.target.value })}
-                            />
-
-                            <div style={styles.scrollArea}>
-                                {nuevoCal.config.map((d, idx) => (
-                                    <div key={d.dia} style={styles.diaRow}>
-                                        <span style={{ width: '60px', fontWeight: 'bold' }}>{d.dia.toUpperCase()}</span>
-
-                                        {/* Input Inicio con protección */}
-                                        <input
-                                            type="time"
-                                            style={styles.miniInput}
-                                            value={d.bloques[0]?.inicio || ''}
-                                            onChange={(e) => {
-                                                const copia = { ...nuevoCal };
-                                                if (!copia.config[idx].bloques[0]) copia.config[idx].bloques[0] = { inicio: '', fin: '' };
-                                                copia.config[idx].bloques[0].inicio = e.target.value;
-                                                setNuevoCal(copia);
-                                            }}
-                                        />
-
-                                        <span>a</span>
-
-                                        {/* Input Fin con protección (Aquí era el error) */}
-                                        <input
-                                            type="time"
-                                            style={styles.miniInput}
-                                            value={d.bloques[0]?.fin || ''}
-                                            onChange={(e) => {
-                                                const copia = { ...nuevoCal };
-                                                if (!copia.config[idx].bloques[0]) copia.config[idx].bloques[0] = { inicio: '', fin: '' };
-                                                copia.config[idx].bloques[0].fin = e.target.value;
-                                                setNuevoCal(copia);
-                                            }}
-                                        />
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-
-                        <div style={styles.modalFooter}>
-                            <button onClick={() => setModalAbierto(false)} style={styles.btnSecundario}>Cancelar</button>
-                            <button
-                                onClick={() => { guardarCalendario(); setModalAbierto(false); }}
-                                style={{ ...styles.btnPrimary, width: 'auto', padding: '10px 20px' }}
-                            >
-                                Guardar Cambios
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
             {/* MODAL NUEVO RECURSO */}
             {modalRecursoAbierto && (
                 <div style={styles.overlay}>
@@ -363,26 +483,121 @@ const RecursosScreen = () => {
                                 onChange={e => setNuevoRecurso({ ...nuevoRecurso, calendarioId: e.target.value })}
                             >
                                 <option value="">Seleccionar Calendario...</option>
-                                {calendarios.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+                                {calendarios.map(c => <option key={c._id} value={c._id}>{c.nombre}</option>)}
                             </select>
+
+                            <label style={{ fontWeight: 'bold' }}>Especialidad / Puesto</label>
+                            <select
+                                style={styles.input}
+                                value={nuevoRecurso.especialidad}
+                                onChange={e => setNuevoRecurso({ ...nuevoRecurso, especialidad: e.target.value })}
+                            >
+                                <option value="">Seleccionar Puesto...</option>
+                                <option value="Mecánico">Mecánico</option>
+                                <option value="Soldador">Soldador</option>
+                                <option value="Ayudante">Ayudante</option>
+                            </select>
+                            <label style={{ fontWeight: 'bold' }}>¿Cuándo inicia su primer día de trabajo?</label>
+                            <input
+                                type="date"
+                                style={styles.input}
+                                value={nuevoRecurso.fechaInicioCiclo || ''}
+                                onChange={e => setNuevoRecurso({ ...nuevoRecurso, fechaInicioCiclo: e.target.value })}
+                            />
                         </div>
 
                         <div style={styles.modalFooter}>
-                            <button onClick={() => setModalRecursoAbierto(false)} style={styles.btnSecundario}>Cancelar</button>
                             <button
                                 onClick={() => {
+                                    setModalRecursoAbierto(false);
+                                    // Es buena práctica limpiar aquí también por si acaso
+                                    setNuevoRecurso({ nombre: '', tipo: 'Humano', especialidad: '', calendarioId: '' });
+                                }}
+                                style={styles.btnSecundario}
+                            >
+                                Cancelar
+                            </button>
+
+                            <button
+                                onClick={async () => {
                                     if (!nuevoRecurso.nombre) return alert("Falta nombre");
-                                    axios.post('http://localhost:5000/api/recursos', nuevoRecurso).then(() => {
-                                        fetchRecursos();
-                                        setModalRecursoAbierto(false); // Cerrar al terminar
-                                        setNuevoRecurso({ nombre: '', tipo: 'Humano', especialidad: '', calendarioId: '' }); // Limpiar
-                                    });
+
+                                    try {
+                                        if (nuevoRecurso._id) {
+                                            // SI TIENE ID: Llamamos a la función de actualizar que definiste en App.js
+                                            await actualizarRecurso(nuevoRecurso._id, nuevoRecurso);
+                                        } else {
+                                            // SI NO TIENE ID: Es un recurso nuevo
+                                            await crearRecurso(nuevoRecurso);
+                                        }
+
+                                        setModalRecursoAbierto(false);
+                                        // Limpiamos el estado para que el ID no se quede pegado
+                                        setNuevoRecurso({ nombre: '', tipo: 'Humano', especialidad: '', calendarioId: '' });
+
+                                        // Opcional: Si quieres que al terminar de editar se vuelva a abrir la lista:
+                                        // setMostrarModalPersonal(true);
+
+                                    } catch (error) {
+                                        console.error("Error al guardar:", error);
+                                        alert("No se pudo guardar el recurso");
+                                    }
                                 }}
                                 style={{ ...styles.btnPrimary, width: 'auto', padding: '10px 20px' }}
                             >
-                                Guardar Recurso
+                                {/* Cambiamos el texto dinámicamente para que el usuario sepa qué está haciendo */}
+                                {nuevoRecurso._id ? 'Actualizar Cambios' : 'Guardar Recurso'}
                             </button>
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {mostrarModalPersonal && (
+                <div style={styles.modalOverlay}>
+                    <div style={{ ...styles.modalContent, width: '650px', maxHeight: '80vh', overflowY: 'auto' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '2px solid #eee', paddingBottom: '10px', marginBottom: '15px' }}>
+                            <h3 style={{ margin: 0 }}>Gestión de Personal</h3>
+                            <button onClick={() => setMostrarModalPersonal(false)} style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '20px' }}>&times;</button>
+                        </div>
+
+                        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                            <thead>
+                                <tr style={{ textAlign: 'left', backgroundColor: '#f8f9fa' }}>
+                                    <th style={{ padding: '10px' }}>Nombre</th>
+                                    <th style={{ padding: '10px' }}>Puesto</th>
+                                    <th style={{ padding: '10px', textAlign: 'right' }}>Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {recursos.map(r => (
+                                    <tr key={r._id} style={{ borderBottom: '1px solid #eee' }}>
+                                        {/* Mostramos solo el texto, ya no necesitamos el Input aquí */}
+                                        <td style={{ padding: '10px' }}>{r.nombre}</td>
+                                        <td style={{ padding: '10px' }}>{r.especialidad || r.puesto}</td>
+
+                                        <td style={{ padding: '10px', textAlign: 'right' }}>
+                                            {/* BOTÓN EDITAR: Ahora llama a la función de "salto" al otro modal */}
+                                            <button
+                                                onClick={() => prepararEdicionRecurso(r)}
+                                                style={styles.btnIcon}
+                                                title="Editar en formulario completo"
+                                            >
+                                                ✏️
+                                            </button>
+
+                                            <button
+                                                type='button'
+                                                onClick={() => { eliminarRecurso(r._id); }}
+                                                style={styles.btnIcon}
+                                            >
+                                                🗑️
+                                            </button>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             )}
@@ -394,35 +609,118 @@ const RecursosScreen = () => {
                             <h3>{editandoId ? '📝 Editar Plantilla' : '🗓️ Crear Nueva Plantilla'}</h3>
                             <button onClick={() => setModalMaestroAbierto(false)} style={styles.btnClose}>&times;</button>
                         </div>
+                        <div style={{ marginBottom: '15px', display: 'flex', gap: '20px' }}>
+                            <label>
+                                <input
+                                    type="radio"
+                                    checked={nuevoCal.tipo === 'semanal'}
+                                    onChange={() => {
+                                        // En lugar de resetear todo, solo cambia el tipo si no quieres perder el nombre
+                                        setNuevoCal(prev => ({ ...prev, tipo: 'semanal', cicloDias: 7 }));
+                                    }}
+                                /> Semana Fija
+                            </label>
+                            <label>
+                                <input
+                                    type="radio"
+                                    checked={nuevoCal.tipo === 'rotativo'}
+                                    onChange={() => setNuevoCal({ ...nuevoCal, tipo: 'rotativo', cicloDias: 8 })}
+                                /> Ciclo Rotativo (Ej: 4x4)
+                            </label>
+                        </div>
 
+                        {nuevoCal.tipo === 'rotativo' && (
+                            <div style={{ marginBottom: '15px', padding: '10px', background: '#f8f9fa', borderRadius: '8px' }}>
+                                <label style={{ fontSize: '12px', fontWeight: 'bold' }}>Días del ciclo total: </label>
+                                <input
+                                    type="number"
+                                    value={isNaN(nuevoCal.cicloDias) ? '' : nuevoCal.cicloDias}
+                                    onChange={(e) => {
+                                        const valor = e.target.value === '' ? 0 : parseInt(e.target.value);
+
+                                        // --- LÓGICA DE ACTUALIZACIÓN DINÁMICA ---
+                                        setNuevoCal(prev => {
+                                            let nuevaConfig = [...prev.config];
+                                            if (valor > nuevaConfig.length) {
+                                                // Añadir días si el número sube
+                                                const dif = valor - nuevaConfig.length;
+                                                const extras = Array.from({ length: dif }, (_, i) => ({
+                                                    dia: `Día ${nuevaConfig.length + i + 1}`,
+                                                    activo: true,
+                                                    bloques: []
+                                                }));
+                                                nuevaConfig = [...nuevaConfig, ...extras];
+                                            } else if (valor < nuevaConfig.length) {
+                                                // Cortar días si el número baja
+                                                nuevaConfig = nuevaConfig.slice(0, valor);
+                                            }
+                                            return { ...prev, cicloDias: valor, config: nuevaConfig };
+                                        });
+                                    }}
+                                    style={styles.miniInput}
+                                />
+                                <p style={{ fontSize: '10px', color: '#666', marginTop: '5px' }}>
+                                    * Si pones 8, podrás configurar 4 días de trabajo y 4 de descanso abajo.
+                                </p>
+                            </div>
+                        )}
                         <div style={styles.modalBody}>
-                            <label style={{ fontWeight: 'bold' }}>Nombre de la Plantilla</label>
+                            <label style={{ fontWeight: 'bold', display: 'block', marginBottom: '10px' }}>Nombre de la Plantilla</label>
                             <input
                                 style={styles.input}
-                                placeholder="Ej: Turno Noche 12x12"
-                                value={nuevoCal.nombre}
+                                placeholder="Ej: Turno Mañana"
+                                value={nuevoCal.nombre || ''}
                                 onChange={e => setNuevoCal({ ...nuevoCal, nombre: e.target.value })}
                             />
 
                             <div style={styles.scrollArea}>
-                                <p style={{ fontSize: '12px', color: '#666', marginBottom: '10px' }}>Configuración de horario por día:</p>
-                                {nuevoCal.config.map((d, idx) => (
-                                    <div key={d.dia} style={styles.diaRow}>
-                                        <span style={{ width: '60px', fontWeight: 'bold' }}>{d.dia.toUpperCase()}</span>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                                            <input
-                                                type="time"
-                                                style={styles.miniInput}
-                                                value={d.bloques[0]?.inicio || ''}
-                                                onChange={(e) => actualizarHora(idx, 'inicio', e.target.value)}
-                                            />
-                                            <span>a</span>
-                                            <input
-                                                type="time"
-                                                style={styles.miniInput}
-                                                value={d.bloques[0]?.fin || ''}
-                                                onChange={(e) => actualizarHora(idx, 'fin', e.target.value)}
-                                            />
+                                <p style={{ fontSize: '12px', color: '#666', marginBottom: '15px' }}>Configuración de tramos por día:</p>
+
+                                {nuevoCal.config.map((d, diaIdx) => (
+                                    <div key={diaIdx} style={{ ...styles.diaContenedor, borderBottom: '1px solid #eee', paddingBottom: '10px', marginBottom: '10px' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                                            {/* CAMBIO AQUÍ: Nombre dinámico según el tipo de turno */}
+                                            <span style={{ fontWeight: 'bold', color: '#2c3e50' }}>
+                                                {nuevoCal.tipo === 'semanal'
+                                                    ? d.dia.toUpperCase()
+                                                    : `DÍA ${diaIdx + 1}`}
+                                            </span>
+
+                                            <button
+                                                onClick={() => agregarBloque(diaIdx)}
+                                                style={{ ...styles.btnMas, padding: '2px 8px', fontSize: '11px' }}
+                                            > + Añadir Tramo </button>
+                                        </div>
+
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                                            {/* Dentro del render del día (d) */}
+                                            {d.bloques && d.bloques.map((bloque, bIdx) => (
+                                                <div key={bIdx} style={styles.bloqueRow}>
+                                                    <input
+                                                        type="time"
+                                                        style={styles.miniInput}
+                                                        // USA ESTE FALLBACK: "" asegura que el input no se bloquee
+                                                        value={bloque.inicio || ""}
+                                                        onChange={(e) => actualizarHora(diaIdx, bIdx, 'inicio', e.target.value)}
+                                                    />
+                                                    <span style={{ margin: '0 5px' }}>a</span>
+                                                    <input
+                                                        type="time"
+                                                        style={styles.miniInput}
+                                                        value={bloque.fin || ""}
+                                                        onChange={(e) => actualizarHora(diaIdx, bIdx, 'fin', e.target.value)}
+                                                    />
+                                                    <button
+                                                        onClick={() => eliminarBloque(diaIdx, bIdx)}
+                                                        style={styles.btnEliminarBloque}
+                                                    >
+                                                        &times;
+                                                    </button>
+                                                </div>
+                                            ))}
+                                            {d.bloques.length === 0 && (
+                                                <span style={{ fontSize: '11px', color: '#999', fontStyle: 'italic' }}>Día no laborable / Descanso</span>
+                                            )}
                                         </div>
                                     </div>
                                 ))}
@@ -431,7 +729,11 @@ const RecursosScreen = () => {
 
                         <div style={styles.modalFooter}>
                             <button onClick={() => setModalMaestroAbierto(false)} style={styles.btnSecundario}>Cancelar</button>
-                            <button onClick={guardarCalendario} style={{ ...styles.btnPrimary, width: 'auto', padding: '10px 25px' }}>
+                            <button
+                                onClick={guardarCalendario}
+                                style={{ ...styles.btnPrimary, width: 'auto', padding: '10px 25px' }}
+                                disabled={!nuevoCal.nombre}
+                            >
                                 {editandoId ? 'Actualizar Plantilla' : 'Guardar Plantilla'}
                             </button>
                         </div>
@@ -444,11 +746,66 @@ const RecursosScreen = () => {
 
 // ESTILOS (Mejorados para visibilidad)
 const styles = {
+    selectorMesContainer: {
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: '15px',
+        marginBottom: '20px',
+        backgroundColor: '#f8f9fa',
+        padding: '12px',
+        borderRadius: '10px',
+        border: '1px solid #e0e0e0',
+        boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
+    },
+    mesTextoLabel: {
+        fontWeight: 'bold',
+        fontSize: '1.2rem',
+        minWidth: '220px',
+        textAlign: 'center',
+        textTransform: 'capitalize',
+        color: '#2c3e50',
+        userSelect: 'none' // Evita que se seleccione el texto al hacer clic rápido
+    },
+    miniSelectAnio: {
+        padding: '5px 10px',
+        borderRadius: '5px',
+        border: '1px solid #ccc',
+        backgroundColor: '#fff',
+        cursor: 'pointer',
+        fontSize: '14px',
+        outline: 'none'
+    },
+    modalOverlay: {
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        width: '100vw',
+        height: '100vh',
+        backgroundColor: 'rgba(0, 0, 0, 0.7)', // Fondo oscuro semitransparente
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        zIndex: 9999, // Asegúrate de que esté por encima de todo
+    },
+    modalContent: {
+        backgroundColor: 'white',
+        padding: '25px',
+        borderRadius: '12px',
+        width: '700px',
+        maxHeight: '85vh',
+        overflowY: 'auto',
+        boxShadow: '0 5px 15px rgba(0,0,0,0.3)',
+        position: 'relative'
+    },
     container: {
-        padding: '20px',
-        backgroundColor: '#f4f7f6',
+        width: '100%',
+        maxWidth: '1500px', // Limita el ancho para mejor lectura
+        margin: '0 auto',    // Centra el bloque en la pantalla
         minHeight: '100vh',
-        fontFamily: '"Segoe UI", Roboto, Helvetica, Arial, sans-serif'
+        padding: '20px',
+        backgroundColor: '#f0f2f5',
+        boxSizing: 'border-box' // Asegura que el padding no sume ancho extra
     },
     header: { marginBottom: '20px' },
 
@@ -633,6 +990,46 @@ const styles = {
         maxHeight: '90vh', // Evita que el modal sea más alto que la pantalla
         overflowY: 'auto' // Si el contenido es mucho, permite scroll interno
     },
+    diaContenedor: {
+        marginBottom: '15px',
+        padding: '10px',
+        backgroundColor: '#f9f9f9',
+        borderRadius: '8px'
+    },
+    diaHeader: {
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: '8px'
+    },
+    diaNombre: { fontWeight: 'bold', color: '#333', fontSize: '14px' },
+    btnMas: {
+        background: '#3498db',
+        color: 'white',
+        border: 'none',
+        borderRadius: '4px',
+        padding: '2px 8px',
+        fontSize: '11px',
+        cursor: 'pointer'
+    },
+    bloquesLista: { display: 'flex', flexDirection: 'column', gap: '5px' },
+    bloqueRow: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px',
+        backgroundColor: 'white',
+        padding: '5px',
+        borderRadius: '4px',
+        border: '1px solid #eee'
+    },
+    btnEliminar: {
+        background: 'none',
+        border: 'none',
+        color: '#e74c3c',
+        fontSize: '18px',
+        cursor: 'pointer',
+        padding: '0 5px'
+    }
 };
 
 export default RecursosScreen;
