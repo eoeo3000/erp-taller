@@ -8,8 +8,7 @@ import DashboardScreen from './screens/DashboardScreen';
 import RecursosScreen from './screens/RecursosScreen'
 import React, { useState, useEffect } from 'react';
 
-const API = 'http://localhost:5000/api';
-
+const API = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 function App() {
   const [recursos, setRecursos] = useState([]);
   const [ots, setOts] = useState([]);
@@ -240,8 +239,7 @@ function App() {
 
   const guardarCalendarioGlobal = async (datos, id) => {
     // URL apuntando explícitamente al BACKEND (Puerto 5000)
-    const API_URL = "http://localhost:5000/api/calendarios";
-
+    const API_URL = `${API}/calendarios`;
     try {
       if (id && id !== "null") {
         await axios.put(`${API_URL}/${id}`, datos);
