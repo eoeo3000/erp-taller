@@ -45,12 +45,8 @@ const GanttScreen = ({ recursos = [], ots = [], calendarios = [], obtenerHorasPa
     });
 
     useEffect(() => {
-        console.log("--- INSPECCIÓN DE DATOS EN GANTT ---");
         ots.forEach(ot => {
             ot.tareas?.forEach(t => {
-                console.log(`OT: ${ot.numero} | Tarea: ${t.descripcion}`);
-                console.log("IDs:", t.operarioId);
-                console.log("Nombres:", t.operarioNombre);
             });
         });
     }, [ots]);
@@ -96,8 +92,9 @@ const GanttScreen = ({ recursos = [], ots = [], calendarios = [], obtenerHorasPa
                     <React.Fragment key={ot._id}>
                         {/* FILA ÚNICA PARA EL NÚMERO DE OT */}
                         <div style={{ ...styles.dataRow, backgroundColor: '#f8f9fa', fontWeight: 'bold' }}>
-                            <div style={{ ...styles.colBase, width: '80px', color: '#2980b9' }}>{ot._id.slice(-5).toUpperCase()}</div>
-                            <div style={{ ...styles.colBase, width: '450px' }}>PROYECTO: {ot.descripcionGeneral || 'Sin descripción'}</div>
+                            <div style={{ ...styles.colBase, width: '80px', color: '#2980b9', fontWeight: 'bold' }}>
+                                {ot.numeroOT || "S/N"}
+                            </div>                            <div style={{ ...styles.colBase, width: '450px' }}>PROYECTO: {ot.descripcionGeneral || 'Sin descripción'}</div>
                             <div style={styles.daysArea}>
                                 {diasHeader.map(dia => <div key={dia} style={{ width: '100px', borderRight: '1px solid #f0f0f0' }} />)}
                             </div>

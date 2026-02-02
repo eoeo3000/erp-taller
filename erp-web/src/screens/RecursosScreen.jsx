@@ -26,11 +26,21 @@ const RecursosScreen = (
         actualizarRecurso,
         eliminarRecurso,
         crearRecurso,
+        crearSuministro,
+        eliminarSuministro,
         guardarCalendarioGlobal,
         obtenerHorasParaDia,
         asignarCalendario,
         guardarCambioManualGlobal,
-        eliminarCalendarioMaestro
+        eliminarCalendarioMaestro,
+        componentes = [],
+        suministros = [],
+        crearEquipo,
+        eliminarEquipo,
+        crearPuesto,
+        eliminarPuesto,
+        puestosDB = [],
+        actualizarEquipo
     }) => {
 
     const [nuevoRecurso, setNuevoRecurso] = useState({ nombre: '', tipo: 'Humano', especialidad: '', calendarioId: '' });
@@ -45,6 +55,25 @@ const RecursosScreen = (
     const [recursoEnEdicion, setRecursoEnEdicion] = useState(null); // Almacena el ID de la fila activa
     const [datosTemporales, setDatosTemporales] = useState({ nombre: '', puesto: '' });
     // Añadir esto cerca de tus otros hooks
+    const [tabActiva, setTabActiva] = useState('Personal');
+    // Añade esto donde están tus otros useState
+    const [modalPuestosAbierto, setModalPuestosAbierto] = useState(false);
+    const [modalComponenteAbierto, setModalComponenteAbierto] = useState({ nombre: '', tipo: 'Herramienta', estado: 'Disponible' });
+    const [modalLogisticaAbierto, setModalLogisticaAbierto] = useState({ unidad: '', patente: '', ruta: '' });
+    const [isModalCompOpen, setIsModalCompOpen] = useState(false);
+    const [isModalLogOpen, setIsModalLogOpen] = useState(false);
+    const [nuevoComponente, setNuevoComponente] = useState({
+        nombre: '',
+        tipo: 'Herramienta',
+        estado: 'Disponible'
+    });
+
+    const [nuevaLogistica, setNuevaLogistica] = useState({
+        unidad: '',
+        patente: '',
+        ruta: ''
+    });
+    // Y para que el listado no falle si no vienen datos:
 
     useEffect(() => {
         if (editandoId && modalMaestroAbierto) {
@@ -54,7 +83,6 @@ const RecursosScreen = (
             }
         }
     }, [editandoId, modalMaestroAbierto, calendarios]);
-
     const prepararEdicion = (cal) => {
         // 1. Guardamos el ID para que el botón "Guardar" sepa que es un PUT y no un POST
         setEditandoId(cal._id);
@@ -72,7 +100,6 @@ const RecursosScreen = (
         // 5. Abrimos el modal
         setModalMaestroAbierto(true);
     };
-
     const abrirNuevoMaestro = () => {
         setEditandoId(null);
         // Usamos JSON.parse/stringify para crear una copia física real
@@ -80,7 +107,6 @@ const RecursosScreen = (
         setNuevoCal(JSON.parse(JSON.stringify(estadoInicialCalendario)));
         setModalMaestroAbierto(true);
     };
-
     const actualizarDiasCiclo = (nuevoTotal) => {
         // Validamos que no sea NaN y sea al menos 1
         const total = isNaN(nuevoTotal) || nuevoTotal < 1 ? 1 : nuevoTotal;
@@ -111,17 +137,6 @@ const RecursosScreen = (
             };
         });
     };
-
-    // En RecursosScreen (suponiendo que recibes las props)
-    /*
-    const guardarCambioManual = (recursoId, dia, nuevasHoras) => {
-        // Usamos la función central de App.js
-        actualizarAjusteRecurso(recursoId, dia, nuevasHoras);
-        setAjusteManual(null);
-    };*/
-    // Estado para saber si estamos editando un calendario existente
-
-    // RecursosScreen.jsx
     const guardarCalendario = async () => {
         // 1. Log prioritario para ver qué estamos enviando realmente
 
@@ -141,15 +156,9 @@ const RecursosScreen = (
 
         // BORRAMOS las líneas extra que tenías aquí abajo que causaban el error
     };
-
-    // Busca estas líneas y cámbialas por:
     const [anio, setAnio] = useState(new Date().getFullYear());
     const [mes, setMes] = useState(new Date().getMonth()); // 0 = Enero, 1 = Febrero...
-
-    // Generar días del mes con manejo de errores
-    // Esto se recalcula automáticamente cada vez que mes o anio cambian
     const cantidadDias = new Date(anio, mes + 1, 0).getDate();
-
     const diasDelMes = Array.from({ length: cantidadDias }, (_, i) => {
         const fecha = new Date(anio, mes, i + 1);
         const nombre = new Intl.DateTimeFormat('es-ES', { weekday: 'short' }).format(fecha);
@@ -161,7 +170,6 @@ const RecursosScreen = (
             fechaCompleta: fecha // <--- CLAVE para el cálculo rotativo
         };
     });
-
     const actualizarHora = (diaIdx, bloqueIdx, campo, valor) => {
         setNuevoCal(prev => {
             // 1. Copia profunda del estado anterior
@@ -175,11 +183,6 @@ const RecursosScreen = (
             return copia;
         });
     };
-
-
-
-
-
     const agregarBloque = (diaIdx) => {
         setNuevoCal(prev => {
             const copia = JSON.parse(JSON.stringify(prev));
@@ -190,18 +193,15 @@ const RecursosScreen = (
             return copia;
         });
     };
-
     const eliminarBloque = (diaIdx, bloqueIdx) => {
         const copia = { ...nuevoCal };
         copia.config[diaIdx].bloques.splice(bloqueIdx, 1);
         setNuevoCal(copia);
     };
-
     useEffect(() => {
         if (modalMaestroAbierto) {
         }
     }, [nuevoCal, modalMaestroAbierto]);
-
     const manejarGuardar = async (id) => {
         const datosActualizados = {
             nombre: nombreInput, // El estado de tu input de nombre
@@ -217,84 +217,320 @@ const RecursosScreen = (
             alert("Hubo un error al guardar los cambios.");
         }
     };
-
     const prepararEdicionRecurso = (recurso) => {
-        // Cargamos los datos en el estado que usa el formulario de creación
+        // Cargamos los datos en el estado que usa el formulario
         setNuevoRecurso({
-            _id: recurso._id, // Identificador para saber que es edición
+            _id: recurso._id,
             nombre: recurso.nombre,
             calendarioId: recurso.calendarioId || '',
+
+            // 🚩 CAMBIO CLAVE: Usa 'puesto' en lugar de (o además de) 'especialidad'
+            // para que el <select value={nuevoRecurso.puesto}> lo encuentre.
+            puesto: recurso.puesto || recurso.especialidad || '',
+
+            // Mantenemos especialidad por si acaso otros componentes aún la usan
             especialidad: recurso.puesto || recurso.especialidad || '',
+
             fechaInicioCiclo: recurso.fechaInicioCiclo ? recurso.fechaInicioCiclo.split('T')[0] : ''
         });
 
-        // Cerramos el listado y abrimos el formulario de "Crear" (que ahora será de editar)
         setMostrarModalPersonal(false);
         setModalRecursoAbierto(true);
     };
-
-    // Este log se disparará cada vez que el modal se intente abrir
     if (modalRecursoAbierto) {
     }
+    const renderContenidoTab = () => {
+        let data = [];
 
+        // 1. Asignación correcta de datos según la pestaña activa
+        if (tabActiva === 'Personal') data = recursos;
+        if (tabActiva === 'Equipos/Herramientas') data = componentes;
+        if (tabActiva === 'Suministros Directos') data = suministros; // <-- Asegúrate de tener este estado
+        if (tabActiva === 'Calendarios') data = calendarios;
+
+        if (data.length === 0) {
+            return <div style={{ padding: '20px', textAlign: 'center', color: '#94a3b8' }}>No hay registros disponibles.</div>;
+        }
+
+        return data.map(item => (
+            <div key={item.id || item._id} style={{
+                display: 'flex',
+                alignItems: 'center',
+                padding: '12px 15px', // Coincide con el padding del encabezado
+                borderBottom: '1px solid #f1f5f9',
+                fontSize: '0.85rem'
+            }}>
+                {/* PERSONAL */}
+                {tabActiva === 'Personal' && (
+                    <>
+                        {/* 1. Nombre (Se mantiene igual) */}
+                        <span style={{ flex: 2, fontWeight: '500', color: '#1e293b' }}>
+                            {item.nombre}
+                        </span>
+
+                        {/* 2. Especialidad -> CAMBIADO A: item.puesto */}
+                        <span style={{ flex: 1.5, color: '#64748b' }}>
+                            {item.puesto || 'Sin cargo'}
+                        </span>
+
+                        {/* 3. Fecha -> CAMBIADO A: item.createdAt (Formateada) */}
+                        <span style={{ flex: 1, color: '#64748b' }}>
+                            {item.createdAt
+                                ? new Date(item.createdAt).toLocaleDateString()
+                                : (item.fechaInicioCiclo || '---')}
+                        </span>
+                    </>
+                )}
+                {/* EQUIPOS */}
+                {tabActiva === 'Equipos/Herramientas' && <>
+                    <span style={{ flex: 2, fontWeight: '500' }}>{item.nombre}</span>
+                    <span style={{ flex: 1.5 }}>{item.tipo}</span>
+
+                    {/* 🚩 NUEVA COLUMNA DE PRECIO */}
+                    <span style={{ flex: 1, fontWeight: 'bold', color: '#27ae60' }}>
+                        {new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP' }).format(item.precio || 0)}
+                    </span>
+
+                    <span style={{
+                        flex: 1,
+                        color: item.estado === 'Disponible' ? '#27ae60' : item.estado === 'En Uso' ? '#f39c12' : '#e74c3c',
+                        fontWeight: 'bold'
+                    }}>
+                        {item.estado}
+                    </span>
+                </>}
+
+                {/* LOGÍSTICA (Suministros Directos) */}
+                {tabActiva === 'Suministros Directos' && <>
+                    <span style={{ flex: 2, fontWeight: '500' }}>{item.unidad}</span>
+                    <span style={{ flex: 1.5 }}>{item.patente}</span>
+                    <span style={{ flex: 1 }}>{item.ruta}</span>
+                </>}
+
+                {/* CALENDARIOS */}
+                {tabActiva === 'Calendarios' && <>
+                    <span style={{ flex: 3, fontWeight: '500' }}>{item.nombre}</span>
+                    <span style={{ flex: 1, textAlign: 'center' }}>⚙️</span>
+                </>}
+
+                {/* ACCIONES (Siempre debe tener el mismo ancho que el encabezado) */}
+                <div style={{ width: '70px', display: 'flex', gap: '10px', justifyContent: 'center' }}>
+                    <button
+                        onClick={() => {
+                            if (tabActiva === 'Personal') prepararEdicionRecurso(item);
+                            if (tabActiva === 'Equipos/Herramientas') {
+                                setNuevoComponente(item);
+                                setEditandoId(item._id || item.id);
+                                setIsModalCompOpen(true);
+                            }
+                            if (tabActiva === 'Suministros Directos') {
+                                setNuevaLogistica(item);      // Carga los datos actuales en el estado del formulario
+                                setEditandoId(item._id || item.id); // Guardamos el ID para saber que estamos editando
+                                setIsModalLogOpen(true);      // Abrimos el modal de logística
+                            }
+                            if (tabActiva === 'Calendarios') {
+                                setNuevoCalendario(item);
+                                setEditandoId(item._id || item.id);
+                                setIsModalCalendarioOpen(true);
+                            }
+                        }}
+                        style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '1rem' }}
+                    >
+                        ✏️
+                    </button>
+                    <button
+                        onClick={() => {
+                            const id = item._id || item.id;
+                            if (window.confirm('¿Estás seguro de eliminar este registro?')) {
+                                // Selecciona la función correcta según la pestaña
+                                if (tabActiva === 'Personal') eliminarRecurso(id);
+                                if (tabActiva === 'Equipos/Herramientas') eliminarEquipo(id); // Asumiendo que pasaste esta prop
+                                if (tabActiva === 'Suministros Directos') eliminarSuministro(id);
+                                if (tabActiva === 'Calendarios') eliminarCalendarioMaestro(id);
+                            }
+                        }}
+                        style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '1rem' }}
+                    >
+                        🗑️
+                    </button>
+
+                </div>
+            </div>
+        ));
+    };
     return (
         <div style={styles.container}>
             <div style={styles.header}>
                 <h2>⚙️ Gestión de Recursos</h2>
                 <p>Configura turnos y visualiza carga horaria.</p>
             </div>
-
             <div style={styles.layout}>
 
-                <div style={{ marginBottom: '20px', display: 'flex', gap: '15px' }}>
-                    <button onClick={() => setModalRecursoAbierto(true)} style={styles.btnPrimary}>
-                        👤 Crear personal
-                    </button>
-
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '20px' }}>
-                    <button
-                        onClick={() => setMostrarModalPersonal(true)}
-                        style={{ ...styles.btnGestion, backgroundColor: '#34495e', color: 'white', padding: '10px 20px', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}
-                    >
-                        👥 Editar Recursos
-                    </button>
-                </div>
-                <div style={styles.layoutCalendarios}>
-                    {/* FORMULARIO (IZQUIERDA) */}
-                    <div style={styles.card}>
-                        <h3>{editandoId ? '📝 Editando Calendario' : '🗓️ Nuevo Calendario'}</h3>
-                        <input
-                            style={styles.input}
-                            value={nuevoCal.nombre}
-                            onChange={e => setNuevoCal({ ...nuevoCal, nombre: e.target.value })}
-                            placeholder="Nombre del turno..."
-                        />
-                        {/* Aquí van los inputs de horas por día que definimos antes */}
-                        <button onClick={guardarCalendario} style={styles.btnPrimary}>
-                            {editandoId ? 'Guardar Cambios' : 'Crear Plantilla'}
+                {/* NAVEGACIÓN POR PESTAÑAS (Tabs Superiores) */}
+                <div style={{ display: 'flex', gap: '5px', marginBottom: '20px', borderBottom: '2px solid #e2e8f0' }}>
+                    {['Personal', 'Equipos/Herramientas', 'Suministros Directos', 'Calendarios'].map(tab => (
+                        <button
+                            key={tab}
+                            onClick={() => setTabActiva(tab)}
+                            style={{
+                                padding: '12px 20px',
+                                border: 'none',
+                                borderBottom: tabActiva === tab ? '3px solid #3498db' : '3px solid transparent',
+                                background: 'none',
+                                cursor: 'pointer',
+                                fontWeight: 'bold',
+                                color: tabActiva === tab ? '#3498db' : '#64748b',
+                                transition: '0.2s'
+                            }}
+                        >
+                            {tab === 'Personal' && '👤 '}
+                            {tab === 'Equipos/Herramientas' && '⚙️ '}
+                            {tab === 'Suministros Directos' && '📦 '}
+                            {tab === 'Calendarios' && '🗓️ '}
+                            {tab}
                         </button>
-                        {editandoId && <button onClick={() => setEditandoId(null)} style={styles.btnLink}>Cancelar</button>}
-                    </div>
-
-                    {/* LISTA DE CALENDARIOS (DERECHA) */}
-                    <div style={styles.listaCal}>
-                        <h4>Plantillas Disponibles</h4>
-                        {calendarios.map(cal => (
-                            <div key={cal._id} style={styles.calItem}>
-                                <span>{cal.nombre}</span>
-                                <button onClick={() => prepararEdicion(cal)} style={styles.btnIcon}>✏️</button>
-                                <button
-                                    onClick={() => eliminarCalendarioMaestro(cal._id)}
-                                    style={styles.btnEliminar}
-                                >
-                                    🗑️
-                                </button>
-                            </div>
-                        ))}
-                    </div>
+                    ))}
                 </div>
 
+                {/* BLOQUE SUPERIOR DINÁMICO */}
+                <div style={{ display: 'flex', gap: '20px', height: '400px', minWidth: '950px', marginBottom: '25px' }}>
+
+                    {/* IZQUIERDA: Formulario de Creación (Contextual) */}
+                    <div style={{
+                        flex: '0 0 280px', // Reducido de 350px a 280px
+                        backgroundColor: '#fff',
+                        padding: '15px', // Padding más ajustado
+                        borderRadius: '10px',
+                        boxShadow: '0 2px 10px rgba(0,0,0,0.08)',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignSelf: 'flex-start' // Evita que se estire a lo alto si el padre es grande
+                    }}>
+                        <h3 style={{ marginTop: 0, fontSize: '0.9rem', color: '#64748b', textAlign: 'center', marginBottom: '15px' }}>
+                            Acciones: {tabActiva}
+                        </h3>
+
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                            {tabActiva === 'Personal' && (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                    <button
+                                        onClick={() => setModalRecursoAbierto(true)}
+                                        style={{ ...styles.btnPrimary, padding: '8px 12px', fontSize: '0.85rem' }}
+                                    >
+                                        ➕ Nuevo Integrante
+                                    </button>
+                                    <button
+                                        onClick={() => setModalPuestosAbierto(true)}
+                                        style={{ ...styles.btnPrimary, backgroundColor: '#34495e', padding: '8px 12px', fontSize: '0.85rem' }}
+                                    >
+                                        🛠️ Gestionar Puestos
+                                    </button>
+                                </div>
+
+                            )}
+
+                            {tabActiva === 'Equipos/Herramientas' && (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                    <button onClick={() => setIsModalCompOpen(true)} style={{ ...styles.btnPrimary, backgroundColor: '#8e44ad', padding: '8px 12px', fontSize: '0.85rem' }}>
+                                        ➕ Agregar Activo
+                                    </button>
+                                    <button onClick={() => setIsModalCompOpen(true)} style={{ ...styles.btnPrimary, backgroundColor: '#8e44ad', padding: '8px 12px', fontSize: '0.85rem' }}>
+                                        ➕ Crear categoria
+                                    </button>
+                                </div>
+                            )}
+
+                            {tabActiva === 'Suministros Directos' && (
+                                <button onClick={() => setIsModalLogOpen(true)} style={{ ...styles.btnPrimary, backgroundColor: '#f39c12', padding: '8px 12px', fontSize: '0.85rem' }}>
+                                    ➕ Registrar Logística
+                                </button>
+                            )}
+
+                            {tabActiva === 'Calendarios' && (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                    <input
+                                        style={{ ...styles.input, padding: '8px', fontSize: '0.85rem' }}
+                                        placeholder="Nombre de plantilla..."
+                                        value={nuevoCal.nombre}
+                                        onChange={e => setNuevoCal({ ...nuevoCal, nombre: e.target.value })}
+                                    />
+                                    <button onClick={guardarCalendario} style={{ ...styles.btnPrimary, backgroundColor: '#27ae60', padding: '8px 12px', fontSize: '0.85rem' }}>
+                                        💾 Guardar Plantilla
+                                    </button>
+                                </div>
+                            )}
+
+                            <p style={{ fontSize: '0.75rem', color: '#94a3b8', textAlign: 'center', marginTop: '5px', lineHeight: '1.2' }}>
+                                Los cambios se reflejarán en el listado y el Gantt.
+                            </p>
+                        </div>
+                    </div>
+
+                    {/* DERECHA: Listado Dinámico (Encabezados Fijos) */}
+                    {/* 1. Agregamos minWidth: 0 para que el flex sepa que puede achicarse */}
+                    <div style={{
+                        flex: 1,
+                        minWidth: 0,
+                        backgroundColor: '#fff',
+                        borderRadius: '12px',
+                        boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
+                        border: '1px solid #eee',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        overflow: 'hidden'
+                    }}>
+
+                        {/* 2. Envolvemos TODO (encabezado y lista) en un div con scroll horizontal */}
+                        <div style={{ width: '100%', overflowX: 'auto' }}>
+
+                            {/* Contenedor con ancho mínimo para asegurar que las columnas no colapsen */}
+                            <div style={{ minWidth: '500px' }}>
+
+                                {/* Encabezado Fijo */}
+                                <div style={{
+                                    display: 'flex',
+                                    padding: '12px 15px',
+                                    backgroundColor: '#f8fafc',
+                                    borderBottom: '1px solid #eee',
+                                    fontSize: '0.75rem',
+                                    fontWeight: 'bold',
+                                    color: '#64748b',
+                                    textTransform: 'uppercase'
+                                }}>
+                                    {tabActiva === 'Personal' && <>
+                                        <span style={{ flex: 2 }}>Nombre</span>
+                                        <span style={{ flex: 1.5 }}>Especialidad</span>
+                                        <span style={{ flex: 1 }}>Inicio</span>
+                                    </>}
+                                    {tabActiva === 'Equipos/Herramientas' && <>
+                                        <span style={{ flex: 2 }}>Modelo</span>
+                                        <span style={{ flex: 1.5 }}>Tipo</span>
+                                        <span style={{ flex: 1 }}>Precio</span>
+                                        <span style={{ flex: 1 }}>Estado</span>
+                                    </>}
+                                    {tabActiva === 'Suministros Directos' && <>
+                                        <span style={{ flex: 2 }}>Codigo</span>
+                                        <span style={{ flex: 1.5 }}>Descripcion</span>
+                                        <span style={{ flex: 1 }}>Precio</span>
+                                    </>}
+                                    {tabActiva === 'Calendarios' && <>
+                                        <span style={{ flex: 3 }}>Nombre</span>
+                                    </>}
+                                    {/* ... resto de tus condiciones ... */}
+                                    <span style={{ width: '70px', textAlign: 'center' }}>Acciones</span>
+                                </div>
+
+                                {/* Listado con Scroll Vertical */}
+                                <div style={{ maxHeight: '400px', overflowY: 'auto', padding: '10px' }}>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                                        {renderContenidoTab()}
+                                    </div>
+                                </div>
+
+                            </div>
+                        </div>
+                    </div>
+                </div>
 
                 <div style={styles.ganttContainer}>
                     <div style={styles.selectorMesContainer}>
@@ -423,7 +659,6 @@ const RecursosScreen = (
                     </table>
                 </div>
 
-
             </div>
 
             {ajusteManual && (
@@ -457,8 +692,144 @@ const RecursosScreen = (
                     </div>
                 </div>
             )}
+            {isModalCompOpen && (
+                <div style={styles.overlay}>
+                    <div style={styles.modal}>
+                        <div style={styles.modalHeader}>
+                            <h3>{nuevoComponente._id ? '📝 Editar Equipo' : '⚙️ Nuevo Equipo / Herramienta'}</h3>
+                            <button onClick={() => setIsModalCompOpen(false)} style={styles.btnClose}>&times;</button>
+                        </div>
 
-            {/* MODAL NUEVO RECURSO */}
+                        <div style={styles.modalBody}>
+                            <label style={{ fontWeight: 'bold' }}>Nombre del Equipo</label>
+                            <input
+                                placeholder="Ej: Generador Eléctrico 5kW"
+                                style={styles.input}
+                                value={nuevoComponente.nombre}
+                                onChange={e => setNuevoComponente({ ...nuevoComponente, nombre: e.target.value })}
+                            />
+
+                            {/* 🚩 NUEVO CAMPO: PRECIO */}
+                            <label style={{ fontWeight: 'bold' }}>Precio de Adquisición ($)</label>
+                            <input
+                                type="number"
+                                placeholder="0.00"
+                                style={styles.input}
+                                value={nuevoComponente.precio || ''}
+                                onChange={e => setNuevoComponente({ ...nuevoComponente, precio: e.target.value })}
+                            />
+
+                            <label style={{ fontWeight: 'bold' }}>Categoría</label>
+                            <select
+                                style={styles.input}
+                                value={nuevoComponente.tipo}
+                                onChange={e => setNuevoComponente({ ...nuevoComponente, tipo: e.target.value })}
+                            >
+                                <option value="Herramienta">Herramienta Manual</option>
+                                <option value="Maquinaria">Maquinaria Pesada</option>
+                                <option value="Instrumento">Instrumento de Medición</option>
+                            </select>
+
+                            <label style={{ fontWeight: 'bold' }}>Estado Inicial</label>
+                            <select
+                                style={styles.input}
+                                value={nuevoComponente.estado}
+                                onChange={e => setNuevoComponente({ ...nuevoComponente, estado: e.target.value })}
+                            >
+                                <option value="Disponible">✅ Disponible</option>
+                                <option value="En Uso">🛠️ En Uso</option>
+                                <option value="Mantenimiento">⚠️ Mantenimiento</option>
+                            </select>
+                        </div>
+
+                        <div style={styles.modalFooter}>
+                            <button
+                                onClick={() => {
+                                    setIsModalCompOpen(false);
+                                    // Reset con campos de suministros limpios
+                                    setNuevoComponente({ nombre: '', tipo: 'Herramienta', estado: 'Disponible', precio: 0 });
+                                }}
+                                style={styles.btnSecundario}
+                            >
+                                Cancelar
+                            </button>
+
+                            <button
+                                onClick={async () => {
+                                    if (!nuevoComponente.nombre) return alert("El nombre es obligatorio");
+
+                                    if (nuevoComponente._id) {
+                                        await actualizarEquipo(nuevoComponente._id, nuevoComponente);
+                                    } else {
+                                        await crearEquipo(nuevoComponente);
+                                    }
+
+                                    setIsModalCompOpen(false);
+                                    setNuevoComponente({ nombre: '', tipo: 'Herramienta', estado: 'Disponible', precio: 0 });
+                                }}
+                                style={{
+                                    ...styles.btnPrimary,
+                                    backgroundColor: nuevoComponente._id ? '#2980b9' : '#8e44ad'
+                                }}
+                            >
+                                {nuevoComponente._id ? "Actualizar Equipo" : "Guardar Equipo"}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+            {isModalLogOpen && (
+                <div style={styles.overlay}>
+                    <div style={styles.modal}>
+                        <div style={styles.modalHeader}>
+                            <h3>🚚 Registro de Logística</h3>
+                            {/* Al cerrar, seteamos el booleano en false */}
+                            <button onClick={() => setIsModalLogOpen(false)} style={styles.btnClose}>&times;</button>
+                        </div>
+                        <div style={styles.modalBody}>
+                            <label style={{ fontWeight: 'bold' }}>Codigo</label>
+                            <input
+                                placeholder="Ej: 0001"
+                                style={styles.input}
+                                value={nuevaLogistica.unidad}
+                                onChange={e => setNuevaLogistica({ ...nuevaLogistica, unidad: e.target.value })}
+                            />
+
+                            <label style={{ fontWeight: 'bold' }}>Descripcion</label>
+                            <input
+                                placeholder="Ej: Disco de Corte 4-1/2''"
+                                style={styles.input}
+                                value={nuevaLogistica.patente}
+                                onChange={e => setNuevaLogistica({ ...nuevaLogistica, patente: e.target.value })}
+                            />
+
+                            <label style={{ fontWeight: 'bold' }}>Precio</label>
+                            <input
+                                placeholder="Ej: 15000"
+                                style={styles.input}
+                                value={nuevaLogistica.ruta}
+                                onChange={e => setNuevaLogistica({ ...nuevaLogistica, ruta: e.target.value })}
+                            />
+                        </div>
+                        <div style={styles.modalFooter}>
+                            <button onClick={() => setIsModalLogOpen(false)} style={styles.btnSecundario}>Cancelar</button>
+                            <button
+                                onClick={() => {
+                                    // Aquí deberías llamar a la función de App.js, ejemplo:
+                                    // crearLogistica(nuevaLogistica); 
+                                    setIsModalLogOpen(false);
+                                    // Opcional: limpiar el formulario
+                                    setNuevaLogistica({ unidad: '', patente: '', ruta: '' });
+                                    crearSuministro(nuevaLogistica);
+                                }}
+                                style={{ ...styles.btnPrimary, backgroundColor: '#f39c12' }}
+                            >
+                                Confirmar Registro
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
             {modalRecursoAbierto && (
                 <div style={styles.overlay}>
                     <div style={styles.modal}>
@@ -489,13 +860,18 @@ const RecursosScreen = (
                             <label style={{ fontWeight: 'bold' }}>Especialidad / Puesto</label>
                             <select
                                 style={styles.input}
-                                value={nuevoRecurso.especialidad}
-                                onChange={e => setNuevoRecurso({ ...nuevoRecurso, especialidad: e.target.value })}
+                                // 🚩 Cambiado de especialidad a puesto según tu modelo de Mongoose
+                                value={nuevoRecurso.puesto || ''}
+                                onChange={e => setNuevoRecurso({ ...nuevoRecurso, puesto: e.target.value })}
                             >
                                 <option value="">Seleccionar Puesto...</option>
-                                <option value="Mecánico">Mecánico</option>
-                                <option value="Soldador">Soldador</option>
-                                <option value="Ayudante">Ayudante</option>
+
+                                {/* 🚩 MAPEO DINÁMICO DE SUMINISTROS (Puestos de la DB) */}
+                                {puestosDB && puestosDB.map(p => (
+                                    <option key={p._id} value={p.nombre}>
+                                        {p.nombre} ({p.categoria})
+                                    </option>
+                                ))}
                             </select>
                             <label style={{ fontWeight: 'bold' }}>¿Cuándo inicia su primer día de trabajo?</label>
                             <input
@@ -552,7 +928,6 @@ const RecursosScreen = (
                     </div>
                 </div>
             )}
-
             {mostrarModalPersonal && (
                 <div style={styles.modalOverlay}>
                     <div style={{ ...styles.modalContent, width: '650px', maxHeight: '80vh', overflowY: 'auto' }}>
@@ -601,7 +976,6 @@ const RecursosScreen = (
                     </div>
                 </div>
             )}
-
             {modalMaestroAbierto && (
                 <div style={styles.overlay}>
                     <div style={styles.modal}>
@@ -737,6 +1111,75 @@ const RecursosScreen = (
                                 {editandoId ? 'Actualizar Plantilla' : 'Guardar Plantilla'}
                             </button>
                         </div>
+                    </div>
+                </div>
+            )}
+            {modalPuestosAbierto && (
+                <div style={styles.modalOverlay}>
+                    <div style={{ ...styles.modalContent, width: '600px' }}>
+                        <h3>🛠️ Configuración de Puestos y Especialidades</h3>
+
+                        {/* Formulario de creación rápida */}
+                        <div style={{ display: 'flex', gap: '10px', marginBottom: '20px', backgroundColor: '#f8fafc', padding: '15px', borderRadius: '8px' }}>
+                            <input
+                                placeholder="Nombre del Puesto (ej: Soldador)"
+                                style={styles.input}
+                                id="nuevo-puesto-nombre"
+                            />
+                            <input
+                                type="number"
+                                placeholder="Costo/Hora ($)"
+                                style={{ ...styles.input, width: '120px' }}
+                                id="nuevo-puesto-costo"
+                            />
+                            <button
+                                onClick={() => {
+                                    const nombreVal = document.getElementById('nuevo-puesto-nombre').value;
+                                    const costoVal = document.getElementById('nuevo-puesto-costo').value;
+
+                                    if (nombreVal && costoVal) {
+                                        // 🚩 PASO CLAVE: Envía los valores sueltos, no entre llaves {}
+                                        // Esto asegura que 'nombre' sea un String y no un Objeto
+                                        crearPuesto(nombreVal, costoVal);
+
+                                        // Limpiar campos
+                                        document.getElementById('nuevo-puesto-nombre').value = '';
+                                        document.getElementById('nuevo-puesto-costo').value = '';
+                                    }
+                                }}
+                                style={styles.btnPrimary}
+                            >
+                                Añadir
+                            </button>
+                        </div>
+
+                        {/* Listado de Puestos */}
+                        <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
+                            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                                <thead>
+                                    <tr style={{ borderBottom: '2px solid #e2e8f0', textAlign: 'left' }}>
+                                        <th style={{ padding: '8px' }}>Puesto</th>
+                                        <th style={{ padding: '8px' }}>Costo/Hora</th>
+                                        <th style={{ padding: '8px' }}>Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {puestosDB.map((puesto) => (
+                                        <tr key={puesto._id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                                            <td style={{ padding: '8px' }}>{puesto.nombre}</td>
+                                            <td style={{ padding: '8px' }}>$ {puesto.costoHora}</td>
+                                            <td style={{ padding: '8px' }}>
+                                                <button onClick={() => eliminarPuesto(puesto._id)} style={{ background: 'none', border: 'none', color: '#e74c3c', cursor: 'pointer' }}>🗑️</button>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <button onClick={() => setModalPuestosAbierto(false)} style={{ ...styles.btnSecundario, marginTop: '20px', width: '100%' }}>
+                            Cerrar
+                        </button>
                     </div>
                 </div>
             )}

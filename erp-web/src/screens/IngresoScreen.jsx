@@ -3,7 +3,7 @@ import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 
 // Recibimos 'solicitudes' como prop desde App.jsx para actualización automática
-const IngresoScreen = ({ solicitudes, cargarDatos, API, crearSolicitudGlobal }) => {
+const IngresoScreen = ({ solicitudes = [], liberarSolicitudManual, cargarDatos, API, crearSolicitudGlobal, ots = [] }) => {
     const [form, setForm] = useState({
         solicitante: '',
         empresaSolicitante: '',
@@ -35,7 +35,6 @@ const IngresoScreen = ({ solicitudes, cargarDatos, API, crearSolicitudGlobal }) 
         window.addEventListener('click', cerrarMenu);
         return () => window.removeEventListener('click', cerrarMenu);
     }, []);
-
 
     // Cambiamos hasolcindleCrear en IngresoScreen.jsx
     const handleCrear = async () => {
@@ -85,9 +84,6 @@ const IngresoScreen = ({ solicitudes, cargarDatos, API, crearSolicitudGlobal }) 
 
         return cumpleEstado && cumpleEmpresa && cumpleSolicitante;
     });
-
-
-
     return (
         <div style={styles.container}>
             <div style={styles.card}>
@@ -308,55 +304,72 @@ const IngresoScreen = ({ solicitudes, cargarDatos, API, crearSolicitudGlobal }) 
                         </thead>
 
                         <tbody>
-                            {/* CAMBIO AQUÍ: Usamos solicitudesFiltradas en lugar de solicitudes */}
-                            {solicitudesFiltradas && solicitudesFiltradas.map((s, index) => (
-                                <tr key={s._id || index} style={{
-                                    borderBottom: '1px solid #eee',
-                                    backgroundColor: s.estado === 'Convertida' || s.estado === 'Generada' ? '#f9f9f9' : 'white'
-                                }}>
-                                    <td style={styles.td}>{index + 1}</td>
+                            {solicitudesFiltradas && solicitudesFiltradas.map((s, index) => {
+                                // --- ESTA LÓGICA DEBE ESTAR AQUÍ DENTRO ---
+                                // 1. Buscamos si hay una OT vinculada para ESTA solicitud 's'
+                                const otEncontrada = (ots || []).find(item => item.solicitudId === s._id || item._id === s._id);
 
-                                    <td style={{
-                                        ...styles.td,
-                                        fontWeight: 'bold',
-                                        color: (s.estado === 'Generada' || s.estado === 'Convertida') ? '#27ae60' : '#f39c12'
+                                // 2. Determinamos el estado real (priorizando el de la OT si existe)
+                                const estadoFinal = otEncontrada ? otEncontrada.estado : s.estado;
+
+                                // 3. Definimos si "Ya tiene OT" para el botón
+                                const yaTieneOT = (estadoFinal === 'Generada' || estadoFinal === 'Convertida' || estadoFinal === 'Planificada');
+
+                                return (
+                                    <tr key={s._id || index} style={{
+                                        borderBottom: '1px solid #eee',
+                                        backgroundColor: yaTieneOT ? '#f9f9f9' : 'white'
                                     }}>
-                                        <span style={styles.badge}>
-                                            {s.estado || 'Pendiente'}
-                                        </span>
-                                    </td>
+                                        <td style={styles.td}>{index + 1}</td>
 
-                                    <td style={styles.td}>{s.empresaSolicitante || '---'}</td>
+                                        <td style={{
+                                            ...styles.td,
+                                            fontWeight: 'bold',
+                                            color: yaTieneOT ? '#27ae60' : '#f39c12'
+                                        }}>
+                                            <span style={styles.badge}>
+                                                {estadoFinal || 'Pendiente'}
+                                            </span>
+                                        </td>
 
-                                    <td style={{ ...styles.td, opacity: (s.estado === 'Tratada' || s.estado === 'Convertida') ? 0.6 : 1 }}>
-                                        {s.solicitante}
-                                    </td>
+                                        <td style={styles.td}>{s.empresaSolicitante || '---'}</td>
 
-                                    <td style={styles.td}>
-                                        {s.adjuntos ? (
-                                            <a
-                                                href={`${API.replace('/api', '')}${s.adjuntos}`}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                style={styles.linkAdjunto}
+                                        <td style={{ ...styles.td, opacity: yaTieneOT ? 0.6 : 1 }}>
+                                            {s.solicitante}
+                                        </td>
+
+                                        <td style={styles.td}>
+                                            {s.adjuntos ? (
+                                                <a
+                                                    href={`${API.replace('/api', '')}${s.adjuntos}`}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    style={styles.linkAdjunto}
+                                                >
+                                                    📎 Ver Archivo
+                                                </a>
+                                            ) : (
+                                                <span style={{ color: '#ccc' }}>---</span>
+                                            )}
+                                        </td>
+
+                                        <td style={styles.td}>
+                                            <button
+                                                onClick={() => {
+                                                    const datosParaTratamiento = {
+                                                        ...(otEncontrada || s),
+                                                        solicitudId: s._id,
+                                                    };
+                                                    navigate('/tratamiento', { state: datosParaTratamiento });
+                                                }}
+                                                style={yaTieneOT ? styles.btnEdit : styles.btnTratar}
                                             >
-                                                📎 Ver Archivo
-                                            </a>
-                                        ) : (
-                                            <span style={{ color: '#ccc' }}>---</span>
-                                        )}
-                                    </td>
-
-                                    <td style={styles.td}>
-                                        <button
-                                            onClick={() => navigate('/tratamiento', { state: s })}
-                                            style={(s.estado === 'Generada' || s.estado === 'Convertida') ? styles.btnEdit : styles.btnTratar}
-                                        >
-                                            {(s.estado === 'Generada' || s.estado === 'Convertida') ? '📝 Ver OT' : '⚙️ Tratar'}
-                                        </button>
-                                    </td>
-                                </tr>
-                            ))}
+                                                {yaTieneOT ? '📝 Ver OT' : '⚙️ Tratar'}
+                                            </button>
+                                        </td>
+                                    </tr>
+                                );
+                            })}
                         </tbody>
                     </table>
                 </div>

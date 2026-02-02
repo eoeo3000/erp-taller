@@ -26,5 +26,6 @@ router.get('/', solicitudController.obtenerSolicitudes);
 router.post('/', upload.single('archivo'), solicitudController.crearSolicitud);
 
 router.patch('/:id', solicitudController.actualizarEstado);
-
+// Agrega esto en tu archivo de rutas de solicitudes
+router.put('/:id', solicitudController.actualizarEstado);
 module.exports = router;

@@ -14,60 +14,50 @@ function App() {
   const [ots, setOts] = useState([]);
   const [solicitudes, setSolicitudes] = useState([]);
   const [calendarios, setCalendarios] = useState([]);
-  // 1. FUNCIÓN DE CARGA COMPLETA (Se usa al iniciar y al hacer cambios manuales)
+  const [componentes, setComponentes] = useState([]);
+  const [suministros, setSuministros] = useState([]);
+  const [puestosDB, setPuestosDB] = useState([]);
+  const [modalPuestosAbierto, setModalPuestosAbierto] = useState(false);
 
   const cargarDatos = async () => {
     try {
-      // CAMBIO 1: Usar GET y apuntar a la ruta /data
-      // Eliminamos el 'formData' que causaba el ReferenceError
       const respuesta = await axios.get(`${API}/data`);
+      const d = respuesta.data;
 
-      // CAMBIO 2: Axios ya devuelve el JSON en la propiedad 'data'
-      const resultado = respuesta.data;
+      // Data consolidada existente
+      setOts(d.ots || []);
+      setSolicitudes(d.solicitudes || []);
+      setCalendarios(d.calendarios || []);
 
+      // Pantalla de Recursos
+      setRecursos(d.recursos || []); // Personal
+      setComponentes(d.equipos || []); // Activos
+      setSuministros(d.suministros || []); // Antes logistica
 
-      // Guardamos los datos en el estado
-      setOts(resultado.ots || []);
-      setSolicitudes(resultado.solicitudes || []);
-      setRecursos(resultado.recursos || []);
-      setCalendarios(resultado.calendarios || []);
-
-      console.log("📊 Sincronización exitosa:",
-        (resultado.ots || []).length, "OTs y",
-        (resultado.solicitudes || []).length, "Solicitudes"
-      );
+      // 🚩 NUEVO: Cargamos los puestos/especialidades configurados
+      if (d.puestos) {
+        setPuestosDB(d.puestos);
+      }
 
     } catch (error) {
-      console.error("❌ Error cargando datos:", error);
+      console.error("❌ Error en la carga inicial:", error);
     }
   };
-
   const actualizarRecurso = async (id, datosActualizados) => {
     try {
       const datosParaEnviar = {
         ...datosActualizados,
-        puesto: datosActualizados.especialidad
+        // 🛡️ Priorizamos 'puesto'. Si no existe, usamos 'especialidad'.
+        puesto: datosActualizados.puesto || datosActualizados.especialidad
       };
 
       const res = await axios.put(`${API}/recursos/${id}`, datosParaEnviar);
 
       if (res.status === 200) {
-        // 1. Actualiza los recursos (esto incluye los nuevos ajustes de horas)
+        // Actualizamos el estado local con la respuesta fresca del servidor
         setRecursos(prev => prev.map(r => r._id === id ? res.data : r));
 
-        // 2. Sincronización de textos (tu código actual)
-        setOts(prevOts => {
-          const otsActualizadas = prevOts.map(ot => ({
-            ...ot,
-            tareas: ot.tareas?.map(t =>
-              String(t.operarioId) === String(id)
-                ? { ...t, operarioNombre: res.data.nombre, puesto: res.data.puesto }
-                : t
-            )
-          }));
-          return otsActualizadas; // O la función que uses para calcular tiempos
-        });
-
+        // ... resto de tu lógica de OTs ...
         return { success: true };
       }
     } catch (error) {
@@ -75,8 +65,6 @@ function App() {
       return { success: false };
     }
   };
-
-  // ✅ FUNCIÓN CORREGIDA Y LIMPIA
   const crearSolicitudGlobal = async (datosForm, archivo) => {
     try {
       const formData = new FormData();
@@ -117,24 +105,19 @@ function App() {
       return false;
     }
   };
-  // App.jsx
   const crearRecurso = async (nuevoRecurso) => {
     try {
-      // 1. Mapeamos los nombres para que coincidan con el modelo del Backend
       const datosParaEnviar = {
         ...nuevoRecurso,
-        puesto: nuevoRecurso.especialidad, // Enviamos 'especialidad' como 'puesto'
-        // La fechaInicioCiclo se envía tal cual, pero el backend debe tenerla en su esquema
+        // 🛡️ Aseguramos que tome el valor correcto
+        puesto: nuevoRecurso.puesto || nuevoRecurso.especialidad
       };
 
-      // 2. Limpieza de calendarioId (tu lógica actual)
       if (!datosParaEnviar.calendarioId || datosParaEnviar.calendarioId.trim() === "") {
         delete datosParaEnviar.calendarioId;
       }
 
-      // 3. Enviamos los datos mapeados
       const respuesta = await axios.post(`${API}/recursos`, datosParaEnviar);
-
       setRecursos(prev => [...prev, respuesta.data]);
       return true;
     } catch (error) {
@@ -143,7 +126,6 @@ function App() {
       return false;
     }
   };
-
   const actualizarAjusteRecurso = async (recursoId, dia, nuevasHoras) => {
     try {
       // 1. Usamos _id en lugar de id
@@ -170,73 +152,65 @@ function App() {
       console.error("❌ Error al actualizar recurso:", error);
     }
   };
-
-  // 2. EFECTO PARA ACTUALIZACIÓN AUTOMÁTICA (Separado)
-  // 2. EFECTO PARA ACTUALIZACIÓN AUTOMÁTICA (Sincronización con MongoDB Atlas)
   useEffect(() => {
-    cargarDatos(); // Carga inicial al abrir la app
+    cargarDatos(); // Carga inicial inmediata
 
-    // Dentro del useEffect de App.jsx
     const interval = setInterval(async () => {
       try {
-        const respuesta = await fetch(`${API}/data`);
-        const resultado = await respuesta.json();
+        // Usamos axios para mantener la consistencia
+        const { data } = await axios.get(`${API}/data`);
 
-        const nuevasOts = resultado.ots || [];
-        const nuevasSolicitudes = resultado.solicitudes || [];
-        const nuevosRecursos = resultado.recursos || [];
-        const nuevosCalendarios = resultado.calendarios || [];
+        // Sincronización inteligente: solo actualiza si hay cambios reales
+        // Esto evita que React vuelva a dibujar la pantalla cada 30 segundos si nada cambió
+        const syncState = (prev, next, setter) => {
+          if (JSON.stringify(prev) !== JSON.stringify(next)) {
+            setter(next || []);
+          }
+        };
 
-        // Sincronizar OTs
-        setOts(prev => JSON.stringify(prev) !== JSON.stringify(nuevasOts) ? nuevasOts : prev);
+        syncState(ots, data.ots, setOts);
+        syncState(solicitudes, data.solicitudes, setSolicitudes);
+        syncState(recursos, data.recursos, setRecursos);
+        syncState(calendarios, data.calendarios, setCalendarios);
 
-        // Sincronizar Solicitudes
-        setSolicitudes(prev => JSON.stringify(prev) !== JSON.stringify(nuevasSolicitudes) ? nuevasSolicitudes : prev);
-
-        // ✅ CORRECCIÓN: Sincronizar Recursos (Vital para la Gantt)
-        setRecursos(prev => JSON.stringify(prev) !== JSON.stringify(nuevosRecursos) ? nuevosRecursos : prev);
-
-        // ✅ CORRECCIÓN: Sincronizar Calendarios (Vital para el Modal Maestro)
-        setCalendarios(prev => JSON.stringify(prev) !== JSON.stringify(nuevosCalendarios) ? nuevosCalendarios : prev);
+        // ✅ Nuevos módulos sincronizados
+        syncState(componentes, data.equipos, setComponentes);
+        syncState(suministros, data.suministros, setSuministros);
 
       } catch (error) {
         console.error("❌ Error en refresco automático:", error);
       }
-    }, 30000);
+    }, 30000); // 30 segundos es un buen equilibrio
+
     return () => clearInterval(interval);
-  }, []);
-
-  // --- FUNCIONES CENTRALES (CRUD) ---
-  // App.jsx - Línea 166
+  }, [ots, solicitudes, recursos, calendarios, componentes, suministros]); // Dependencias para la comparación
   const eliminarOT = async (id) => {
-    // 1. Si el ID es nulo o no existe, cortamos la ejecución de inmediato
-    if (!id || id === 'null' || id === 'undefined') {
-      console.error("❌ Error: Se intentó eliminar un registro sin ID válido.");
-      return;
-    }
+    if (!id || id === 'null') return;
 
-    if (window.confirm("¿Estás seguro de eliminar esta Orden de Trabajo?")) {
+    if (window.confirm("¿Deseas eliminar esta OT? (La solicitud volverá a estar pendiente)")) {
       try {
-        await axios.delete(`${API}/ots/${id}`);
-        await cargarDatos(); // Refrescamos la lista de Atlas
-        alert("✅ Eliminado correctamente");
+
+        // 1. Solo una petición: El backend hace el resto del trabajo sucio
+        const res = await axios.delete(`${API}/ots/${id}`);
+
+
+        // 2. Refrescamos la UI con los nuevos estados
+        await cargarDatos();
+
+        alert("✅ OT eliminada y solicitud liberada automáticamente.");
+
       } catch (error) {
-        console.error("Error al eliminar:", error);
-        alert("No se pudo eliminar el registro en el servidor.");
+        console.error("❌ ERROR AL ELIMINAR:", error.response?.data || error.message);
+        alert("No se pudo completar la operación.");
       }
     }
   };
-
   const estiloDinamico = ({ isActive }) => ({
     ...styles.link,
     color: isActive ? '#3498db' : 'white',
     borderBottom: isActive ? '2px solid #3498db' : 'none',
     paddingBottom: '5px'
   });
-
-  // App.jsx
-  // App.jsx
-
   const guardarCalendarioGlobal = async (datos, id) => {
     // URL apuntando explícitamente al BACKEND (Puerto 5000)
     const API_URL = `${API}/calendarios`;
@@ -255,26 +229,48 @@ function App() {
       return false;
     }
   };
-  // App.jsx
   const actualizarOtGlobal = async (id, dataCompleta) => {
     try {
+      // 1. Extraemos el _id para que no choque con MongoDB
+      const { _id, ...datosParaEnviar } = dataCompleta;
+
+      // 2. ASEGURAMOS que el solicitudId viaje en el cuerpo
+      // Si dataCompleta no lo trae, intentamos usar el 'id' que recibe la función
+      if (!datosParaEnviar.solicitudId) {
+        datosParaEnviar.solicitudId = id;
+      }
+
       const respuesta = await fetch(`${API}/ots/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(dataCompleta)
+        body: JSON.stringify(datosParaEnviar)
       });
+
       if (respuesta.ok) {
-        await cargarDatos(); // Refresca todo el sistema
-        return true;  // <--- ESTO activa el alert("Planificación guardada...")
+        const resultado = await respuesta.json();
+        await cargarDatos(); // Refresca las otras pantallas de fondo
+
+        // IMPORTANTE: Devolvemos el objeto para que la pantalla lo use YA
+        return { exito: true, otActualizada: resultado.ot || resultado };
       }
-      return false;
+
+      const errorData = await respuesta.json();
+      console.error("Error del servidor:", errorData);
+      return { exito: false };
     } catch (error) {
-      console.error(error);
-      return false;
+      console.error("Error de red:", error);
+      return { exito: false };
     }
   };
-
-  // En App.js
+  const liberarSolicitudManual = async (solicitudId) => {
+    try {
+      await axios.put(`${API}/solicitudes/${solicitudId}`, { estado: 'Pendiente' });
+      await cargarDatos();
+      alert("✅ Estado reseteado a Pendiente");
+    } catch (error) {
+      console.error("Error al liberar:", error);
+    }
+  };
   const editarOtGlobal = async (id, otActualizada) => {
     try {
       const respuesta = await fetch(`${API}/ots/${id}`, {
@@ -302,7 +298,6 @@ function App() {
       return total + (minutos / 60);
     }, 0);
   };
-
   const obtenerHorasParaDia = (recurso, diaCalendario) => {
     // 1. PRIORIDAD ABSOLUTA: Ajustes manuales
     const fechaISO = new Date(diaCalendario.fechaCompleta).toISOString().split('T')[0];
@@ -350,7 +345,6 @@ function App() {
       return (configDia && configDia.activo) ? calcularHorasDia(configDia.bloques) : 0;
     }
   };
-
   const eliminarRecurso = async (id) => {
     if (!window.confirm("¿Estás seguro de eliminar este recurso?")) return;
 
@@ -377,8 +371,6 @@ function App() {
       alert("No se pudo eliminar el recurso");
     }
   };
-
-
   const eliminarCalendarioMaestro = async (id) => {
     if (!window.confirm("¿Estás seguro de eliminar este turno? Los operarios asignados quedarán 'Sin Turno'.")) return;
 
@@ -402,8 +394,6 @@ function App() {
       alert("No se pudo eliminar el calendario");
     }
   };
-
-  // En App.js
   const asignarCalendarioGlobal = async (recursoId, calendarioId) => {
     try {
       const valorParaEnviar = calendarioId || null;
@@ -433,8 +423,6 @@ function App() {
       console.error("❌ Error:", error);
     }
   };
-
-  // En App.js
   const guardarCambioManualGlobal = async (recursoId, dia, nuevasHoras) => {
     try {
       const recursoActual = recursos.find(r => r._id === recursoId);
@@ -465,7 +453,125 @@ function App() {
     }
     return false;
   };
+  const crearEquipo = async (nuevoEquipo) => {
+    try {
+      const datosNormalizados = {
+        ...nuevoEquipo,
+        // 🚩 Aseguramos que la primera letra sea mayúscula para cumplir con el enum
+        tipo: nuevoEquipo.tipo
+          ? nuevoEquipo.tipo.charAt(0).toUpperCase() + nuevoEquipo.tipo.slice(1).toLowerCase()
+          : 'Herramienta',
+        precio: parseFloat(nuevoEquipo.precio) || 0,
+        codigo: nuevoEquipo.codigo || `EQ-${Date.now()}` // Genera un código si no hay uno
+      };
 
+      const res = await axios.post(`${API}/equipos`, datosNormalizados);
+      if (res.status === 201 || res.status === 200) {
+        setComponentes(prev => [...prev, res.data]);
+        return true;
+      }
+    } catch (error) {
+      console.error("❌ Error de Validación:", error.response?.data);
+      return false;
+    }
+  };
+  const eliminarEquipo = async (id) => {
+    if (!window.confirm("¿Eliminar este equipo?")) return;
+    try {
+      await axios.delete(`${API}/equipos/${id}`);
+      setComponentes(prev => prev.filter(e => e._id !== id));
+    } catch (error) {
+      console.error("❌ Error al eliminar equipo:", error);
+    }
+  };
+  const actualizarEquipo = async (id, datosActualizados) => {
+    console.log("📦 Datos que se enviarán al servidor:", datosActualizados);
+    try {
+      const res = await axios.put(`${API}/equipos/${id}`, datosActualizados);
+      if (res.status === 200) {
+        // Actualizamos el estado local de componentes (equipos)
+        setComponentes(prev => prev.map(e => (e._id === id ? res.data : e)));
+        return true;
+      }
+    } catch (error) {
+      console.error("❌ Error al actualizar equipo:", error.response?.data);
+      return false;
+    }
+  };
+  const crearSuministro = async (nuevoSuministro) => {
+    try {
+      const res = await axios.post(`${API}/suministros`, nuevoSuministro);
+      if (res.status === 201 || res.status === 200) {
+        setLogistica(prev => [...prev, res.data]);
+        return true;
+      }
+    } catch (error) {
+      console.error("❌ Error al crear suministro:", error.response?.data);
+      return false;
+    }
+  };
+  const eliminarSuministro = async (id) => {
+    if (!window.confirm("¿Eliminar este registro de logística?")) return;
+    try {
+      await axios.delete(`${API}/suministros/${id}`);
+      setLogistica(prev => prev.filter(s => s._id !== id));
+    } catch (error) {
+      console.error("❌ Error al eliminar suministro:", error);
+    }
+  };
+  const actualizarSuministro = async (id, datosActualizados) => {
+    try {
+      const res = await axios.put(`${API}/suministros/${id}`, datosActualizados);
+      if (res.status === 200) {
+        setLogistica(prev => prev.map(item =>
+          (item._id || item.id) === id ? res.data : item
+        ));
+        return true;
+      }
+    } catch (error) {
+      console.error("❌ Error al actualizar suministro:", error);
+      return false;
+    }
+  };
+  const crearPuesto = async (nombre, costoHora) => {
+    try {
+      const response = await fetch(`${API}/puestos`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          nombre: String(nombre).trim(),
+          costoHora: parseFloat(costoHora),
+          categoria: 'Técnico' // Valor por defecto para cumplir con el modelo
+        })
+      });
+
+      const resultado = await response.json();
+
+      if (response.ok) {
+        setPuestosDB([...puestosDB, resultado]);
+        // Limpiar inputs
+        document.getElementById('nuevo-puesto-nombre').value = '';
+        document.getElementById('nuevo-puesto-costo').value = '';
+      } else {
+        // 🚩 Esto te dirá en la consola si el error es por "Duplicado" o "Validación"
+        console.error("Respuesta de error del servidor:", resultado);
+        alert(`Error: ${resultado.mensaje || 'No se pudo crear el puesto'}`);
+      }
+    } catch (error) {
+      console.error("Error de red/conexión:", error);
+    }
+  };
+  const eliminarPuesto = async (id) => {
+    if (!confirm("¿Seguro que deseas eliminar este puesto?")) return;
+    try {
+      const response = await fetch(`${API_URL}/puestos/${id}`, { method: 'DELETE' }); // 🚩
+      if (response.ok) {
+        setPuestosDB(puestosDB.filter(p => p._id !== id));
+      }
+    } catch (error) {
+      console.error("Error al eliminar puesto:", error);
+    }
+  };
   return (
     <Router>
       <div style={{ width: '100vw', minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
@@ -479,11 +585,34 @@ function App() {
 
         <main style={{ flex: 1, width: '100%', backgroundColor: '#f0f2f5' }}>
           <Routes>
-            <Route path="/" element={<IngresoScreen solicitudes={solicitudes} crearSolicitudGlobal={crearSolicitudGlobal} setSolicitudes={setSolicitudes} cargarDatos={cargarDatos} API={API} />} />
+            <Route path="/" element={<IngresoScreen solicitudes={solicitudes} liberarSolicitudManual={liberarSolicitudManual} crearSolicitudGlobal={crearSolicitudGlobal} setSolicitudes={setSolicitudes} cargarDatos={cargarDatos} API={API} ots={ots} />} />
             <Route path="/dashboard" element={<DashboardScreen solicitudes={solicitudes} ots={ots} eliminarOT={eliminarOT} />} />
-            <Route path="/tratamiento" element={<TratamientoScreen actualizarOtGlobal={actualizarOtGlobal} editarOtGlobal={editarOtGlobal} cargarDatos={cargarDatos} API={API} recursos={recursos} />} />
+            <Route path="/tratamiento" element={<TratamientoScreen recurso={recursos} componentes={componentes} actualizarOtGlobal={actualizarOtGlobal} editarOtGlobal={editarOtGlobal} cargarDatos={cargarDatos} API={API} recursos={recursos} suministros={suministros} />} />
             <Route path="/gantt" element={<GanttScreen ots={ots} recursos={recursos} calendarios={calendarios} obtenerHorasParaDia={obtenerHorasParaDia} />} />
-            <Route path="/recursos" element={<RecursosScreen eliminarCalendarioMaestro={eliminarCalendarioMaestro} guardarCambioManualGlobal={guardarCambioManualGlobal} asignarCalendario={asignarCalendarioGlobal} guardarCalendarioGlobal={guardarCalendarioGlobal} crearRecurso={crearRecurso} recursos={recursos} calendarios={calendarios} setRecursos={setRecursos} actualizarAjusteRecurso={actualizarAjusteRecurso} actualizarRecurso={actualizarRecurso} obtenerHorasParaDia={obtenerHorasParaDia} eliminarRecurso={eliminarRecurso} ot={ots} />} />
+            <Route path="/recursos" element={
+              <RecursosScreen
+                // Props existentes
+                recursos={recursos}
+                calendarios={calendarios}
+                ots={ots}
+                crearRecurso={crearRecurso}
+                eliminarRecurso={eliminarRecurso}
+                actualizarRecurso={actualizarRecurso}
+                componentes={componentes}
+                suministros={suministros}
+                crearEquipo={crearEquipo}
+                eliminarEquipo={eliminarEquipo}
+                crearSuministro={crearSuministro}
+                eliminarSuministro={eliminarSuministro}
+                actualizarSuministro={actualizarSuministro}
+                obtenerHorasParaDia={obtenerHorasParaDia}
+                puestosDB={puestosDB}
+                crearPuesto={crearPuesto}
+                eliminarPuesto={eliminarPuesto}
+                actualizarEquipo={actualizarEquipo}
+
+              />
+            } />
           </Routes>
         </main>
       </div>

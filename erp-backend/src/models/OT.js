@@ -4,6 +4,7 @@ const OTSchema = new mongoose.Schema({
     // Identificadores básicos
     numeroOT: { type: String, unique: true },
     solicitante: { type: String, required: true },
+    solicitudId: { type: mongoose.Schema.Types.ObjectId, ref: 'Solicitud' },
     descripcion: { type: String, required: true },
 
     // Estado del flujo
@@ -39,7 +40,10 @@ const OTSchema = new mongoose.Schema({
     }],
 
     // 3. Logística y otros gastos
+    // En tu archivo de modelo:
     logistica: [{
+        unidad: String,
+        patente: String,
         descripcion: String,
         cantidad: Number,
         precio: Number

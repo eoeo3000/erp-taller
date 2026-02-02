@@ -1,44 +1,27 @@
-const OT = require('../models/OT'); // Asegúrate de crear este modelo
+const OT = require('../models/OT');
 const Recurso = require('../models/Recurso');
-const Solicitud = require('../models/Solicitud');
-// const Calendario = require('../models/Calendario'); 
+// Eliminamos la carga global de Solicitud aquí para evitar bloqueos por referencia circular
+// y la cargaremos dentro de las funciones que la necesiten.
 
-// 1. Obtener toda la data (Sincronización global)
-// src/controllers/otController.js
-
+// 1. Obtener toda la data
 exports.getAllData = async (req, res) => {
     try {
-        const [todasLasOts, recursos, calendarios] = await Promise.all([
+        const Solicitud = require('../models/Solicitud');
+        const [todasLasOts, todasLasSolicitudes, recursos] = await Promise.all([
             OT.find().sort({ createdAt: -1 }),
-            Recurso.find(),
-            Calendario.find().catch(() => [])
+            Solicitud.find().sort({ fechaCreacion: -1 }),
+            Recurso.find()
         ]);
-
-        res.json({
-            // Las OTs son las que ya tienen proceso (Generada, Tratada, etc.)
-            ots: todasLasOts.filter(o => o.estado !== 'Pendiente'),
-
-            // CAMBIO AQUÍ: Las solicitudes ahora incluyen las 'Pendientes' 
-            // Y las 'Generadas' para que sigan apareciendo en tu tabla de ingreso.
-            solicitudes: todasLasOts.filter(o => o.estado === 'Pendiente' || o.estado === 'Generada'),
-
-            recursos: recursos,
-            calendarios: calendarios
-        });
+        res.json({ ots: todasLasOts, solicitudes: todasLasSolicitudes, recursos });
     } catch (error) {
-        console.error("Error global:", error);
-        res.status(500).json({ error: "Error al obtener datos" });
+        res.status(500).json({ error: "Error al sincronizar" });
     }
 };
 
 // 2. Crear Solicitud Manual
 exports.crearSolicitudManual = async (req, res) => {
     try {
-        const nueva = new OT({
-            ...req.body,
-            estado: 'Pendiente',
-            origen: 'Manual'
-        });
+        const nueva = new OT({ ...req.body, estado: 'Pendiente', origen: 'Manual' });
         await nueva.save();
         res.status(201).json(nueva);
     } catch (error) {
@@ -46,121 +29,106 @@ exports.crearSolicitudManual = async (req, res) => {
     }
 };
 
-// 3. Convertir a OT (Upsert: Actualizar o Insertar)
+// 3. Convertir a OT
 exports.convertirOT = async (req, res) => {
     try {
         const data = req.body;
-        // En Mongo usamos el _id si viene, o el id que tú manejes
         const idBusqueda = data._id || data.solicitudId;
-
+        if (!data.numeroOT) {
+            const ultimaOT = await OT.findOne({ numeroOT: { $regex: /^OT-/ } }).sort({ numeroOT: -1 });
+            let siguienteNum = 1;
+            if (ultimaOT?.numeroOT) {
+                const numeroLimpio = parseInt(ultimaOT.numeroOT.replace(/\D/g, ''));
+                if (!isNaN(numeroLimpio)) siguienteNum = numeroLimpio + 1;
+            }
+            data.numeroOT = `OT-${siguienteNum.toString().padStart(3, '0')}`;
+        }
+        const { _id, ...updateData } = data;
         const nuevaOT = await OT.findByIdAndUpdate(
             idBusqueda,
-            {
-                ...data,
-                estado: 'Generada',
-                ultimaEdicion: new Date().toISOString()
-            },
-            { new: true, upsert: true } // Si no existe, la crea
+            { ...updateData, numeroOT: data.numeroOT, estado: 'Generada', ultimaEdicion: new Date().toISOString() },
+            { new: true, upsert: true, runValidators: true }
         );
-
         res.status(201).json({ success: true, ot: nuevaOT });
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
 };
 
-// 4. Eliminar OT
+// 4. Eliminar OT y Liberar Solicitud
 exports.eliminarOT = async (req, res) => {
     try {
         const { id } = req.params;
-        const resultado = await OT.findByIdAndDelete(id);
+        const otAEliminar = await OT.findById(id);
+        if (!otAEliminar) return res.status(404).json({ message: "OT no encontrada" });
 
-        if (!resultado) {
-            return res.status(404).json({ message: "OT no encontrada" });
-        }
+        const idSolicitudVinculada = otAEliminar.solicitudId || otAEliminar._id;
+        await OT.findByIdAndDelete(id);
 
-        res.status(200).json({ message: "Eliminado con éxito" });
+        const Solicitud = require('../models/Solicitud');
+        await Solicitud.findByIdAndUpdate(idSolicitudVinculada, { estado: 'Pendiente', numeroOT: null });
+
+        res.status(200).json({ message: "OT eliminada y solicitud liberada" });
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
 };
 
-// 5. Obtener por ID
+// 5. Obtener OT por ID de Solicitud (ESTA ES LA QUE EL ROUTER NO ENCONTRABA)
+exports.obtenerOTPorSolicitud = async (req, res) => {
+    try {
+        const { solicitudId } = req.params;
+        const ot = await OT.findOne({ solicitudId: solicitudId });
+        if (!ot) return res.status(404).json({ message: "No se encontró planificación" });
+        res.json(ot);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+};
+
+// 6. Obtener por ID (Búsqueda directa)
 exports.obtenerOTPorId = async (req, res) => {
     try {
-        const { id } = req.params;
-        // Buscamos por el ID de MongoDB
-        const ot = await OT.findById(id);
-
-        if (!ot) {
-            return res.status(404).json({ message: "No encontrado en Atlas" });
-        }
-
+        const ot = await OT.findById(req.params.id);
+        if (!ot) return res.status(404).json({ message: "No encontrado" });
         res.json(ot);
     } catch (error) {
         res.status(500).json({ error: "Error interno" });
     }
 };
 
-// 6. Webhook Emails
+// 7. Webhook Emails
 exports.webhookEmail = async (req, res) => {
     try {
-        const { remitente, asunto, contenido } = req.body;
         const nuevaSolicitud = new OT({
-            solicitante: remitente,
-            descripcion: `${asunto}: ${contenido}`,
+            solicitante: req.body.remitente,
+            descripcion: `${req.body.asunto}: ${req.body.contenido}`,
             origen: 'Correo',
             estado: 'Pendiente'
         });
         await nuevaSolicitud.save();
-        res.status(201).json({ mensaje: "Solicitud recibida y guardada en Atlas" });
+        res.status(201).json({ mensaje: "Guardada en Atlas" });
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
 };
-// 7. Actualizar OT (Para Tratamiento Técnico, Tareas y Componentes)
-// controllers/otController.js
-// Reemplaza tu función 7 por esta:
-// src/controllers/otController.js
 
-// src/controllers/otController.js
+// 8. Actualizar OT (General)
 exports.actualizarOT = async (req, res) => {
     try {
         const { id } = req.params;
-        const data = req.body;
-
-        // 1. Intentamos actualizar si ya existe como OT
-        let ot = await OT.findByIdAndUpdate(id, data, { new: true });
-
-        // 2. Si no existe en la colección OT, buscamos en Solicitud
+        let ot = await OT.findByIdAndUpdate(id, req.body, { new: true });
         if (!ot) {
             const Solicitud = require('../models/Solicitud');
             const solicitud = await Solicitud.findById(id);
-
             if (solicitud) {
                 const total = await OT.countDocuments();
-                const numeroGenerado = `OT-${2026}-${(total + 1).toString().padStart(4, '0')}`;
-
-                // CREAR LA OT
-                ot = new OT({
-                    ...solicitud.toObject(),
-                    ...data,
-                    _id: solicitud._id,
-                    numeroOT: numeroGenerado,
-                    estado: 'Generada'
-                });
+                const num = `OT-2026-${(total + 1).toString().padStart(4, '0')}`;
+                ot = new OT({ ...solicitud.toObject(), ...req.body, _id: solicitud._id, numeroOT: num, estado: 'Generada' });
                 await ot.save();
-
-                // --- CAMBIO CLAVE AQUÍ ---
-                // En lugar de borrarla, actualizamos su estado en la tabla de Solicitudes
-                await Solicitud.findByIdAndUpdate(id, {
-                    estado: 'Generada',
-                    numeroOT: numeroGenerado
-                });
-
+                await Solicitud.findByIdAndUpdate(id, { estado: 'Generada', numeroOT: num });
             }
         }
-
         if (!ot) return res.status(404).json({ error: "No encontrado" });
         res.json(ot);
     } catch (error) {

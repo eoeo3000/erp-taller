@@ -1,36 +1,54 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import autoTable from 'jspdf-autotable';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 
-const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = [] }) => {
+const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = [], componentes: componentesDB = [], suministros: suministrosDB = [], logistica: logisticaDB = [] }) => {
     const { state: datosRecibidos } = useLocation();
     const navigate = useNavigate();
+    const inicializado = useRef(false);
     const [tabActiva, setTabActiva] = useState('tareas');
-    const [tareas, setTareas] = useState([]); // Inicia vacío
-    const [componentes, setComponentes] = useState([]); // Inicia vacío
+    const [otSeleccionada, setOtSeleccionada] = useState(datosRecibidos || {});
+    const [tareas, setTareas] = useState([]);
+    const [componentes, setComponentes] = useState([]);
     const [cotizacion, setCotizacion] = useState({
-        materiales: [],
-        equipos: [],
-        manoObra: [],
-        lineaMando: [],
-        insumos: [],
-        logistica: { alimentacion: 0, traslado: 0, examenes: 0, banos: 0 }
+        materiales: [], equipos: [], manoObra: [], lineaMando: [],
+        insumos: [], logistica: { alimentacion: 0, traslado: 0, examenes: 0, banos: 0 }
     });
-    // --- FUNCIONES DE LOGICA ---
-    // En TratamientoScreen
-    const manejarGuardadoFinal = () => {
-        const otParaGuardar = {
-            ...otSeleccionada, // Datos originales
-            tareas: tareas     // Tus nuevas tareas creadas con agregarTarea
-        };
+    const manejarGuardadoFinal = async () => {
+        try {
+            const otParaGuardar = {
+                ...otSeleccionada,
+                // --- VÍNCULO AUTOMÁTICO ---
+                // Si ya tiene solicitudId lo mantiene, si no, usa su _id actual
+                solicitudId: otSeleccionada.solicitudId || otSeleccionada._id,
+                // --------------------------
+                tareas: tareas,
+                componentes: componentes,
+                cotizacion: cotizacion,
+                estado: 'Planificado'
+            };
 
-        actualizarOtGlobal(otSeleccionada._id, otParaGuardar);
+            const resultado = await actualizarOtGlobal(otSeleccionada._id, otParaGuardar);
+
+            if (resultado && resultado.exito) {
+                // 1. Extraemos la OT numerada que viene del Backend
+                const otNumerada = resultado.otActualizada;
+
+                // 2. Actualizamos el estado de la OT (Esto pone el número en el <h2>)
+                setOtSeleccionada(otNumerada);
+
+                // 3. Opcional: Si el backend hizo algún ajuste en las tareas (como poner IDs), las actualizamos
+                if (otNumerada.tareas) setTareas(otNumerada.tareas);
+
+                alert(`✅ Guardado con éxito. OT #${otNumerada.numeroOT}`);
+            }
+        } catch (err) {
+            console.error("Error en el cliente:", err);
+        }
     };
-
-    // Dentro de TratamientoScreen.js
     const handleGuardarCambios = async () => {
         // 1. Usamos 'datosRecibidos', que es como llamaste al state de useLocation()
         const otEditada = {
@@ -51,7 +69,6 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
             alert("Error al guardar en el servidor");
         }
     };
-
     const actualizarTarea = (index, campo, valor) => {
         setTareas(tareas.map((t, i) =>
             i === index
@@ -62,64 +79,44 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                 : t
         ));
     };
-
-    // Función para añadir componente con la nueva estructura
     const agregarComponente = () => {
         setComponentes([
             ...componentes,
             { id: Date.now(), codigo: '', descripcion: '', cantidad: 1, precio: 0 }
         ]);
     };
-
-    // Función para actualizar campos de componentes
     const actualizarComponente = (index, campo, valor) => {
-        // Usamos map para crear un array totalmente nuevo
-        const nuevosComponentes = componentes.map((c, i) => {
-            if (i === index) {
-                // Retornamos una COPIA del objeto con el nuevo valor
-                return {
-                    ...c,
-                    [campo]: (campo === 'cantidad' || campo === 'precio')
-                        ? parseFloat(valor || 0)
-                        : valor,
-
-                };
-            }
-            return c; // El resto queda igual
+        // 🚩 IMPORTANTE: Usamos 'prev' para que las actualizaciones no se pisen
+        setComponentes(prev => {
+            return prev.map((c, i) => {
+                if (i === index) {
+                    return {
+                        ...c,
+                        [campo]: (campo === 'cantidad' || campo === 'precio')
+                            ? parseFloat(valor || 0)
+                            : valor,
+                    };
+                }
+                return c;
+            });
         });
-
-        setComponentes(nuevosComponentes);
     };
-
-
-    // Funciones para Materiales/Equipos Cotizados
     const agregarItemCotizacion = (tipo) => {
         const nuevoItem = { id: Date.now(), descripcion: '', cantidad: 1, unitario: 0 };
         setCotizacion({ ...cotizacion, [tipo]: [...cotizacion[tipo], nuevoItem] });
     };
-
     const actualizarItemCotizacion = (tipo, id, campo, valor) => {
         const listaActualizada = cotizacion[tipo].map(item =>
             item._id === id ? { ...item, [campo]: valor } : item
         );
         setCotizacion({ ...cotizacion, [tipo]: listaActualizada });
     };
-
-    // --- CÁLCULOS DINÁMICOS ---
     const calcularSubtotal = (lista) => lista.reduce((sum, i) => sum + (Number(i.cantidad || 0) * Number(i.unitario || 0)), 0);
-
     const totalEqui = calcularSubtotal(cotizacion.equipos);
     const totalInsumos = calcularSubtotal(cotizacion.insumos);
-    // Totales agrupados de la pestaña Componentes
     const totalEquipos = componentes.reduce((sum, c) => sum + (c.tipo === 'Equipo' ? Number(c.cantidad * c.precio) : 0), 0);
     const totalHerramientas = componentes.reduce((sum, c) => sum + (c.tipo === 'Herramienta' ? Number(c.cantidad * c.precio) : 0), 0);
     const totalInsumosMateriales = componentes.reduce((sum, c) => sum + (c.tipo === 'Insumo' || c.tipo === 'Material' ? Number(c.cantidad * c.precio) : 0), 0);
-    // Mano de obra (puedes sumarlo de la tabla de HH en cotización o de las tareas)
-
-    // El Gran Total actualizado
-    // ... (resto del código igual)
-
-    // 1. Función ÚNICA para preparar los datos (evitamos repetir código)
     const prepararPayload = () => {
         // Priorizamos el _id de MongoDB Atlas
         const idReal = datosRecibidos?._id || datosRecibidos?._id;
@@ -150,43 +147,52 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
             fechaGeneracion: new Date().toISOString()
         };
     };
-
+    // 1. Helper para limpiar IDs temporales (Ponlo fuera para evitar el ReferenceError)
+    const limpiarIds = (lista) => (lista || []).map(item => {
+        const { _id, id, ...resto } = item;
+        // Solo conservamos _id si es un ObjectId válido de Mongo (24 caracteres)
+        return (String(_id).length === 24) ? { _id, ...resto } : resto;
+    });
 
     const guardarPlanificacion = async () => {
-        // 1. Limpiamos los objetos para que MongoDB no se confunda con IDs inválidos
-        const logisticaLimpia = logistica.map(item => {
-            const { _id, id, ...resto } = item;
-            // Si el _id parece un ObjectId de Mongo (24 chars), lo dejamos. 
-            // Si es el temporal de React, lo quitamos.
-            return (String(_id).length === 24) ? { _id, ...resto } : resto;
-        });
-
-        const componentesLimpios = componentes.map(item => {
+        // Definimos el helper dentro para que no de ReferenceError
+        const limpiarIds = (lista) => (lista || []).map(item => {
             const { _id, id, ...resto } = item;
             return (String(_id).length === 24) ? { _id, ...resto } : resto;
         });
 
-        // 2. Construimos el objeto final
         const dataCompleta = {
             ...datosRecibidos,
+            solicitudId: datosRecibidos.solicitudId || datosRecibidos._id,
+            numeroOT: otSeleccionada.numeroOT || datosRecibidos.numeroOT,
             tareas: tareas,
-            componentes: componentesLimpios,
-            logistica: logisticaLimpia,
+            componentes: limpiarIds(componentes),
+
+            // 🚩 TRUCO AQUÍ: Mapeamos para que coincida con el SCHEMA
+            logistica: (logistica || []).map(l => ({
+                _id: (String(l._id).length === 24) ? l._id : undefined,
+                unidad: l.unidad || '',      // Coincide con tu nuevo modelo
+                patente: l.patente || '',    // Coincide con tu nuevo modelo
+                descripcion: l.descripcion || '',
+                cantidad: Number(l.cantidad) || 0,
+                precio: Number(l.precio) || 0
+            })),
+
             granTotal: granTotal,
             estado: 'Generada'
         };
 
-        console.log("Enviando datos limpios al servidor...", dataCompleta);
-
-        // 3. Enviamos a App.js
-        const exito = await actualizarOtGlobal(datosRecibidos._id, dataCompleta);
-
-        if (exito) {
-            alert("Planificación guardada con éxito.");
+        try {
+            const respuesta = await actualizarOtGlobal(datosRecibidos._id, dataCompleta);
+            if (respuesta && respuesta.exito) {
+                alert("✅ Planificación guardada.");
+                // Forzamos recarga de datos para ver el cambio
+                if (cargarDatos) await cargarDatos();
+            }
+        } catch (error) {
+            console.error(error);
         }
     };
-
-    // 3. Función para FINALIZAR TODO (Guarda + PDF + Navegar)
     const finalizarYCotizar = async () => {
         // 1. Validación de seguridad
         if (granTotal === 0) {
@@ -220,7 +226,6 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
             alert(`No se pudo procesar: ${mensajeError}`);
         }
     };
-
     const agregarTarea = () => {
         const nuevaTarea = {
             id: Date.now(), // ID temporal para el renderizado
@@ -239,39 +244,42 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
         const cargarDetalleOT = async () => {
             if (!datosRecibidos?._id) return;
 
-            // CASO A: Ya es una OT generada (Buscamos en el servidor)
-            if (datosRecibidos.estado !== 'Pendiente') {
-                try {
-                    const res = await axios.get(`${API}/ots/${datosRecibidos._id}`);
+            // Si es Pendiente, solo inicializamos una tarea vacía
+            if (datosRecibidos.estado === 'Pendiente' && !inicializado.current) {
+                setTareas([{ id: Date.now(), descripcion: '', puesto: '', duracion: 0, fecha: '', hora: '', valorHora: 0 }]);
+                inicializado.current = true;
+                return;
+            }
 
-                    if (res.data) {
-                        // Seteamos solo si el servidor tiene datos, si no, inicializamos vacío
-                        setTareas(res.data.tareas?.length > 0 ? res.data.tareas : [{ id: 1, descripcion: '', puesto: '', duracion: '', fecha: '', hora: '' }]);
-                        setComponentes(res.data.componentes || []);
-                        setLogistica(res.data.logistica || []);
-                        if (res.data.cotizacionDetalle) setCotizacion(res.data.cotizacionDetalle);
-                    }
-                } catch (error) {
-                    console.error("❌ Error al recuperar de Atlas:", error);
+            // Si ya está Planificada/Generada, buscamos en la DB
+            try {
+                const res = await axios.get(`${API}/ots/solicitud/${datosRecibidos._id}`);
+
+                if (res.data) {
+
+                    // CRÍTICO: Actualizar otSeleccionada para que el <h2> tenga el numeroOT
+                    setOtSeleccionada(res.data);
+
+                    setTareas(res.data.tareas || []);
+                    setComponentes(res.data.componentes || []);
+                    setLogistica(res.data.logistica || []);
+
+                    // Si tienes cotizacion guardada, cárgala también
+                    if (res.data.cotizacion) setCotizacion(res.data.cotizacion);
                 }
+            } catch (error) {
+                console.error("ℹ️ No se encontró OT previa o error de red.");
             }
-            // CASO B: Es una solicitud nueva (Iniciamos formulario limpio)
-            else {
-                setTareas([{ id: 1, descripcion: '', puesto: '', duracion: '', fecha: '', hora: '' }]);
-                setComponentes([]);
-                setLogistica([{ id: Date.now(), descripcion: '', cantidad: 1, precio: 0 }]);
-            }
+            inicializado.current = true;
         };
 
         cargarDetalleOT();
-    }, [datosRecibidos?._id, datosRecibidos?.estado]); // Se dispara al cargar o al cambiar el estado (después de guardar)
+    }, [datosRecibidos?._id, API]);
     // ... (resto del código igual)
     // Estado independiente para Logística
     const [logistica, setLogistica] = useState([
         { id: Date.now(), descripcion: '', cantidad: 1, precio: 0 }
     ]);
-
-    // Función para añadir ítem de logística
     const agregarLogistica = () => {
         setLogistica([...logistica,
         {
@@ -281,29 +289,22 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
             precio: 0
         }]);
     };
-
-    // Función para actualizar ítem de logística
     const actualizarLogistica = (index, campo, valor) => {
-        setLogistica(logistica.map((item, i) =>
-            i === index
-                ? { ...item, [campo]: (campo === 'cantidad' || campo === 'precio') ? Number(valor) : valor }
-                : item
-        ));
+        setLogistica(prev => {
+            const nueva = [...prev];
+            nueva[index] = { ...nueva[index], [campo]: valor };
+            return nueva;
+        });
     };
-
     const generarPDF = async () => {
         const doc = new jsPDF();
         const pageWidth = doc.internal.pageSize.getWidth();
-
         // 1. Encabezado
         doc.setFontSize(18);
         doc.setTextColor(44, 62, 80);
         doc.text("COTIZACIÓN TÉCNICA Y COMERCIAL", pageWidth / 2, 20, { align: 'center' });
-
         doc.setFontSize(10);
         doc.text(`OT N°: ${datosRecibidos?._id || 'N/A'}`, 14, 30);
-
-        // 2. Tabla de Materiales
         autoTable(doc, {
             startY: 40,
             head: [['1. MATERIALES / REPUESTOS', 'CANT.', 'SUBTOTAL']],
@@ -314,8 +315,6 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
             ]),
             headStyles: { fillColor: [44, 62, 80] }
         });
-
-        // 3. Tabla de Mano de Obra
         autoTable(doc, {
             startY: doc.lastAutoTable.finalY + 10,
             head: [['2. PLAN DE TRABAJO', 'PUESTO', 'HRS', 'SUBTOTAL']],
@@ -327,8 +326,6 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
             ]),
             headStyles: { fillColor: [52, 73, 94] }
         });
-
-        // --- 4. SECCIÓN CARTA GANTT (CAPTURA VISUAL) ---
         const finalYPlan = doc.lastAutoTable.finalY + 10;
         doc.setFontSize(12);
         doc.text("3. CRONOGRAMA DE EJECUCIÓN (GANTT)", 14, finalYPlan);
@@ -350,8 +347,6 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
         } else {
             var nextY = finalYPlan + 10;
         }
-
-        // 5. Tabla de Logística
         autoTable(doc, {
             startY: nextY,
             head: [['4. LOGÍSTICA Y TRASLADOS', 'SUBTOTAL']],
@@ -361,8 +356,6 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
             ]),
             headStyles: { fillColor: [127, 140, 141] }
         });
-
-        // 6. Resumen de Totales
         const resY = doc.lastAutoTable.finalY + 15;
         doc.setFontSize(11);
         doc.text(`TOTAL NETO: $ ${granTotal.toLocaleString()}`, pageWidth - 15, resY, { align: 'right' });
@@ -432,29 +425,52 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
     const eliminarComponente = (index) => {
         setComponentes(prev => prev.filter((_, i) => i !== index));
     };
-
     const eliminarLogistica = (index) => {
-        const nuevaLog = ot.logistica.filter((_, i) => i !== index);
-        setOt({ ...ot, logistica: nuevaLog });
+        // 1. Usamos la variable 'logistica' directamente (que es tu estado actual)
+        // No 'ot.logistica', para evitar que si 'ot' es nulo, la app falle.
+        const nuevaLog = logistica.filter((_, i) => i !== index);
+
+        // 2. Actualizamos el estado que controla la tabla
+        setLogistica(nuevaLog);
+
+        // 3. (Opcional) Si también necesitas actualizar el objeto 'ot' principal:
+        if (otSeleccionada) {
+            setOtSeleccionada({ ...otSeleccionada, logistica: nuevaLog });
+        }
     };
 
     if (!datosRecibidos) return <div style={{ padding: '50px' }}>⚠️ No hay datos.</div>;
+    useEffect(() => {
+        if (logisticaDB && logisticaDB.length > 0) {
+        }
+    }, [logisticaDB, suministrosDB]);
 
     return (
         <div style={styles.container}>
             <div style={styles.cardFull}>
                 <div style={styles.header}>
-                    <h2>{datosRecibidos.tareas ? '📝 Editando Planificación' : '⚙️ Tratamiento Técnico'} : OT #{datosRecibidos._id}</h2>
-                    <p>Cliente: <strong>{datosRecibidos.solicitante || datosRecibidos.cliente}</strong></p>
+                    <div>
+                        <div className="mb-4 p-3 border-start border-4 border-primary bg-light">
+                            <h2 className="mb-0">
+                                {otSeleccionada?.numeroOT ? (
+                                    <span className="text-primary">Orden de Trabajo: {otSeleccionada.numeroOT}</span>
+                                ) : (
+                                    <span className="text-muted italic">Nueva Planificación</span>
+                                )}
+                            </h2>
+                            <small className="text-secondary">
+                                Referencia Solicitud: {datosRecibidos?.numeroOT || datosRecibidos?._id?.slice(-8)}
+                            </small>
+                        </div>
+                        <p>Cliente: <strong>{otSeleccionada.solicitante || otSeleccionada.cliente}</strong></p>
+                    </div>
                 </div>
-
                 <div style={styles.tabBar}>
                     <button onClick={() => setTabActiva('tareas')} style={tabActiva === 'tareas' ? styles.tabBtnActive : styles.tabBtn}>1. Tareas</button>
                     <button onClick={() => setTabActiva('componentes')} style={tabActiva === 'componentes' ? styles.tabBtnActive : styles.tabBtn}>2. Componentes (Técnicos)</button>
                     <button onClick={() => setTabActiva('Logistica')} style={tabActiva === 'Logistica' ? styles.tabBtnActive : styles.tabBtn}>3. Logística</button>
                     <button onClick={() => setTabActiva('cotizacion')} style={tabActiva === 'cotizacion' ? styles.tabBtnActive : styles.tabBtn}>3. Cotización Comercial</button>
                 </div>
-
                 <div style={styles.content}>
                     {/* VISTA 1: TAREAS */}
                     {tabActiva === 'tareas' && (
@@ -466,8 +482,8 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                                         <th>Puesto</th>
                                         <th>Responsable</th>
                                         <th>Hrs</th>
-                                        <th>Fecha</th>
-                                        <th>Hora</th>
+                                        <th>Fecha Inicio</th>
+                                        <th>Hora Inicio</th>
                                         <th>$/Hora</th>
                                         <th>Subtotal</th>
                                         <th style={{ width: '50px' }}></th>
@@ -600,99 +616,178 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                             <button onClick={agregarTarea} style={styles.btnAdd}>+ Añadir Tarea</button>
                         </div>
                     )}
-
-                    {tabActiva === 'componentes' && ( // O la pestaña que corresponda
+                    {/* VISTA 2: COMPONENTES CON AUTOCOMPLETADO */}
+                    {tabActiva === 'componentes' && (
                         <div>
                             <table style={styles.table}>
                                 <thead>
-                                    <tr style={{ backgroundColor: '#f8f9fa' }}>
-                                        <th style={{ width: '40%' }}>Código</th>
-                                        <th style={{ width: '20%' }}>Descripción</th>
-                                        <th style={{ width: '15%' }}>Cant.</th>
-                                        <th style={{ width: '20%' }}>Precio Unit.</th>
-                                        <th style={{ width: '5%' }}>Total</th>
+                                    <tr style={{ background: '#f8f9fa' }}>
+                                        <th>Código</th>
+                                        <th>Descripción (Equipos/Herramientas)</th>
+                                        <th>Cant.</th>
+                                        <th>Precio</th>
+                                        <th>Subtotal</th>
+                                        <th></th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {(componentes || []).map((c, idx) => (
-                                        <tr key={c.id || c._id || idx} style={{ borderBottom: '1px solid #ddd' }}>
-                                            {/* COLUMNA CÓDIGO */}
-                                            <td style={styles.td}>
+                                    {componentes.map((c, idx) => (
+                                        <tr key={c.id || idx}>
+                                            {/* 1. Código */}
+                                            <td>
                                                 <input
                                                     style={styles.inputTable}
-                                                    placeholder="Ej: MAT-001"
                                                     value={c.codigo || ''}
                                                     onChange={(e) => actualizarComponente(idx, 'codigo', e.target.value)}
                                                 />
                                             </td>
-                                            {/* COLUMNA DESCRIPCIÓN */}
-                                            <td style={styles.td}>
+
+                                            {/* 2. Descripción con Buscador */}
+                                            <td>
                                                 <input
+                                                    list="lista-componentes-recursos"
                                                     style={{ ...styles.inputTable, width: '100%' }}
-                                                    placeholder="Nombre del componente..."
+                                                    placeholder="Escribe para buscar..."
                                                     value={c.descripcion || ''}
-                                                    onChange={(e) => actualizarComponente(idx, 'descripcion', e.target.value)}
+                                                    onChange={(e) => {
+                                                        const val = e.target.value;
+                                                        // 1. Siempre actualizamos lo que se ve en el input para que no se trabe
+                                                        actualizarComponente(idx, 'descripcion', val);
+
+                                                        // 2. Si el valor es muy corto, no buscamos (ahorra recursos)
+                                                        if (val.length < 2) return;
+
+                                                        const listaParaBuscar = componentesDB || [];
+
+                                                        // 3. Buscamos el match
+                                                        const match = listaParaBuscar.find(db => {
+                                                            const nombreLimpio = db.nombre ? db.nombre.trim() : "";
+                                                            const formatoCompleto = db.tipo ? `${nombreLimpio} (${db.tipo})` : nombreLimpio;
+
+                                                            // Comparamos contra el nombre solo O contra el formato con paréntesis
+                                                            return val === nombreLimpio || val === formatoCompleto;
+                                                        });
+
+                                                        // 4. Si hay match, inyectamos los datos con un pequeño respiro para React
+                                                        if (match) {
+                                                            setTimeout(() => {
+                                                                actualizarComponente(idx, 'descripcion', match.nombre);
+                                                                actualizarComponente(idx, 'tipo', match.tipo || 'Equipo');
+                                                                actualizarComponente(idx, 'codigo', match.codigo || 'REF');
+                                                                actualizarComponente(idx, 'precio', match.precio || 0);
+                                                            }, 50); // 50ms bastan para que el datalist suelte el foco
+                                                        }
+                                                    }}
                                                 />
                                             </td>
-                                            {/* COLUMNA CANTIDAD */}
-                                            <td style={{ ...styles.td, textAlign: 'center' }}>
+
+                                            {/* 🚩 3. NUEVA COLUMNA: TIPO (Faltaba en tu código) */}
+                                            <td>
+                                                <input
+                                                    type="text"
+                                                    style={styles.inputTable}
+                                                    placeholder="Tipo"
+                                                    value={c.tipo || ''}
+                                                    onChange={(e) => actualizarComponente(idx, 'tipo', e.target.value)}
+                                                />
+                                            </td>
+
+                                            {/* 4. Cantidad */}
+                                            <td>
                                                 <input
                                                     type="number"
-                                                    style={{ ...styles.inputTable, textAlign: 'center', width: '50px' }}
-                                                    value={c.cantidad || 0}
+                                                    style={styles.inputTable}
+                                                    value={c.cantidad}
                                                     onChange={(e) => actualizarComponente(idx, 'cantidad', e.target.value)}
                                                 />
                                             </td>
-                                            {/* COLUMNA PRECIO */}
-                                            <td style={{ ...styles.td, textAlign: 'right' }}>
+
+                                            {/* 5. Precio */}
+                                            <td>
                                                 <input
                                                     type="number"
-                                                    style={{ ...styles.inputTable, textAlign: 'right', width: '90px' }}
-                                                    value={c.precio || 0}
+                                                    style={styles.inputTable}
+                                                    value={c.precio}
                                                     onChange={(e) => actualizarComponente(idx, 'precio', e.target.value)}
                                                 />
                                             </td>
-                                            {/* COLUMNA TOTAL FILA */}
-                                            <td style={{ ...styles.td, textAlign: 'right', fontWeight: 'bold' }}>
+
+                                            {/* 6. Subtotal */}
+                                            <td style={{ fontWeight: 'bold' }}>
                                                 $ {(Number(c.cantidad || 0) * Number(c.precio || 0)).toLocaleString()}
+                                            </td>
+
+                                            {/* 7. Eliminar */}
+                                            <td>
+                                                <button onClick={() => eliminarComponente(idx)} style={styles.btnEliminar}>×</button>
                                             </td>
                                         </tr>
                                     ))}
                                 </tbody>
                             </table>
-                            <button onClick={agregarComponente} style={{ ...styles.btnPrimario, marginTop: '15px' }}>
-                                + Añadir Componente
-                            </button>
+                            <button onClick={agregarComponente} style={styles.btnPrimario}>+ Añadir Componente</button>
                         </div>
                     )}
-
+                    {/* VISTA 3: LOGÍSTICA */}
                     {tabActiva === 'Logistica' && (
                         <div>
                             <table style={styles.table}>
                                 <thead>
                                     <tr style={{ background: '#f8f9fa' }}>
-                                        <th style={{ width: '60%' }}>Descripción del Servicio Logístico (Fletes, Viáticos, Arriendos)</th>
-                                        <th style={{ width: '10%' }}>Cant.</th>
-                                        <th style={{ width: '15%' }}>Precio Unit.</th>
-                                        <th style={{ width: '15%' }}>Subtotal</th>
+                                        <th>Servicio / Ruta</th>
+                                        <th>Patente</th>
+                                        <th>Cant.</th>
+                                        <th>Precio</th>
+                                        <th>Subtotal</th>
+                                        <th></th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {logistica.map((item, idx) => (
-                                        <tr key={item._id}>
+                                    {(logistica || []).map((l, idx) => (
+                                        <tr key={l._id || idx}>
                                             <td>
                                                 <input
+                                                    list="lista-logistica-recursos"
                                                     style={styles.inputTable}
-                                                    placeholder="Ej: Flete Antofagasta - Santiago"
-                                                    value={item.descripcion}
-                                                    onChange={(e) => actualizarLogistica(idx, 'descripcion', e.target.value)}
+                                                    // Importante: mantenemos el valor que el usuario escribe/selecciona
+                                                    value={l.unidad || ''}
+                                                    placeholder="Buscar unidad..."
+                                                    onChange={(e) => {
+                                                        const val = e.target.value;
+                                                        actualizarLogistica(idx, 'unidad', val);
+
+                                                        // 🚩 CAMBIO CLAVE: Usar suministrosDB en lugar de logisticaDB
+                                                        const listaParaBuscar = suministrosDB || [];
+
+                                                        const match = listaParaBuscar.find(db =>
+                                                            db.unidad === val ||
+                                                            `${db.unidad} - ${db.patente}` === val
+                                                        );
+
+                                                        if (match) {
+                                                            console.log("Suministro encontrado:", match);
+                                                            actualizarLogistica(idx, 'unidad', match.unidad);
+                                                            actualizarLogistica(idx, 'patente', match.patente);
+                                                            // Verifica si en tu DB es 'ruta' o 'descripcion'
+                                                            actualizarLogistica(idx, 'descripcion', match.ruta || match.descripcion || '');
+                                                            // Verifica si en tu DB es 'valor' o 'precio'
+                                                            actualizarLogistica(idx, 'precio', match.valor || match.precio || 0);
+                                                        }
+                                                    }}
                                                 />
                                             </td>
                                             <td>
                                                 <input
+                                                    style={styles.inputTable}
+                                                    value={l.patente || ''}
+                                                    onChange={(e) => actualizarLogistica(idx, 'patente', e.target.value)}
+                                                />
+                                            </td>
+                                            <td style={{ width: '80px' }}>
+                                                <input
                                                     type="number"
                                                     style={styles.inputTable}
-                                                    value={item.cantidad || ''}
+                                                    value={l.cantidad || 1}
                                                     onChange={(e) => actualizarLogistica(idx, 'cantidad', e.target.value)}
                                                 />
                                             </td>
@@ -700,21 +795,44 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                                                 <input
                                                     type="number"
                                                     style={styles.inputTable}
-                                                    value={item.precio || ''}
+                                                    value={l.precio || 0}
                                                     onChange={(e) => actualizarLogistica(idx, 'precio', e.target.value)}
                                                 />
                                             </td>
-                                            <td style={styles.celdaSubtotal}>
-                                                $ {(Number(item.cantidad || 0) * Number(item.precio || 0)).toLocaleString()}
+                                            <td style={{ fontWeight: 'bold', textAlign: 'right' }}>
+                                                $ {(Number(l.cantidad || 0) * Number(l.precio || 0)).toLocaleString()}
+                                            </td>
+                                            <td>
+                                                <button onClick={() => eliminarLogistica(idx)} style={styles.btnEliminar}>×</button>
                                             </td>
                                         </tr>
                                     ))}
                                 </tbody>
                             </table>
-                            <button onClick={agregarLogistica} style={styles.btnAdd}>+ Añadir Item Logístico</button>
+                            <button onClick={agregarLogistica} style={styles.btnPrimario}>+ Añadir Suministro</button>
                         </div>
                     )}
-
+                    {/* 🚩 DATALISTS: Deben estar dentro del return para reconocer componentesDB y logisticaDB */}
+                    <datalist id="lista-componentes-recursos">
+                        {(componentesDB || []).map((item, i) => (
+                            <option
+                                key={i}
+                                // Mostramos el nombre y el tipo para que el usuario diferencie
+                                value={item.tipo ? `${item.nombre} (${item.tipo})` : item.nombre}
+                            />
+                        ))}
+                    </datalist>
+                    <datalist id="lista-logistica-recursos">
+                        {suministrosDB.map((item, idx) => (
+                            // El 'value' es lo que se filtrará. Usamos la unidad o patente.
+                            <option
+                                key={item._id || idx}
+                                value={`${item.unidad} - ${item.patente}`}
+                            >
+                                Ruta: {item.ruta}
+                            </option>
+                        ))}
+                    </datalist>
                     {tabActiva === 'cotizacion' && (
                         <div style={styles.documentoHoja}>
                             {/* ENCABEZADO PROFESIONAL */}
@@ -849,7 +967,6 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                             </div>
                         </div>
                     )}
-
                 </div>
                 <div style={styles.footerAcciones}>
                     <div style={{ display: 'flex', gap: '15px' }}>
@@ -879,7 +996,6 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                         💰 {tabActiva === 'cotizacion' ? 'FINALIZAR Y GENERAR COTIZACIÓN' : 'IR A COTIZAR'}
                     </button>
                 </div>            </div>
-
         </div>
     );
 };
@@ -996,5 +1112,6 @@ const styles = {
         textAlign: 'center'
     }
 };
+
 
 export default TratamientoScreen;

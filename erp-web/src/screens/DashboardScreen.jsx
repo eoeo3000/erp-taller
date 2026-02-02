@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom'; // 1. IMPORTAR
 
-const DashboardScreen = ({ ots = [], eliminarOT = [], solicitudes = [] }) => { // Recibe props para usar eliminarOT
+const DashboardScreen = ({ ots = [], eliminarOT = [], solicitudes = [] }) => { // Recibe props para usar 
+
     const navigate = useNavigate(); // 2. IMPORTANTE: Declarar navigate
     const [otSeleccionada, setOtSeleccionada] = useState(null);
     const [tabActiva, setTabActiva] = useState('resumen');
@@ -56,11 +57,16 @@ const DashboardScreen = ({ ots = [], eliminarOT = [], solicitudes = [] }) => { /
                         <div key={ot._id} style={styles.macroRow}>
                             {/* CELDA MACRO (1 sola por OT) */}
                             <div style={styles.macroCell}>
-                                <strong>OT #{ot._id}</strong>
-                                <div style={{ fontSize: '12px', color: '#7f8c8d' }}>
-                                    Planificado: {ot.tareas?.length} tareas
-                                    // En tu tabla o tarjetas del Dashboard
-                                    <p><strong>Orden:</strong> {ot.numeroOT || 'Sin asignar'}</p>
+                                {/* Usamos el numeroOT como título principal porque es lo que el humano reconoce */}
+                                <strong style={{ fontSize: '16px', color: '#2c3e50' }}>
+                                    #{ot.numeroOT || 'S/N'}
+                                </strong>
+
+                                <div style={{ fontSize: '12px', color: '#7f8c8d', marginTop: '4px' }}>
+                                    <span>📋 {ot.tareas?.length || 0} tareas planificadas</span>
+                                    <br />
+                                    {/* Dejamos el ID técnico en pequeño solo por si necesitas rastrearlo en la DB */}
+                                    <span style={{ fontSize: '10px', color: '#bdc3c7' }}>ID: {ot._id.substring(0, 8)}...</span>
                                 </div>
                             </div>
 
@@ -76,7 +82,7 @@ const DashboardScreen = ({ ots = [], eliminarOT = [], solicitudes = [] }) => { /
                                 ))}
                             </div>
                             <div style={styles.actionCell}>
-                                <strong>OT #{ot._id}</strong>
+
                                 <div style={styles.btnGroup}>
                                     {/* BOTÓN EDITAR: Envía los datos actuales de la OT a la pantalla de tratamiento */}
                                     <button
@@ -85,14 +91,11 @@ const DashboardScreen = ({ ots = [], eliminarOT = [], solicitudes = [] }) => { /
                                     >✏️ Editar Plan
                                     </button>
                                     <button
-                                        onClick={() => props.eliminarOT(ot._id, () => window.location.reload())}
+                                        onClick={() => eliminarOT(ot._id, ot.solicitudId)} // ✅ Cambiamos la función por el ID real
                                         style={styles.btnDelete}
-                                    >🗑️ Eliminar
+                                    >
+                                        🗑️ Eliminar
                                     </button>
-                                    <button
-                                        onClick={() => props.eliminarOT(ot._id, () => window.location.reload())}
-                                        style={styles.btnDelete}
-                                    >Generar cotizacion                                </button>
                                 </div>
                             </div>
                         </div>
@@ -163,7 +166,7 @@ const styles = {
         textAlign: 'center'
     },
     btnEdit: {
-        width: '100%',
+        width: '70%',
         padding: '8px',
         backgroundColor: '#3498db',
         color: 'white',
@@ -173,7 +176,7 @@ const styles = {
         fontSize: '12px'
     },
     btnDelete: {
-        width: '100%',
+        width: '70%',
         padding: '8px',
         backgroundColor: '#e74c3c',
         color: 'white',

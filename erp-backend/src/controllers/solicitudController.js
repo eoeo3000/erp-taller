@@ -2,7 +2,8 @@ const Solicitud = require('../models/Solicitud');
 
 exports.obtenerSolicitudes = async (req, res) => {
     try {
-        const solicitudes = await Solicitud.find({ estado: 'Pendiente' }).sort({ fechaCreacion: -1 });
+        // Quitamos el { estado: 'Pendiente' } para recibir TODO
+        const solicitudes = await Solicitud.find().sort({ fechaCreacion: -1 });
         res.json(solicitudes);
     } catch (error) {
         res.status(500).json({ error: "Error al obtener solicitudes" });
@@ -38,7 +39,6 @@ exports.crearSolicitud = async (req, res) => {
         res.status(201).json(nuevaSolicitud);
     } catch (error) {
         // Este console.log es vital ahora mismo en tu terminal de VS Code
-        console.log("DATOS RECIBIDOS QUE FALLARON:", req.body);
         console.error("DETALLE DEL ERROR:", error.message);
 
         res.status(400).json({
