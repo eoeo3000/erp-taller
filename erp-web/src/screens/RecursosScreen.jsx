@@ -35,6 +35,7 @@ const RecursosScreen = (
         eliminarCalendarioMaestro,
         componentes = [],
         suministros = [],
+        actualizarSuministro,
         crearEquipo,
         eliminarEquipo,
         crearPuesto,
@@ -67,14 +68,13 @@ const RecursosScreen = (
         tipo: 'Herramienta',
         estado: 'Disponible'
     });
-
+    // Cambia esto en tus useState
     const [nuevaLogistica, setNuevaLogistica] = useState({
-        unidad: '',
-        patente: '',
-        ruta: ''
+        codigo: '',       // Antes unidad
+        descripcion: '',  // Antes patente
+        precio: '',       // Antes ruta
+        categoria: 'Insumo' // Nueva propiedad para diferenciar tipos de suministros
     });
-    // Y para que el listado no falle si no vienen datos:
-
     useEffect(() => {
         if (editandoId && modalMaestroAbierto) {
             const calOriginal = calendarios.find(c => c._id === editandoId);
@@ -138,11 +138,7 @@ const RecursosScreen = (
         });
     };
     const guardarCalendario = async () => {
-        // 1. Log prioritario para ver qué estamos enviando realmente
-
-        // 2. Llamamos a la función del padre UNA SOLA VEZ
         const exito = await guardarCalendarioGlobal(nuevoCal, editandoId);
-
         if (exito) {
             // 3. Si el servidor respondió OK, cerramos y limpiamos
             setModalMaestroAbierto(false);
@@ -241,8 +237,6 @@ const RecursosScreen = (
     }
     const renderContenidoTab = () => {
         let data = [];
-
-        // 1. Asignación correcta de datos según la pestaña activa
         if (tabActiva === 'Personal') data = recursos;
         if (tabActiva === 'Equipos/Herramientas') data = componentes;
         if (tabActiva === 'Suministros Directos') data = suministros; // <-- Asegúrate de tener este estado
@@ -302,11 +296,12 @@ const RecursosScreen = (
 
                 {/* LOGÍSTICA (Suministros Directos) */}
                 {tabActiva === 'Suministros Directos' && <>
-                    <span style={{ flex: 2, fontWeight: '500' }}>{item.unidad}</span>
-                    <span style={{ flex: 1.5 }}>{item.patente}</span>
-                    <span style={{ flex: 1 }}>{item.ruta}</span>
+                    <span style={{ flex: 2, fontWeight: '500' }}>{item.codigo}</span>
+                    <span style={{ flex: 1.5 }}>{item.descripcion}</span>
+                    <span style={{ flex: 1 }}>
+                        {new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP' }).format(item.precio || 0)}
+                    </span>
                 </>}
-
                 {/* CALENDARIOS */}
                 {tabActiva === 'Calendarios' && <>
                     <span style={{ flex: 3, fontWeight: '500' }}>{item.nombre}</span>
@@ -339,14 +334,28 @@ const RecursosScreen = (
                         ✏️
                     </button>
                     <button
-                        onClick={() => {
+                        onClick={(e) => {
+                            e.stopPropagation(); // Evita que el clic afecte a otros elementos
                             const id = item._id || item.id;
+
                             if (window.confirm('¿Estás seguro de eliminar este registro?')) {
-                                // Selecciona la función correcta según la pestaña
-                                if (tabActiva === 'Personal') eliminarRecurso(id);
-                                if (tabActiva === 'Equipos/Herramientas') eliminarEquipo(id); // Asumiendo que pasaste esta prop
-                                if (tabActiva === 'Suministros Directos') eliminarSuministro(id);
-                                if (tabActiva === 'Calendarios') eliminarCalendarioMaestro(id);
+                                // Usamos switch para asegurar que solo entre en UNA opción
+                                switch (tabActiva) {
+                                    case 'Personal':
+                                        eliminarRecurso(id);
+                                        break;
+                                    case 'Equipos/Herramientas':
+                                        eliminarEquipo?.(id); // El ?. evita errores si no existe
+                                        break;
+                                    case 'Suministros Directos':
+                                        eliminarSuministro(id);
+                                        break;
+                                    case 'Calendarios':
+                                        eliminarCalendarioMaestro(id);
+                                        break;
+                                    default:
+                                        console.warn("No se encontró una acción para la pestaña:", tabActiva);
+                                }
                             }
                         }}
                         style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '1rem' }}
@@ -357,6 +366,45 @@ const RecursosScreen = (
                 </div>
             </div>
         ));
+    };
+    // 1. Definir la lógica de guardado (Crear o Editar)
+    const manejarGuardadoSuministro = async () => {
+        // 1. Validación
+        if (!nuevaLogistica.codigo || !nuevaLogistica.descripcion) {
+            alert("El código y la descripción son obligatorios.");
+            return;
+        }
+
+        // 2. SANITIZACIÓN: Creamos un objeto nuevo con solo los campos del Schema
+        // Esto evita enviar el _id accidentalmente al crear uno nuevo
+        const datosLimpios = {
+            codigo: nuevaLogistica.codigo.trim(),
+            descripcion: nuevaLogistica.descripcion,
+            precio: Number(nuevaLogistica.precio) || 0,
+            categoria: nuevaLogistica.categoria || 'Insumo'
+        };
+
+        console.log("📡 Intentando guardar:", datosLimpios);
+
+        let exito;
+        if (editandoId) {
+            // Para actualizar usamos el ID de la fila, no el del objeto
+            exito = await actualizarSuministro(editandoId, datosLimpios);
+        } else {
+            // Al crear, datosLimpios NO tiene _id, por lo que MongoDB generará uno nuevo
+            exito = await crearSuministro(datosLimpios);
+        }
+
+        if (exito) {
+            setIsModalLogOpen(false);
+            setEditandoId(null);
+            setNuevaLogistica({
+                codigo: '',
+                descripcion: '',
+                precio: '',
+                categoria: 'Insumo'
+            });
+        }
     };
     return (
         <div style={styles.container}>
@@ -465,9 +513,6 @@ const RecursosScreen = (
                             </p>
                         </div>
                     </div>
-
-                    {/* DERECHA: Listado Dinámico (Encabezados Fijos) */}
-                    {/* 1. Agregamos minWidth: 0 para que el flex sepa que puede achicarse */}
                     <div style={{
                         flex: 1,
                         minWidth: 0,
@@ -479,14 +524,8 @@ const RecursosScreen = (
                         flexDirection: 'column',
                         overflow: 'hidden'
                     }}>
-
-                        {/* 2. Envolvemos TODO (encabezado y lista) en un div con scroll horizontal */}
                         <div style={{ width: '100%', overflowX: 'auto' }}>
-
-                            {/* Contenedor con ancho mínimo para asegurar que las columnas no colapsen */}
                             <div style={{ minWidth: '500px' }}>
-
-                                {/* Encabezado Fijo */}
                                 <div style={{
                                     display: 'flex',
                                     padding: '12px 15px',
@@ -559,9 +598,7 @@ const RecursosScreen = (
                     <table style={styles.ganttTable}>
                         <thead>
                             <tr>
-                                {/* Celda vacía sobre los nombres de los operarios */}
                                 <th style={styles.thNombre}>Recurso</th>
-
                                 {/* Generación de los días */}
                                 {diasDelMes.map((d, index) => {
                                     const fecha = new Date(d.fechaCompleta);
@@ -782,49 +819,39 @@ const RecursosScreen = (
                 <div style={styles.overlay}>
                     <div style={styles.modal}>
                         <div style={styles.modalHeader}>
-                            <h3>🚚 Registro de Logística</h3>
-                            {/* Al cerrar, seteamos el booleano en false */}
+                            <h3>🚚 Registro de Suministros</h3>
                             <button onClick={() => setIsModalLogOpen(false)} style={styles.btnClose}>&times;</button>
                         </div>
                         <div style={styles.modalBody}>
-                            <label style={{ fontWeight: 'bold' }}>Codigo</label>
+                            <label style={{ fontWeight: 'bold' }}>Código</label>
                             <input
                                 placeholder="Ej: 0001"
                                 style={styles.input}
-                                value={nuevaLogistica.unidad}
-                                onChange={e => setNuevaLogistica({ ...nuevaLogistica, unidad: e.target.value })}
+                                value={nuevaLogistica.codigo || ''} // Usamos 'codigo'
+                                onChange={e => setNuevaLogistica({ ...nuevaLogistica, codigo: e.target.value })}
                             />
 
-                            <label style={{ fontWeight: 'bold' }}>Descripcion</label>
+                            <label style={{ fontWeight: 'bold' }}>Descripción</label>
                             <input
-                                placeholder="Ej: Disco de Corte 4-1/2''"
+                                placeholder="Ej: Disco de Corte"
                                 style={styles.input}
-                                value={nuevaLogistica.patente}
-                                onChange={e => setNuevaLogistica({ ...nuevaLogistica, patente: e.target.value })}
+                                value={nuevaLogistica.descripcion || ''} // Usamos 'descripcion'
+                                onChange={e => setNuevaLogistica({ ...nuevaLogistica, descripcion: e.target.value })}
                             />
 
                             <label style={{ fontWeight: 'bold' }}>Precio</label>
                             <input
+                                type="number"
                                 placeholder="Ej: 15000"
                                 style={styles.input}
-                                value={nuevaLogistica.ruta}
-                                onChange={e => setNuevaLogistica({ ...nuevaLogistica, ruta: e.target.value })}
+                                value={nuevaLogistica.precio || ''} // Usamos 'precio'
+                                onChange={e => setNuevaLogistica({ ...nuevaLogistica, precio: e.target.value })}
                             />
                         </div>
                         <div style={styles.modalFooter}>
                             <button onClick={() => setIsModalLogOpen(false)} style={styles.btnSecundario}>Cancelar</button>
-                            <button
-                                onClick={() => {
-                                    // Aquí deberías llamar a la función de App.js, ejemplo:
-                                    // crearLogistica(nuevaLogistica); 
-                                    setIsModalLogOpen(false);
-                                    // Opcional: limpiar el formulario
-                                    setNuevaLogistica({ unidad: '', patente: '', ruta: '' });
-                                    crearSuministro(nuevaLogistica);
-                                }}
-                                style={{ ...styles.btnPrimary, backgroundColor: '#f39c12' }}
-                            >
-                                Confirmar Registro
+                            <button onClick={manejarGuardadoSuministro} style={styles.btnPrimary}>
+                                {editandoId ? 'Actualizar Suministro' : 'Guardar Suministro'}
                             </button>
                         </div>
                     </div>
@@ -896,33 +923,37 @@ const RecursosScreen = (
 
                             <button
                                 onClick={async () => {
-                                    if (!nuevoRecurso.nombre) return alert("Falta nombre");
+                                    // 1. Validamos que los campos no estén vacíos para evitar errores de Mongoose
+                                    if (!nuevaLogistica.unidad || !nuevaLogistica.patente) {
+                                        alert("Por favor completa Código y Descripción");
+                                        return;
+                                    }
 
-                                    try {
-                                        if (nuevoRecurso._id) {
-                                            // SI TIENE ID: Llamamos a la función de actualizar que definiste en App.js
-                                            await actualizarRecurso(nuevoRecurso._id, nuevoRecurso);
-                                        } else {
-                                            // SI NO TIENE ID: Es un recurso nuevo
-                                            await crearRecurso(nuevoRecurso);
-                                        }
+                                    // 2. TRADUCCIÓN: Mapeamos los campos del Modal al Esquema de la DB
+                                    const suministroParaDB = {
+                                        codigo: nuevaLogistica.unidad,           // unidad -> codigo
+                                        descripcion: nuevaLogistica.patente,      // patente -> descripcion
+                                        precio: Number(nuevaLogistica.ruta) || 0, // ruta -> precio (forzamos número)
+                                        categoria: 'Transporte'                   // Aseguramos que esté en el enum
+                                    };
 
-                                        setModalRecursoAbierto(false);
-                                        // Limpiamos el estado para que el ID no se quede pegado
-                                        setNuevoRecurso({ nombre: '', tipo: 'Humano', especialidad: '', calendarioId: '' });
+                                    console.log("Enviando al servidor:", suministroParaDB);
 
-                                        // Opcional: Si quieres que al terminar de editar se vuelva a abrir la lista:
-                                        // setMostrarModalPersonal(true);
+                                    // 3. Llamamos a la función de App.js
+                                    const exito = await crearSuministro(suministroParaDB);
 
-                                    } catch (error) {
-                                        console.error("Error al guardar:", error);
-                                        alert("No se pudo guardar el recurso");
+                                    if (exito) {
+                                        setIsModalLogOpen(false);
+                                        // Limpiamos con los nombres que usa tu estado local
+                                        setNuevaLogistica({ unidad: '', patente: '', ruta: '' });
+                                        alert("¡Suministro registrado con éxito!");
+                                    } else {
+                                        alert("Error al registrar: Puede que el código ya exista.");
                                     }
                                 }}
-                                style={{ ...styles.btnPrimary, width: 'auto', padding: '10px 20px' }}
+                                style={{ ...styles.btnPrimary, backgroundColor: '#f39c12' }}
                             >
-                                {/* Cambiamos el texto dinámicamente para que el usuario sepa qué está haciendo */}
-                                {nuevoRecurso._id ? 'Actualizar Cambios' : 'Guardar Recurso'}
+                                Confirmar Registro
                             </button>
                         </div>
                     </div>

@@ -1,9 +1,7 @@
 const OT = require('../models/OT');
 const Recurso = require('../models/Recurso');
-// Eliminamos la carga global de Solicitud aquí para evitar bloqueos por referencia circular
-// y la cargaremos dentro de las funciones que la necesiten.
 
-// 1. Obtener toda la data
+// 1. Obtener toda la data (OTs, Solicitudes y Recursos)
 exports.getAllData = async (req, res) => {
     try {
         const Solicitud = require('../models/Solicitud');
@@ -14,7 +12,7 @@ exports.getAllData = async (req, res) => {
         ]);
         res.json({ ots: todasLasOts, solicitudes: todasLasSolicitudes, recursos });
     } catch (error) {
-        res.status(500).json({ error: "Error al sincronizar" });
+        res.status(500).json({ error: "Error al sincronizar data" });
     }
 };
 
@@ -29,26 +27,39 @@ exports.crearSolicitudManual = async (req, res) => {
     }
 };
 
-// 3. Convertir a OT
+// 3. Convertir a OT (Con formato OT-2026-0000)
 exports.convertirOT = async (req, res) => {
     try {
         const data = req.body;
-        const idBusqueda = data._id || data.solicitudId;
+        const idSolicitud = data._id || data.solicitudId;
+
+        // Generación de número con guiones
         if (!data.numeroOT) {
-            const ultimaOT = await OT.findOne({ numeroOT: { $regex: /^OT-/ } }).sort({ numeroOT: -1 });
+            const ultimaOT = await OT.findOne({ numeroOT: { $regex: /^OT-2026-/ } }).sort({ numeroOT: -1 });
             let siguienteNum = 1;
+
             if (ultimaOT?.numeroOT) {
-                const numeroLimpio = parseInt(ultimaOT.numeroOT.replace(/\D/g, ''));
-                if (!isNaN(numeroLimpio)) siguienteNum = numeroLimpio + 1;
+                const partes = ultimaOT.numeroOT.split('-');
+                const ultimoSecuencial = parseInt(partes[partes.length - 1]);
+                if (!isNaN(ultimoSecuencial)) siguienteNum = ultimoSecuencial + 1;
             }
-            data.numeroOT = `OT-${siguienteNum.toString().padStart(3, '0')}`;
+            data.numeroOT = `OT-2026-${siguienteNum.toString().padStart(4, '0')}`;
         }
+
         const { _id, ...updateData } = data;
+
         const nuevaOT = await OT.findByIdAndUpdate(
-            idBusqueda,
-            { ...updateData, numeroOT: data.numeroOT, estado: 'Generada', ultimaEdicion: new Date().toISOString() },
+            idSolicitud,
+            {
+                ...updateData,
+                solicitudId: idSolicitud,
+                numeroOT: data.numeroOT,
+                estado: 'Generada',
+                ultimaEdicion: new Date().toISOString()
+            },
             { new: true, upsert: true, runValidators: true }
         );
+
         res.status(201).json({ success: true, ot: nuevaOT });
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -74,11 +85,17 @@ exports.eliminarOT = async (req, res) => {
     }
 };
 
-// 5. Obtener OT por ID de Solicitud (ESTA ES LA QUE EL ROUTER NO ENCONTRABA)
+// 5. Obtener OT por ID de Solicitud (Búsqueda híbrida para evitar el 404)
 exports.obtenerOTPorSolicitud = async (req, res) => {
     try {
         const { solicitudId } = req.params;
-        const ot = await OT.findOne({ solicitudId: solicitudId });
+        const ot = await OT.findOne({
+            $or: [
+                { solicitudId: solicitudId },
+                { _id: solicitudId }
+            ]
+        });
+
         if (!ot) return res.status(404).json({ message: "No se encontró planificación" });
         res.json(ot);
     } catch (error) {
@@ -86,7 +103,7 @@ exports.obtenerOTPorSolicitud = async (req, res) => {
     }
 };
 
-// 6. Obtener por ID (Búsqueda directa)
+// 6. Obtener por ID Directo
 exports.obtenerOTPorId = async (req, res) => {
     try {
         const ot = await OT.findById(req.params.id);
@@ -113,22 +130,31 @@ exports.webhookEmail = async (req, res) => {
     }
 };
 
-// 8. Actualizar OT (General)
+// 8. Actualizar OT (General y Suministros)
 exports.actualizarOT = async (req, res) => {
     try {
         const { id } = req.params;
         let ot = await OT.findByIdAndUpdate(id, req.body, { new: true });
+
         if (!ot) {
             const Solicitud = require('../models/Solicitud');
             const solicitud = await Solicitud.findById(id);
             if (solicitud) {
                 const total = await OT.countDocuments();
                 const num = `OT-2026-${(total + 1).toString().padStart(4, '0')}`;
-                ot = new OT({ ...solicitud.toObject(), ...req.body, _id: solicitud._id, numeroOT: num, estado: 'Generada' });
+                ot = new OT({
+                    ...solicitud.toObject(),
+                    ...req.body,
+                    _id: solicitud._id,
+                    solicitudId: solicitud._id,
+                    numeroOT: num,
+                    estado: 'Generada'
+                });
                 await ot.save();
                 await Solicitud.findByIdAndUpdate(id, { estado: 'Generada', numeroOT: num });
             }
         }
+
         if (!ot) return res.status(404).json({ error: "No encontrado" });
         res.json(ot);
     } catch (error) {

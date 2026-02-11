@@ -5,7 +5,11 @@ import autoTable from 'jspdf-autotable';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 
-const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = [], componentes: componentesDB = [], suministros: suministrosDB = [], logistica: logisticaDB = [] }) => {
+const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = [],
+    componentes: componentesDB = [],
+    suministros: suministrosDB = [],
+    puestosDB: puestosDB = [],
+    logistica: logisticaDB = [] }) => {
     const { state: datosRecibidos } = useLocation();
     const navigate = useNavigate();
     const inicializado = useRef(false);
@@ -244,39 +248,29 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
         const cargarDetalleOT = async () => {
             if (!datosRecibidos?._id) return;
 
-            // Si es Pendiente, solo inicializamos una tarea vacía
-            if (datosRecibidos.estado === 'Pendiente' && !inicializado.current) {
-                setTareas([{ id: Date.now(), descripcion: '', puesto: '', duracion: 0, fecha: '', hora: '', valorHora: 0 }]);
-                inicializado.current = true;
-                return;
-            }
-
-            // Si ya está Planificada/Generada, buscamos en la DB
             try {
                 const res = await axios.get(`${API}/ots/solicitud/${datosRecibidos._id}`);
-
                 if (res.data) {
-
-                    // CRÍTICO: Actualizar otSeleccionada para que el <h2> tenga el numeroOT
                     setOtSeleccionada(res.data);
-
                     setTareas(res.data.tareas || []);
                     setComponentes(res.data.componentes || []);
-                    setLogistica(res.data.logistica || []);
-
-                    // Si tienes cotizacion guardada, cárgala también
-                    if (res.data.cotizacion) setCotizacion(res.data.cotizacion);
+                    setSuministros(res.data.suministros || []); // Carga suministros desde DB
                 }
             } catch (error) {
-                console.error("ℹ️ No se encontró OT previa o error de red.");
+                if (error.response?.status === 404) {
+                    console.info("📝 Nueva planificación: Iniciando campos en blanco.");
+                    if (!inicializado.current) {
+                        setTareas([{ id: Date.now(), descripcion: '', puesto: '', duracion: 0, fecha: '', hora: '', valorHora: 0 }]);
+                    }
+                } else {
+                    console.error("❌ Error de red:", error.message);
+                }
             }
             inicializado.current = true;
         };
-
         cargarDetalleOT();
     }, [datosRecibidos?._id, API]);
-    // ... (resto del código igual)
-    // Estado independiente para Logística
+
     const [logistica, setLogistica] = useState([
         { id: Date.now(), descripcion: '', cantidad: 1, precio: 0 }
     ]);
@@ -392,9 +386,6 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
 
     // Nuevo cálculo para Logística
     const totalLogisticaFinal = logistica.reduce((sum, l) => sum + (Number(l.cantidad) * Number(l.precio) || 0), 0);
-
-
-    // Sumamos la mano de obra de todas las tareas
     const totalManoObraTareas = tareas.reduce((sum, t) =>
         sum + (Number(t.duracion || 0) * Number(t.valorHora || 0)), 0);
 
@@ -402,11 +393,34 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
     const granTotal = totalMateriales + totalManoObra + totalLogisticaFinal;
 
     // 1. Extraer días únicos de las tareas para las columnas
-    const diasPlanificados = [...new Set(tareas
-        .filter(t => t.fecha)
-        .map(t => t.fecha))]
-        .sort();
+    const diasPlanificados = (() => {
+        // 1. Filtrar tareas con fecha y obtener sus valores en milisegundos
+        const tareasConFecha = tareas.filter(t => t.fecha);
+        if (tareasConFecha.length === 0) return [];
 
+        const fechasEnMs = tareasConFecha.map(t => new Date(t.fecha).getTime());
+
+        // 2. Obtener el rango: del primer día al último día
+        const inicioMs = Math.min(...fechasEnMs);
+        const finMs = Math.max(...fechasEnMs);
+
+        const listaCompleta = [];
+        let fechaActual = new Date(inicioMs);
+        const fechaFin = new Date(finMs);
+
+        // 3. Bucle para llenar todos los días intermedios
+        // Usamos un loop que suma 1 día en cada iteración
+        while (fechaActual <= fechaFin) {
+            // Aseguramos formato YYYY-MM-DD para que el .map de la tabla lo encuentre
+            const isoStr = fechaActual.toISOString().split('T')[0];
+            listaCompleta.push(isoStr);
+
+            // Sumar un día
+            fechaActual.setDate(fechaActual.getDate() + 1);
+        }
+
+        return listaCompleta;
+    })();
     // 2. Función para formatear la fecha (ej: "09 ene")
     const formatearFechaGantt = (fechaStr) => {
         if (!fechaStr) return '';
@@ -420,7 +434,6 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
         // Usamos setTareas (que es tu estado local) en lugar de ot.tareas
         setTareas(prevTareas => prevTareas.filter((_, i) => i !== index));
     };
-
     // HAZ LO MISMO PARA COMPONENTES SI ES NECESARIO:
     const eliminarComponente = (index) => {
         setComponentes(prev => prev.filter((_, i) => i !== index));
@@ -467,8 +480,8 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                 </div>
                 <div style={styles.tabBar}>
                     <button onClick={() => setTabActiva('tareas')} style={tabActiva === 'tareas' ? styles.tabBtnActive : styles.tabBtn}>1. Tareas</button>
-                    <button onClick={() => setTabActiva('componentes')} style={tabActiva === 'componentes' ? styles.tabBtnActive : styles.tabBtn}>2. Componentes (Técnicos)</button>
-                    <button onClick={() => setTabActiva('Logistica')} style={tabActiva === 'Logistica' ? styles.tabBtnActive : styles.tabBtn}>3. Logística</button>
+                    <button onClick={() => setTabActiva('componentes')} style={tabActiva === 'componentes' ? styles.tabBtnActive : styles.tabBtn}>2. Equipos/Herramientas</button>
+                    <button onClick={() => setTabActiva('Logistica')} style={tabActiva === 'Logistica' ? styles.tabBtnActive : styles.tabBtn}>3. Suministros Directos</button>
                     <button onClick={() => setTabActiva('cotizacion')} style={tabActiva === 'cotizacion' ? styles.tabBtnActive : styles.tabBtn}>3. Cotización Comercial</button>
                 </div>
                 <div style={styles.content}>
@@ -495,11 +508,32 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                                             {/* ... celda descripción ... */}
                                             <td><input style={styles.inputTable} value={t.descripcion} onChange={(e) => actualizarTarea(idx, 'descripcion', e.target.value)} /></td>
                                             <td>
-                                                <select style={styles.inputTable} value={t.puesto} onChange={(e) => actualizarTarea(idx, 'puesto', e.target.value)}>
+                                                <select
+                                                    style={styles.inputTable}
+                                                    value={t.puesto}
+                                                    onChange={(e) => {
+                                                        const nombreSeleccionado = e.target.value;
+                                                        const puestoEncontrado = puestosDB.find(p => p.nombre === nombreSeleccionado);
+
+                                                        // Creamos el objeto con los nuevos datos
+                                                        const nuevosDatos = { puesto: nombreSeleccionado };
+                                                        if (puestoEncontrado) {
+                                                            nuevosDatos.valorHora = puestoEncontrado.costoHora;
+                                                        }
+
+                                                        // Actualizamos la tarea de una sola vez enviando un objeto
+                                                        // Nota: Esto requiere que tu función actualizarTarea soporte recibir un objeto
+                                                        setTareas(prev => prev.map((tarea, i) =>
+                                                            i === idx ? { ...tarea, ...nuevosDatos } : tarea
+                                                        ));
+                                                    }}
+                                                >
                                                     <option value="">Seleccionar...</option>
-                                                    <option value="Mecánico">Mecánico</option>
-                                                    <option value="Soldador">Soldador</option>
-                                                    <option value="Eléctrico">Eléctrico</option>
+                                                    {puestosDB && puestosDB.map((p) => (
+                                                        <option key={p._id} value={p.nombre}>
+                                                            {p.nombre}
+                                                        </option>
+                                                    ))}
                                                 </select>
                                             </td>
                                             {/* NUEVA CELDA: RESPONSABLE */}
@@ -593,9 +627,20 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                                             <td><input type="number" style={styles.inputTable} value={t.valorHora || ''} placeholder="$" onChange={(e) => actualizarTarea(idx, 'valorHora', e.target.value)} /></td>
 
                                             {/* 8. Subtotal (Calculado) */}
+                                            {/* 8. Subtotal (Calculado: Hrs * $/Hora * N° Personas) */}
                                             <td style={{ textAlign: 'right', fontWeight: 'bold', padding: '0 10px' }}>
                                                 {(() => {
-                                                    const sub = (Number(t.duracion) || 0) * (Number(t.valorHora) || 0);
+                                                    const horas = Number(t.duracion) || 0;
+                                                    const precioHora = Number(t.valorHora) || 0;
+                                                    // Contamos cuántos operarios hay asignados
+                                                    const cantidadPersonas = Array.isArray(t.operarioId) ? t.operarioId.length : 0;
+
+                                                    // Si no hay nadie asignado, podrías decidir si multiplicar por 0 o por 1.
+                                                    // Lo lógico para costos de suministros humanos es:
+                                                    const factorPersonas = cantidadPersonas > 0 ? cantidadPersonas : 1;
+
+                                                    const sub = horas * precioHora * factorPersonas;
+
                                                     return `$ ${sub.toLocaleString()}`;
                                                 })()}
                                             </td>
@@ -713,8 +758,20 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                                             </td>
 
                                             {/* 6. Subtotal */}
-                                            <td style={{ fontWeight: 'bold' }}>
-                                                $ {(Number(c.cantidad || 0) * Number(c.precio || 0)).toLocaleString()}
+                                            {/* 6. Subtotal (Calculado: Cantidad * Precio) */}
+                                            <td style={{
+                                                textAlign: 'right',
+                                                fontWeight: 'bold',
+                                                padding: '0 10px',
+                                                minWidth: '100px'
+                                            }}>
+                                                {(() => {
+                                                    const cant = Number(c.cantidad) || 0;
+                                                    const prec = Number(c.precio) || 0;
+                                                    const sub = cant * prec;
+
+                                                    return `$ ${sub.toLocaleString('es-CL')}`;
+                                                })()}
                                             </td>
 
                                             {/* 7. Eliminar */}
@@ -729,15 +786,15 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                         </div>
                     )}
                     {/* VISTA 3: LOGÍSTICA */}
-                    {tabActiva === 'Logistica' && (
+                    {tabActiva === 'Logistica' && ( // Nota: Podrías cambiar el label de la pestaña a 'Suministros'
                         <div>
                             <table style={styles.table}>
                                 <thead>
                                     <tr style={{ background: '#f8f9fa' }}>
-                                        <th>Servicio / Ruta</th>
-                                        <th>Patente</th>
+                                        <th>Código / Suministro</th>
+                                        <th>Descripción</th>
                                         <th>Cant.</th>
-                                        <th>Precio</th>
+                                        <th>Precio Unit.</th>
                                         <th>Subtotal</th>
                                         <th></th>
                                     </tr>
@@ -747,31 +804,24 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                                         <tr key={l._id || idx}>
                                             <td>
                                                 <input
-                                                    list="lista-logistica-recursos"
+                                                    list="lista-suministros-recursos"
                                                     style={styles.inputTable}
-                                                    // Importante: mantenemos el valor que el usuario escribe/selecciona
-                                                    value={l.unidad || ''}
-                                                    placeholder="Buscar unidad..."
+                                                    value={l.codigo || ''}
+                                                    placeholder="Buscar código..."
                                                     onChange={(e) => {
                                                         const val = e.target.value;
-                                                        actualizarLogistica(idx, 'unidad', val);
+                                                        actualizarLogistica(idx, 'codigo', val);
 
-                                                        // 🚩 CAMBIO CLAVE: Usar suministrosDB en lugar de logisticaDB
-                                                        const listaParaBuscar = suministrosDB || [];
-
-                                                        const match = listaParaBuscar.find(db =>
-                                                            db.unidad === val ||
-                                                            `${db.unidad} - ${db.patente}` === val
+                                                        // Buscador Actualizado para el nuevo Schema
+                                                        const match = (suministrosDB || []).find(s =>
+                                                            s.codigo?.toLowerCase() === val.toLowerCase() ||
+                                                            s.descripcion?.toLowerCase() === val.toLowerCase()
                                                         );
 
                                                         if (match) {
-                                                            console.log("Suministro encontrado:", match);
-                                                            actualizarLogistica(idx, 'unidad', match.unidad);
-                                                            actualizarLogistica(idx, 'patente', match.patente);
-                                                            // Verifica si en tu DB es 'ruta' o 'descripcion'
-                                                            actualizarLogistica(idx, 'descripcion', match.ruta || match.descripcion || '');
-                                                            // Verifica si en tu DB es 'valor' o 'precio'
-                                                            actualizarLogistica(idx, 'precio', match.valor || match.precio || 0);
+                                                            actualizarLogistica(idx, 'codigo', match.codigo);
+                                                            actualizarLogistica(idx, 'descripcion', match.descripcion);
+                                                            actualizarLogistica(idx, 'precio', Number(match.precio) || 0);
                                                         }
                                                     }}
                                                 />
@@ -779,8 +829,9 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                                             <td>
                                                 <input
                                                     style={styles.inputTable}
-                                                    value={l.patente || ''}
-                                                    onChange={(e) => actualizarLogistica(idx, 'patente', e.target.value)}
+                                                    value={l.descripcion || ''}
+                                                    placeholder="Descripción del suministro"
+                                                    onChange={(e) => actualizarLogistica(idx, 'descripcion', e.target.value)}
                                                 />
                                             </td>
                                             <td style={{ width: '80px' }}>
@@ -788,7 +839,7 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                                                     type="number"
                                                     style={styles.inputTable}
                                                     value={l.cantidad || 1}
-                                                    onChange={(e) => actualizarLogistica(idx, 'cantidad', e.target.value)}
+                                                    onChange={(e) => actualizarLogistica(idx, 'cantidad', Number(e.target.value))}
                                                 />
                                             </td>
                                             <td>
@@ -796,11 +847,14 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                                                     type="number"
                                                     style={styles.inputTable}
                                                     value={l.precio || 0}
-                                                    onChange={(e) => actualizarLogistica(idx, 'precio', e.target.value)}
+                                                    onChange={(e) => actualizarLogistica(idx, 'precio', Number(e.target.value))}
                                                 />
                                             </td>
-                                            <td style={{ fontWeight: 'bold', textAlign: 'right' }}>
-                                                $ {(Number(l.cantidad || 0) * Number(l.precio || 0)).toLocaleString()}
+                                            <td style={{ fontWeight: 'bold', textAlign: 'right', padding: '0 10px', color: '#2c3e50' }}>
+                                                {(() => {
+                                                    const sub = (Number(l.cantidad) || 0) * (Number(l.precio) || 0);
+                                                    return `$ ${sub.toLocaleString('es-CL')}`;
+                                                })()}
                                             </td>
                                             <td>
                                                 <button onClick={() => eliminarLogistica(idx)} style={styles.btnEliminar}>×</button>
@@ -813,23 +867,22 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                         </div>
                     )}
                     {/* 🚩 DATALISTS: Deben estar dentro del return para reconocer componentesDB y logisticaDB */}
+                    {/* 🚩 DATALISTS ACTUALIZADOS */}
                     <datalist id="lista-componentes-recursos">
                         {(componentesDB || []).map((item, i) => (
                             <option
-                                key={i}
-                                // Mostramos el nombre y el tipo para que el usuario diferencie
+                                key={item._id || i}
                                 value={item.tipo ? `${item.nombre} (${item.tipo})` : item.nombre}
                             />
                         ))}
                     </datalist>
-                    <datalist id="lista-logistica-recursos">
-                        {suministrosDB.map((item, idx) => (
-                            // El 'value' es lo que se filtrará. Usamos la unidad o patente.
+                    <datalist id="lista-suministros-recursos">
+                        {(suministrosDB || []).map((item, idx) => (
                             <option
                                 key={item._id || idx}
-                                value={`${item.unidad} - ${item.patente}`}
+                                value={item.codigo}
                             >
-                                Ruta: {item.ruta}
+                                {item.descripcion} - ${Number(item.precio).toLocaleString('es-CL')}
                             </option>
                         ))}
                     </datalist>
@@ -879,6 +932,20 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                                         ))}</tbody>
                                 </table>
                             </section>
+
+                            <section style={styles.seccionDoc}>
+                                <h4 style={styles.tituloSeccionDoc}>4. Logística y Gastos Operacionales</h4>
+                                <table style={styles.tableDoc}>
+                                    <tbody>
+                                        {logistica.map(l => (
+                                            <tr key={l._id}>
+                                                <td style={{ width: '70%' }}>{l.descripcion}</td>
+                                                <td style={{ textAlign: 'right' }}>$ {(Number(l.cantidad || 0) * Number(l.precio || 0)).toLocaleString()}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </section>
                             {/* SECCIÓN 3: CRONOGRAMA DE EJECUCIÓN (Estilo Plano de Ejecución) */}
                             <section style={styles.seccionDoc}>
                                 <h4 style={styles.tituloSeccionDoc}>3. Cronograma de Ejecución (Gantt)</h4>
@@ -887,8 +954,10 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                                         <thead>
                                             <tr style={{ backgroundColor: '#2c3e50', color: 'white' }}>
                                                 <th style={{ padding: '8px', border: '1px solid #ddd' }}>#</th>
-                                                <th style={{ padding: '8px', border: '1px solid #ddd' }}>Descripción General / OT</th>
-                                                <th style={{ padding: '8px', border: '1px solid #ddd' }}>Personal</th>
+                                                <th style={{ padding: '8px', border: '1px solid #ddd' }}>Descripción de Tarea</th>
+                                                <th style={{ padding: '8px', border: '1px solid #ddd' }}>Puesto</th>
+                                                {/* ✅ Título dinámico para múltiples responsables */}
+                                                <th style={{ padding: '8px', border: '1px solid #ddd' }}>Personal Asignado</th>
                                                 <th style={{ padding: '8px', border: '1px solid #ddd' }}>Duración</th>
                                                 {diasPlanificados.map(dia => (
                                                     <th key={dia} style={{ padding: '8px', border: '1px solid #ddd', minWidth: '70px' }}>
@@ -914,6 +983,20 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                                                             {t.puesto}
                                                         </span>
                                                     </td>
+                                                    {/* ✅ Renderizado de la lista de operarios */}
+                                                    <td style={{ border: '1px solid #ddd', padding: '5px', fontSize: '10px' }}>
+                                                        {Array.isArray(t.operarioNombre) && t.operarioNombre.length > 0 ? (
+                                                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2px' }}>
+                                                                {t.operarioNombre.map((nom, i) => (
+                                                                    <span key={i} className="badge bg-light text-dark border">
+                                                                        {nom}
+                                                                    </span>
+                                                                ))}
+                                                            </div>
+                                                        ) : (
+                                                            <span className="text-muted italic">No asignado</span>
+                                                        )}
+                                                    </td>
                                                     <td style={{ border: '1px solid #ddd', textAlign: 'center' }}>{t.duracion} h</td>
                                                     {diasPlanificados.map(dia => (
                                                         <td key={dia} style={{ border: '1px solid #ddd', position: 'relative', padding: '4px' }}>
@@ -924,11 +1007,17 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                                                                     textAlign: 'center',
                                                                     borderRadius: '4px',
                                                                     padding: '4px 2px',
-                                                                    fontSize: '10px',
+                                                                    fontSize: '9px',
                                                                     fontWeight: 'bold',
                                                                     boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
                                                                 }}>
-                                                                    {t.hora}
+                                                                    <div>{t.hora}</div>
+                                                                    {/* ✅ Muestra cantidad de personas en el gráfico si hay más de una */}
+                                                                    {t.operarioId?.length > 1 && (
+                                                                        <div style={{ fontSize: '8px', borderTop: '1px solid rgba(255,255,255,0.3)', marginTop: '2px' }}>
+                                                                            {t.operarioId.length} pers.
+                                                                        </div>
+                                                                    )}
                                                                 </div>
                                                             )}
                                                         </td>
@@ -938,21 +1027,6 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                                         </tbody>
                                     </table>
                                 </div>
-                            </section>
-
-                            {/* SECCIÓN 4: LOGÍSTICA */}
-                            <section style={styles.seccionDoc}>
-                                <h4 style={styles.tituloSeccionDoc}>4. Logística y Gastos Operacionales</h4>
-                                <table style={styles.tableDoc}>
-                                    <tbody>
-                                        {logistica.map(l => (
-                                            <tr key={l._id}>
-                                                <td style={{ width: '70%' }}>{l.descripcion}</td>
-                                                <td style={{ textAlign: 'right' }}>$ {(Number(l.cantidad || 0) * Number(l.precio || 0)).toLocaleString()}</td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
                             </section>
 
                             {/* RESUMEN FINAL Y TOTALES */}

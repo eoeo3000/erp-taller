@@ -172,8 +172,6 @@ function App() {
         syncState(solicitudes, data.solicitudes, setSolicitudes);
         syncState(recursos, data.recursos, setRecursos);
         syncState(calendarios, data.calendarios, setCalendarios);
-
-        // ✅ Nuevos módulos sincronizados
         syncState(componentes, data.equipos, setComponentes);
         syncState(suministros, data.suministros, setSuministros);
 
@@ -346,8 +344,6 @@ function App() {
     }
   };
   const eliminarRecurso = async (id) => {
-    if (!window.confirm("¿Estás seguro de eliminar este recurso?")) return;
-
     try {
       const respuesta = await axios.delete(`${API}/recursos/${id}`);
 
@@ -498,38 +494,66 @@ function App() {
       return false;
     }
   };
-  const crearSuministro = async (nuevoSuministro) => {
+  // --- SECCIÓN SUMINISTROS (CRUD) ---
+  const crearSuministro = async (datos) => {
     try {
-      const res = await axios.post(`${API}/suministros`, nuevoSuministro);
+      // 🛡️ BLINDAJE: Solo extraemos lo que el Schema de Mongoose permite
+      const datosLimpios = {
+        codigo: String(datos.codigo).trim(),
+        descripcion: String(datos.descripcion).trim(),
+        precio: Number(datos.precio) || 0,
+        categoria: datos.categoria || 'Insumo' // Usamos el default del Schema
+      };
+
+      console.log("📡 Enviando datos limpios al servidor:", datosLimpios);
+
+      const res = await axios.post(`${API}/suministros`, datosLimpios);
+
       if (res.status === 201 || res.status === 200) {
-        setLogistica(prev => [...prev, res.data]);
+        setSuministros(prev => [...prev, res.data]);
         return true;
       }
     } catch (error) {
-      console.error("❌ Error al crear suministro:", error.response?.data);
+      // 🚩 Log detallado para ver exactamente qué rechazó el servidor
+      const mensajeServidor = error.response?.data?.error || error.message;
+      console.error("❌ Error al crear suministro:", mensajeServidor);
+      alert(`No se pudo crear: ${mensajeServidor}`);
       return false;
     }
   };
   const eliminarSuministro = async (id) => {
-    if (!window.confirm("¿Eliminar este registro de logística?")) return;
     try {
-      await axios.delete(`${API}/suministros/${id}`);
-      setLogistica(prev => prev.filter(s => s._id !== id));
+      const res = await axios.delete(`${API}/suministros/${id}`);
+      if (res.status === 200) {
+        // ✅ Filtramos sobre el estado correcto
+        setSuministros(prev => prev.filter(s => s._id !== id));
+        return true;
+      }
     } catch (error) {
       console.error("❌ Error al eliminar suministro:", error);
+      alert("No se pudo eliminar el registro");
     }
   };
   const actualizarSuministro = async (id, datosActualizados) => {
     try {
-      const res = await axios.put(`${API}/suministros/${id}`, datosActualizados);
+      // Sanitización para evitar enviar el _id dentro del body
+      const { _id, ...soloDatos } = datosActualizados;
+
+      const datosLimpios = {
+        ...soloDatos,
+        precio: Number(soloDatos.precio) || 0
+      };
+
+      const res = await axios.put(`${API}/suministros/${id}`, datosLimpios);
+
       if (res.status === 200) {
-        setLogistica(prev => prev.map(item =>
-          (item._id || item.id) === id ? res.data : item
+        setSuministros(prev => prev.map(item =>
+          (item._id === id) ? res.data : item
         ));
         return true;
       }
     } catch (error) {
-      console.error("❌ Error al actualizar suministro:", error);
+      console.error("❌ Error al actualizar suministro:", error.response?.data || error.message);
       return false;
     }
   };
@@ -587,7 +611,7 @@ function App() {
           <Routes>
             <Route path="/" element={<IngresoScreen solicitudes={solicitudes} liberarSolicitudManual={liberarSolicitudManual} crearSolicitudGlobal={crearSolicitudGlobal} setSolicitudes={setSolicitudes} cargarDatos={cargarDatos} API={API} ots={ots} />} />
             <Route path="/dashboard" element={<DashboardScreen solicitudes={solicitudes} ots={ots} eliminarOT={eliminarOT} />} />
-            <Route path="/tratamiento" element={<TratamientoScreen recurso={recursos} componentes={componentes} actualizarOtGlobal={actualizarOtGlobal} editarOtGlobal={editarOtGlobal} cargarDatos={cargarDatos} API={API} recursos={recursos} suministros={suministros} />} />
+            <Route path="/tratamiento" element={<TratamientoScreen recurso={recursos} puestosDB={puestosDB} componentes={componentes} actualizarOtGlobal={actualizarOtGlobal} editarOtGlobal={editarOtGlobal} cargarDatos={cargarDatos} API={API} recursos={recursos} suministros={suministros} />} />
             <Route path="/gantt" element={<GanttScreen ots={ots} recursos={recursos} calendarios={calendarios} obtenerHorasParaDia={obtenerHorasParaDia} />} />
             <Route path="/recursos" element={
               <RecursosScreen
@@ -610,6 +634,7 @@ function App() {
                 crearPuesto={crearPuesto}
                 eliminarPuesto={eliminarPuesto}
                 actualizarEquipo={actualizarEquipo}
+                guardarCalendarioGlobal={guardarCalendarioGlobal}
 
               />
             } />

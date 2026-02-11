@@ -17,8 +17,15 @@ exports.crearSuministro = async (req, res) => {
         await nuevoSuministro.save();
         res.status(201).json(nuevoSuministro);
     } catch (error) {
-        console.error("Error en crearSuministro:", error);
-        res.status(400).json({ error: "Error al registrar suministro" });
+        console.error("❌ Error en crearSuministro:", error.message);
+
+        // Si el código está duplicado (Error 11000 en MongoDB)
+        if (error.code === 11000) {
+            return res.status(400).json({ error: "Ese código ya está registrado" });
+        }
+
+        // Si fallan las validaciones del Schema (precio, enum, etc)
+        res.status(400).json({ error: error.message });
     }
 };
 

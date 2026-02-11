@@ -1,20 +1,26 @@
 const mongoose = require('mongoose');
 
 const SuministroSchema = new mongoose.Schema({
-    unidad: {
+    codigo: {
         type: String,
-        required: [true, 'La unidad o vehículo es obligatorio'],
+        required: [true, 'El código es obligatorio'],
+        unique: true,
         trim: true
     },
-    patente: {
+    descripcion: {
         type: String,
-        required: [true, 'La patente es obligatoria'],
-        unique: true, // Evita duplicados de vehículos
+        required: [true, 'La descripción es obligatoria'],
         trim: true
     },
-    ruta: {
+    precio: {
+        type: Number,
+        required: [true, 'El precio es obligatorio'],
+        default: 0
+    },
+    categoria: {
         type: String,
-        required: [true, 'La ruta asignada es obligatoria']
+        enum: ['Transporte', 'Repuesto', 'Insumo', 'Otro'],
+        default: 'Insumo'
     },
     fechaRegistro: {
         type: Date,

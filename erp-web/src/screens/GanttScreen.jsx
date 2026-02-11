@@ -17,11 +17,32 @@ const GanttScreen = ({ recursos = [], ots = [], calendarios = [], obtenerHorasPa
     // 1. Obtener rango de días (ahora basado en un rango fijo o dinámico de las OTs)
     const obtenerDiasUnicos = () => {
         const fechas = [];
-        // Si "ots" es undefined por error, el ?. evita que la app explote
         ots?.forEach(ot => {
             ot.tareas?.forEach(t => { if (t.fecha) fechas.push(t.fecha); });
         });
-        return [...new Set(fechas)].sort();
+
+        if (fechas.length === 0) return [];
+
+        // 1. Convertir a timestamps para encontrar extremos
+        // Añadimos T00:00:00 para evitar problemas de desfase horario
+        const timestamps = fechas.map(f => new Date(f + "T00:00:00").getTime());
+        const minMs = Math.min(...timestamps);
+        const maxMs = Math.max(...timestamps);
+
+        const listaCompleta = [];
+        let fechaActual = new Date(minMs);
+        const fechaFin = new Date(maxMs);
+
+        // 2. Rellenar el rango día por día
+        while (fechaActual <= fechaFin) {
+            const iso = fechaActual.toISOString().split('T')[0];
+            listaCompleta.push(iso);
+
+            // Avanzamos 1 día
+            fechaActual.setDate(fechaActual.getDate() + 1);
+        }
+
+        return listaCompleta; // Ya viene ordenada cronológicamente
     };
 
     const diasHeader = obtenerDiasUnicos();
