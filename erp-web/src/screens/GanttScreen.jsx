@@ -83,7 +83,7 @@ const GanttScreen = ({ recursos = [], ots = [], calendarios = [], obtenerHorasPa
 
                 {/* ENCABEZADO UNIFICADO */}
                 <div style={styles.headerRow}>
-                    <div style={{ ...styles.colBase, width: '80px' }}>OT #</div>
+                    <div style={{ ...styles.colBase, width: '150px' }}>OT #</div>
                     <div style={{ ...styles.colBase, width: '220px' }}>Tarea / Descripción</div>
                     <div style={{ ...styles.colBase, width: '150px' }}>Responsable</div>
                     <div style={{ ...styles.colBase, width: '80px' }}>Duración</div>
@@ -108,12 +108,11 @@ const GanttScreen = ({ recursos = [], ots = [], calendarios = [], obtenerHorasPa
                 </div>
 
                 {/* FILAS DE OTs */}
-                {/* FILAS DE OTs */}
                 {ots.map((ot) => (
                     <React.Fragment key={ot._id}>
                         {/* FILA ÚNICA PARA EL NÚMERO DE OT */}
                         <div style={{ ...styles.dataRow, backgroundColor: '#f8f9fa', fontWeight: 'bold' }}>
-                            <div style={{ ...styles.colBase, width: '80px', color: '#2980b9', fontWeight: 'bold' }}>
+                            <div style={{ ...styles.colBase, width: '150px', color: '#2980b9', fontWeight: 'bold' }}>
                                 {ot.numeroOT || "S/N"}
                             </div>                            <div style={{ ...styles.colBase, width: '450px' }}>PROYECTO: {ot.descripcionGeneral || 'Sin descripción'}</div>
                             <div style={styles.daysArea}>
@@ -125,7 +124,7 @@ const GanttScreen = ({ recursos = [], ots = [], calendarios = [], obtenerHorasPa
                         {ot.tareas?.map((tarea, tIdx) => {
                             return (
                                 <div key={`${ot._id}-${tIdx}`} style={styles.dataRow}>
-                                    <div style={{ ...styles.colBase, width: '80px', color: '#95a5a6', textAlign: 'center' }}>{tIdx + 1}</div>
+                                    <div style={{ ...styles.colBase, width: '150px', color: '#95a5a6', textAlign: 'center' }}>{tIdx + 1}</div>
                                     <div style={{ ...styles.colBase, width: '220px' }}>{tarea.descripcion}</div>
 
                                     {/* Celda de Responsables Corregida */}
@@ -177,7 +176,7 @@ const GanttScreen = ({ recursos = [], ots = [], calendarios = [], obtenerHorasPa
                 {recursos.map(recurso => (
                     <div key={recurso._id} style={styles.dataRow}>
                         {/* Sumamos 80+220+150+80 = 530px para que coincida con la tabla de arriba */}
-                        <div style={{ ...styles.colBase, width: '530px', backgroundColor: '#f9f9f9', padding: '10px', borderRight: '1px solid #ddd' }}>
+                        <div style={{ ...styles.colBase, width: '600px', backgroundColor: '#f9f9f9', padding: '10px', borderRight: '1px solid #ddd' }}>
                             <div style={{ display: 'flex', flexDirection: 'column' }}>
                                 <strong>{recurso.nombre}</strong>
                                 <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>

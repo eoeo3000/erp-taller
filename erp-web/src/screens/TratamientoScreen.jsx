@@ -8,7 +8,11 @@ import html2canvas from 'html2canvas';
 const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = [],
     componentes: componentesDB = [],
     suministros: suministrosDB = [],
+    otSeleccionada: otDelPadre, // <-- Prop nueva
+    setOtSeleccionada: setOtPadre,
     puestosDB: puestosDB = [],
+    enviarASupervisor,
+
     logistica: logisticaDB = [] }) => {
     const { state: datosRecibidos } = useLocation();
     const navigate = useNavigate();
@@ -21,6 +25,11 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
         materiales: [], equipos: [], manoObra: [], lineaMando: [],
         insumos: [], logistica: { alimentacion: 0, traslado: 0, examenes: 0, banos: 0 }
     });
+
+    const [isModalEnvioOpen, setIsModalEnvioOpen] = useState(false);
+    const [emailsEnvio, setEmailsEnvio] = useState([]); // Lista de correos
+    const [nuevoEmail, setNuevoEmail] = useState(''); // Input para añadir otro
+    const [suministros, setSuministros] = useState([]);
     const manejarGuardadoFinal = async () => {
         try {
             const otParaGuardar = {
@@ -159,7 +168,6 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
     });
 
     const guardarPlanificacion = async () => {
-        // Definimos el helper dentro para que no de ReferenceError
         const limpiarIds = (lista) => (lista || []).map(item => {
             const { _id, id, ...resto } = item;
             return (String(_id).length === 24) ? { _id, ...resto } : resto;
@@ -172,11 +180,12 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
             tareas: tareas,
             componentes: limpiarIds(componentes),
 
-            // 🚩 TRUCO AQUÍ: Mapeamos para que coincida con el SCHEMA
+            // 🚩 CLAVE: El Schema solo acepta 'logistica'. 
+            // Usamos nuestro estado 'logistica' (que son tus suministros).
             logistica: (logistica || []).map(l => ({
                 _id: (String(l._id).length === 24) ? l._id : undefined,
-                unidad: l.unidad || '',      // Coincide con tu nuevo modelo
-                patente: l.patente || '',    // Coincide con tu nuevo modelo
+                unidad: l.codigo || l.unidad || '',
+                patente: l.patente || '',
                 descripcion: l.descripcion || '',
                 cantidad: Number(l.cantidad) || 0,
                 precio: Number(l.precio) || 0
@@ -188,13 +197,26 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
 
         try {
             const respuesta = await actualizarOtGlobal(datosRecibidos._id, dataCompleta);
+
             if (respuesta && respuesta.exito) {
                 alert("✅ Planificación guardada.");
-                // Forzamos recarga de datos para ver el cambio
+
+                // 🚩 CAMBIO DE LÓGICA AQUÍ:
+                if (respuesta.otActualizada) {
+                    setOtSeleccionada(respuesta.otActualizada);
+
+                    // Solo actualizamos el estado si el servidor trae datos en logistica
+                    // Si viene vacío o undefined, NO lo tocamos para que no se borre lo que escribió el usuario
+                    if (respuesta.otActualizada.logistica && respuesta.otActualizada.logistica.length > 0) {
+                        setLogistica(respuesta.otActualizada.logistica);
+                    }
+                }
+                // Si cargarDatos es una función que vuelve a pedir todo al servidor, 
+                // asegúrate de que el servidor realmente terminó de escribir en el DB.
                 if (cargarDatos) await cargarDatos();
             }
         } catch (error) {
-            console.error(error);
+            console.error("Error al guardar:", error);
         }
     };
     const finalizarYCotizar = async () => {
@@ -207,29 +229,43 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
         try {
             const payload = prepararPayload();
 
-            // --- 🚀 CORRECCIÓN CRÍTICA DE RUTA ---
-            // Cambiamos `${API}/convertir-ot` por `${API}/ots/convertir-ot`
+            // --- 🚀 GUARDADO EN BD ---
             const respuesta = await axios.post(`${API}/ots/convertir-ot`, payload);
 
             if (respuesta.status === 200 || respuesta.status === 201) {
-                // 2. Sincronizamos el estado global en App.js
+                /*
+                                // A. Registramos el Log (Usamos datosRecibidos._id que es tu fuente de verdad)
+                                const idParaLog = datosRecibidos?._id;
+                
+                                await registrarEvento(
+                                    idParaLog,
+                                    'En Tratamiento',
+                                    'Generación de OT',
+                                    'Se completó la planificación de suministros y personal.'
+                                );
+                */
+                // B. Sincronizamos datos globales
                 if (typeof cargarDatos === 'function') {
                     await cargarDatos();
                 }
 
-                // 3. Generar el documento (solo si el backend confirmó el guardado)
+                // C. 🚩 CORRECCIÓN CRÍTICA: Cambiamos solicitudSeleccionada por datosRecibidos
+                const correoBase = datosRecibidos?.correo || "";
+                setEmailsEnvio([correoBase]);
+                setIsModalEnvioOpen(true);
+
+                // D. Generar el PDF
                 generarPDF();
 
-                alert("✅ Cotización guardada en Atlas y PDF generado con éxito.");
-                navigate('/');
+                console.log("✅ OT Guardada y lista para envío.");
             }
         } catch (error) {
             console.error("❌ Error al finalizar:", error);
-            // Mostramos un mensaje más descriptivo si el backend nos da detalles
             const mensajeError = error.response?.data?.error || "Error al conectar con el servidor.";
             alert(`No se pudo procesar: ${mensajeError}`);
         }
     };
+
     const agregarTarea = () => {
         const nuevaTarea = {
             id: Date.now(), // ID temporal para el renderizado
@@ -243,24 +279,78 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
 
         setTareas([...tareas, nuevaTarea]);
     };
+    useEffect(() => {
+        const cargarDetalleOT = async () => {
+            if (!datosRecibidos?._id) return;
+
+            try {
+                const respuesta = await axios.get(`${API}/ots/solicitud/${datosRecibidos._id}`);
+
+                if (respuesta.data) {
+                    // ✅ DEFINIMOS 'data' AQUÍ
+                    const data = respuesta.data;
+
+                    console.log("-----------------------------------------");
+                    console.log("📦 DATOS RECUPERADOS:", data);
+
+                    // Ahora 'data' ya existe y no dará error
+                    const encontrados = data.reportes || data.evidencias || data.fotos || [];
+                    console.log("📸 Cantidad de reportes hallados:", encontrados.length);
+                    console.log("-----------------------------------------");
+
+                    setOtSeleccionada(data);
+                    setTareas(data.tareas || []);
+                    setComponentes(data.componentes || []);
+
+                    // Uso de la preferencia guardada: suministros/logistica
+                    if (data.logistica && data.logistica.length > 0) {
+                        setLogistica(data.logistica);
+                    } else {
+                        setLogistica([{ id: Date.now(), descripcion: '', cantidad: 1, precio: 0 }]);
+                    }
+
+                    setSuministros(data.suministros || []);
+                }
+            } catch (error) {
+                console.error("❌ Error de red:", error.message);
+            }
+            inicializado.current = true;
+        };
+
+        cargarDetalleOT();
+    }, [datosRecibidos?._id, API]);
 
     useEffect(() => {
         const cargarDetalleOT = async () => {
             if (!datosRecibidos?._id) return;
 
             try {
-                const res = await axios.get(`${API}/ots/solicitud/${datosRecibidos._id}`);
-                if (res.data) {
+                const respuesta = await axios.get(`${API}/ots/numero/${data.numeroOT}`); if (res.data) {
                     setOtSeleccionada(res.data);
                     setTareas(res.data.tareas || []);
                     setComponentes(res.data.componentes || []);
-                    setSuministros(res.data.suministros || []); // Carga suministros desde DB
+
+                    // 🚩 CORRECCIÓN CRÍTICA:
+                    // Si tu tabla usa el estado 'logistica', debes cargar los datos ahí.
+                    // Usamos res.data.logistica porque es el nombre que definiste en guardarPlanificacion.
+                    if (res.data.logistica && res.data.logistica.length > 0) {
+                        setLogistica(res.data.logistica);
+                    } else {
+                        // Si no hay nada, dejamos el campo inicial para que el usuario pueda escribir
+                        setLogistica([{ id: Date.now(), descripcion: '', cantidad: 1, precio: 0 }]);
+                    }
+
+                    // Si aún necesitas setSuministros para otra lógica, mantenlo, 
+                    // pero 'logistica' es lo que controla tu tabla actual.
+                    setSuministros(res.data.suministros || []);
                 }
             } catch (error) {
                 if (error.response?.status === 404) {
                     console.info("📝 Nueva planificación: Iniciando campos en blanco.");
                     if (!inicializado.current) {
                         setTareas([{ id: Date.now(), descripcion: '', puesto: '', duracion: 0, fecha: '', hora: '', valorHora: 0 }]);
+                        // Inicializamos también la logistica/suministros vacía
+                        setLogistica([{ id: Date.now(), descripcion: '', cantidad: 1, precio: 0 }]);
                     }
                 } else {
                     console.error("❌ Error de red:", error.message);
@@ -286,21 +376,71 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
     const actualizarLogistica = (index, campo, valor) => {
         setLogistica(prev => {
             const nueva = [...prev];
-            nueva[index] = { ...nueva[index], [campo]: valor };
+
+            // Convertimos a número solo si el campo es cantidad o precio
+            const valorFinal = (campo === 'cantidad' || campo === 'precio')
+                ? parseFloat(valor || 0)
+                : valor;
+
+            nueva[index] = {
+                ...nueva[index],
+                [campo]: valorFinal
+            };
+
             return nueva;
         });
     };
     const generarPDF = async () => {
         const doc = new jsPDF();
         const pageWidth = doc.internal.pageSize.getWidth();
-        // 1. Encabezado
+
+        // 1. Encabezado Principal
         doc.setFontSize(18);
         doc.setTextColor(44, 62, 80);
         doc.text("COTIZACIÓN TÉCNICA Y COMERCIAL", pageWidth / 2, 20, { align: 'center' });
+
         doc.setFontSize(10);
-        doc.text(`OT N°: ${datosRecibidos?._id || 'N/A'}`, 14, 30);
+        doc.setTextColor(100);
+        doc.text(`OT N°: ${datosRecibidos?.numeroOT || 'N/A'}`, 14, 28);
+        doc.text(`Fecha Emisión: ${new Date().toLocaleDateString()}`, pageWidth - 14, 28, { align: 'right' });
+
+        // --- NUEVA SECCIÓN: DATOS DE LA SOLICITUD (CLIENTE Y REQUERIMIENTO) ---
+        doc.setDrawColor(200);
+        doc.line(14, 32, pageWidth - 14, 32); // Línea divisoria
+
+        doc.setFontSize(11);
+        doc.setTextColor(44, 62, 80);
+        doc.setFont(undefined, 'bold');
+        doc.text("INFORMACIÓN DEL CLIENTE", 14, 38);
+        doc.text("DETALLES DEL SERVICIO", pageWidth / 2 + 7, 38);
+
+        doc.setFontSize(9);
+        doc.setTextColor(0);
+        doc.setFont(undefined, 'normal');
+
+        // Columna Izquierda: Cliente
+        doc.text(`Empresa: ${datosRecibidos?.empresaSolicitante || 'Particular'}`, 14, 45);
+        doc.text(`Solicitante: ${datosRecibidos?.solicitante || '-'}`, 14, 50);
+        doc.text(`Correo: ${datosRecibidos?.correo || '-'}`, 14, 55);
+        doc.text(`Teléfono: ${datosRecibidos?.numero || '-'}`, 14, 60);
+
+        // Columna Derecha: Requerimiento
+        const col2 = pageWidth / 2 + 7;
+        doc.text(`Origen: ${datosRecibidos?.origen || 'WhatsApp'}`, col2, 45);
+        doc.text(`Fecha Solicitada: ${datosRecibidos?.fechaEjecucionSolicitada ? new Date(datosRecibidos.fechaEjecucionSolicitada).toLocaleDateString() : 'A convenir'}`, col2, 50);
+        doc.text(`Plazo Sugerido: ${datosRecibidos?.plazoEjecucionSugerido || '0'} días`, col2, 55);
+
+        // Descripción con salto de línea automático
+        const desc = `Descripción: ${datosRecibidos?.descripcion || 'Sin detalle'}`;
+        const splitDesc = doc.splitTextToSize(desc, pageWidth - 28);
+        doc.text(splitDesc, 14, 68);
+
+        // Calculamos dónde termina la descripción para mover las tablas
+        const startTablesY = 68 + (splitDesc.length * 5) + 5;
+
+        // 2. Tablas de Costos y Suministros
         autoTable(doc, {
-            startY: 40,
+            startY: startTablesY,
             head: [['1. MATERIALES / REPUESTOS', 'CANT.', 'SUBTOTAL']],
             body: componentes.map(c => [
                 c.descripcion,
@@ -309,56 +449,69 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
             ]),
             headStyles: { fillColor: [44, 62, 80] }
         });
+
         autoTable(doc, {
             startY: doc.lastAutoTable.finalY + 10,
-            head: [['2. PLAN DE TRABAJO', 'PUESTO', 'HRS', 'SUBTOTAL']],
+            head: [['2. PLAN DE TRABAJO (SUMINISTROS)', 'PUESTO', 'HRS', 'SUBTOTAL']],
             body: tareas.map(t => [
                 t.descripcion,
                 t.puesto,
                 t.duracion,
-                `$ ${(Number(t.duracion) * Number(t.valorHora)).toLocaleString()}`
+                `$ ${(Number(t.duracion) * Number(t.valorHora) * (t.operarioId?.length || 1)).toLocaleString()}`
             ]),
             headStyles: { fillColor: [52, 73, 94] }
         });
+
+        // 3. Gantt (Captura de imagen)
         const finalYPlan = doc.lastAutoTable.finalY + 10;
         doc.setFontSize(12);
+        doc.setTextColor(44, 62, 80);
         doc.text("3. CRONOGRAMA DE EJECUCIÓN (GANTT)", 14, finalYPlan);
 
-        // Capturamos el elemento HTML de la Gantt
         const ganttElement = document.getElementById('seccion-gantt-visual');
+        let nextY = finalYPlan + 10;
+
         if (ganttElement) {
             const canvas = await html2canvas(ganttElement, { scale: 2 });
             const imgData = canvas.toDataURL('image/png');
-
-            // Ajustamos la imagen al ancho del PDF
             const imgWidth = pageWidth - 28;
             const imgHeight = (canvas.height * imgWidth) / canvas.width;
 
-            doc.addImage(imgData, 'PNG', 14, finalYPlan + 5, imgWidth, imgHeight);
-
-            // Actualizamos la posición para la siguiente tabla
-            var nextY = finalYPlan + imgHeight + 15;
-        } else {
-            var nextY = finalYPlan + 10;
+            // Verificar si la imagen cabe en la página actual, si no, añadir página
+            if (finalYPlan + imgHeight > 270) {
+                doc.addPage();
+                doc.addImage(imgData, 'PNG', 14, 20, imgWidth, imgHeight);
+                nextY = 20 + imgHeight + 15;
+            } else {
+                doc.addImage(imgData, 'PNG', 14, finalYPlan + 5, imgWidth, imgHeight);
+                nextY = finalYPlan + imgHeight + 15;
+            }
         }
+
+        // 4. Suministros de Traslado (Logística)
         autoTable(doc, {
             startY: nextY,
-            head: [['4. LOGÍSTICA Y TRASLADOS', 'SUBTOTAL']],
+            head: [['4. TRASLADOS Y OTROS SUMINISTROS', 'SUBTOTAL']],
             body: logistica.map(l => [
                 l.descripcion,
                 `$ ${(Number(l.cantidad) * Number(l.precio)).toLocaleString()}`
             ]),
             headStyles: { fillColor: [127, 140, 141] }
         });
+
+        // 5. Totales Finales
         const resY = doc.lastAutoTable.finalY + 15;
         doc.setFontSize(11);
+        doc.setTextColor(0);
         doc.text(`TOTAL NETO: $ ${granTotal.toLocaleString()}`, pageWidth - 15, resY, { align: 'right' });
         doc.text(`IVA (19%): $ ${(granTotal * 0.19).toLocaleString()}`, pageWidth - 15, resY + 7, { align: 'right' });
         doc.setFontSize(13);
+        doc.setFont(undefined, 'bold');
         doc.text(`TOTAL BRUTO: $ ${(granTotal * 1.19).toLocaleString()}`, pageWidth - 15, resY + 15, { align: 'right' });
 
-        // 7. Guardar
-        doc.save(`Cotizacion_OT_${datosRecibidos._id}.pdf`);
+        // 6. Guardar Documento
+        doc.save(`Cotizacion_OT_${datosRecibidos?._id || 'nueva'}.pdf`);
+        return doc;
     };
 
     // --- 1. Primero calculamos los subtotales independientes ---
@@ -457,7 +610,75 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
         if (logisticaDB && logisticaDB.length > 0) {
         }
     }, [logisticaDB, suministrosDB]);
+    const abrirModalEnvio = (solicitud) => {
+        // Iniciamos la lista con el correo que ya tiene la solicitud
+        setEmailsEnvio([solicitud.correo]);
+        setIsModalEnvioOpen(true);
+    };
 
+    const validarFechasTareas = () => {
+        // 1. Verificamos que existan tareas
+        if (!tareas || tareas.length === 0) {
+            alert("⚠️ No hay tareas programadas. Agregue al menos una tarea antes de continuar.");
+            return false;
+        }
+
+        const hoy = new Date();
+        hoy.setHours(0, 0, 0, 0); // Resetear horas para comparar solo el calendario
+
+        // 2. Revisamos si alguna tarea tiene fecha pasada
+        const tieneFechasPasadas = tareas.some(tarea => {
+            if (!tarea.fecha) return true; // Si no hay fecha, la tratamos como error
+            const fechaTarea = new Date(tarea.fecha);
+            return fechaTarea < hoy;
+        });
+
+        if (tieneFechasPasadas) {
+            alert("⚠️ Error en Suministros: Hay tareas con fechas pasadas o sin fecha. Por favor, ajuste el cronograma al futuro.");
+            return false;
+        }
+        return true;
+    };
+
+    const manejarEnvioSupervisor = () => {
+        // 1. Preguntar el número (por defecto dejamos un código de país)
+        const numeroDestino = window.prompt("📱 ¿A qué número de WhatsApp enviamos la planificación? (Ej: 56912345678)", "569");
+
+        // 2. Validar que no canceló y que el número tiene un largo mínimo
+        if (numeroDestino && numeroDestino.length > 8) {
+
+            // Preparamos la data (usamos datosRecibidos o otSeleccionada)
+            const dataParaEnviar = {
+                ...datosRecibidos,
+                tareas: tareas,
+                componentes: componentes,
+                logistica: logistica, // Estos son tus suministros
+                whatsappDestino: numeroDestino // Pasamos el número elegido
+            };
+
+            // 3. Llamar a la función que viene por props
+            enviarASupervisor(dataParaEnviar);
+
+        } else if (numeroDestino !== null) {
+            alert("⚠️ Por favor ingresa un número válido para despachar los suministros.");
+        }
+    };
+
+    const manejarCambioEvidencia = (idx, campo, valor) => {
+        const nuevasTareas = [...tareas];
+        nuevasTareas[idx] = { ...nuevasTareas[idx], [campo]: valor };
+        setTareas(nuevasTareas);
+    };
+
+    const capturarFoto = (idx, archivo) => {
+        if (!archivo) return;
+        const reader = new FileReader();
+        reader.onloadend = () => {
+            manejarCambioEvidencia(idx, 'fotoEvidencia', reader.result); // Guardamos el base64
+            alert("📸 Foto cargada correctamente");
+        };
+        reader.readAsDataURL(archivo);
+    };
     return (
         <div style={styles.container}>
             <div style={styles.cardFull}>
@@ -483,6 +704,12 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                     <button onClick={() => setTabActiva('componentes')} style={tabActiva === 'componentes' ? styles.tabBtnActive : styles.tabBtn}>2. Equipos/Herramientas</button>
                     <button onClick={() => setTabActiva('Logistica')} style={tabActiva === 'Logistica' ? styles.tabBtnActive : styles.tabBtn}>3. Suministros Directos</button>
                     <button onClick={() => setTabActiva('cotizacion')} style={tabActiva === 'cotizacion' ? styles.tabBtnActive : styles.tabBtn}>3. Cotización Comercial</button>
+                    <button
+                        onClick={() => setTabActiva('reportes')}
+                        style={{ ...styles.tabBtn, backgroundColor: tabActiva === 'reportes' ? '#27ae60' : '#eee' }}
+                    >
+                        📸 Reportes ({otSeleccionada.reportes?.length || 0})
+                    </button>
                 </div>
                 <div style={styles.content}>
                     {/* VISTA 1: TAREAS */}
@@ -806,12 +1033,12 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                                                 <input
                                                     list="lista-suministros-recursos"
                                                     style={styles.inputTable}
-                                                    value={l.codigo || ''}
+                                                    value={l.codigo || l.unidad || ''}
                                                     placeholder="Buscar código..."
                                                     onChange={(e) => {
                                                         const val = e.target.value;
                                                         actualizarLogistica(idx, 'codigo', val);
-
+                                                        actualizarLogistica(idx, 'unidad', val);
                                                         // Buscador Actualizado para el nuevo Schema
                                                         const match = (suministrosDB || []).find(s =>
                                                             s.codigo?.toLowerCase() === val.toLowerCase() ||
@@ -866,7 +1093,6 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                             <button onClick={agregarLogistica} style={styles.btnPrimario}>+ Añadir Suministro</button>
                         </div>
                     )}
-                    {/* 🚩 DATALISTS: Deben estar dentro del return para reconocer componentesDB y logisticaDB */}
                     {/* 🚩 DATALISTS ACTUALIZADOS */}
                     <datalist id="lista-componentes-recursos">
                         {(componentesDB || []).map((item, i) => (
@@ -891,8 +1117,79 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                             {/* ENCABEZADO PROFESIONAL */}
                             <div style={styles.headerDoc}>
                                 <h2 style={{ textAlign: 'center', color: '#2c3e50' }}>COTIZACIÓN TÉCNICA Y COMERCIAL</h2>
-                                <p><strong>OT N°:</strong> {datosRecibidos?._id || 'N/A'}</p>
+                                <p><strong>OT N°:</strong> {datosRecibidos?.numeroOT || 'N/A'}</p>
                             </div>
+                            <section style={{
+                                ...styles.seccionDoc,
+                                border: '1px solid #ced4da',
+                                borderRadius: '8px',
+                                padding: '20px',
+                                marginBottom: '25px',
+                                backgroundColor: '#fff',
+                                boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
+                            }}>
+                                {/* Contenedor Principal Flex */}
+                                <div style={{ display: 'flex', gap: '30px', flexWrap: 'wrap' }}>
+
+                                    {/* COLUMNA 1: CLIENTE */}
+                                    <div style={{ flex: '1', minWidth: '300px' }}>
+                                        <h6 style={{ color: '#2c3e50', borderBottom: '2px solid #3498db', paddingBottom: '5px', fontSize: '0.9rem', fontWeight: 'bold', textTransform: 'uppercase' }}>
+                                            👤 Identificación del Cliente
+                                        </h6>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '10px', fontSize: '0.95rem' }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                                <span style={{ color: '#6c757d' }}>Empresa:</span>
+                                                <span style={{ fontWeight: '600' }}>{datosRecibidos?.empresaSolicitante || 'Particular'}</span>
+                                            </div>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                                <span style={{ color: '#6c757d' }}>Solicitante:</span>
+                                                <span>{datosRecibidos?.solicitante || '-'}</span>
+                                            </div>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                                <span style={{ color: '#6c757d' }}>Correo:</span>
+                                                <span style={{ color: '#007bff' }}>{datosRecibidos?.correo || '-'}</span>
+                                            </div>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                                <span style={{ color: '#6c757d' }}>Teléfono / Dir:</span>
+                                                <span>{datosRecibidos?.numero || '-'} | {datosRecibidos?.direccion || '-'}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* COLUMNA 2: REQUERIMIENTO */}
+                                    <div style={{ flex: '1', minWidth: '300px' }}>
+                                        <h6 style={{ color: '#2c3e50', borderBottom: '2px solid #3498db', paddingBottom: '5px', fontSize: '0.9rem', fontWeight: 'bold', textTransform: 'uppercase' }}>
+                                            📋 Detalles del Requerimiento
+                                        </h6>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '10px', fontSize: '0.95rem' }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                                <span style={{ color: '#6c757d' }}>Origen / Plazo:</span>
+                                                <span>{datosRecibidos?.origen || 'WhatsApp'} / {datosRecibidos?.plazoEjecucionSugerido || '0'} días</span>
+                                            </div>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                                <span style={{ color: '#6c757d' }}>Fecha Solicitada:</span>
+                                                <span style={{ fontWeight: '600' }}>{datosRecibidos?.fechaEjecucionSolicitada ? new Date(datosRecibidos.fechaEjecucionSolicitada).toLocaleDateString() : 'A convenir'}</span>
+                                            </div>
+                                            <div style={{ marginTop: '5px' }}>
+                                                <span style={{ color: '#6c757d', fontSize: '0.85rem' }}>Descripción del servicio:</span>
+                                                <div style={{
+                                                    backgroundColor: '#f8f9fa',
+                                                    padding: '10px',
+                                                    borderRadius: '5px',
+                                                    border: '1px solid #e9ecef',
+                                                    marginTop: '5px',
+                                                    fontSize: '0.9rem',
+                                                    fontStyle: 'italic',
+                                                    color: '#495057'
+                                                }}>
+                                                    {datosRecibidos?.descripcion || 'Sin descripción.'}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                </div>
+                            </section>
 
                             {/* SECCIÓN 1: COMPONENTES / REPUESTOS */}
                             <section style={styles.seccionDoc}>
@@ -1041,6 +1338,158 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                             </div>
                         </div>
                     )}
+                    {tabActiva === 'reportes' && (
+                        <div style={{ padding: '20px' }}>
+                            <h3 style={{ borderBottom: '2px solid #27ae60', paddingBottom: '10px' }}>
+                                📸 Historial de Evidencias en Terreno
+                            </h3>
+
+                            {otSeleccionada.reportes && otSeleccionada.reportes.length > 0 ? (
+                                <div style={{
+                                    display: 'grid',
+                                    gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))',
+                                    gap: '20px',
+                                    marginTop: '20px'
+                                }}>
+                                    {otSeleccionada.reportes.map((rep, i) => (
+                                        <div key={i} style={{
+                                            background: '#fff',
+                                            borderRadius: '10px',
+                                            boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                                            overflow: 'hidden'
+                                        }}>
+                                            <img
+                                                src={rep.foto}
+                                                alt="Evidencia"
+                                                style={{ width: '100%', height: '180px', objectFit: 'cover', cursor: 'pointer' }}
+                                                onClick={() => window.open(rep.foto, '_blank')} // Zoom simple
+                                            />
+                                            <div style={{ padding: '12px' }}>
+                                                <p style={{ margin: 0, fontWeight: 'bold', color: '#2c3e50' }}>{rep.tareaId}</p>
+                                                <p style={{ margin: '5px 0', fontSize: '0.9em', color: '#7f8c8d' }}>{rep.comentario}</p>
+                                                <small style={{ color: '#bdc3c7' }}>
+                                                    📅 {new Date(rep.fecha).toLocaleString()}
+                                                </small>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : (
+                                <div style={{ textAlign: 'center', padding: '50px', color: '#95a5a6' }}>
+                                    <p style={{ fontSize: '1.2em' }}>No hay reportes fotográficos para esta OT aún.</p>
+                                    <small>Los reportes subidos desde la App móvil aparecerán aquí.</small>
+                                </div>
+                            )}
+                        </div>
+                    )}
+                    {isModalEnvioOpen && (
+                        <div style={styles.overlay}>
+                            <div style={styles.modal}>
+                                <div style={styles.modalHeader}>
+                                    <h3 style={{ margin: 0 }}>📧 Enviar Cotización por Correo</h3>
+                                    <button onClick={() => setIsModalEnvioOpen(false)} style={styles.btnCloseModal}>&times;</button>
+                                </div>
+
+                                <div style={styles.modalBody}>
+                                    <p>Confirme los destinatarios para enviar la cotización:</p>
+
+                                    <div style={styles.listaEmails}>
+                                        {emailsEnvio.map((email, index) => (
+                                            <div key={index} style={styles.tagEmail}>
+                                                {email}
+                                                <span
+                                                    onClick={() => setEmailsEnvio(emailsEnvio.filter((_, i) => i !== index))}
+                                                    style={{ cursor: 'pointer', marginLeft: '8px', color: '#e74c3c', fontWeight: 'bold' }}
+                                                >✕</span>
+                                            </div>
+                                        ))}
+                                    </div>
+
+                                    <div style={{ display: 'flex', gap: '10px', marginTop: '15px' }}>
+                                        <input
+                                            type="email"
+                                            placeholder="Añadir otro correo (ej: finanzas@empresa.com)"
+                                            style={styles.inputTable}
+                                            value={nuevoEmail}
+                                            onChange={(e) => setNuevoEmail(e.target.value)}
+                                        />
+                                        <button
+                                            onClick={() => {
+                                                if (nuevoEmail && nuevoEmail.includes('@')) {
+                                                    setEmailsEnvio([...emailsEnvio, nuevoEmail]);
+                                                    setNuevoEmail('');
+                                                }
+                                            }}
+                                            style={styles.btnAgregarEmail}
+                                        >+ Añadir</button>
+                                    </div>
+                                </div>
+
+                                <div style={styles.modalFooter}>
+                                    <button onClick={() => setIsModalEnvioOpen(false)} style={styles.btnInactivo}>Cancelar</button>
+                                    <button
+                                        onClick={async () => {
+                                            try {
+                                                console.log("=== 🛠️ VERIFICACIÓN DE SUMINISTROS ===");
+
+                                                // 1. Extraemos las fechas limpias de las tareas
+                                                const fechasRaw = tareas.map(t => t.fecha).filter(f => f);
+                                                console.log("1. Fechas detectadas en la tabla:", fechasRaw);
+
+                                                if (fechasRaw.length === 0) {
+                                                    alert("⚠️ No hay fechas programadas en las tareas.");
+                                                    return;
+                                                }
+
+                                                // 2. Simulamos el cálculo de rango (Motor de fechas)
+                                                // Usamos 'T00:00:00' para evitar que la zona horaria nos quite un día
+                                                const objetosFecha = fechasRaw.map(f => new Date(f + 'T00:00:00'));
+
+                                                const minFecha = new Date(Math.min(...objetosFecha));
+                                                const maxFecha = new Date(Math.max(...objetosFecha));
+
+                                                console.log("2. Cálculo de Cronograma:");
+                                                console.log("   - Fecha de Inicio:", minFecha.toLocaleDateString('es-CL'));
+                                                console.log("   - Fecha de Término:", maxFecha.toLocaleDateString('es-CL'));
+                                                console.log("   - Días totales:", Math.ceil((maxFecha - minFecha) / (1000 * 60 * 60 * 24)) + 1);
+
+                                                /*
+                                                // 3. Generamos el PDF (sin descarga automática)
+                                                const doc = await generarPDF();
+                                                const pdfBase64 = doc.output('datauristring').split(',')[1];
+                                                console.log("3. ✅ PDF generado correctamente.");
+
+                                                // 4. Envío real al Backend
+                                                const respuesta = await axios.post('http://localhost:5000/api/mail/enviar-cotizacion', {
+                                                    emails: emailsEnvio,
+                                                    otId: datosRecibidos?._id,
+                                                    cliente: datosRecibidos?.solicitante || "Cliente General",
+                                                    total: granTotal || 0,
+                                                    pdfData: pdfBase64,
+                                                    tareas: tareas // Enviamos las tareas para que el backend repita el cálculo en el HTML del correo
+                                                });
+                                                */
+
+                                                if (respuesta.data.ok) {
+                                                    alert(`🚀 Cotización enviada. Programado del ${minFecha.toLocaleDateString('es-CL')} al ${maxFecha.toLocaleDateString('es-CL')}`);
+                                                    setIsModalEnvioOpen(false);
+                                                    navigate('/');
+                                                }
+
+                                            } catch (error) {
+                                                console.error("❌ Error en el proceso:", error);
+                                                alert("Error al procesar los suministros. Revisa la consola.");
+                                            }
+                                        }}
+                                        style={styles.btnSuccessFinal}
+                                    >
+                                        🚀 Enviar Ahora
+                                    </button>
+
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
                 <div style={styles.footerAcciones}>
                     <div style={{ display: 'flex', gap: '15px' }}>
@@ -1054,28 +1503,122 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
 
                         <button
                             type="button"
-                            onClick={() => guardarPlanificacion(false)}
+                            onClick={() => {
+                                // ✅ Validamos antes de guardar en Atlas
+                                if (validarFechasTareas()) {
+                                    guardarPlanificacion(false);
+                                }
+                            }}
                             style={styles.btnPlanificar}
                         >
                             💾 Solo Guardar Planificación
                         </button>
                     </div>
-
-                    {/* Este botón destaca más y sugiere el cierre del proceso */}
                     <button
                         type="button"
-                        onClick={finalizarYCotizar}
-                        style={tabActiva === 'cotizacion' ? styles.btnSuccessFinal : styles.btnSuccessInactivo}
+                        onClick={manejarEnvioSupervisor} // <-- Llamamos a la lógica que pregunta el número
+                        style={{
+                            backgroundColor: '#2c3e50', // Azul oscuro "Supervisor"
+                            color: 'white',
+                            padding: '12px 20px',
+                            borderRadius: '8px',
+                            border: 'none',
+                            cursor: 'pointer',
+                            fontWeight: 'bold',
+                            marginTop: '15px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '10px',
+                            width: '100%',
+                            justifyContent: 'center'
+                        }}
                     >
-                        💰 {tabActiva === 'cotizacion' ? 'FINALIZAR Y GENERAR COTIZACIÓN' : 'IR A COTIZAR'}
+                        👷‍♂️ DESPACHAR SUMINISTROS A SUPERVISOR
                     </button>
-                </div>            </div>
+                    <button
+                        type="button"
+                        onClick={() => {
+                            if (tabActiva !== 'cotizacion') {
+                                // 1. Si no estamos en la pestaña final, solo cambiamos de pestaña
+                                setTabActiva('cotizacion');
+                            } else {
+                                // 2. Si ya estamos en cotización, validamos y ejecutamos el proceso real
+                                if (validarFechasTareas()) {
+                                    finalizarYCotizar();
+                                }
+                            }
+                        }}
+                        style={tabActiva === 'cotizacion' ? styles.btnSuccessFinal : styles.btnSuccessNormal}
+                    >
+                        💰 {tabActiva === 'cotizacion' ? 'FINALIZAR Y GENERAR COTIZACIÓN' : 'SIGUIENTE: REVISAR COTIZACIÓN'}
+                    </button>
+                </div>
+            </div>
         </div>
     );
 };
 
 // ESTILOS ADICIONALES PARA EL DISEÑO NUEVO
 const styles = {
+    overlay: {
+        position: 'fixed',
+        top: 0, left: 0, right: 0, bottom: 0,
+        backgroundColor: 'rgba(0,0,0,0.7)',
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        zIndex: 9999
+    },
+    modal: {
+        backgroundColor: '#fff',
+        padding: '25px',
+        borderRadius: '12px',
+        width: '450px',
+        boxShadow: '0 10px 30px rgba(0,0,0,0.3)'
+    },
+    tagEmail: {
+        display: 'inline-flex',
+        alignItems: 'center',
+        backgroundColor: '#ebf5ff',
+        color: '#007bff',
+        padding: '5px 12px',
+        borderRadius: '20px',
+        margin: '5px',
+        fontSize: '14px',
+        border: '1px solid #cce5ff'
+    },
+    listaEmails: {
+        border: '1px solid #ddd',
+        padding: '10px',
+        borderRadius: '8px',
+        minHeight: '60px',
+        marginBottom: '15px',
+        backgroundColor: '#fcfcfc'
+    },
+    btnInactivo: {
+        backgroundColor: '#95a5a6',
+        color: 'white',
+        border: 'none',
+        padding: '10px 20px',
+        borderRadius: '6px',
+        cursor: 'pointer'
+    },
+    btnCloseModal: {
+        background: 'none',
+        border: 'none',
+        fontSize: '24px',
+        cursor: 'pointer',
+        color: '#7f8c8d'
+    },
+    seccionDoc: {
+        border: '1px solid #ced4da',
+        borderRadius: '8px',
+        padding: '20px',
+        overflowX: 'auto',
+        marginBottom: '25px',
+        backgroundColor: '#fff',
+        boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
+    },
     btnDeleteRow: {
         backgroundColor: 'transparent',
         border: 'none',
@@ -1100,9 +1643,9 @@ const styles = {
     tabBtn: { padding: '12px 25px', border: '1px solid #ddd', cursor: 'pointer', borderRadius: '8px 8px 0 0', background: '#f8f9fa' },
     tabBtnActive: { padding: '12px 25px', border: '1px solid #3498db', borderBottom: '2px solid white', background: 'white', fontWeight: 'bold', color: '#3498db', borderRadius: '8px 8px 0 0', zIndex: 1 },
     content: { border: '1px solid #ddd', padding: '25px', borderRadius: '0 8px 8px 8px', marginTop: '-1px' },
-    table: { tableLayout: 'fixed', width: '100%', borderCollapse: 'collapse', marginBottom: '10px' },
+    table: { minWidth: '800px', tableLayout: 'fixed', width: '100%', borderCollapse: 'collapse', marginBottom: '10px' },
     headerTable: { background: '#f8f9fa', textAlign: 'left' },
-    inputTable: { width: '90%', padding: '8px', border: '1px solid #ccc', borderRadius: '4px' },
+    inputTable: { boxSizing: 'border-box', width: '90%', padding: '8px', border: '1px solid #ccc', borderRadius: '4px' },
     celdaSubtotal: { textAlign: 'right', fontWeight: 'bold', paddingRight: '10px' },
     cotizadorGrid: { display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '30px' },
     subTitulo: { borderLeft: '4px solid #3498db', paddingLeft: '10px', color: '#2c3e50', marginBottom: '15px' },
@@ -1112,7 +1655,6 @@ const styles = {
     resumenLinea: { display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '15px' },
     totalTexto: { color: '#27ae60', margin: '10px 0 0 0', textAlign: 'right' },
     btnAddSmall: { padding: '8px 15px', background: '#34495e', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '13px' },
-    btnSuccess: { width: '100%', marginTop: '30px', padding: '18px', background: '#27ae60', color: 'white', border: 'none', borderRadius: '8px', fontSize: '18px', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 4px 10px rgba(39, 174, 96, 0.3)' },
     footerAcciones: {
         display: 'flex',
         justifyContent: 'space-between',

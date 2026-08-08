@@ -48,7 +48,13 @@ const OTSchema = new mongoose.Schema({
         cantidad: Number,
         precio: Number
     }],
-
+    reportes: [{
+        fecha: { type: Date, default: Date.now },
+        tareaId: String,
+        comentario: String,
+        foto: String, // Base64 o URL
+        usuario: String // Nombre del supervisor
+    }],
     // 4. Totales Financieros
     granTotal: { type: Number, default: 0 },
 

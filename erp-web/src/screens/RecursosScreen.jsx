@@ -277,10 +277,16 @@ const RecursosScreen = (
                 )}
                 {/* EQUIPOS */}
                 {tabActiva === 'Equipos/Herramientas' && <>
+                    {/* 🚩 NUEVA COLUMNA DE CÓDIGO */}
+                    <span style={{ flex: 1, fontWeight: 'bold', color: '#7f8c8d' }}>
+                        {item.codigo || 'S/C'}
+                    </span>
+
                     <span style={{ flex: 2, fontWeight: '500' }}>{item.nombre}</span>
+
                     <span style={{ flex: 1.5 }}>{item.tipo}</span>
 
-                    {/* 🚩 NUEVA COLUMNA DE PRECIO */}
+                    {/* COLUMNA DE PRECIO */}
                     <span style={{ flex: 1, fontWeight: 'bold', color: '#27ae60' }}>
                         {new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP' }).format(item.precio || 0)}
                     </span>
@@ -293,7 +299,6 @@ const RecursosScreen = (
                         {item.estado}
                     </span>
                 </>}
-
                 {/* LOGÍSTICA (Suministros Directos) */}
                 {tabActiva === 'Suministros Directos' && <>
                     <span style={{ flex: 2, fontWeight: '500' }}>{item.codigo}</span>
@@ -476,7 +481,6 @@ const RecursosScreen = (
                                 </div>
 
                             )}
-
                             {tabActiva === 'Equipos/Herramientas' && (
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                                     <button onClick={() => setIsModalCompOpen(true)} style={{ ...styles.btnPrimary, backgroundColor: '#8e44ad', padding: '8px 12px', fontSize: '0.85rem' }}>
@@ -487,13 +491,11 @@ const RecursosScreen = (
                                     </button>
                                 </div>
                             )}
-
                             {tabActiva === 'Suministros Directos' && (
                                 <button onClick={() => setIsModalLogOpen(true)} style={{ ...styles.btnPrimary, backgroundColor: '#f39c12', padding: '8px 12px', fontSize: '0.85rem' }}>
                                     ➕ Registrar Logística
                                 </button>
                             )}
-
                             {tabActiva === 'Calendarios' && (
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                                     <input
@@ -507,7 +509,6 @@ const RecursosScreen = (
                                     </button>
                                 </div>
                             )}
-
                             <p style={{ fontSize: '0.75rem', color: '#94a3b8', textAlign: 'center', marginTop: '5px', lineHeight: '1.2' }}>
                                 Los cambios se reflejarán en el listado y el Gantt.
                             </p>
@@ -738,6 +739,15 @@ const RecursosScreen = (
                         </div>
 
                         <div style={styles.modalBody}>
+                            {/* 🚩 NUEVO CAMPO: CÓDIGO */}
+                            <label style={{ fontWeight: 'bold' }}>Código del Equipo / Suministro</label>
+                            <input
+                                placeholder="Ej: EQ-001 o SUM-45"
+                                style={styles.input}
+                                value={nuevoComponente.codigo || ''}
+                                onChange={e => setNuevoComponente({ ...nuevoComponente, codigo: e.target.value })}
+                            />
+
                             <label style={{ fontWeight: 'bold' }}>Nombre del Equipo</label>
                             <input
                                 placeholder="Ej: Generador Eléctrico 5kW"
@@ -746,7 +756,6 @@ const RecursosScreen = (
                                 onChange={e => setNuevoComponente({ ...nuevoComponente, nombre: e.target.value })}
                             />
 
-                            {/* 🚩 NUEVO CAMPO: PRECIO */}
                             <label style={{ fontWeight: 'bold' }}>Precio de Adquisición ($)</label>
                             <input
                                 type="number"
@@ -783,8 +792,8 @@ const RecursosScreen = (
                             <button
                                 onClick={() => {
                                     setIsModalCompOpen(false);
-                                    // Reset con campos de suministros limpios
-                                    setNuevoComponente({ nombre: '', tipo: 'Herramienta', estado: 'Disponible', precio: 0 });
+                                    // Reset incluyendo el código
+                                    setNuevoComponente({ codigo: '', nombre: '', tipo: 'Herramienta', estado: 'Disponible', precio: 0 });
                                 }}
                                 style={styles.btnSecundario}
                             >
@@ -795,14 +804,20 @@ const RecursosScreen = (
                                 onClick={async () => {
                                     if (!nuevoComponente.nombre) return alert("El nombre es obligatorio");
 
+                                    // Aseguramos que los números sean números antes de enviar
+                                    const dataEnviar = {
+                                        ...nuevoComponente,
+                                        precio: Number(nuevoComponente.precio) || 0
+                                    };
+
                                     if (nuevoComponente._id) {
-                                        await actualizarEquipo(nuevoComponente._id, nuevoComponente);
+                                        await actualizarEquipo(nuevoComponente._id, dataEnviar);
                                     } else {
-                                        await crearEquipo(nuevoComponente);
+                                        await crearEquipo(dataEnviar);
                                     }
 
                                     setIsModalCompOpen(false);
-                                    setNuevoComponente({ nombre: '', tipo: 'Herramienta', estado: 'Disponible', precio: 0 });
+                                    setNuevoComponente({ codigo: '', nombre: '', tipo: 'Herramienta', estado: 'Disponible', precio: 0 });
                                 }}
                                 style={{
                                     ...styles.btnPrimary,

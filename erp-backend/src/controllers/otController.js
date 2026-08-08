@@ -134,30 +134,87 @@ exports.webhookEmail = async (req, res) => {
 exports.actualizarOT = async (req, res) => {
     try {
         const { id } = req.params;
-        let ot = await OT.findByIdAndUpdate(id, req.body, { new: true });
+        const datosCuerpo = req.body;
 
+        // 1. Intentar actualizar (Usamos $set para campos normales y nos aseguramos de traer la OT nueva)
+        let ot = await OT.findByIdAndUpdate(
+            id,
+            { $set: datosCuerpo },
+            { new: true, runValidators: true }
+        );
+
+        // 2. Lógica de creación si no existe (Tu lógica original mejorada)
         if (!ot) {
             const Solicitud = require('../models/Solicitud');
             const solicitud = await Solicitud.findById(id);
+
             if (solicitud) {
                 const total = await OT.countDocuments();
                 const num = `OT-2026-${(total + 1).toString().padStart(4, '0')}`;
+
+                // Creamos la nueva OT
                 ot = new OT({
                     ...solicitud.toObject(),
-                    ...req.body,
+                    ...datosCuerpo,
                     _id: solicitud._id,
                     solicitudId: solicitud._id,
                     numeroOT: num,
                     estado: 'Generada'
                 });
+
                 await ot.save();
+                // Actualizamos la solicitud original
                 await Solicitud.findByIdAndUpdate(id, { estado: 'Generada', numeroOT: num });
             }
         }
 
         if (!ot) return res.status(404).json({ error: "No encontrado" });
+
+        // 🚩 CLAVE: Devolvemos la OT completa para que el frontend vea los reportes
         res.json(ot);
+
     } catch (error) {
+        console.error("Error en actualizarOT:", error);
         res.status(500).json({ error: error.message });
+    }
+};
+
+// 9. Respuesta Directa del Cliente (Solo actualización interna)
+exports.responderCotizacionCliente = async (req, res) => {
+    try {
+        const { id, nuevoEstado } = req.params;
+
+        // 1. Actualizar la OT
+        const otActualizada = await OT.findByIdAndUpdate(
+            id,
+            { estado: nuevoEstado },
+            { new: true }
+        );
+
+        if (!otActualizada) {
+            return res.status(404).send("<h1>Error: Registro no encontrado.</h1>");
+        }
+
+        // 2. Sincronizar con la Solicitud original para que el ERP sea consistente
+        const idSolicitud = otActualizada.solicitudId || otActualizada._id;
+        const Solicitud = require('../models/Solicitud');
+        await Solicitud.findByIdAndUpdate(idSolicitud, { estado: nuevoEstado });
+
+        console.log(`♻️ ERP Actualizado: OT ${otActualizada.numeroOT} ahora está ${nuevoEstado}`);
+
+        // 3. Respuesta visual simple para el cliente
+        res.send(`
+            <div style="font-family: sans-serif; text-align: center; padding: 100px 20px;">
+                <div style="font-size: 50px;">✔️</div>
+                <h1 style="color: #2c3e50;">Respuesta Recibida</h1>
+                <p style="font-size: 18px; color: #7f8c8d;">
+                    Gracias. Su respuesta sobre la cotización <b>${otActualizada.numeroOT}</b> ha sido procesada correctamente.
+                </p>
+            </div>
+        `);
+
+    } catch (error) {
+        console.error("Error al procesar respuesta:", error);
+        res.status(500).send("Error interno.");
     }
 };

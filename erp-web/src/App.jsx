@@ -7,6 +7,7 @@ import GanttScreen from './screens/GanttScreen';
 import DashboardScreen from './screens/DashboardScreen';
 import RecursosScreen from './screens/RecursosScreen'
 import React, { useState, useEffect } from 'react';
+import ReporteTerreno from './screens/ReporteTerreno'; // 🚩 Nueva importación
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 function App() {
@@ -18,7 +19,7 @@ function App() {
   const [suministros, setSuministros] = useState([]);
   const [puestosDB, setPuestosDB] = useState([]);
   const [modalPuestosAbierto, setModalPuestosAbierto] = useState(false);
-
+  const [otSeleccionada, setOtSeleccionada] = useState(null);
   const cargarDatos = async () => {
     try {
       const respuesta = await axios.get(`${API}/data`);
@@ -229,14 +230,8 @@ function App() {
   };
   const actualizarOtGlobal = async (id, dataCompleta) => {
     try {
-      // 1. Extraemos el _id para que no choque con MongoDB
       const { _id, ...datosParaEnviar } = dataCompleta;
-
-      // 2. ASEGURAMOS que el solicitudId viaje en el cuerpo
-      // Si dataCompleta no lo trae, intentamos usar el 'id' que recibe la función
-      if (!datosParaEnviar.solicitudId) {
-        datosParaEnviar.solicitudId = id;
-      }
+      if (!datosParaEnviar.solicitudId) datosParaEnviar.solicitudId = id;
 
       const respuesta = await fetch(`${API}/ots/${id}`, {
         method: 'PUT',
@@ -246,17 +241,21 @@ function App() {
 
       if (respuesta.ok) {
         const resultado = await respuesta.json();
-        await cargarDatos(); // Refresca las otras pantallas de fondo
+        const otNueva = resultado.ot || resultado;
 
-        // IMPORTANTE: Devolvemos el objeto para que la pantalla lo use YA
-        return { exito: true, otActualizada: resultado.ot || resultado };
+        // 🚩 ACTUALIZACIÓN TRIPLE:
+        // 1. La lista general
+        setOts(prev => prev.map(o => o._id === id ? otNueva : o));
+        // 2. La OT activa en pantalla (Esto es lo que hace que se vea el reporte)
+        setOtSeleccionada(otNueva);
+        // 3. Fondo
+        await cargarDatos();
+
+        return { exito: true, otActualizada: otNueva };
       }
-
-      const errorData = await respuesta.json();
-      console.error("Error del servidor:", errorData);
       return { exito: false };
     } catch (error) {
-      console.error("Error de red:", error);
+      console.error("Error:", error);
       return { exito: false };
     }
   };
@@ -596,6 +595,53 @@ function App() {
       console.error("Error al eliminar puesto:", error);
     }
   };
+
+  const enviarASupervisor = (ot) => {
+    if (!ot) return;
+    const telefono = ot.whatsappDestino;
+
+    // 🚩 AJUSTE 1: Limpieza total de la URL
+    // Eliminamos espacios y aseguramos HTTPS. 
+    // Si estás en producción, asegúrate de que tu URL NO sea una IP (ej: 192.168...)
+    let urlBase = window.location.origin.trim();
+
+    // Si es localhost, WhatsApp rara vez lo pondrá azul, 
+    // pero para producción esto es vital:
+    const linkReporte = `${urlBase}/reporte?id=${ot._id}`;
+
+    // 🚩 AJUSTE 2: Formato de "Ancla"
+    // Ponemos el link entre dos saltos de línea y sin caracteres pegados
+    const mensajeLink = `\n\n*ACCESO AL REPORTE:* \n${linkReporte}\n\n`;
+
+    const encabezado = `*RESUMEN DE SUMINISTROS - OT #${ot.numeroOT || 'S/N'}*`;
+    const cliente = `\n📍 *Cliente:* ${ot.solicitante || 'Particular'}`;
+
+    // 🚩 AJUSTE 3: El orden de los factores
+    // Pon el link lo más arriba posible. A veces WhatsApp corta el escaneo si el mensaje es muy largo.
+    const mensajeFinal = `${encabezado}${mensajeLink}${cliente}\n\n_Por favor confirmar recepción._`;
+
+    const urlFinal = `https://wa.me/${telefono}?text=${encodeURIComponent(mensajeFinal)}`;
+    window.open(urlFinal, '_blank');
+  };
+
+  const actualizarProgresoTarea = async (otId, tareaId, evidencia) => {
+    // 1. Buscamos la OT en el estado global
+    const otPrev = oTs.find(o => o._id === otId);
+    if (!otPrev) return;
+
+    // 2. Actualizamos solo la tarea específica dentro del array
+    const tareasNuevas = otPrev.tareas.map(t =>
+      (t._id === tareaId || t.id === tareaId)
+        ? { ...t, ...evidencia, fechaRegistro: new Date().toISOString() }
+        : t
+    );
+
+    const otActualizada = { ...otPrev, tareas: tareasNuevas };
+
+    // 3. Usamos tu función existente para persistir en DB
+    await actualizarOtGlobal(otId, otActualizada);
+  };
+
   return (
     <Router>
       <div style={{ width: '100vw', minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
@@ -609,9 +655,11 @@ function App() {
 
         <main style={{ flex: 1, width: '100%', backgroundColor: '#f0f2f5' }}>
           <Routes>
+            <Route path="/reporte" element={<ReporteTerreno ots={ots} actualizarOtGlobal={actualizarOtGlobal} />} />
             <Route path="/" element={<IngresoScreen solicitudes={solicitudes} liberarSolicitudManual={liberarSolicitudManual} crearSolicitudGlobal={crearSolicitudGlobal} setSolicitudes={setSolicitudes} cargarDatos={cargarDatos} API={API} ots={ots} />} />
             <Route path="/dashboard" element={<DashboardScreen solicitudes={solicitudes} ots={ots} eliminarOT={eliminarOT} />} />
-            <Route path="/tratamiento" element={<TratamientoScreen recurso={recursos} puestosDB={puestosDB} componentes={componentes} actualizarOtGlobal={actualizarOtGlobal} editarOtGlobal={editarOtGlobal} cargarDatos={cargarDatos} API={API} recursos={recursos} suministros={suministros} />} />
+            <Route path="/tratamiento" element={<TratamientoScreen recurso={recursos} puestosDB={puestosDB} enviarASupervisor={enviarASupervisor} componentes={componentes} actualizarOtGlobal={actualizarOtGlobal} editarOtGlobal={editarOtGlobal} cargarDatos={cargarDatos} API={API} recursos={recursos} suministros={suministros} otSeleccionada={otSeleccionada}     // 🚩 PASAMOS LA OT
+              setOtSeleccionada={setOtSeleccionada} />} />
             <Route path="/gantt" element={<GanttScreen ots={ots} recursos={recursos} calendarios={calendarios} obtenerHorasParaDia={obtenerHorasParaDia} />} />
             <Route path="/recursos" element={
               <RecursosScreen

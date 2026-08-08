@@ -84,14 +84,27 @@ const DashboardScreen = ({ ots = [], eliminarOT = [], solicitudes = [] }) => { /
                             <div style={styles.actionCell}>
 
                                 <div style={styles.btnGroup}>
-                                    {/* BOTÓN EDITAR: Envía los datos actuales de la OT a la pantalla de tratamiento */}
+                                    {/* BOTÓN PROGRAMAR: Solo visible si la OT está Aprobada */}
+                                    {ot.estado === 'Aprobada' && (
+                                        <button
+                                            onClick={() => navigate('/gantt', { state: { otId: ot._id, programar: true } })}
+                                            style={{ ...styles.btnEdit, backgroundColor: '#8e44ad' }} // Color morado para diferenciarlo
+                                        >
+                                            🗓️ Programar
+                                        </button>
+                                    )}
+
+                                    {/* BOTÓN EDITAR */}
                                     <button
                                         onClick={() => navigate('/tratamiento', { state: ot })}
                                         style={styles.btnEdit}
-                                    >✏️ Editar Plan
+                                    >
+                                        ✏️ Editar Plan
                                     </button>
+
+                                    {/* BOTÓN ELIMINAR */}
                                     <button
-                                        onClick={() => eliminarOT(ot._id, ot.solicitudId)} // ✅ Cambiamos la función por el ID real
+                                        onClick={() => eliminarOT(ot._id, ot.solicitudId)}
                                         style={styles.btnDelete}
                                     >
                                         🗑️ Eliminar

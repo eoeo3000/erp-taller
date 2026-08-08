@@ -1,18 +1,20 @@
 require('dotenv').config();
+const dns = require('dns');
+dns.setServers(['8.8.8.8', '1.1.1.1']);
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const path = require('path');
 const fs = require('fs');
 const apiRoutes = require('./src/routes/index');
-
+const mailRoutes = require('./src/routes/mailRoutes');
 const app = express();
 
 // Middlewares
 app.use(cors());
 app.use(express.json());
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
-
+app.use('/api/mail', mailRoutes);
 // Asegurar carpeta de subidas
 const dir = './uploads';
 if (!fs.existsSync(dir)) fs.mkdirSync(dir);

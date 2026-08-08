@@ -257,10 +257,10 @@ const IngresoScreen = ({ solicitudes = [], liberarSolicitudManual, cargarDatos, 
                     <table style={styles.tablaAnchoFijo}>
                         <thead>
                             <tr style={{ borderBottom: '2px solid #eee', textAlign: 'left', color: '#7f8c8d' }}>
-                                <th style={{ ...styles.th, width: '50px' }}>N°</th>
+                                <th style={{ ...styles.th, width: '30px' }}>N°</th>
 
                                 {/* COLUMNA ESTADO */}
-                                <th style={{ ...styles.th, position: 'relative' }}>
+                                <th style={{ ...styles.th, width: '80px', position: 'relative' }}>
                                     <div style={styles.headerCell}>
                                         <span>Estado</span>
                                         <button
@@ -296,7 +296,7 @@ const IngresoScreen = ({ solicitudes = [], liberarSolicitudManual, cargarDatos, 
                                     )}
                                 </th>
 
-                                <th style={styles.th}>Solicitante</th>
+                                <th style={{ ...styles.th, width: '100px' }}>Solicitante</th>
                                 <th style={{ ...styles.th, width: '120px' }}>Nombre Solicitante</th>
                                 <th style={{ ...styles.th, width: '120px' }}>Adjunto</th>
                                 <th style={{ ...styles.th, width: '120px' }}>Acción</th>
