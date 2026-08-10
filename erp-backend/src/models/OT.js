@@ -10,7 +10,16 @@ const OTSchema = new mongoose.Schema({
     // Estado del flujo
     estado: {
         type: String,
-        enum: ['Pendiente', 'Generada', 'En Proceso', 'Tratada', 'Finalizada'],
+        enum: [
+            'Pendiente',        // OT creada, sin planificar
+            'Tratada',          // Tratamiento iniciado
+            'Planificada',      // Tareas y recursos definidos
+            'Programada',       // Agendada en Gantt
+            'En Ejecución',     // Trabajo en terreno
+            'Trabajo Terminado',// Faena completada
+            'Con Informe',      // Reporte entregado
+            'Pagada'            // Cobro recibido
+        ],
         default: 'Pendiente'
     },
     origen: { type: String, default: 'Manual' },
@@ -58,12 +67,26 @@ const OTSchema = new mongoose.Schema({
     // 4. Totales Financieros
     granTotal: { type: Number, default: 0 },
 
+    // 5. Control de Pago
+    pago: {
+        estado: { type: String, enum: ['Pendiente', 'Parcial', 'Pagado'], default: 'Pendiente' },
+        montoPagado: { type: Number, default: 0 },
+        fechaPago: { type: String, default: '' },
+        metodoPago: { type: String, default: 'Transferencia' },
+        referencia: { type: String, default: '' },
+        notas: { type: String, default: '' },
+        anulado: { type: Boolean, default: false },
+        fechaAnulacion: { type: String, default: '' },
+        motivoAnulacion: { type: String, default: '' }
+    },
+
     // --- Metadatos y Asignación ---
     prioridad: { type: String, enum: ['Baja', 'Media', 'Alta', 'Urgente'] },
     tecnicoAsignado: { type: String },
     fechaInicio: { type: Date },
     fechaEntrega: { type: Date },
 
+    tokenEjecucion: { type: String, default: '' },
     ultimaEdicion: { type: Date, default: Date.now },
     fechaCreacion: { type: Date, default: Date.now }
 }, {

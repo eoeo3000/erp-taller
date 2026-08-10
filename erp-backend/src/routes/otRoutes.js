@@ -13,6 +13,12 @@ router.post('/webhook-emails', auth, otController.webhookEmail);
 
 // --- 2. Rutas con parámetros generales (Deben ir al final) ---
 
+router.post('/:id/generar-link-ejecucion', otController.generarLinkEjecucion);
+router.post('/:id/enviar-supervisor', otController.enviarAlSupervisor);
+router.get('/:id/supervisor', otController.supervisorPortal);
+router.post('/:id/supervisor', otController.supervisorAccion);
+router.get('/:id/iniciar-ejecucion', otController.iniciarEjecucion);
+router.post('/:id/iniciar-ejecucion', otController.confirmarEjecucion);
 router.get('/:id', otController.obtenerOTPorId);
 router.put('/:id', otController.actualizarOT);
 router.delete('/:id', otController.eliminarOT);

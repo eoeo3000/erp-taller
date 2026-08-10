@@ -276,7 +276,7 @@ const IngresoScreen = ({ solicitudes = [], liberarSolicitudManual, cargarDatos, 
 
                                     {menuAbierto === 'estado' && (
                                         <div style={styles.dropdownDirecto}>
-                                            {['', 'Pendiente', 'Generada', 'Convertida'].map((opcion) => (
+                                            {['', 'Pendiente', 'Aprobada', 'Rechazada', 'Tratada'].map((opcion) => (
                                                 <div
                                                     key={opcion}
                                                     onClick={() => {
@@ -313,7 +313,7 @@ const IngresoScreen = ({ solicitudes = [], liberarSolicitudManual, cargarDatos, 
                                 const estadoFinal = otEncontrada ? otEncontrada.estado : s.estado;
 
                                 // 3. Definimos si "Ya tiene OT" para el botón
-                                const yaTieneOT = (estadoFinal === 'Generada' || estadoFinal === 'Convertida' || estadoFinal === 'Planificada');
+                                const yaTieneOT = !!otEncontrada || ['Tratada', 'Planificada', 'Programada', 'En Ejecución', 'Trabajo Terminado', 'Con Informe', 'Pagada'].includes(estadoFinal);
 
                                 return (
                                     <tr key={s._id || index} style={{
@@ -519,19 +519,18 @@ const styles = {
         width: '100%',
         maxWidth: '1200px',
         margin: '0 auto',
-        display: 'flex',      // Asegúrate de que sea flex
+        display: 'flex',
         flexDirection: 'column',
         gap: '20px',
-        padding: '20px',
+        padding: 'clamp(10px, 3vw, 20px)',
         boxSizing: 'border-box'
-        // Quitamos minHeight y backgroundColor porque ya están en el 'main' de App.js
     },
     btnTratar: { background: '#f39c12', color: 'white', border: 'none', padding: '5px 10px', borderRadius: '4px', cursor: 'pointer' },
     btnEdit: { background: '#27ae60', color: 'white', border: 'none', padding: '5px 10px', borderRadius: '4px', cursor: 'pointer' },
     card: {
         background: 'white',
         minHeight: '400px',
-        padding: '25px',
+        padding: 'clamp(12px, 3vw, 25px)',
         borderRadius: '12px',
         boxShadow: '0 4px 6px rgba(0,0,0,0.05)'
     },

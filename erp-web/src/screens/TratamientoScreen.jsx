@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import useIsMobile from '../hooks/useIsMobile';
 import autoTable from 'jspdf-autotable';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
@@ -8,12 +9,13 @@ import html2canvas from 'html2canvas';
 const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = [],
     componentes: componentesDB = [],
     suministros: suministrosDB = [],
-    otSeleccionada: otDelPadre, // <-- Prop nueva
+    otSeleccionada: otDelPadre,
     setOtSeleccionada: setOtPadre,
     puestosDB: puestosDB = [],
     enviarASupervisor,
-
+    plantillas = [],
     logistica: logisticaDB = [] }) => {
+    const isMobile = useIsMobile();
     const { state: datosRecibidos } = useLocation();
     const navigate = useNavigate();
     const inicializado = useRef(false);
@@ -27,21 +29,24 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
     });
 
     const [isModalEnvioOpen, setIsModalEnvioOpen] = useState(false);
-    const [emailsEnvio, setEmailsEnvio] = useState([]); // Lista de correos
-    const [nuevoEmail, setNuevoEmail] = useState(''); // Input para añadir otro
+    const [emailsEnvio, setEmailsEnvio] = useState([]);
+    const [nuevoEmail, setNuevoEmail] = useState('');
     const [suministros, setSuministros] = useState([]);
+    const [modalPlantilla, setModalPlantilla] = useState(false);
+    const [plantillaPreview, setPlantillaPreview] = useState(null);
+    const [pago, setPago] = useState(() => {
+        const p = datosRecibidos?.pago;
+        return p || { estado: 'Pendiente', montoPagado: 0, fechaPago: '', metodoPago: 'Transferencia', referencia: '', notas: '' };
+    });
     const manejarGuardadoFinal = async () => {
         try {
             const otParaGuardar = {
                 ...otSeleccionada,
-                // --- VÍNCULO AUTOMÁTICO ---
-                // Si ya tiene solicitudId lo mantiene, si no, usa su _id actual
                 solicitudId: otSeleccionada.solicitudId || otSeleccionada._id,
-                // --------------------------
                 tareas: tareas,
                 componentes: componentes,
                 cotizacion: cotizacion,
-                estado: 'Planificado'
+                pago: pago,
             };
 
             const resultado = await actualizarOtGlobal(otSeleccionada._id, otParaGuardar);
@@ -55,6 +60,7 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
 
                 // 3. Opcional: Si el backend hizo algún ajuste en las tareas (como poner IDs), las actualizamos
                 if (otNumerada.tareas) setTareas(otNumerada.tareas);
+                if (otNumerada.pago) setPago(otNumerada.pago);
 
                 alert(`✅ Guardado con éxito. OT #${otNumerada.numeroOT}`);
             }
@@ -156,7 +162,6 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                 totalGeneral: granTotal * 1.19
             },
 
-            estado: 'Generada', // Le avisamos al backend que ya debe pasar a la Gantt
             fechaGeneracion: new Date().toISOString()
         };
     };
@@ -167,7 +172,7 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
         return (String(_id).length === 24) ? { _id, ...resto } : resto;
     });
 
-    const guardarPlanificacion = async () => {
+    const guardarPlanificacion = async (estadoForzado) => {
         const limpiarIds = (lista) => (lista || []).map(item => {
             const { _id, id, ...resto } = item;
             return (String(_id).length === 24) ? { _id, ...resto } : resto;
@@ -177,11 +182,10 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
             ...datosRecibidos,
             solicitudId: datosRecibidos.solicitudId || datosRecibidos._id,
             numeroOT: otSeleccionada.numeroOT || datosRecibidos.numeroOT,
+            estado: estadoForzado || (['Pendiente','Tratada','Planificada','Programada','En Ejecución','Trabajo Terminado','Con Informe','Pagada'].includes(otSeleccionada?.estado) ? otSeleccionada.estado : 'Tratada'),
             tareas: tareas,
             componentes: limpiarIds(componentes),
 
-            // 🚩 CLAVE: El Schema solo acepta 'logistica'. 
-            // Usamos nuestro estado 'logistica' (que son tus suministros).
             logistica: (logistica || []).map(l => ({
                 _id: (String(l._id).length === 24) ? l._id : undefined,
                 unidad: l.codigo || l.unidad || '',
@@ -191,8 +195,7 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                 precio: Number(l.precio) || 0
             })),
 
-            granTotal: granTotal,
-            estado: 'Generada'
+            granTotal: granTotal
         };
 
         try {
@@ -301,6 +304,7 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                     setOtSeleccionada(data);
                     setTareas(data.tareas || []);
                     setComponentes(data.componentes || []);
+                    if (data.pago) setPago(data.pago);
 
                     // Uso de la preferencia guardada: suministros/logistica
                     if (data.logistica && data.logistica.length > 0) {
@@ -319,6 +323,31 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
 
         cargarDetalleOT();
     }, [datosRecibidos?._id, API]);
+
+    // Al montar: si datosRecibidos ya es una OT (tiene numeroOT), refrescar desde el servidor
+    useEffect(() => {
+        const id = datosRecibidos?._id;
+        if (!id || !datosRecibidos?.numeroOT) return; // solo si es una OT directa, no una solicitud
+        axios.get(`${API}/ots/${id}`)
+            .then(({ data }) => {
+                setOtSeleccionada(data);
+                setTareas(data.tareas || []);
+                setComponentes(data.componentes || []);
+                if (data.logistica?.length > 0) setLogistica(data.logistica);
+                if (data.pago) setPago(data.pago);
+            })
+            .catch(() => {});
+    }, []);
+
+    // Sincronizar estado fresco del backend cada vez que se abre el tab Reportes
+    useEffect(() => {
+        if (tabActiva !== 'reportes') return;
+        const id = otSeleccionada?._id || datosRecibidos?._id;
+        if (!id || !API) return;
+        axios.get(`${API}/ots/${id}`)
+            .then(({ data }) => setOtSeleccionada(data))
+            .catch(() => {});
+    }, [tabActiva]);
 
     useEffect(() => {
         const cargarDetalleOT = async () => {
@@ -616,51 +645,209 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
         setIsModalEnvioOpen(true);
     };
 
-    const validarFechasTareas = () => {
-        // 1. Verificamos que existan tareas
-        if (!tareas || tareas.length === 0) {
-            alert("⚠️ No hay tareas programadas. Agregue al menos una tarea antes de continuar.");
-            return false;
-        }
+    const aplicarPlantilla = (plantilla) => {
+        const confirmar = tareas.length > 0 || componentes.length > 0
+            ? window.confirm(`¿Aplicar la plantilla "${plantilla.nombre}"? Se agregarán sus tareas y materiales a los existentes.`)
+            : true;
+        if (!confirmar) return;
 
-        const hoy = new Date();
-        hoy.setHours(0, 0, 0, 0); // Resetear horas para comparar solo el calendario
+        // Tareas de la plantilla sin fecha/hora/operario (los completa el usuario)
+        const tareasNuevas = (plantilla.tareas || []).map(t => ({
+            descripcion: t.descripcion || '',
+            puesto: t.puesto || '',
+            duracion: t.duracion || 0,
+            fecha: '',
+            hora: '',
+            operarioId: [],
+            operarioNombre: []
+        }));
 
-        // 2. Revisamos si alguna tarea tiene fecha pasada
-        const tieneFechasPasadas = tareas.some(tarea => {
-            if (!tarea.fecha) return true; // Si no hay fecha, la tratamos como error
-            const fechaTarea = new Date(tarea.fecha);
-            return fechaTarea < hoy;
-        });
+        setTareas(prev => [...prev, ...tareasNuevas]);
+        setComponentes(prev => [...prev, ...(plantilla.componentes || [])]);
+        setLogistica(prev => [...prev, ...(plantilla.logistica || [])]);
 
-        if (tieneFechasPasadas) {
-            alert("⚠️ Error en Suministros: Hay tareas con fechas pasadas o sin fecha. Por favor, ajuste el cronograma al futuro.");
-            return false;
-        }
-        return true;
+        setModalPlantilla(false);
+        setPlantillaPreview(null);
+        alert(`✅ Plantilla "${plantilla.nombre}" aplicada. Ahora asigna fechas, horarios y responsables a las tareas.`);
     };
 
-    const manejarEnvioSupervisor = () => {
-        // 1. Preguntar el número (por defecto dejamos un código de país)
-        const numeroDestino = window.prompt("📱 ¿A qué número de WhatsApp enviamos la planificación? (Ej: 56912345678)", "569");
+    const [reporteEditIdx, setReporteEditIdx] = useState(null);
+    const [reporteEditData, setReporteEditData] = useState({ comentario: '', foto: '' });
 
-        // 2. Validar que no canceló y que el número tiene un largo mínimo
-        if (numeroDestino && numeroDestino.length > 8) {
+    const abrirEdicionReporte = (idx) => {
+        const rep = otSeleccionada.reportes[idx];
+        setReporteEditData({ comentario: rep.comentario || '', foto: rep.foto || '' });
+        setReporteEditIdx(idx);
+    };
 
-            // Preparamos la data (usamos datosRecibidos o otSeleccionada)
-            const dataParaEnviar = {
-                ...datosRecibidos,
-                tareas: tareas,
-                componentes: componentes,
-                logistica: logistica, // Estos son tus suministros
-                whatsappDestino: numeroDestino // Pasamos el número elegido
+    const guardarEdicionReporte = async () => {
+        const id = otSeleccionada._id;
+        const reportesActualizados = otSeleccionada.reportes.map((r, i) =>
+            i === reporteEditIdx ? { ...r, comentario: reporteEditData.comentario, foto: reporteEditData.foto } : r
+        );
+        try {
+            const { data } = await axios.put(`${API}/ots/${id}`, { reportes: reportesActualizados });
+            setOtSeleccionada(prev => ({ ...prev, reportes: reportesActualizados }));
+            setReporteEditIdx(null);
+            if (cargarDatos) cargarDatos();
+        } catch (e) { alert('Error al guardar: ' + e.message); }
+    };
+
+    const anularReporte = async (idx) => {
+        if (!window.confirm('¿Anular este reporte?')) return;
+        const id = otSeleccionada._id;
+        const reportesActualizados = otSeleccionada.reportes.map((r, i) =>
+            i === idx ? { ...r, anulado: true } : r
+        );
+        const todosAnulados = reportesActualizados.every(r => r.anulado);
+        const nuevoEstado = todosAnulados ? 'Trabajo Terminado' : otSeleccionada.estado;
+        try {
+            await axios.put(`${API}/ots/${id}`, { reportes: reportesActualizados, estado: nuevoEstado });
+            setOtSeleccionada(prev => ({ ...prev, reportes: reportesActualizados, estado: nuevoEstado }));
+            if (cargarDatos) cargarDatos();
+        } catch (e) { alert('Error al anular: ' + e.message); }
+    };
+
+    const restaurarReporte = async (idx) => {
+        const id = otSeleccionada._id;
+        const reportesActualizados = otSeleccionada.reportes.map((r, i) =>
+            i === idx ? { ...r, anulado: false } : r
+        );
+        const nuevoEstado = otSeleccionada.estado === 'Trabajo Terminado' ? 'Con Informe' : otSeleccionada.estado;
+        try {
+            await axios.put(`${API}/ots/${id}`, { reportes: reportesActualizados, estado: nuevoEstado });
+            setOtSeleccionada(prev => ({ ...prev, reportes: reportesActualizados, estado: nuevoEstado }));
+            if (cargarDatos) cargarDatos();
+        } catch (e) { alert('Error al restaurar: ' + e.message); }
+    };
+
+    const guardarPago = async () => {
+        try {
+            const id = otSeleccionada?._id || datosRecibidos?._id;
+            if (!id) return alert('Sin OT seleccionada');
+            const estadoActual = otSeleccionada?.estado || datosRecibidos?.estado || 'Con Informe';
+            const nuevoEstadoOT = pago.estado === 'Pagado' ? 'Pagada' : estadoActual;
+            const pagoAGuardar = { ...pago, anulado: false, fechaAnulacion: '', motivoAnulacion: '' };
+            const { data } = await axios.put(`${API}/ots/${id}`, { pago: pagoAGuardar, estado: nuevoEstadoOT });
+            setOtSeleccionada(prev => ({ ...prev, pago: pagoAGuardar, estado: nuevoEstadoOT }));
+            setPago(data.pago || pagoAGuardar);
+            if (cargarDatos) cargarDatos();
+            alert('✅ Información de pago guardada');
+        } catch (e) {
+            alert('Error al guardar pago: ' + e.message);
+        }
+    };
+
+    const anularPago = async () => {
+        const motivo = window.prompt('Motivo de anulación (opcional):') ?? '';
+        if (motivo === null) return;
+        try {
+            const id = otSeleccionada?._id || datosRecibidos?._id;
+            if (!id) return;
+            const pagoAnulado = {
+                ...pago,
+                anulado: true,
+                fechaAnulacion: new Date().toISOString().slice(0, 10),
+                motivoAnulacion: motivo
             };
+            // Revertir OT de 'Pagada' a 'Con Informe'
+            const nuevoEstadoOT = otSeleccionada.estado === 'Pagada' ? 'Con Informe' : otSeleccionada.estado;
+            await axios.put(`${API}/ots/${id}`, { pago: pagoAnulado, estado: nuevoEstadoOT });
+            setOtSeleccionada(prev => ({ ...prev, pago: pagoAnulado, estado: nuevoEstadoOT }));
+            setPago(pagoAnulado);
+            if (cargarDatos) cargarDatos();
+        } catch (e) {
+            alert('Error al anular pago: ' + e.message);
+        }
+    };
 
-            // 3. Llamar a la función que viene por props
-            enviarASupervisor(dataParaEnviar);
+    const restaurarPago = async () => {
+        if (!window.confirm('¿Restaurar el pago y volver al estado "Pagada"?')) return;
+        try {
+            const id = otSeleccionada?._id || datosRecibidos?._id;
+            if (!id) return;
+            const pagoRestaurado = { ...pago, anulado: false, fechaAnulacion: '', motivoAnulacion: '' };
+            const nuevoEstadoOT = pagoRestaurado.estado === 'Pagado' ? 'Pagada' : otSeleccionada.estado;
+            await axios.put(`${API}/ots/${id}`, { pago: pagoRestaurado, estado: nuevoEstadoOT });
+            setOtSeleccionada(prev => ({ ...prev, pago: pagoRestaurado, estado: nuevoEstadoOT }));
+            setPago(pagoRestaurado);
+            if (cargarDatos) cargarDatos();
+        } catch (e) {
+            alert('Error al restaurar pago: ' + e.message);
+        }
+    };
 
-        } else if (numeroDestino !== null) {
-            alert("⚠️ Por favor ingresa un número válido para despachar los suministros.");
+    const recargarOT = async () => {
+        try {
+            const id = otSeleccionada?._id || datosRecibidos?._id;
+            if (!id) return;
+            const { data } = await axios.get(`${API}/ots/${id}`);
+            setOtSeleccionada(data);
+            if (cargarDatos) await cargarDatos();
+        } catch (e) {
+            alert('Error al actualizar: ' + e.message);
+        }
+    };
+
+    const notificarSupervisor = async () => {
+        try {
+            const otId = otSeleccionada?._id || datosRecibidos?._id;
+
+            // Buscar supervisor (primer operario con email o teléfono)
+            const ids = [...new Set(tareas.flatMap(t => Array.isArray(t.operarioId) ? t.operarioId : [t.operarioId]).filter(Boolean))];
+            const recurso = recursos.find(r => ids.map(String).includes(String(r._id)) && (r.email || r.telefono));
+
+            let supervisorEmail = recurso?.email || '';
+            const supervisorNombre = recurso?.nombre || 'Supervisor';
+            const telefono = recurso?.telefono;
+
+            if (!supervisorEmail) {
+                supervisorEmail = window.prompt(`Sin email registrado para ${supervisorNombre}.\nIngresa el email del supervisor:`);
+                if (!supervisorEmail) return;
+            }
+
+            // Validación final antes de enviar
+            const emailFinal = supervisorEmail.trim();
+            if (!emailFinal || !emailFinal.includes('@')) {
+                alert('Ingresa un email válido para el supervisor.');
+                return;
+            }
+
+            // Llamar al endpoint que genera PDF + envía email + genera token
+            const { data } = await axios.post(`${API}/ots/${otId}/enviar-supervisor`, {
+                supervisorEmail: emailFinal,
+                supervisorNombre
+            });
+            const link = data.link;
+
+            // Abrir WhatsApp con resumen + link
+            const tareasTexto = tareas.map(t =>
+                `  • ${t.descripcion}${t.fecha ? ` — ${t.fecha}` : ''}${t.hora ? ` ${t.hora}` : ''}${t.operarioNombre?.length ? ` (${[].concat(t.operarioNombre).join(', ')})` : ''}`
+            ).join('\n');
+
+            const resumen = [
+                `*ORDEN DE TRABAJO: ${otSeleccionada?.numeroOT || ''}*`,
+                `Cliente: ${otSeleccionada?.solicitante || ''}`,
+                `Descripción: ${otSeleccionada?.descripcion || ''}`,
+                ``,
+                `*Tareas programadas:*`,
+                tareasTexto || '  Sin tareas',
+                ``,
+                `📧 Se te envió el PDF completo a ${supervisorEmail}`,
+                ``,
+                `Para confirmar inicio del trabajo toca el link:`,
+                link
+            ].join('\n');
+
+            const msg = encodeURIComponent(resumen);
+            if (telefono) {
+                window.open(`https://wa.me/${telefono}?text=${msg}`, '_blank');
+            } else {
+                const num = window.prompt(`Sin teléfono registrado para ${supervisorNombre}.\nIngresa el número (ej: 56912345678):`);
+                if (num) window.open(`https://wa.me/${num.trim()}?text=${msg}`, '_blank');
+            }
+        } catch (e) {
+            alert('Error al enviar al supervisor: ' + e.message);
         }
     };
 
@@ -674,11 +861,24 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
         if (!archivo) return;
         const reader = new FileReader();
         reader.onloadend = () => {
-            manejarCambioEvidencia(idx, 'fotoEvidencia', reader.result); // Guardamos el base64
+            manejarCambioEvidencia(idx, 'fotoEvidencia', reader.result);
             alert("📸 Foto cargada correctamente");
         };
         reader.readAsDataURL(archivo);
     };
+
+    // Pipeline de estados de la OT (solo visual, el sistema avanza automáticamente)
+    const PIPELINE = [
+        { key: 'Tratada',           label: 'Tratamiento',  color: '#e67e22' },
+        { key: 'Planificada',       label: 'Planificada',  color: '#3498db' },
+        { key: 'Programada',        label: 'Programada',   color: '#8e44ad' },
+        { key: 'En Ejecución',      label: 'En Ejecución', color: '#f39c12' },
+        { key: 'Trabajo Terminado', label: 'Terminado',    color: '#16a085' },
+        { key: 'Con Informe',       label: 'Con Informe',  color: '#27ae60' },
+        { key: 'Pagada',            label: 'Pagada',       color: '#2ecc71' },
+    ];
+    const idxActual = PIPELINE.findIndex(e => e.key === otSeleccionada?.estado);
+
     return (
         <div style={styles.container}>
             <div style={styles.cardFull}>
@@ -699,16 +899,96 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                         <p>Cliente: <strong>{otSeleccionada.solicitante || otSeleccionada.cliente}</strong></p>
                     </div>
                 </div>
-                <div style={styles.tabBar}>
-                    <button onClick={() => setTabActiva('tareas')} style={tabActiva === 'tareas' ? styles.tabBtnActive : styles.tabBtn}>1. Tareas</button>
-                    <button onClick={() => setTabActiva('componentes')} style={tabActiva === 'componentes' ? styles.tabBtnActive : styles.tabBtn}>2. Equipos/Herramientas</button>
-                    <button onClick={() => setTabActiva('Logistica')} style={tabActiva === 'Logistica' ? styles.tabBtnActive : styles.tabBtn}>3. Suministros Directos</button>
-                    <button onClick={() => setTabActiva('cotizacion')} style={tabActiva === 'cotizacion' ? styles.tabBtnActive : styles.tabBtn}>3. Cotización Comercial</button>
+                {/* BARRA DE PROGRESO DE ESTADO (solo visual) */}
+                {otSeleccionada?._id && (() => {
+                    const estaCerrada = otSeleccionada?.estado === 'Pagada';
+                    return (
+                        <>
+                            {estaCerrada && (
+                                <div style={{
+                                    display: 'flex', alignItems: 'center', gap: '10px',
+                                    background: '#d4edda', border: '1px solid #c3e6cb',
+                                    borderRadius: '8px', padding: '8px 16px', marginBottom: '10px'
+                                }}>
+                                    <span style={{ fontSize: '18px' }}>✅</span>
+                                    <span style={{ fontWeight: 'bold', color: '#155724', fontSize: '14px' }}>
+                                        OT CERRADA — Completamente Pagada
+                                    </span>
+                                </div>
+                            )}
+                            <div style={{
+                                display: 'flex', alignItems: 'center',
+                                margin: '10px 0 16px', overflowX: 'auto', paddingBottom: '4px', gap: '0'
+                            }}>
+                                {PIPELINE.map((etapa, idx) => {
+                                    const esPasada = estaCerrada ? true : idx < idxActual;
+                                    const esActual = estaCerrada ? false : idx === idxActual;
+                                    return (
+                                        <React.Fragment key={etapa.key}>
+                                            <div style={{
+                                                padding: '5px 12px',
+                                                borderRadius: '4px',
+                                                fontSize: '11px',
+                                                fontWeight: esActual ? 'bold' : 'normal',
+                                                whiteSpace: 'nowrap',
+                                                backgroundColor: esActual ? etapa.color : esPasada ? etapa.color + '25' : '#f5f5f5',
+                                                color: esActual ? 'white' : esPasada ? etapa.color : '#ccc',
+                                                boxShadow: esActual ? `0 2px 6px ${etapa.color}55` : 'none',
+                                            }}>
+                                                {esPasada ? '✓ ' : ''}{etapa.label}
+                                            </div>
+                                            {idx < PIPELINE.length - 1 && (
+                                                <div style={{
+                                                    width: '16px', height: '2px', flexShrink: 0,
+                                                    backgroundColor: esPasada ? etapa.color + '40' : '#e8e8e8'
+                                                }} />
+                                            )}
+                                        </React.Fragment>
+                                    );
+                                })}
+                            </div>
+                        </>
+                    );
+                })()}
+
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
+                    <div style={styles.tabBar}>
+                        <button onClick={() => setTabActiva('tareas')} style={tabActiva === 'tareas' ? styles.tabBtnActive : styles.tabBtn}>1. Tareas</button>
+                        <button onClick={() => setTabActiva('componentes')} style={tabActiva === 'componentes' ? styles.tabBtnActive : styles.tabBtn}>2. Equipos/Herramientas</button>
+                        <button onClick={() => setTabActiva('Logistica')} style={tabActiva === 'Logistica' ? styles.tabBtnActive : styles.tabBtn}>3. Suministros Directos</button>
+                        <button onClick={() => setTabActiva('cotizacion')} style={tabActiva === 'cotizacion' ? styles.tabBtnActive : styles.tabBtn}>4. Cotización</button>
+                        <button
+                            onClick={() => setTabActiva('reportes')}
+                            style={{ ...styles.tabBtn, backgroundColor: tabActiva === 'reportes' ? '#27ae60' : '#eee' }}
+                        >
+                            📸 Reportes ({otSeleccionada.reportes?.length || 0})
+                        </button>
+                        <button
+                            onClick={() => setTabActiva('pago')}
+                            style={{
+                                ...styles.tabBtn,
+                                backgroundColor: tabActiva === 'pago' ? '#16a085' : '#eee',
+                                color: tabActiva === 'pago' ? 'white' : '#333'
+                            }}
+                        >
+                            💵 Pago
+                        </button>
+                    </div>
                     <button
-                        onClick={() => setTabActiva('reportes')}
-                        style={{ ...styles.tabBtn, backgroundColor: tabActiva === 'reportes' ? '#27ae60' : '#eee' }}
+                        onClick={() => setModalPlantilla(true)}
+                        style={{
+                            padding: '8px 16px',
+                            backgroundColor: '#8e44ad',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '6px',
+                            cursor: 'pointer',
+                            fontWeight: 'bold',
+                            fontSize: '13px',
+                            whiteSpace: 'nowrap'
+                        }}
                     >
-                        📸 Reportes ({otSeleccionada.reportes?.length || 0})
+                        📋 Cargar Plantilla
                     </button>
                 </div>
                 <div style={styles.content}>
@@ -886,6 +1166,14 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                                 </tbody>
                             </table>
                             <button onClick={agregarTarea} style={styles.btnAdd}>+ Añadir Tarea</button>
+                            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '24px' }}>
+                                <button
+                                    onClick={() => setTabActiva('componentes')}
+                                    style={{ padding: '10px 24px', backgroundColor: '#3498db', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px' }}
+                                >
+                                    Continuar: Equipos / Herramientas →
+                                </button>
+                            </div>
                         </div>
                     )}
                     {/* VISTA 2: COMPONENTES CON AUTOCOMPLETADO */}
@@ -1010,6 +1298,14 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                                 </tbody>
                             </table>
                             <button onClick={agregarComponente} style={styles.btnPrimario}>+ Añadir Componente</button>
+                            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '24px' }}>
+                                <button
+                                    onClick={() => setTabActiva('Logistica')}
+                                    style={{ padding: '10px 24px', backgroundColor: '#3498db', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px' }}
+                                >
+                                    Continuar: Suministros Directos →
+                                </button>
+                            </div>
                         </div>
                     )}
                     {/* VISTA 3: LOGÍSTICA */}
@@ -1091,6 +1387,15 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                                 </tbody>
                             </table>
                             <button onClick={agregarLogistica} style={styles.btnPrimario}>+ Añadir Suministro</button>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '24px', padding: '16px', backgroundColor: '#f0f7f0', borderRadius: '8px', border: '1px solid #c3e6c3' }}>
+                                <span style={{ color: '#27ae60', fontWeight: 'bold' }}>✓ Todo listo — tareas, equipos y suministros definidos</span>
+                                <button
+                                    onClick={() => guardarPlanificacion('Planificada')}
+                                    style={{ padding: '12px 28px', backgroundColor: '#27ae60', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', fontSize: '15px' }}
+                                >
+                                    ✓ Terminar Planificación
+                                </button>
+                            </div>
                         </div>
                     )}
                     {/* 🚩 DATALISTS ACTUALIZADOS */}
@@ -1340,48 +1645,408 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                     )}
                     {tabActiva === 'reportes' && (
                         <div style={{ padding: '20px' }}>
-                            <h3 style={{ borderBottom: '2px solid #27ae60', paddingBottom: '10px' }}>
-                                📸 Historial de Evidencias en Terreno
+
+                            {/* ── SECCIÓN 1: DESPACHO AL SUPERVISOR ── */}
+                            <div style={{ marginBottom: '30px', border: '1px solid #e0e0e0', borderRadius: '12px', overflow: 'hidden' }}>
+                                <div style={{ padding: '14px 20px', backgroundColor: '#2c3e50', color: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <span style={{ fontWeight: 'bold', fontSize: '15px' }}>📋 Despacho al Supervisor</span>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        <span style={{
+                                            padding: '4px 14px', borderRadius: '12px', fontSize: '12px', fontWeight: 'bold',
+                                            backgroundColor: otSeleccionada?.estado === 'En Ejecución' ? '#e67e22' : otSeleccionada?.estado === 'Programada' ? '#3498db' : otSeleccionada?.estado === 'Trabajo Terminado' ? '#27ae60' : otSeleccionada?.estado === 'Con Informe' ? '#8e44ad' : '#95a5a6',
+                                            color: 'white'
+                                        }}>{otSeleccionada?.estado || 'Sin estado'}</span>
+                                        <button
+                                            onClick={recargarOT}
+                                            title="Actualizar estado desde el servidor"
+                                            style={{ background: 'rgba(255,255,255,0.15)', border: 'none', borderRadius: '6px', color: 'white', padding: '4px 10px', cursor: 'pointer', fontSize: '13px' }}
+                                        >🔄</button>
+                                    </div>
+                                </div>
+
+                                <div style={{ padding: '20px' }}>
+                                    {/* Resumen de la OT */}
+                                    <div style={{ backgroundColor: '#f8f9fa', borderRadius: '8px', padding: '16px', marginBottom: '20px', fontSize: '13px' }}>
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '12px' }}>
+                                            <div><span style={{ color: '#888' }}>OT:</span> <strong>{otSeleccionada?.numeroOT || '—'}</strong></div>
+                                            <div><span style={{ color: '#888' }}>Cliente:</span> <strong>{otSeleccionada?.solicitante || '—'}</strong></div>
+                                            <div style={{ gridColumn: '1/-1' }}><span style={{ color: '#888' }}>Descripción:</span> {otSeleccionada?.descripcion || '—'}</div>
+                                        </div>
+                                        {tareas.length > 0 && (
+                                            <>
+                                                <div style={{ color: '#888', fontWeight: 'bold', marginBottom: '6px', fontSize: '12px' }}>TAREAS PROGRAMADAS</div>
+                                                {tareas.map((t, i) => (
+                                                    <div key={i} style={{ display: 'flex', gap: '8px', alignItems: 'center', padding: '5px 0', borderBottom: '1px solid #eee', flexWrap: 'wrap' }}>
+                                                        <span style={{ flex: 2, color: '#2c3e50' }}>{t.descripcion}</span>
+                                                        {t.fecha && <span style={{ color: '#3498db', fontSize: '12px', whiteSpace: 'nowrap' }}>📅 {t.fecha}</span>}
+                                                        {t.hora && <span style={{ color: '#7f8c8d', fontSize: '12px' }}>⏰ {t.hora}</span>}
+                                                        {t.operarioNombre?.length > 0 && <span style={{ color: '#27ae60', fontSize: '12px' }}>👷 {[].concat(t.operarioNombre).join(', ')}</span>}
+                                                    </div>
+                                                ))}
+                                            </>
+                                        )}
+                                    </div>
+
+                                    {/* Acción según estado */}
+                                    {otSeleccionada?.estado === 'En Ejecución' ? (
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '14px', backgroundColor: '#f0fff4', borderRadius: '8px', border: '1px solid #c3e6c3' }}>
+                                                <span style={{ fontSize: '24px' }}>⚙️</span>
+                                                <div>
+                                                    <div style={{ fontWeight: 'bold', color: '#27ae60', fontSize: '14px' }}>Trabajo En Ejecución</div>
+                                                    <div style={{ color: '#555', fontSize: '12px' }}>El supervisor confirmó el inicio del trabajo</div>
+                                                </div>
+                                            </div>
+                                            <button
+                                                onClick={notificarSupervisor}
+                                                style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 18px', backgroundColor: '#25D366', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', fontSize: '13px' }}
+                                            >
+                                                📱 Reenviar link al Supervisor
+                                            </button>
+                                        </div>
+                                    ) : otSeleccionada?.estado === 'Programada' ? (
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                                            <p style={{ margin: 0, color: '#555', fontSize: '13px' }}>
+                                                La OT está programada. Envía la orden al supervisor para que confirme el inicio del trabajo.
+                                            </p>
+                                            <button
+                                                onClick={notificarSupervisor}
+                                                style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px 24px', backgroundColor: '#25D366', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px' }}
+                                            >
+                                                📱 Enviar OT al Supervisor vía WhatsApp
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <p style={{ color: '#aaa', fontSize: '13px', margin: 0 }}>
+                                            El botón de despacho se habilitará cuando la OT esté en estado <strong>Programada</strong>.
+                                        </p>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* ── SECCIÓN 2: EVIDENCIAS DE TERRENO ── */}
+                            <h3 style={{ borderBottom: '2px solid #27ae60', paddingBottom: '10px', marginBottom: '20px' }}>
+                                📸 Evidencias de Terreno
+                                {otSeleccionada.reportes?.length > 0 && (
+                                    <span style={{ marginLeft: '10px', fontSize: '14px', color: '#27ae60', fontWeight: 'normal' }}>
+                                        ({otSeleccionada.reportes.length} reporte{otSeleccionada.reportes.length !== 1 ? 's' : ''})
+                                    </span>
+                                )}
                             </h3>
 
                             {otSeleccionada.reportes && otSeleccionada.reportes.length > 0 ? (
-                                <div style={{
-                                    display: 'grid',
-                                    gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))',
-                                    gap: '20px',
-                                    marginTop: '20px'
-                                }}>
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '20px' }}>
                                     {otSeleccionada.reportes.map((rep, i) => (
-                                        <div key={i} style={{
-                                            background: '#fff',
-                                            borderRadius: '10px',
-                                            boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-                                            overflow: 'hidden'
-                                        }}>
-                                            <img
-                                                src={rep.foto}
-                                                alt="Evidencia"
-                                                style={{ width: '100%', height: '180px', objectFit: 'cover', cursor: 'pointer' }}
-                                                onClick={() => window.open(rep.foto, '_blank')} // Zoom simple
-                                            />
-                                            <div style={{ padding: '12px' }}>
-                                                <p style={{ margin: 0, fontWeight: 'bold', color: '#2c3e50' }}>{rep.tareaId}</p>
-                                                <p style={{ margin: '5px 0', fontSize: '0.9em', color: '#7f8c8d' }}>{rep.comentario}</p>
-                                                <small style={{ color: '#bdc3c7' }}>
-                                                    📅 {new Date(rep.fecha).toLocaleString()}
-                                                </small>
-                                            </div>
+                                        <div key={i} style={{ background: '#fff', borderRadius: '10px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+
+                                            {reporteEditIdx === i ? (
+                                                /* ── MODO EDICIÓN ── */
+                                                <div style={{ padding: '14px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                                                    <div style={{ fontSize: '12px', fontWeight: 'bold', color: '#7f8c8d' }}>EDITANDO REPORTE #{i + 1}</div>
+                                                    <textarea
+                                                        value={reporteEditData.comentario}
+                                                        onChange={e => setReporteEditData(d => ({ ...d, comentario: e.target.value }))}
+                                                        rows={3}
+                                                        style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px', fontSize: '13px', resize: 'vertical', fontFamily: 'inherit' }}
+                                                        placeholder="Comentario del reporte..."
+                                                    />
+                                                    {reporteEditData.foto && (
+                                                        <img src={reporteEditData.foto} alt="actual" style={{ width: '100%', height: '120px', objectFit: 'cover', borderRadius: '6px' }} />
+                                                    )}
+                                                    <label style={{ fontSize: '12px', color: '#555', cursor: 'pointer' }}>
+                                                        📷 Cambiar foto
+                                                        <input type="file" accept="image/*" style={{ display: 'none' }} onChange={e => {
+                                                            const file = e.target.files[0];
+                                                            if (!file) return;
+                                                            const reader = new FileReader();
+                                                            reader.onload = ev => setReporteEditData(d => ({ ...d, foto: ev.target.result }));
+                                                            reader.readAsDataURL(file);
+                                                        }} />
+                                                    </label>
+                                                    <div style={{ display: 'flex', gap: '8px' }}>
+                                                        <button onClick={guardarEdicionReporte} style={{ flex: 1, padding: '8px', background: '#27ae60', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '13px' }}>
+                                                            💾 Guardar
+                                                        </button>
+                                                        <button onClick={() => setReporteEditIdx(null)} style={{ flex: 1, padding: '8px', background: '#ecf0f1', color: '#555', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '13px' }}>
+                                                            Cancelar
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                /* ── MODO NORMAL ── */
+                                                <>
+                                                    <div style={{ position: 'relative' }}>
+                                                        {rep.foto && (
+                                                            <img
+                                                                src={rep.foto}
+                                                                alt="Evidencia"
+                                                                style={{ width: '100%', height: '180px', objectFit: 'cover', cursor: rep.anulado ? 'default' : 'pointer', filter: rep.anulado ? 'grayscale(1) opacity(0.4)' : 'none' }}
+                                                                onClick={() => !rep.anulado && window.open(rep.foto, '_blank')}
+                                                            />
+                                                        )}
+                                                        {rep.anulado && (
+                                                            <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', background: 'rgba(231,76,60,0.85)', color: 'white', fontWeight: 'bold', fontSize: '13px', padding: '4px 12px', borderRadius: '4px', letterSpacing: '1px' }}>
+                                                                ANULADO
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                    <div style={{ padding: '12px', flex: 1, display: 'flex', flexDirection: 'column', gap: '4px', opacity: rep.anulado ? 0.45 : 1 }}>
+                                                        {rep.tareaId && <p style={{ margin: 0, fontWeight: 'bold', color: '#2c3e50', fontSize: '13px', textDecoration: rep.anulado ? 'line-through' : 'none' }}>{rep.tareaId}</p>}
+                                                        {rep.comentario && <p style={{ margin: 0, fontSize: '13px', color: '#555', lineHeight: '1.4', textDecoration: rep.anulado ? 'line-through' : 'none' }}>{rep.comentario}</p>}
+                                                        {rep.usuario && <small style={{ color: '#aaa' }}>👷 {rep.usuario}</small>}
+                                                        <small style={{ color: '#bdc3c7' }}>📅 {new Date(rep.fecha).toLocaleString('es-CL')}</small>
+                                                    </div>
+                                                    <div style={{ display: 'flex', borderTop: '1px solid #f0f0f0' }}>
+                                                        {rep.anulado ? (
+                                                            <button
+                                                                onClick={() => restaurarReporte(i)}
+                                                                style={{ flex: 1, padding: '8px', background: 'none', border: 'none', color: '#27ae60', cursor: 'pointer', fontSize: '13px', fontWeight: '600' }}
+                                                            >↩️ Restaurar</button>
+                                                        ) : (
+                                                            <>
+                                                                <button
+                                                                    onClick={() => abrirEdicionReporte(i)}
+                                                                    style={{ flex: 1, padding: '8px', background: 'none', border: 'none', color: '#3498db', cursor: 'pointer', fontSize: '13px', fontWeight: '600' }}
+                                                                >✏️ Editar</button>
+                                                                <div style={{ width: '1px', background: '#f0f0f0' }} />
+                                                                <button
+                                                                    onClick={() => anularReporte(i)}
+                                                                    style={{ flex: 1, padding: '8px', background: 'none', border: 'none', color: '#e74c3c', cursor: 'pointer', fontSize: '13px', fontWeight: '600' }}
+                                                                >🚫 Anular</button>
+                                                            </>
+                                                        )}
+                                                    </div>
+                                                </>
+                                            )}
                                         </div>
                                     ))}
                                 </div>
                             ) : (
-                                <div style={{ textAlign: 'center', padding: '50px', color: '#95a5a6' }}>
-                                    <p style={{ fontSize: '1.2em' }}>No hay reportes fotográficos para esta OT aún.</p>
-                                    <small>Los reportes subidos desde la App móvil aparecerán aquí.</small>
+                                <div style={{ textAlign: 'center', padding: '50px', color: '#95a5a6', backgroundColor: '#fafafa', borderRadius: '10px', border: '1px dashed #ddd' }}>
+                                    <div style={{ fontSize: '40px', marginBottom: '10px' }}>📷</div>
+                                    <p style={{ fontSize: '14px', margin: 0 }}>Sin reportes fotográficos aún.</p>
+                                    <small>Aparecerán aquí cuando el supervisor suba evidencias desde terreno.</small>
                                 </div>
                             )}
                         </div>
                     )}
+                    {/* PESTAÑA PAGO */}
+                    {tabActiva === 'pago' && (
+                        <div style={{ padding: '25px', maxWidth: '700px', margin: '0 auto' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '2px solid #16a085', paddingBottom: '10px', marginBottom: '25px' }}>
+                                <h3 style={{ margin: 0, color: '#16a085' }}>💵 Control de Pago</h3>
+                                {pago.anulado && (
+                                    <span style={{ background: '#e74c3c', color: 'white', fontWeight: 'bold', fontSize: '12px', padding: '4px 14px', borderRadius: '20px', letterSpacing: '1px' }}>
+                                        🚫 PAGO ANULADO
+                                    </span>
+                                )}
+                            </div>
+
+                            {/* Banner de anulación */}
+                            {pago.anulado && (
+                                <div style={{ background: '#fff5f5', border: '1px solid #fcc', borderRadius: '8px', padding: '14px 18px', marginBottom: '20px' }}>
+                                    <div style={{ fontWeight: 'bold', color: '#c0392b', marginBottom: '4px' }}>🚫 Pago Anulado</div>
+                                    <div style={{ fontSize: '13px', color: '#666' }}>
+                                        {pago.fechaAnulacion && <span>Fecha: <strong>{pago.fechaAnulacion}</strong> — </span>}
+                                        {pago.motivoAnulacion ? <span>Motivo: <strong>{pago.motivoAnulacion}</strong></span> : <span>Sin motivo registrado</span>}
+                                    </div>
+                                    <div style={{ fontSize: '12px', color: '#888', marginTop: '4px' }}>
+                                        El registro de pago se conserva. Puede restaurarlo o ingresar uno nuevo.
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Resumen financiero */}
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '15px', marginBottom: '30px' }}>
+                                <div style={{ background: '#f8f9fa', padding: '15px', borderRadius: '10px', textAlign: 'center', border: '1px solid #eee' }}>
+                                    <div style={{ fontSize: '12px', color: '#888', marginBottom: '5px' }}>TOTAL COTIZADO</div>
+                                    <div style={{ fontSize: '22px', fontWeight: 'bold', color: '#2c3e50' }}>$ {(granTotal * 1.19).toLocaleString('es-CL')}</div>
+                                    <div style={{ fontSize: '11px', color: '#aaa' }}>con IVA</div>
+                                </div>
+                                <div style={{ background: '#f0fdf4', padding: '15px', borderRadius: '10px', textAlign: 'center', border: '1px solid #d1fae5' }}>
+                                    <div style={{ fontSize: '12px', color: '#888', marginBottom: '5px' }}>MONTO PAGADO</div>
+                                    <div style={{ fontSize: '22px', fontWeight: 'bold', color: '#16a085' }}>$ {Number(pago.montoPagado || 0).toLocaleString('es-CL')}</div>
+                                </div>
+                                <div style={{ background: '#fff5f5', padding: '15px', borderRadius: '10px', textAlign: 'center', border: '1px solid #fed7d7' }}>
+                                    <div style={{ fontSize: '12px', color: '#888', marginBottom: '5px' }}>SALDO PENDIENTE</div>
+                                    <div style={{ fontSize: '22px', fontWeight: 'bold', color: '#e74c3c' }}>
+                                        $ {Math.max(0, (granTotal * 1.19) - Number(pago.montoPagado || 0)).toLocaleString('es-CL')}
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Estado del pago */}
+                            <div style={{ marginBottom: '20px' }}>
+                                <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '8px', color: '#555' }}>Estado del Pago</label>
+                                <div style={{ display: 'flex', gap: '10px' }}>
+                                    {['Pendiente', 'Parcial', 'Pagado'].map(e => (
+                                        <button key={e} onClick={() => setPago(p => ({ ...p, estado: e }))}
+                                            style={{
+                                                padding: '8px 20px', borderRadius: '20px', border: 'none', cursor: 'pointer', fontWeight: 'bold',
+                                                backgroundColor: pago.estado === e
+                                                    ? (e === 'Pagado' ? '#27ae60' : e === 'Parcial' ? '#f39c12' : '#e74c3c')
+                                                    : '#ecf0f1',
+                                                color: pago.estado === e ? 'white' : '#666'
+                                            }}>
+                                            {e === 'Pagado' ? '✅ Pagado' : e === 'Parcial' ? '⏳ Parcial' : '🔴 Pendiente'}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Formulario de pago */}
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginBottom: '20px' }}>
+                                <div>
+                                    <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '5px', color: '#555', fontSize: '13px' }}>Monto Pagado ($)</label>
+                                    <input type="number" value={pago.montoPagado} onChange={e => setPago(p => ({ ...p, montoPagado: Number(e.target.value) }))}
+                                        style={{ width: '100%', padding: '9px 12px', border: '1px solid #ddd', borderRadius: '6px', fontSize: '14px', boxSizing: 'border-box' }} />
+                                </div>
+                                <div>
+                                    <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '5px', color: '#555', fontSize: '13px' }}>Fecha de Pago</label>
+                                    <input type="date" value={pago.fechaPago} onChange={e => setPago(p => ({ ...p, fechaPago: e.target.value }))}
+                                        style={{ width: '100%', padding: '9px 12px', border: '1px solid #ddd', borderRadius: '6px', fontSize: '14px', boxSizing: 'border-box' }} />
+                                </div>
+                                <div>
+                                    <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '5px', color: '#555', fontSize: '13px' }}>Método de Pago</label>
+                                    <select value={pago.metodoPago} onChange={e => setPago(p => ({ ...p, metodoPago: e.target.value }))}
+                                        style={{ width: '100%', padding: '9px 12px', border: '1px solid #ddd', borderRadius: '6px', fontSize: '14px', boxSizing: 'border-box' }}>
+                                        {['Transferencia', 'Efectivo', 'Cheque', 'Débito', 'Crédito', 'Otro'].map(m => <option key={m}>{m}</option>)}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '5px', color: '#555', fontSize: '13px' }}>N° Referencia / Comprobante</label>
+                                    <input type="text" value={pago.referencia} onChange={e => setPago(p => ({ ...p, referencia: e.target.value }))}
+                                        placeholder="Ej: TRF-20240801-001"
+                                        style={{ width: '100%', padding: '9px 12px', border: '1px solid #ddd', borderRadius: '6px', fontSize: '14px', boxSizing: 'border-box' }} />
+                                </div>
+                            </div>
+                            <div style={{ marginBottom: '20px' }}>
+                                <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '5px', color: '#555', fontSize: '13px' }}>Notas</label>
+                                <textarea value={pago.notas} onChange={e => setPago(p => ({ ...p, notas: e.target.value }))}
+                                    placeholder="Observaciones sobre el pago..."
+                                    style={{ width: '100%', padding: '9px 12px', border: '1px solid #ddd', borderRadius: '6px', fontSize: '14px', minHeight: '80px', resize: 'vertical', boxSizing: 'border-box' }} />
+                            </div>
+
+                            <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                                <button onClick={guardarPago}
+                                    style={{ padding: '12px 30px', backgroundColor: '#16a085', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', fontSize: '15px' }}>
+                                    💾 Guardar Información de Pago
+                                </button>
+                                {!pago.anulado && pago.estado !== 'Pendiente' && (
+                                    <button onClick={anularPago}
+                                        style={{ padding: '12px 24px', backgroundColor: '#e74c3c', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', fontSize: '15px' }}>
+                                        🚫 Anular Pago
+                                    </button>
+                                )}
+                                {pago.anulado && (
+                                    <button onClick={restaurarPago}
+                                        style={{ padding: '12px 24px', backgroundColor: '#8e44ad', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', fontSize: '15px' }}>
+                                        ↩️ Restaurar Pago
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* MODAL HOJAS DE RUTA */}
+                    {modalPlantilla && (
+                        <div style={styles.overlay}>
+                            <div style={{ ...styles.modal, width: '700px', maxWidth: '95vw', maxHeight: '85vh', display: 'flex', flexDirection: 'column' }}>
+                                <div style={styles.modalHeader}>
+                                    <h3 style={{ margin: 0 }}>📋 Seleccionar Hoja de Ruta</h3>
+                                    <button onClick={() => { setModalPlantilla(false); setPlantillaPreview(null); }} style={styles.btnCloseModal}>&times;</button>
+                                </div>
+                                <div style={{ display: 'flex', gap: '15px', flex: 1, overflow: 'hidden', padding: '15px' }}>
+                                    {/* Lista de plantillas */}
+                                    <div style={{ width: '220px', overflowY: 'auto', borderRight: '1px solid #eee', paddingRight: '15px' }}>
+                                        {plantillas.length === 0 && (
+                                            <p style={{ color: '#999', fontSize: '13px' }}>No hay plantillas creadas. Ve a Recursos → Plantillas.</p>
+                                        )}
+                                        {plantillas.map(p => (
+                                            <div
+                                                key={p._id}
+                                                onClick={() => setPlantillaPreview(p)}
+                                                style={{
+                                                    padding: '10px',
+                                                    borderRadius: '6px',
+                                                    cursor: 'pointer',
+                                                    marginBottom: '6px',
+                                                    backgroundColor: plantillaPreview?._id === p._id ? '#ede7f6' : '#f8f9fa',
+                                                    border: plantillaPreview?._id === p._id ? '2px solid #8e44ad' : '1px solid #eee'
+                                                }}
+                                            >
+                                                <div style={{ fontWeight: 'bold', fontSize: '13px' }}>{p.nombre}</div>
+                                                <div style={{ fontSize: '11px', color: '#888', marginTop: '3px' }}>{p.categoria}</div>
+                                                <div style={{ fontSize: '11px', color: '#aaa' }}>
+                                                    {p.tareas?.length || 0} tareas · {p.componentes?.length || 0} equipos · {p.logistica?.length || 0} suministros
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    {/* Preview de la plantilla seleccionada */}
+                                    <div style={{ flex: 1, overflowY: 'auto' }}>
+                                        {!plantillaPreview ? (
+                                            <div style={{ color: '#999', textAlign: 'center', marginTop: '40px' }}>
+                                                Selecciona una plantilla para ver el detalle
+                                            </div>
+                                        ) : (
+                                            <div>
+                                                <h4 style={{ color: '#8e44ad', margin: '0 0 5px' }}>{plantillaPreview.nombre}</h4>
+                                                <p style={{ color: '#666', fontSize: '13px', margin: '0 0 15px' }}>{plantillaPreview.descripcion}</p>
+                                                {plantillaPreview.procedimiento && (
+                                                    <div style={{ background: '#f8f4ff', padding: '10px', borderRadius: '6px', fontSize: '12px', marginBottom: '15px', whiteSpace: 'pre-wrap' }}>
+                                                        <strong>Procedimiento:</strong><br />{plantillaPreview.procedimiento}
+                                                    </div>
+                                                )}
+                                                {plantillaPreview.tareas?.length > 0 && (
+                                                    <>
+                                                        <strong style={{ fontSize: '13px' }}>Tareas ({plantillaPreview.tareas.length})</strong>
+                                                        <table style={{ width: '100%', fontSize: '12px', marginTop: '5px', marginBottom: '12px', borderCollapse: 'collapse' }}>
+                                                            <thead><tr style={{ background: '#f0f0f0' }}>
+                                                                <th style={{ padding: '6px', textAlign: 'left' }}>Descripción</th>
+                                                                <th style={{ padding: '6px' }}>Puesto</th>
+                                                                <th style={{ padding: '6px' }}>Horas</th>
+                                                            </tr></thead>
+                                                            <tbody>{plantillaPreview.tareas.map((t, i) => (
+                                                                <tr key={i} style={{ borderBottom: '1px solid #eee' }}>
+                                                                    <td style={{ padding: '6px' }}>{t.descripcion}</td>
+                                                                    <td style={{ padding: '6px', textAlign: 'center' }}>{t.puesto}</td>
+                                                                    <td style={{ padding: '6px', textAlign: 'center' }}>{t.duracion}h</td>
+                                                                </tr>
+                                                            ))}</tbody>
+                                                        </table>
+                                                    </>
+                                                )}
+                                                {plantillaPreview.componentes?.length > 0 && (
+                                                    <>
+                                                        <strong style={{ fontSize: '13px' }}>Equipos/Herramientas ({plantillaPreview.componentes.length})</strong>
+                                                        <ul style={{ fontSize: '12px', margin: '5px 0 12px', paddingLeft: '18px' }}>
+                                                            {plantillaPreview.componentes.map((c, i) => <li key={i}>{c.descripcion} × {c.cantidad}</li>)}
+                                                        </ul>
+                                                    </>
+                                                )}
+                                                {plantillaPreview.logistica?.length > 0 && (
+                                                    <>
+                                                        <strong style={{ fontSize: '13px' }}>Suministros ({plantillaPreview.logistica.length})</strong>
+                                                        <ul style={{ fontSize: '12px', margin: '5px 0 12px', paddingLeft: '18px' }}>
+                                                            {plantillaPreview.logistica.map((l, i) => <li key={i}>{l.descripcion} × {l.cantidad} {l.unidad}</li>)}
+                                                        </ul>
+                                                    </>
+                                                )}
+                                                <button
+                                                    onClick={() => aplicarPlantilla(plantillaPreview)}
+                                                    style={{ marginTop: '10px', padding: '10px 20px', backgroundColor: '#8e44ad', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', width: '100%' }}
+                                                >
+                                                    ✅ Aplicar esta plantilla
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
                     {isModalEnvioOpen && (
                         <div style={styles.overlay}>
                             <div style={styles.modal}>
@@ -1491,12 +2156,12 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                         </div>
                     )}
                 </div>
-                <div style={styles.footerAcciones}>
-                    <div style={{ display: 'flex', gap: '15px' }}>
+                <div style={{ ...styles.footerAcciones, flexDirection: isMobile ? 'column' : 'row', gap: isMobile ? '10px' : undefined }}>
+                    <div style={{ display: 'flex', gap: '15px', width: isMobile ? '100%' : undefined }}>
                         <button
                             type="button"
                             onClick={() => navigate(-1)}
-                            style={styles.btnSecundario}
+                            style={{ ...styles.btnSecundario, flex: isMobile ? 1 : undefined }}
                         >
                             ❌ Cancelar
                         </button>
@@ -1504,51 +2169,23 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                         <button
                             type="button"
                             onClick={() => {
-                                // ✅ Validamos antes de guardar en Atlas
-                                if (validarFechasTareas()) {
-                                    guardarPlanificacion(false);
-                                }
+                                guardarPlanificacion(false);
                             }}
-                            style={styles.btnPlanificar}
+                            style={{ ...styles.btnPlanificar, flex: isMobile ? 1 : undefined }}
                         >
                             💾 Solo Guardar Planificación
                         </button>
                     </div>
                     <button
                         type="button"
-                        onClick={manejarEnvioSupervisor} // <-- Llamamos a la lógica que pregunta el número
-                        style={{
-                            backgroundColor: '#2c3e50', // Azul oscuro "Supervisor"
-                            color: 'white',
-                            padding: '12px 20px',
-                            borderRadius: '8px',
-                            border: 'none',
-                            cursor: 'pointer',
-                            fontWeight: 'bold',
-                            marginTop: '15px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '10px',
-                            width: '100%',
-                            justifyContent: 'center'
-                        }}
-                    >
-                        👷‍♂️ DESPACHAR SUMINISTROS A SUPERVISOR
-                    </button>
-                    <button
-                        type="button"
                         onClick={() => {
                             if (tabActiva !== 'cotizacion') {
-                                // 1. Si no estamos en la pestaña final, solo cambiamos de pestaña
                                 setTabActiva('cotizacion');
                             } else {
-                                // 2. Si ya estamos en cotización, validamos y ejecutamos el proceso real
-                                if (validarFechasTareas()) {
-                                    finalizarYCotizar();
-                                }
+                                finalizarYCotizar();
                             }
                         }}
-                        style={tabActiva === 'cotizacion' ? styles.btnSuccessFinal : styles.btnSuccessNormal}
+                        style={{ ...(tabActiva === 'cotizacion' ? styles.btnSuccessFinal : styles.btnSuccessNormal), width: isMobile ? '100%' : undefined }}
                     >
                         💰 {tabActiva === 'cotizacion' ? 'FINALIZAR Y GENERAR COTIZACIÓN' : 'SIGUIENTE: REVISAR COTIZACIÓN'}
                     </button>

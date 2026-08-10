@@ -32,8 +32,11 @@ const ReporteTerreno = ({ ots, actualizarOtGlobal }) => {
 
         const reader = new FileReader();
         reader.onloadend = () => {
-            manejarCambioEvidencia(idx, 'fotoEvidencia', reader.result);
-            manejarCambioEvidencia(idx, 'estado', 'Completada');
+            setOt(prev => {
+                const nuevasTareas = [...prev.tareas];
+                nuevasTareas[idx] = { ...nuevasTareas[idx], fotoEvidencia: reader.result, estado: 'Completada' };
+                return { ...prev, tareas: nuevasTareas };
+            });
             setProcesando(false);
         };
         reader.readAsDataURL(archivo);
@@ -59,18 +62,19 @@ const ReporteTerreno = ({ ots, actualizarOtGlobal }) => {
 
             // Creamos los hitos con validación de existencia de campos
             const nuevosHitos = ot.tareas
-                .filter(t => t && t.comentarioAvance && t.comentarioAvance.trim() !== "")
+                .filter(t => t && (t.comentarioAvance?.trim() || t.fotoEvidencia))
                 .map(t => ({
                     fecha: new Date().toISOString(),
                     tareaId: t.descripcion || "Tarea sin nombre",
-                    comentario: t.comentarioAvance,
+                    comentario: t.comentarioAvance || '',
+                    foto: t.fotoEvidencia || null,
                     usuario: ot.tecnicoAsignado || 'Operario'
                 }));
 
             console.log("📝 Hitos generados:", nuevosHitos.length);
 
             if (nuevosHitos.length === 0) {
-                alert("⚠️ No hay comentarios nuevos para enviar.");
+                alert("⚠️ No hay comentarios ni fotos para enviar.");
                 return;
             }
 

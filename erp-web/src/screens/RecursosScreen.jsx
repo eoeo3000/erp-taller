@@ -41,7 +41,11 @@ const RecursosScreen = (
         crearPuesto,
         eliminarPuesto,
         puestosDB = [],
-        actualizarEquipo
+        actualizarEquipo,
+        plantillas = [],
+        crearPlantilla,
+        actualizarPlantilla,
+        eliminarPlantilla
     }) => {
 
     const [nuevoRecurso, setNuevoRecurso] = useState({ nombre: '', tipo: 'Humano', especialidad: '', calendarioId: '' });
@@ -57,6 +61,10 @@ const RecursosScreen = (
     const [datosTemporales, setDatosTemporales] = useState({ nombre: '', puesto: '' });
     // Añadir esto cerca de tus otros hooks
     const [tabActiva, setTabActiva] = useState('Personal');
+    const plantillaVacia = { nombre: '', categoria: 'General', descripcion: '', procedimiento: '', tareas: [], componentes: [], logistica: [] };
+    const [modalPlantilla, setModalPlantilla] = useState(false);
+    const [plantillaEditando, setPlantillaEditando] = useState(null);
+    const [formPlantilla, setFormPlantilla] = useState(plantillaVacia);
     // Añade esto donde están tus otros useState
     const [modalPuestosAbierto, setModalPuestosAbierto] = useState(false);
     const [modalComponenteAbierto, setModalComponenteAbierto] = useState({ nombre: '', tipo: 'Herramienta', estado: 'Disponible' });
@@ -421,7 +429,7 @@ const RecursosScreen = (
 
                 {/* NAVEGACIÓN POR PESTAÑAS (Tabs Superiores) */}
                 <div style={{ display: 'flex', gap: '5px', marginBottom: '20px', borderBottom: '2px solid #e2e8f0' }}>
-                    {['Personal', 'Equipos/Herramientas', 'Suministros Directos', 'Calendarios'].map(tab => (
+                    {['Personal', 'Equipos/Herramientas', 'Suministros Directos', 'Calendarios', 'Plantillas'].map(tab => (
                         <button
                             key={tab}
                             onClick={() => setTabActiva(tab)}
@@ -440,13 +448,14 @@ const RecursosScreen = (
                             {tab === 'Equipos/Herramientas' && '⚙️ '}
                             {tab === 'Suministros Directos' && '📦 '}
                             {tab === 'Calendarios' && '🗓️ '}
+                            {tab === 'Plantillas' && '📋 '}
                             {tab}
                         </button>
                     ))}
                 </div>
 
                 {/* BLOQUE SUPERIOR DINÁMICO */}
-                <div style={{ display: 'flex', gap: '20px', height: '400px', minWidth: '950px', marginBottom: '25px' }}>
+                {tabActiva !== 'Plantillas' && (<><div style={{ display: 'flex', gap: '20px', height: '400px', minWidth: '950px', marginBottom: '25px' }}>
 
                     {/* IZQUIERDA: Formulario de Creación (Contextual) */}
                     <div style={{
@@ -571,7 +580,6 @@ const RecursosScreen = (
                         </div>
                     </div>
                 </div>
-
                 <div style={styles.ganttContainer}>
                     <div style={styles.selectorMesContainer}>
                         <button style={styles.btnSecundario} onClick={() => {
@@ -603,7 +611,7 @@ const RecursosScreen = (
                                 {/* Generación de los días */}
                                 {diasDelMes.map((d, index) => {
                                     const fecha = new Date(d.fechaCompleta);
-                                    const diasSemana = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+                                    const diasSemana = ['D', 'L', 'M', 'X', 'J', 'V', 'S'];
                                     const nombreDia = diasSemana[fecha.getDay()];
                                     const esFinDeSemana = fecha.getDay() === 0 || fecha.getDay() === 6;
 
@@ -612,17 +620,17 @@ const RecursosScreen = (
                                             key={index}
                                             style={{
                                                 ...styles.thDia,
-                                                backgroundColor: esFinDeSemana ? '#f5f5f5' : '#fff', // Gris claro si es finde
-                                                color: esFinDeSemana ? '#999' : '#333',
-                                                minWidth: '45px',
-                                                padding: '8px 4px'
+                                                backgroundColor: esFinDeSemana ? '#f0f0f0' : '#fafafa',
+                                                color: esFinDeSemana ? '#aaa' : '#333',
+                                                width: '30px',
+                                                minWidth: '30px',
+                                                maxWidth: '30px',
+                                                padding: '4px 2px'
                                             }}
                                         >
-                                            <div style={{ display: 'flex', flexDirection: 'column', fontSize: '10px' }}>
-                                                {/* El nombre del día arriba (Lun, Mar...) */}
-                                                <span style={{ fontWeight: 'normal', marginBottom: '2px' }}>{nombreDia}</span>
-                                                {/* El número del día abajo (1, 2, 3...) */}
-                                                <span style={{ fontSize: '14px', fontWeight: 'bold' }}>{fecha.getDate()}</span>
+                                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', fontSize: '9px' }}>
+                                                <span style={{ color: esFinDeSemana ? '#bbb' : '#888' }}>{nombreDia}</span>
+                                                <span style={{ fontSize: '11px', fontWeight: 'bold', marginTop: '1px' }}>{fecha.getDate()}</span>
                                             </div>
                                         </th>
                                     );
@@ -683,10 +691,9 @@ const RecursosScreen = (
                                                         border: r.ajustes && r.ajustes[diaKey] !== undefined ? '2px solid #ff9800' : '1px solid #eee'
                                                     }}
                                                 >
-                                                    {/* CORRECCIÓN: Validamos que sea un número antes de usar toFixed */}
                                                     {typeof horasFinales === 'number' && horasFinales > 0
-                                                        ? horasFinales.toFixed(1)
-                                                        : '-'}
+                                                        ? (Number.isInteger(horasFinales) ? horasFinales : horasFinales.toFixed(1))
+                                                        : <span style={{ color: '#ddd', fontSize: '10px' }}>·</span>}
                                                 </td>
                                             );
                                         })}
@@ -696,8 +703,155 @@ const RecursosScreen = (
                         </tbody>
                     </table>
                 </div>
+                </>)}
+                {tabActiva === 'Plantillas' && (
+                <div style={{ padding: '20px 0' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                        <h3 style={{ margin: 0 }}>Hojas de Ruta Estándar</h3>
+                        <button
+                            onClick={() => { setFormPlantilla(plantillaVacia); setPlantillaEditando(null); setModalPlantilla(true); }}
+                            style={{ padding: '10px 20px', backgroundColor: '#8e44ad', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}
+                        >
+                            + Nueva Plantilla
+                        </button>
+                    </div>
+                    {plantillas.length === 0 && (
+                        <div style={{ textAlign: 'center', padding: '40px', color: '#999' }}>
+                            No hay plantillas creadas. Crea la primera con el botón de arriba.
+                        </div>
+                    )}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '15px' }}>
+                        {plantillas.map(p => (
+                            <div key={p._id} style={{ background: 'white', borderRadius: '10px', padding: '20px', boxShadow: '0 2px 8px rgba(0,0,0,0.08)', borderLeft: '4px solid #8e44ad' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                                    <div>
+                                        <h4 style={{ margin: '0 0 4px', color: '#2c3e50' }}>{p.nombre}</h4>
+                                        <span style={{ fontSize: '11px', background: '#ede7f6', color: '#8e44ad', padding: '2px 8px', borderRadius: '10px' }}>{p.categoria}</span>
+                                    </div>
+                                    <div style={{ display: 'flex', gap: '6px' }}>
+                                        <button onClick={() => { setFormPlantilla({ ...p }); setPlantillaEditando(p._id); setModalPlantilla(true); }}
+                                            style={{ background: '#3498db', color: 'white', border: 'none', borderRadius: '4px', padding: '4px 8px', cursor: 'pointer', fontSize: '12px' }}>
+                                            ✏️
+                                        </button>
+                                        <button onClick={() => { if (confirm(`¿Eliminar "${p.nombre}"?`)) eliminarPlantilla(p._id); }}
+                                            style={{ background: '#e74c3c', color: 'white', border: 'none', borderRadius: '4px', padding: '4px 8px', cursor: 'pointer', fontSize: '12px' }}>
+                                            🗑️
+                                        </button>
+                                    </div>
+                                </div>
+                                {p.descripcion && <p style={{ fontSize: '12px', color: '#666', margin: '10px 0 8px' }}>{p.descripcion}</p>}
+                                <div style={{ display: 'flex', gap: '10px', fontSize: '12px', color: '#888', marginTop: '8px' }}>
+                                    <span>📌 {p.tareas?.length || 0} tareas</span>
+                                    <span>⚙️ {p.componentes?.length || 0} equipos</span>
+                                    <span>📦 {p.logistica?.length || 0} suministros</span>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
 
-            </div>
+            {/* MODAL EDITOR DE PLANTILLA */}
+            {modalPlantilla && (
+                <div style={styles.overlay}>
+                    <div style={{ ...styles.modalContent, width: '680px', maxHeight: '90vh', overflowY: 'auto' }}>
+                        <h3 style={{ margin: '0 0 20px' }}>{plantillaEditando ? 'Editar Plantilla' : 'Nueva Hoja de Ruta'}</h3>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
+                            <div>
+                                <label style={styles.label}>Nombre *</label>
+                                <input style={styles.input} value={formPlantilla.nombre} onChange={e => setFormPlantilla(f => ({ ...f, nombre: e.target.value }))} placeholder="Ej: Mantenimiento Preventivo Motor" />
+                            </div>
+                            <div>
+                                <label style={styles.label}>Categoría</label>
+                                <select style={styles.input} value={formPlantilla.categoria} onChange={e => setFormPlantilla(f => ({ ...f, categoria: e.target.value }))}>
+                                    {['General', 'Mantenimiento', 'Instalación', 'Reparación', 'Inspección', 'Montaje'].map(c => <option key={c}>{c}</option>)}
+                                </select>
+                            </div>
+                        </div>
+                        <div style={{ marginBottom: '12px' }}>
+                            <label style={styles.label}>Descripción</label>
+                            <input style={styles.input} value={formPlantilla.descripcion} onChange={e => setFormPlantilla(f => ({ ...f, descripcion: e.target.value }))} placeholder="Descripción breve de cuándo usar esta plantilla" />
+                        </div>
+                        <div style={{ marginBottom: '16px' }}>
+                            <label style={styles.label}>Procedimiento / Instrucciones</label>
+                            <textarea style={{ ...styles.input, minHeight: '80px', resize: 'vertical' }} value={formPlantilla.procedimiento} onChange={e => setFormPlantilla(f => ({ ...f, procedimiento: e.target.value }))} placeholder="Pasos del procedimiento..." />
+                        </div>
+
+                        {/* Tareas */}
+                        <div style={{ marginBottom: '16px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                                <strong>Tareas</strong>
+                                <button onClick={() => setFormPlantilla(f => ({ ...f, tareas: [...f.tareas, { descripcion: '', puesto: '', duracion: 1 }] }))}
+                                    style={{ background: '#3498db', color: 'white', border: 'none', borderRadius: '4px', padding: '4px 10px', cursor: 'pointer', fontSize: '12px' }}>+ Agregar</button>
+                            </div>
+                            {formPlantilla.tareas.map((t, i) => (
+                                <div key={i} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 80px 30px', gap: '8px', marginBottom: '6px', alignItems: 'center' }}>
+                                    <input style={styles.input} placeholder="Descripción" value={t.descripcion} onChange={e => { const ts = [...formPlantilla.tareas]; ts[i] = { ...ts[i], descripcion: e.target.value }; setFormPlantilla(f => ({ ...f, tareas: ts })); }} />
+                                    <input style={styles.input} placeholder="Puesto" value={t.puesto} onChange={e => { const ts = [...formPlantilla.tareas]; ts[i] = { ...ts[i], puesto: e.target.value }; setFormPlantilla(f => ({ ...f, tareas: ts })); }} />
+                                    <input style={styles.input} type="number" placeholder="Horas" value={t.duracion} onChange={e => { const ts = [...formPlantilla.tareas]; ts[i] = { ...ts[i], duracion: Number(e.target.value) }; setFormPlantilla(f => ({ ...f, tareas: ts })); }} />
+                                    <button onClick={() => setFormPlantilla(f => ({ ...f, tareas: f.tareas.filter((_, idx) => idx !== i) }))} style={{ background: '#e74c3c', color: 'white', border: 'none', borderRadius: '4px', padding: '4px', cursor: 'pointer' }}>✕</button>
+                                </div>
+                            ))}
+                        </div>
+
+                        {/* Equipos/Componentes */}
+                        <div style={{ marginBottom: '16px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                                <strong>Equipos / Herramientas</strong>
+                                <button onClick={() => setFormPlantilla(f => ({ ...f, componentes: [...f.componentes, { descripcion: '', cantidad: 1, tipo: 'Herramienta' }] }))}
+                                    style={{ background: '#3498db', color: 'white', border: 'none', borderRadius: '4px', padding: '4px 10px', cursor: 'pointer', fontSize: '12px' }}>+ Agregar</button>
+                            </div>
+                            {formPlantilla.componentes.map((c, i) => (
+                                <div key={i} style={{ display: 'grid', gridTemplateColumns: '2fr 80px 100px 30px', gap: '8px', marginBottom: '6px', alignItems: 'center' }}>
+                                    <input style={styles.input} placeholder="Descripción" value={c.descripcion} onChange={e => { const cs = [...formPlantilla.componentes]; cs[i] = { ...cs[i], descripcion: e.target.value }; setFormPlantilla(f => ({ ...f, componentes: cs })); }} />
+                                    <input style={styles.input} type="number" placeholder="Cant." value={c.cantidad} onChange={e => { const cs = [...formPlantilla.componentes]; cs[i] = { ...cs[i], cantidad: Number(e.target.value) }; setFormPlantilla(f => ({ ...f, componentes: cs })); }} />
+                                    <select style={styles.input} value={c.tipo} onChange={e => { const cs = [...formPlantilla.componentes]; cs[i] = { ...cs[i], tipo: e.target.value }; setFormPlantilla(f => ({ ...f, componentes: cs })); }}>
+                                        <option>Herramienta</option><option>Equipo</option><option>Material</option>
+                                    </select>
+                                    <button onClick={() => setFormPlantilla(f => ({ ...f, componentes: f.componentes.filter((_, idx) => idx !== i) }))} style={{ background: '#e74c3c', color: 'white', border: 'none', borderRadius: '4px', padding: '4px', cursor: 'pointer' }}>✕</button>
+                                </div>
+                            ))}
+                        </div>
+
+                        {/* Suministros / Logística */}
+                        <div style={{ marginBottom: '20px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                                <strong>Suministros Directos</strong>
+                                <button onClick={() => setFormPlantilla(f => ({ ...f, logistica: [...f.logistica, { descripcion: '', cantidad: 1, unidad: 'un', precio: 0 }] }))}
+                                    style={{ background: '#3498db', color: 'white', border: 'none', borderRadius: '4px', padding: '4px 10px', cursor: 'pointer', fontSize: '12px' }}>+ Agregar</button>
+                            </div>
+                            {formPlantilla.logistica.map((l, i) => (
+                                <div key={i} style={{ display: 'grid', gridTemplateColumns: '2fr 80px 60px 30px', gap: '8px', marginBottom: '6px', alignItems: 'center' }}>
+                                    <input style={styles.input} placeholder="Descripción" value={l.descripcion} onChange={e => { const ls = [...formPlantilla.logistica]; ls[i] = { ...ls[i], descripcion: e.target.value }; setFormPlantilla(f => ({ ...f, logistica: ls })); }} />
+                                    <input style={styles.input} type="number" placeholder="Cant." value={l.cantidad} onChange={e => { const ls = [...formPlantilla.logistica]; ls[i] = { ...ls[i], cantidad: Number(e.target.value) }; setFormPlantilla(f => ({ ...f, logistica: ls })); }} />
+                                    <input style={styles.input} placeholder="Unidad" value={l.unidad} onChange={e => { const ls = [...formPlantilla.logistica]; ls[i] = { ...ls[i], unidad: e.target.value }; setFormPlantilla(f => ({ ...f, logistica: ls })); }} />
+                                    <button onClick={() => setFormPlantilla(f => ({ ...f, logistica: f.logistica.filter((_, idx) => idx !== i) }))} style={{ background: '#e74c3c', color: 'white', border: 'none', borderRadius: '4px', padding: '4px', cursor: 'pointer' }}>✕</button>
+                                </div>
+                            ))}
+                        </div>
+
+                        <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+                            <button onClick={() => { setModalPlantilla(false); setPlantillaEditando(null); }} style={styles.btnSecundario}>Cancelar</button>
+                            <button
+                                onClick={async () => {
+                                    if (!formPlantilla.nombre.trim()) { alert('El nombre es obligatorio'); return; }
+                                    if (plantillaEditando) {
+                                        await actualizarPlantilla(plantillaEditando, formPlantilla);
+                                    } else {
+                                        await crearPlantilla(formPlantilla);
+                                    }
+                                    setModalPlantilla(false);
+                                    setPlantillaEditando(null);
+                                }}
+                                style={{ ...styles.btnPrimary, padding: '10px 25px' }}
+                            >
+                                {plantillaEditando ? '💾 Guardar Cambios' : '✅ Crear Plantilla'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {ajusteManual && (
                 <div style={styles.overlay}>
@@ -887,6 +1041,31 @@ const RecursosScreen = (
                                 style={styles.input}
                                 value={nuevoRecurso.nombre}
                                 onChange={e => setNuevoRecurso({ ...nuevoRecurso, nombre: e.target.value })}
+                            />
+
+                            <label style={{ fontWeight: 'bold' }}>Teléfono / WhatsApp</label>
+                            <input
+                                placeholder="Ej: 56912345678 (con código de país, sin +)"
+                                style={styles.input}
+                                value={nuevoRecurso.telefono || ''}
+                                onChange={e => setNuevoRecurso({ ...nuevoRecurso, telefono: e.target.value })}
+                            />
+
+                            <label style={{ fontWeight: 'bold' }}>Email</label>
+                            <input
+                                placeholder="supervisor@empresa.com"
+                                style={styles.input}
+                                value={nuevoRecurso.email || ''}
+                                onChange={e => setNuevoRecurso({ ...nuevoRecurso, email: e.target.value })}
+                            />
+
+                            <label style={{ fontWeight: 'bold' }}>Tarifa por Hora (CLP)</label>
+                            <input
+                                type="number"
+                                placeholder="Ej: 5000"
+                                style={styles.input}
+                                value={nuevoRecurso.tarifaHora || ''}
+                                onChange={e => setNuevoRecurso({ ...nuevoRecurso, tarifaHora: Number(e.target.value) || 0 })}
                             />
 
                             <label style={{ fontWeight: 'bold' }}>Asignar Turno Inicial</label>
@@ -1229,6 +1408,7 @@ const RecursosScreen = (
                     </div>
                 </div>
             )}
+            </div>
         </div>
     );
 };
@@ -1373,6 +1553,16 @@ const styles = {
         transition: 'background 0.3s'
     },
 
+    btnSecundario: {
+        padding: '10px 20px',
+        background: '#95a5a6',
+        color: 'white',
+        border: 'none',
+        borderRadius: '6px',
+        cursor: 'pointer',
+        fontWeight: 'bold'
+    },
+
     // CONTENEDOR GANTT: Ahora ocupa el 100%
     ganttContainer: {
         overflowX: 'auto',
@@ -1390,8 +1580,10 @@ const styles = {
 
     // Columna de nombres más ancha y persistente
     recursoColHeader: {
-        minWidth: '220px',
-        padding: '15px',
+        width: '140px',
+        minWidth: '140px',
+        maxWidth: '140px',
+        padding: '10px 8px',
         position: 'sticky',
         left: 0,
         zIndex: 20,
@@ -1402,14 +1594,17 @@ const styles = {
     },
 
     recursoName: {
-        padding: '12px 15px',
+        padding: '8px 10px',
         position: 'sticky',
         left: 0,
         background: '#ffffff',
         zIndex: 5,
-        borderRight: '3px solid #3498db', // Separación visual clara
+        borderRight: '3px solid #3498db',
         borderBottom: '1px solid #eee',
-        fontWeight: '600'
+        fontWeight: '600',
+        width: '140px',
+        minWidth: '140px',
+        maxWidth: '140px',
     },
 
     miniSelect: {
@@ -1423,8 +1618,10 @@ const styles = {
     },
 
     diaCol: {
-        minWidth: '45px',
-        padding: '10px 5px',
+        width: '30px',
+        minWidth: '30px',
+        maxWidth: '30px',
+        padding: '6px 2px',
         borderRight: '1px solid #3e4f5f',
         textAlign: 'center'
     },
@@ -1433,7 +1630,11 @@ const styles = {
         borderRight: '1px solid #eee',
         borderBottom: '1px solid #eee',
         textAlign: 'center',
-        height: '60px'
+        height: '50px',
+        width: '30px',
+        minWidth: '30px',
+        maxWidth: '30px',
+        padding: '2px'
     },
 
     horaBadge: {

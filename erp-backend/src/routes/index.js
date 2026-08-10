@@ -11,6 +11,8 @@ const otRoutes = require('./otRoutes');
 const puestosRoutes = require('./puestosRoutes');
 // ✅ PASO 1: Importar solicitudes
 const solicitudRoutes = require('./solicitudRoutes');
+const plantillaRoutes = require('./plantillaRoutes');
+const finanzasRoutes = require('./finanzasRoutes');
 
 // Definir los prefijos de las URLs
 router.use('/data', dataRoutes);
@@ -20,7 +22,8 @@ router.use('/suministros', suministroRoutes);
 router.use('/calendarios', calendarioRoutes);
 router.use('/ots', otRoutes);
 router.use('/puestos', puestosRoutes);
-// ✅ PASO 2: Registrar solicitudes (Esto habilita /api/solicitudes)
 router.use('/solicitudes', solicitudRoutes);
+router.use('/plantillas', plantillaRoutes);
+router.use('/finanzas', finanzasRoutes);
 
 module.exports = router;

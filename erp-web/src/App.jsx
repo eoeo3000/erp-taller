@@ -7,10 +7,14 @@ import GanttScreen from './screens/GanttScreen';
 import DashboardScreen from './screens/DashboardScreen';
 import RecursosScreen from './screens/RecursosScreen'
 import React, { useState, useEffect } from 'react';
-import ReporteTerreno from './screens/ReporteTerreno'; // 🚩 Nueva importación
+import ReporteTerreno from './screens/ReporteTerreno';
+import FinanzasScreen from './screens/FinanzasScreen';
+import useIsMobile from './hooks/useIsMobile';
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 function App() {
+  const isMobile = useIsMobile();
+  const [navAbierto, setNavAbierto] = useState(false);
   const [recursos, setRecursos] = useState([]);
   const [ots, setOts] = useState([]);
   const [solicitudes, setSolicitudes] = useState([]);
@@ -18,6 +22,7 @@ function App() {
   const [componentes, setComponentes] = useState([]);
   const [suministros, setSuministros] = useState([]);
   const [puestosDB, setPuestosDB] = useState([]);
+  const [plantillas, setPlantillas] = useState([]);
   const [modalPuestosAbierto, setModalPuestosAbierto] = useState(false);
   const [otSeleccionada, setOtSeleccionada] = useState(null);
   const cargarDatos = async () => {
@@ -36,9 +41,8 @@ function App() {
       setSuministros(d.suministros || []); // Antes logistica
 
       // 🚩 NUEVO: Cargamos los puestos/especialidades configurados
-      if (d.puestos) {
-        setPuestosDB(d.puestos);
-      }
+      if (d.puestos) setPuestosDB(d.puestos);
+      if (d.plantillas) setPlantillas(d.plantillas);
 
     } catch (error) {
       console.error("❌ Error en la carga inicial:", error);
@@ -208,7 +212,8 @@ function App() {
     ...styles.link,
     color: isActive ? '#3498db' : 'white',
     borderBottom: isActive ? '2px solid #3498db' : 'none',
-    paddingBottom: '5px'
+    padding: isMobile ? '12px 0' : '0 0 5px 0',
+    display: 'block'
   });
   const guardarCalendarioGlobal = async (datos, id) => {
     // URL apuntando explícitamente al BACKEND (Puerto 5000)
@@ -266,6 +271,14 @@ function App() {
       alert("✅ Estado reseteado a Pendiente");
     } catch (error) {
       console.error("Error al liberar:", error);
+    }
+  };
+  const actualizarEstadoSolicitud = async (solicitudId, nuevoEstado) => {
+    try {
+      await axios.put(`${API}/solicitudes/${solicitudId}`, { estado: nuevoEstado });
+      setSolicitudes(prev => prev.map(s => String(s._id) === String(solicitudId) ? { ...s, estado: nuevoEstado } : s));
+    } catch (error) {
+      console.error("Error al actualizar solicitud:", error);
     }
   };
   const editarOtGlobal = async (id, otActualizada) => {
@@ -596,6 +609,37 @@ function App() {
     }
   };
 
+  const crearPlantilla = async (datos) => {
+    try {
+      const res = await axios.post(`${API}/plantillas`, datos);
+      setPlantillas(prev => [...prev, res.data]);
+      return { exito: true, plantilla: res.data };
+    } catch (error) {
+      console.error('Error al crear plantilla:', error);
+      return { exito: false };
+    }
+  };
+
+  const actualizarPlantilla = async (id, datos) => {
+    try {
+      const res = await axios.put(`${API}/plantillas/${id}`, datos);
+      setPlantillas(prev => prev.map(p => p._id === id ? res.data : p));
+      return { exito: true };
+    } catch (error) {
+      console.error('Error al actualizar plantilla:', error);
+      return { exito: false };
+    }
+  };
+
+  const eliminarPlantilla = async (id) => {
+    try {
+      await axios.delete(`${API}/plantillas/${id}`);
+      setPlantillas(prev => prev.filter(p => p._id !== id));
+    } catch (error) {
+      console.error('Error al eliminar plantilla:', error);
+    }
+  };
+
   const enviarASupervisor = (ot) => {
     if (!ot) return;
     const telefono = ot.whatsappDestino;
@@ -611,14 +655,11 @@ function App() {
 
     // 🚩 AJUSTE 2: Formato de "Ancla"
     // Ponemos el link entre dos saltos de línea y sin caracteres pegados
-    const mensajeLink = `\n\n*ACCESO AL REPORTE:* \n${linkReporte}\n\n`;
-
     const encabezado = `*RESUMEN DE SUMINISTROS - OT #${ot.numeroOT || 'S/N'}*`;
-    const cliente = `\n📍 *Cliente:* ${ot.solicitante || 'Particular'}`;
+    const cliente = `📍 *Cliente:* ${ot.solicitante || 'Particular'}`;
 
-    // 🚩 AJUSTE 3: El orden de los factores
-    // Pon el link lo más arriba posible. A veces WhatsApp corta el escaneo si el mensaje es muy largo.
-    const mensajeFinal = `${encabezado}${mensajeLink}${cliente}\n\n_Por favor confirmar recepción._`;
+    // El link debe ir solo en su línea, sin texto pegado, para que WhatsApp lo convierta en enlace clickeable
+    const mensajeFinal = `${encabezado}\n${cliente}\n\n*Acceso al reporte:*\n${linkReporte}\n\n_Por favor confirmar recepción._`;
 
     const urlFinal = `https://wa.me/${telefono}?text=${encodeURIComponent(mensajeFinal)}`;
     window.open(urlFinal, '_blank');
@@ -647,20 +688,42 @@ function App() {
       <div style={{ width: '100vw', minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
         <nav style={styles.nav}>
           <div style={styles.logo}>ERP SISTEMA</div>
-          <NavLink style={estiloDinamico} to="/">📥 SOLICITUDES</NavLink>
-          <NavLink style={estiloDinamico} to="/dashboard">📊 CONTROL MACRO</NavLink>
-          <NavLink style={estiloDinamico} to="/gantt">📅 PLANO (GANTT)</NavLink>
-          <NavLink style={estiloDinamico} to="/recursos">🛠️ RECURSOS</NavLink>
+          {isMobile ? (
+            <>
+              <button
+                onClick={() => setNavAbierto(v => !v)}
+                style={styles.hamburger}
+              >
+                {navAbierto ? '✕' : '☰'}
+              </button>
+              {navAbierto && (
+                <div style={styles.menuMobile}>
+                  <NavLink style={estiloDinamico} to="/" onClick={() => setNavAbierto(false)}>📥 SOLICITUDES</NavLink>
+                  <NavLink style={estiloDinamico} to="/dashboard" onClick={() => setNavAbierto(false)}>📊 CONTROL MACRO</NavLink>
+                  <NavLink style={estiloDinamico} to="/gantt" onClick={() => setNavAbierto(false)}>📅 PLANO (GANTT)</NavLink>
+                  <NavLink style={estiloDinamico} to="/recursos" onClick={() => setNavAbierto(false)}>🛠️ RECURSOS</NavLink>
+                  <NavLink style={estiloDinamico} to="/finanzas" onClick={() => setNavAbierto(false)}>💰 FINANZAS</NavLink>
+                </div>
+              )}
+            </>
+          ) : (
+            <>
+              <NavLink style={estiloDinamico} to="/">📥 SOLICITUDES</NavLink>
+              <NavLink style={estiloDinamico} to="/dashboard">📊 CONTROL MACRO</NavLink>
+              <NavLink style={estiloDinamico} to="/gantt">📅 PLANO (GANTT)</NavLink>
+              <NavLink style={estiloDinamico} to="/recursos">🛠️ RECURSOS</NavLink>
+              <NavLink style={estiloDinamico} to="/finanzas">💰 FINANZAS</NavLink>
+            </>
+          )}
         </nav>
 
         <main style={{ flex: 1, width: '100%', backgroundColor: '#f0f2f5' }}>
           <Routes>
             <Route path="/reporte" element={<ReporteTerreno ots={ots} actualizarOtGlobal={actualizarOtGlobal} />} />
             <Route path="/" element={<IngresoScreen solicitudes={solicitudes} liberarSolicitudManual={liberarSolicitudManual} crearSolicitudGlobal={crearSolicitudGlobal} setSolicitudes={setSolicitudes} cargarDatos={cargarDatos} API={API} ots={ots} />} />
-            <Route path="/dashboard" element={<DashboardScreen solicitudes={solicitudes} ots={ots} eliminarOT={eliminarOT} />} />
-            <Route path="/tratamiento" element={<TratamientoScreen recurso={recursos} puestosDB={puestosDB} enviarASupervisor={enviarASupervisor} componentes={componentes} actualizarOtGlobal={actualizarOtGlobal} editarOtGlobal={editarOtGlobal} cargarDatos={cargarDatos} API={API} recursos={recursos} suministros={suministros} otSeleccionada={otSeleccionada}     // 🚩 PASAMOS LA OT
-              setOtSeleccionada={setOtSeleccionada} />} />
-            <Route path="/gantt" element={<GanttScreen ots={ots} recursos={recursos} calendarios={calendarios} obtenerHorasParaDia={obtenerHorasParaDia} />} />
+            <Route path="/dashboard" element={<DashboardScreen solicitudes={solicitudes} ots={ots} eliminarOT={eliminarOT} actualizarEstadoSolicitud={actualizarEstadoSolicitud} recursos={recursos} API={API} />} />
+            <Route path="/tratamiento" element={<TratamientoScreen recurso={recursos} puestosDB={puestosDB} enviarASupervisor={enviarASupervisor} componentes={componentes} actualizarOtGlobal={actualizarOtGlobal} editarOtGlobal={editarOtGlobal} cargarDatos={cargarDatos} API={API} recursos={recursos} suministros={suministros} otSeleccionada={otSeleccionada} setOtSeleccionada={setOtSeleccionada} plantillas={plantillas} />} />
+            <Route path="/gantt" element={<GanttScreen ots={ots} recursos={recursos} calendarios={calendarios} obtenerHorasParaDia={obtenerHorasParaDia} actualizarOtGlobal={actualizarOtGlobal} cargarDatos={cargarDatos} />} />
             <Route path="/recursos" element={
               <RecursosScreen
                 // Props existentes
@@ -683,9 +746,13 @@ function App() {
                 eliminarPuesto={eliminarPuesto}
                 actualizarEquipo={actualizarEquipo}
                 guardarCalendarioGlobal={guardarCalendarioGlobal}
-
+                plantillas={plantillas}
+                crearPlantilla={crearPlantilla}
+                actualizarPlantilla={actualizarPlantilla}
+                eliminarPlantilla={eliminarPlantilla}
               />
             } />
+            <Route path="/finanzas" element={<FinanzasScreen recursos={recursos} API={API} />} />
           </Routes>
         </main>
       </div>
@@ -696,16 +763,17 @@ function App() {
 const styles = {
   nav: {
     background: '#1a2a3a',
-    padding: '15px 30px',
+    padding: '15px 20px',
     display: 'flex',
     gap: '40px',
     alignItems: 'center',
     position: 'sticky',
     top: 0,
     zIndex: 1000,
-    boxShadow: '0 2px 10px rgba(0,0,0,0.3)'
+    boxShadow: '0 2px 10px rgba(0,0,0,0.3)',
+    flexWrap: 'wrap'
   },
-  logo: { color: '#3498db', fontWeight: 'bold', fontSize: '20px', marginRight: '20px' },
+  logo: { color: '#3498db', fontWeight: 'bold', fontSize: '20px', flex: 1 },
   link: {
     color: 'white',
     textDecoration: 'none',
@@ -713,6 +781,23 @@ const styles = {
     fontSize: '13px',
     letterSpacing: '1px',
     transition: 'all 0.3s ease'
+  },
+  hamburger: {
+    background: 'none',
+    border: '1px solid rgba(255,255,255,0.3)',
+    color: 'white',
+    fontSize: '20px',
+    padding: '6px 12px',
+    borderRadius: '6px',
+    cursor: 'pointer'
+  },
+  menuMobile: {
+    width: '100%',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '0',
+    borderTop: '1px solid rgba(255,255,255,0.1)',
+    paddingTop: '10px'
   }
 };
 

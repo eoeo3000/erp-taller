@@ -24,6 +24,9 @@ const RecursoSchema = new mongoose.Schema({
         of: Number,
         default: {}
     },
+    telefono: { type: String, default: '' },
+    email: { type: String, default: '' },
+    tarifaHora: { type: Number, default: 0 },
     fechaInicioCiclo: { type: String },
     // Mejoramos ausencias para que coincida con la lógica de fechas
     ausencias: [{
