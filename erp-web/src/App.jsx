@@ -9,6 +9,8 @@ import RecursosScreen from './screens/RecursosScreen'
 import React, { useState, useEffect } from 'react';
 import ReporteTerreno from './screens/ReporteTerreno';
 import FinanzasScreen from './screens/FinanzasScreen';
+import ContabilidadScreen from './screens/ContabilidadScreen';
+import ImportExportScreen from './screens/ImportExportScreen';
 import useIsMobile from './hooks/useIsMobile';
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
@@ -685,7 +687,7 @@ function App() {
 
   return (
     <Router>
-      <div style={{ width: '100vw', minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ width: '100%', minHeight: '100vh', display: 'flex', flexDirection: 'column', overflowX: 'hidden' }}>
         <nav style={styles.nav}>
           <div style={styles.logo}>ERP SISTEMA</div>
           {isMobile ? (
@@ -703,6 +705,8 @@ function App() {
                   <NavLink style={estiloDinamico} to="/gantt" onClick={() => setNavAbierto(false)}>📅 PLANO (GANTT)</NavLink>
                   <NavLink style={estiloDinamico} to="/recursos" onClick={() => setNavAbierto(false)}>🛠️ RECURSOS</NavLink>
                   <NavLink style={estiloDinamico} to="/finanzas" onClick={() => setNavAbierto(false)}>💰 FINANZAS</NavLink>
+                  <NavLink style={estiloDinamico} to="/contabilidad" onClick={() => setNavAbierto(false)}>📒 CONTABILIDAD</NavLink>
+                  <NavLink style={estiloDinamico} to="/importexport" onClick={() => setNavAbierto(false)}>📊 EXCEL</NavLink>
                 </div>
               )}
             </>
@@ -713,6 +717,8 @@ function App() {
               <NavLink style={estiloDinamico} to="/gantt">📅 PLANO (GANTT)</NavLink>
               <NavLink style={estiloDinamico} to="/recursos">🛠️ RECURSOS</NavLink>
               <NavLink style={estiloDinamico} to="/finanzas">💰 FINANZAS</NavLink>
+              <NavLink style={estiloDinamico} to="/contabilidad">📒 CONTABILIDAD</NavLink>
+              <NavLink style={estiloDinamico} to="/importexport">📊 EXCEL</NavLink>
             </>
           )}
         </nav>
@@ -753,6 +759,8 @@ function App() {
               />
             } />
             <Route path="/finanzas" element={<FinanzasScreen recursos={recursos} API={API} />} />
+            <Route path="/contabilidad" element={<ContabilidadScreen API={API} />} />
+            <Route path="/importexport" element={<ImportExportScreen API={API} cargarDatos={cargarDatos} />} />
           </Routes>
         </main>
       </div>

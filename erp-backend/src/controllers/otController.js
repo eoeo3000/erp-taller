@@ -138,6 +138,9 @@ exports.actualizarOT = async (req, res) => {
         const { id } = req.params;
         const datosCuerpo = req.body;
 
+        // Snapshot previo para detectar transiciones contables
+        const otAnterior = await OT.findById(id).lean();
+
         // 1. Intentar actualizar (Usamos $set para campos normales y nos aseguramos de traer la OT nueva)
         let ot = await OT.findByIdAndUpdate(
             id,
@@ -171,6 +174,34 @@ exports.actualizarOT = async (req, res) => {
         }
 
         if (!ot) return res.status(404).json({ error: "No encontrado" });
+
+        // Hooks contables (no bloquean la respuesta si falla)
+        try {
+            const pagoNuevo = datosCuerpo.pago;
+            const pagoViejo = otAnterior?.pago;
+            const { crearAsientoAutomatico, anularAsientoPorReferencia } = require('./contabilidadController');
+
+            const seEstaPagando = pagoNuevo?.estado === 'Pagado'
+                && pagoViejo?.estado !== 'Pagado'
+                && !pagoNuevo?.anulado;
+
+            const seEstaAnulando = pagoNuevo?.anulado === true && !pagoViejo?.anulado;
+
+            if (seEstaPagando) {
+                const monto = Number(pagoNuevo.montoPagado) || 0;
+                const fechaPago = pagoNuevo.fechaPago || new Date().toISOString().slice(0, 10);
+                await crearAsientoAutomatico('OT', ot._id, ot.numeroOT, [
+                    { codigoCuenta: '1.1.2', debe: monto, haber: 0, glosa: `Cobro ${ot.numeroOT}` },
+                    { codigoCuenta: '4.1.1', debe: 0, haber: monto, glosa: `Ingreso ${ot.numeroOT}` }
+                ], fechaPago, `Cobro servicios ${ot.numeroOT}`);
+            }
+
+            if (seEstaAnulando) {
+                await anularAsientoPorReferencia('OT', ot._id, pagoNuevo.motivoAnulacion || 'Pago anulado');
+            }
+        } catch (eContab) {
+            console.warn('[Contabilidad] Hook OT falló (sin impacto en la operación):', eContab.message);
+        }
 
         // 🚩 CLAVE: Devolvemos la OT completa para que el frontend vea los reportes
         res.json(ot);

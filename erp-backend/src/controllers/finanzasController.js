@@ -113,6 +113,23 @@ exports.marcarPagado = async (req, res) => {
             { _id: { $in: ids } },
             { $set: { pagado: true, fechaPago: fechaPago || '', metodoPago: metodoPago || 'Transferencia' } }
         );
+
+        // Hook contable
+        try {
+            const registros = await RegistroPago.find({ _id: { $in: ids } }).lean();
+            const totalMO = registros.reduce((s, r) => s + (r.totalDia || 0), 0);
+            if (totalMO > 0) {
+                const { crearAsientoAutomatico } = require('./contabilidadController');
+                const fecha = fechaPago || new Date().toISOString().slice(0, 10);
+                await crearAsientoAutomatico('PagoPersonal', null, `PAGO-${fecha}`, [
+                    { codigoCuenta: '5.1.2', debe: totalMO, haber: 0, glosa: `Pago personal ${fecha}` },
+                    { codigoCuenta: '1.1.2', debe: 0, haber: totalMO, glosa: `Pago personal ${fecha}` }
+                ], fecha, `Pago mano de obra ${fecha} — ${registros.length} registros`);
+            }
+        } catch (eContab) {
+            console.warn('[Contabilidad] Hook PagoPersonal falló (sin impacto en la operación):', eContab.message);
+        }
+
         res.json({ ok: true });
     } catch (err) {
         res.status(500).json({ error: err.message });
