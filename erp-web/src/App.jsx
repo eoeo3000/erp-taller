@@ -1,5 +1,11 @@
 // src/App.jsx
-import { BrowserRouter as Router, Routes, Route, NavLink } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, NavLink, useLocation } from 'react-router-dom';
+
+function NavPortalGuard({ children }) {
+  const loc = useLocation();
+  if (loc.pathname.startsWith('/portal')) return null;
+  return children;
+}
 import axios from 'axios';
 import IngresoScreen from './screens/IngresoScreen';
 import TratamientoScreen from './screens/TratamientoScreen';
@@ -11,6 +17,7 @@ import ReporteTerreno from './screens/ReporteTerreno';
 import FinanzasScreen from './screens/FinanzasScreen';
 import ContabilidadScreen from './screens/ContabilidadScreen';
 import ImportExportScreen from './screens/ImportExportScreen';
+import PortalClienteScreen from './screens/PortalClienteScreen';
 import useIsMobile from './hooks/useIsMobile';
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
@@ -688,6 +695,7 @@ function App() {
   return (
     <Router>
       <div style={{ width: '100%', minHeight: '100vh', display: 'flex', flexDirection: 'column', overflowX: 'hidden' }}>
+        <NavPortalGuard>
         <nav style={styles.nav}>
           <div style={styles.logo}>ERP SISTEMA</div>
           {isMobile ? (
@@ -707,6 +715,7 @@ function App() {
                   <NavLink style={estiloDinamico} to="/finanzas" onClick={() => setNavAbierto(false)}>💰 FINANZAS</NavLink>
                   <NavLink style={estiloDinamico} to="/contabilidad" onClick={() => setNavAbierto(false)}>📒 CONTABILIDAD</NavLink>
                   <NavLink style={estiloDinamico} to="/importexport" onClick={() => setNavAbierto(false)}>📊 EXCEL</NavLink>
+                  <NavLink style={estiloDinamico} to="/portal" onClick={() => setNavAbierto(false)}>🌐 PORTAL CLIENTE</NavLink>
                 </div>
               )}
             </>
@@ -719,9 +728,11 @@ function App() {
               <NavLink style={estiloDinamico} to="/finanzas">💰 FINANZAS</NavLink>
               <NavLink style={estiloDinamico} to="/contabilidad">📒 CONTABILIDAD</NavLink>
               <NavLink style={estiloDinamico} to="/importexport">📊 EXCEL</NavLink>
+              <NavLink style={estiloDinamico} to="/portal">🌐 PORTAL CLIENTE</NavLink>
             </>
           )}
         </nav>
+        </NavPortalGuard>
 
         <main style={{ flex: 1, width: '100%', backgroundColor: '#f0f2f5' }}>
           <Routes>
@@ -761,6 +772,7 @@ function App() {
             <Route path="/finanzas" element={<FinanzasScreen recursos={recursos} API={API} />} />
             <Route path="/contabilidad" element={<ContabilidadScreen API={API} />} />
             <Route path="/importexport" element={<ImportExportScreen API={API} cargarDatos={cargarDatos} />} />
+            <Route path="/portal" element={<PortalClienteScreen API={API} />} />
           </Routes>
         </main>
       </div>

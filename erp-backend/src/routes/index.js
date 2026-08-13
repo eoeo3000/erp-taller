@@ -15,6 +15,7 @@ const plantillaRoutes = require('./plantillaRoutes');
 const finanzasRoutes = require('./finanzasRoutes');
 const contabilidadRoutes = require('./contabilidadRoutes');
 const importExportRoutes = require('./importExportRoutes');
+const portalRoutes = require('./portalRoutes');
 
 // Definir los prefijos de las URLs
 router.use('/data', dataRoutes);
@@ -29,5 +30,6 @@ router.use('/plantillas', plantillaRoutes);
 router.use('/finanzas', finanzasRoutes);
 router.use('/contabilidad', contabilidadRoutes);
 router.use('/import', importExportRoutes);
+router.use('/portal', portalRoutes);
 
 module.exports = router;

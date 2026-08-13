@@ -1,5 +1,18 @@
 const Solicitud = require('../models/Solicitud');
 
+async function generarNumeroSolicitud() {
+    const anio = new Date().getFullYear();
+    const prefijo = `SOL-${anio}-`;
+    const ultima = await Solicitud.findOne({ numeroSolicitud: { $regex: new RegExp(`^${prefijo}`) } }).sort({ numeroSolicitud: -1 });
+    let siguiente = 1;
+    if (ultima?.numeroSolicitud) {
+        const partes = ultima.numeroSolicitud.split('-');
+        const n = parseInt(partes[partes.length - 1]);
+        if (!isNaN(n)) siguiente = n + 1;
+    }
+    return `${prefijo}${siguiente.toString().padStart(4, '0')}`;
+}
+
 exports.obtenerSolicitudes = async (req, res) => {
     try {
         // Quitamos el { estado: 'Pendiente' } para recibir TODO
@@ -32,6 +45,10 @@ exports.crearSolicitud = async (req, res) => {
         // y NO hay req.file, el bucle de arriba podría haberlo saltado, 
         // pero vamos a asegurarnos:
         if (data.adjuntos === 'undefined') delete data.adjuntos;
+
+        if (!data.numeroSolicitud) {
+            data.numeroSolicitud = await generarNumeroSolicitud();
+        }
 
         const nuevaSolicitud = new Solicitud(data);
         await nuevaSolicitud.save();

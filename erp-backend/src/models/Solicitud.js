@@ -22,7 +22,8 @@ const solicitudSchema = new mongoose.Schema({
     adjuntos: { type: String },
 
     // --- Control Interno ---
-    fechaCreacion: { type: Date, default: Date.now }
+    fechaCreacion: { type: Date, default: Date.now },
+    numeroSolicitud: { type: String }
 }, {
     timestamps: true,
     collection: 'solicitudes'

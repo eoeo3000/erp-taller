@@ -340,11 +340,21 @@ const GanttScreen = ({ recursos = [], ots = [], calendarios = [], obtenerHorasPa
                                     <div style={styles.daysArea}>
                                         {diasSemana.map(dia => (
                                             <div key={dia} style={styles.dayCell}>
-                                                {tarea.fecha === dia && (
-                                                    <div style={{ ...styles.taskBar, backgroundColor: getColorByPuesto(tarea.puesto) }}>
-                                                        {tarea.hora || '8:00'}
-                                                    </div>
-                                                )}
+                                                {tarea.fecha === dia && (() => {
+                                                    const ids = Array.isArray(tarea.operarioId) ? tarea.operarioId : [tarea.operarioId];
+                                                    const hayExceso = ids.some(id => {
+                                                        if (!id) return false;
+                                                        const rec = recursos.find(r => String(r._id) === String(id));
+                                                        if (!rec) return false;
+                                                        const cap = obtenerHorasParaDia ? obtenerHorasParaDia(rec, { fechaCompleta: new Date(dia + 'T00:00:00') }) : 8;
+                                                        return (mapaCarga[`${String(id)}-${dia}`] || 0) > cap;
+                                                    });
+                                                    return (
+                                                        <div style={{ ...styles.taskBar, backgroundColor: getColorByPuesto(tarea.puesto), outline: hayExceso ? '2px solid #e74c3c' : 'none' }}>
+                                                            {hayExceso ? '⚠️ ' : ''}{tarea.hora || '8:00'}
+                                                        </div>
+                                                    );
+                                                })()}
                                             </div>
                                         ))}
                                     </div>
@@ -360,29 +370,33 @@ const GanttScreen = ({ recursos = [], ots = [], calendarios = [], obtenerHorasPa
                 </div>
 
 
-                {recursos.map(recurso => (
+                {recursos.map(recurso => {
+                    const sumaCarga = diasSemana.reduce((acc, dia) => acc + (mapaCarga[`${String(recurso._id)}-${dia}`] || 0), 0);
+                    const sumaCapacidad = diasSemana.reduce((acc, dia) => acc + (obtenerHorasParaDia ? obtenerHorasParaDia(recurso, { fechaCompleta: new Date(dia + 'T00:00:00') }) : 8), 0);
+                    const pct = sumaCapacidad > 0 ? Math.round((sumaCarga / sumaCapacidad) * 100) : 0;
+                    const colorSemana = sumaCarga > sumaCapacidad ? '#c62828' : sumaCarga > 0 ? '#2e7d32' : '#999';
+                    return (
                     <div key={recurso._id} style={styles.dataRow}>
                         <div style={{ ...styles.colBase, width: '780px', flexShrink: 0, backgroundColor: '#f9f9f9', padding: '10px', borderRight: '1px solid #ddd' }}>
-                            <div style={{ display: 'flex', flexDirection: 'column' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                                 <strong>{recurso.nombre}</strong>
-                                <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-                                    {/* Puesto del recurso */}
-                                    <span style={{ fontSize: '11px', color: '#666' }}>
-                                        {recurso.puesto}
-                                    </span>
-
-                                    {/* Buscamos el nombre del calendario asignado */}
-                                    <span style={{
-                                        fontSize: '10px',
-                                        backgroundColor: '#e0e0e0',
-                                        padding: '1px 6px',
-                                        borderRadius: '4px',
-                                        color: '#333',
-                                        fontWeight: 'bold'
-                                    }}>
+                                <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+                                    <span style={{ fontSize: '11px', color: '#666' }}>{recurso.puesto}</span>
+                                    <span style={{ fontSize: '10px', backgroundColor: '#e0e0e0', padding: '1px 6px', borderRadius: '4px', color: '#333', fontWeight: 'bold' }}>
                                         {calendarios.find(c => String(c._id) === String(recurso.calendarioId))?.nombre || 'Sin Turno'}
                                     </span>
                                 </div>
+                                {/* Resumen semanal */}
+                                {diasSemana.length > 0 && (
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 2 }}>
+                                        <div style={{ flex: 1, background: '#e0e0e0', borderRadius: 4, height: 6 }}>
+                                            <div style={{ background: colorSemana, height: 6, borderRadius: 4, width: `${Math.min(pct, 100)}%`, transition: 'width .3s' }} />
+                                        </div>
+                                        <span style={{ fontSize: 11, fontWeight: 700, color: colorSemana, whiteSpace: 'nowrap' }}>
+                                            {sumaCarga}h / {sumaCapacidad}h ({pct}%)
+                                        </span>
+                                    </div>
+                                )}
                             </div>
                         </div>
                         <div style={styles.daysArea}>
@@ -427,7 +441,8 @@ const GanttScreen = ({ recursos = [], ots = [], calendarios = [], obtenerHorasPa
                             })}
                         </div>
                     </div>
-                ))}
+                    );
+                })}
             </div>
         </div>
 

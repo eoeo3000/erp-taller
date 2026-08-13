@@ -957,12 +957,24 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                         <button onClick={() => setTabActiva('componentes')} style={tabActiva === 'componentes' ? styles.tabBtnActive : styles.tabBtn}>2. Equipos/Herramientas</button>
                         <button onClick={() => setTabActiva('Logistica')} style={tabActiva === 'Logistica' ? styles.tabBtnActive : styles.tabBtn}>3. Suministros Directos</button>
                         <button onClick={() => setTabActiva('cotizacion')} style={tabActiva === 'cotizacion' ? styles.tabBtnActive : styles.tabBtn}>4. Cotización</button>
-                        <button
-                            onClick={() => setTabActiva('reportes')}
-                            style={{ ...styles.tabBtn, backgroundColor: tabActiva === 'reportes' ? '#27ae60' : '#eee' }}
-                        >
-                            📸 Reportes ({otSeleccionada.reportes?.length || 0})
-                        </button>
+                        {(() => {
+                            const puedeEjecucion = ['Programada','En Ejecución','Trabajo Terminado','Con Informe','Pagada'].includes(otSeleccionada.estado);
+                            return (
+                                <button
+                                    onClick={() => puedeEjecucion && setTabActiva('reportes')}
+                                    title={puedeEjecucion ? '' : 'Disponible una vez que la OT esté Programada'}
+                                    style={{
+                                        ...styles.tabBtn,
+                                        backgroundColor: tabActiva === 'reportes' ? '#27ae60' : (puedeEjecucion ? '#eee' : '#f5f5f5'),
+                                        color: puedeEjecucion ? '#333' : '#bbb',
+                                        cursor: puedeEjecucion ? 'pointer' : 'not-allowed',
+                                        opacity: puedeEjecucion ? 1 : 0.6
+                                    }}
+                                >
+                                    🔧 En Ejecución ({otSeleccionada.reportes?.length || 0})
+                                </button>
+                            );
+                        })()}
                         <button
                             onClick={() => setTabActiva('pago')}
                             style={{
@@ -972,6 +984,17 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                             }}
                         >
                             💵 Pago
+                        </button>
+                        <button
+                            onClick={() => navigate('/gantt')}
+                            style={{
+                                ...styles.tabBtn,
+                                backgroundColor: '#2c3e50',
+                                color: 'white',
+                                fontWeight: 'bold'
+                            }}
+                        >
+                            📅 Programar
                         </button>
                     </div>
                     <button
