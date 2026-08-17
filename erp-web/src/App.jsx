@@ -245,7 +245,7 @@ function App() {
         // 2. Refrescamos la UI con los nuevos estados
         await cargarDatos();
 
-        alert("✅ OT eliminada y solicitud liberada automáticamente.");
+        alert("OT eliminada y solicitud liberada automáticamente.");
 
       } catch (error) {
         console.error("❌ ERROR AL ELIMINAR:", error.response?.data || error.message);
@@ -253,7 +253,7 @@ function App() {
       }
     }
   };
-  // Shell nuevo (ver Incomplete web app design/design_handoff_panel_control/README.md, paso 1):
+  // Shell nuevo (ver docs/rediseno/design_handoff_panel_control/README.md, paso 1):
   // nav lateral colapsable con ancho arrastrable, en vez del top bar. En móvil arranca colapsada.
   useEffect(() => { if (isMobile) setNavOculta(true); }, [isMobile]);
 
@@ -322,7 +322,7 @@ function App() {
     try {
       await axios.put(`${API}/solicitudes/${solicitudId}`, { estado: 'Pendiente' });
       await cargarDatos();
-      alert("✅ Estado reseteado a Pendiente");
+      alert("Estado reseteado a Pendiente");
     } catch (error) {
       console.error("Error al liberar:", error);
     }
@@ -810,7 +810,6 @@ function App() {
   const navOperacion = [
     { to: '/', label: 'Ingreso', count: solicitudesSinOT },
     { to: '/dashboard', label: 'Panel de control', count: ots.length },
-    { to: '/compras', label: 'Compras', count: null },
     { to: '/gantt', label: 'Programación', count: otsProgramables },
   ];
   const navAdmin = [
@@ -818,7 +817,7 @@ function App() {
     { to: '/importexport', label: 'Importar / exportar' },
   ];
   // Fuera del nav por decisión del cliente (siguen existiendo y accesibles por URL directa):
-  // Finanzas (/finanzas), Contabilidad (/contabilidad), Portal cliente (/portal).
+  // Compras (/compras), Finanzas (/finanzas), Contabilidad (/contabilidad), Portal cliente (/portal).
 
   return (
     <Router>
@@ -920,13 +919,13 @@ function App() {
   );
 }
 
-// Tokens del handoff (Incomplete web app design/design_handoff_panel_control/README.md §2) — definitivos, sin librerías nuevas.
+// Tokens del handoff (docs/rediseno/design_handoff_panel_control/README.md §2) — definitivos, sin librerías nuevas.
 const fontUi = '"Helvetica Neue", Helvetica, Arial, sans-serif';
 const fontMono = 'ui-monospace, Menlo, monospace';
 
 const styles = {
   raiz: {
-    display: 'flex', height: '100vh', minHeight: '720px', width: '100%',
+    display: 'flex', height: '100dvh', maxHeight: '100dvh', width: '100%',
     background: '#eceae5', color: '#1a1a18', fontSize: '13px', fontFamily: fontUi,
     overflow: 'hidden',
   },
@@ -956,7 +955,7 @@ const styles = {
     background: '#1c1d1b', color: 'rgba(255,255,255,.45)', fontFamily: fontMono, fontSize: '12px',
     cursor: 'pointer', borderRight: '1px solid rgba(0,0,0,.20)',
   },
-  main: { flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', background: '#f6f5f2', overflow: 'auto' },
+  main: { flex: 1, minWidth: 0, minHeight: 0, display: 'flex', flexDirection: 'column', background: '#f6f5f2', overflow: 'hidden' },
 };
 
 export default App;

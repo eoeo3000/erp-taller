@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 
-// Paso 7 del rediseño (ver Incomplete web app design/design_handoff_panel_control/README.md §3-4):
+// Paso 7 del rediseño (ver docs/rediseno/design_handoff_panel_control/README.md §3-4):
 // catálogo de 13 campos configurable, redimensionado de columnas por drag, densidad de fila
 // (32/40/52) y variantes guardadas en localStorage. El panel de detalle (paso 2) sigue igual.
 
@@ -119,14 +119,16 @@ const CAMPOS = [
 ];
 const campo = (key) => CAMPOS.find(c => c.key === key);
 const VISIBLES_BASE = ['ot', 'cliente', 'etapa', 'horas', 'total'];
-const BASE_LAYOUT = { asideW: 300, rowH: 40, columnas: CAMPOS.map(c => ({ key: c.key, w: c.w, visible: VISIBLES_BASE.includes(c.key) })) };
-const clonarLayout = (l) => ({ ...l, columnas: l.columnas.map(c => ({ ...c })) });
+const SECCIONES_DEFAULT = { ficha: true, flujo: true, tareas: true, costos: true };
+const BASE_LAYOUT = { asideW: 300, rowH: 40, secciones: { ...SECCIONES_DEFAULT }, columnas: CAMPOS.map(c => ({ key: c.key, w: c.w, visible: VISIBLES_BASE.includes(c.key) })) };
+const clonarLayout = (l) => ({ ...l, secciones: { ...l.secciones }, columnas: l.columnas.map(c => ({ ...c })) });
 const normalizarLayout = (l) => {
     const dadas = (l && l.columnas) || [];
     const columnas = dadas.filter(c => campo(c.key)).map(c => ({ key: c.key, w: c.w || campo(c.key).w, visible: !!c.visible }));
     CAMPOS.forEach(c => { if (!columnas.find(x => x.key === c.key)) columnas.push({ key: c.key, w: c.w, visible: false }); });
     const cli = columnas.find(c => c.key === 'cliente'); if (cli) cli.visible = true;
-    return { asideW: (l && l.asideW) || BASE_LAYOUT.asideW, rowH: (l && l.rowH) || BASE_LAYOUT.rowH, columnas };
+    const secciones = { ...SECCIONES_DEFAULT, ...(l && l.secciones) };
+    return { asideW: (l && l.asideW) || BASE_LAYOUT.asideW, rowH: (l && l.rowH) || BASE_LAYOUT.rowH, secciones, columnas };
 };
 const LS_KEY = 'erpTaller.disposicion.v2';
 
@@ -222,6 +224,16 @@ const DashboardScreen = ({ ots = [], solicitudes = [], eliminarOT, actualizarEst
         window.addEventListener('pointerup', soltar);
     };
     const setRowH = (h) => { setLayoutState(prev => ({ ...prev, rowH: h })); setActiva(''); };
+    const toggleSeccion = (key) => {
+        setLayoutState(prev => ({ ...prev, secciones: { ...prev.secciones, [key]: !prev.secciones[key] } }));
+        setActiva('');
+    };
+    const todasAbiertas = Object.values(layout.secciones).every(Boolean);
+    const alternarTodasSecciones = () => {
+        const abierta = !todasAbiertas;
+        setLayoutState(prev => ({ ...prev, secciones: { ficha: abierta, flujo: abierta, tareas: abierta, costos: abierta } }));
+        setActiva('');
+    };
     const guardarVariante = async () => {
         const nombre = (nombreNueva || '').trim() || `Variante ${variantes.length + 1}`;
         const resultado = await guardarDisposicionGlobal?.({ nombre, pantalla: 'panel-control', layout: clonarLayout(layout) });
@@ -408,6 +420,16 @@ const DashboardScreen = ({ ots = [], solicitudes = [], eliminarOT, actualizarEst
         if (info.rechazada || info.idx >= 6) return { label: 'Abrir tratamiento', onClick: () => navigate('/tratamiento', { state: ot }), nota: 'Revisa tareas, cotización y pago desde Tratamiento.' };
         return { label: 'Enviar al supervisor', onClick: () => enviarASupervisor?.(ot), nota: 'El supervisor recibe un enlace con token; no requiere cuenta.' };
     })();
+
+    const encabezadoSeccion = (titulo, key, resumen) => (
+        <div onClick={() => toggleSeccion(key)} style={styles.asideTituloClicable}>
+            <span>{titulo}</span>
+            <span style={styles.asideTituloDerecha}>
+                {resumen && <span style={{ fontFamily: t.fontMono, textTransform: 'none', letterSpacing: 0 }}>{resumen}</span>}
+                <span style={styles.glifoSeccion}>{layout.secciones[key] ? '−' : '+'}</span>
+            </span>
+        </div>
+    );
 
     return (
         <div style={styles.raiz}>
@@ -641,8 +663,8 @@ const DashboardScreen = ({ ots = [], solicitudes = [], eliminarOT, actualizarEst
 
                                     <div style={styles.asideScroll}>
                                         <div style={styles.asideBloque}>
-                                            <div style={styles.asideTitulo}>Ficha</div>
-                                            {detalle.ficha.map(f => (
+                                            {encabezadoSeccion('Ficha', 'ficha')}
+                                            {layout.secciones.ficha && detalle.ficha.map(f => (
                                                 <div key={f.label} style={styles.fichaFila}>
                                                     <span style={styles.fichaLabel}>{f.label}</span>
                                                     <span style={styles.fichaValor}>{f.valor}</span>
@@ -651,8 +673,8 @@ const DashboardScreen = ({ ots = [], solicitudes = [], eliminarOT, actualizarEst
                                         </div>
 
                                         <div style={styles.asideBloque}>
-                                            <div style={styles.asideTitulo}>Flujo</div>
-                                            {detalle.etapas.map((e, i) => (
+                                            {encabezadoSeccion('Flujo', 'flujo')}
+                                            {layout.secciones.flujo && detalle.etapas.map((e, i) => (
                                                 <div key={i} style={styles.flujoFila}>
                                                     <span style={{ fontFamily: t.fontMono, fontSize: '10px', color: e.tono }}>{e.marca}</span>
                                                     <span style={{ fontSize: '11.5px', color: e.tono, fontWeight: e.peso }}>{e.label}</span>
@@ -661,10 +683,8 @@ const DashboardScreen = ({ ots = [], solicitudes = [], eliminarOT, actualizarEst
                                         </div>
 
                                         <div style={styles.asideBloque}>
-                                            <div style={{ ...styles.asideTitulo, display: 'flex', justifyContent: 'space-between' }}>
-                                                <span>Tareas</span><span style={{ fontFamily: t.fontMono }}>{detalle.resumenTareas}</span>
-                                            </div>
-                                            {detalle.tareas.map((ta, i) => (
+                                            {encabezadoSeccion('Tareas', 'tareas', detalle.resumenTareas)}
+                                            {layout.secciones.tareas && detalle.tareas.map((ta, i) => (
                                                 <div key={i} style={styles.tareaFila}>
                                                     <span style={{ minWidth: 0 }}>
                                                         <span style={styles.tareaDesc}>{ta.descripcion}</span>
@@ -677,33 +697,42 @@ const DashboardScreen = ({ ots = [], solicitudes = [], eliminarOT, actualizarEst
                                         </div>
 
                                         <div style={styles.asideBloque}>
-                                            <div style={styles.asideTitulo}>Costos</div>
-                                            {detalle.costos.map(c => (
-                                                <div key={c.label} style={styles.fichaFila}>
-                                                    <span style={styles.fichaLabel}>{c.label}</span>
-                                                    <span style={styles.fichaValor}>{c.valor}</span>
-                                                </div>
-                                            ))}
-                                            <div style={styles.granTotalFila}>
-                                                <span style={{ fontSize: '11.5px', fontWeight: 700 }}>Gran total</span>
-                                                <span style={{ fontFamily: t.fontMono, fontSize: '14px', fontWeight: 600 }}>{detalle.granTotal}</span>
-                                            </div>
-                                        </div>
-
-                                        <div style={{ padding: '11px 16px 14px' }}>
-                                            <div style={styles.asideTitulo}>Acciones</div>
-                                            <div style={styles.accionesGrid}>
-                                                {accionesDetalle().map(a => (
-                                                    <button key={a.label} onClick={a.onClick} style={styles.btnAccion}>{a.label}</button>
-                                                ))}
-                                            </div>
-                                            {primario && (
+                                            {encabezadoSeccion('Costos', 'costos', detalle.granTotal)}
+                                            {layout.secciones.costos && (
                                                 <>
-                                                    <button onClick={primario.onClick} style={styles.btnPrimarioAside}>{primario.label}</button>
-                                                    <div style={styles.notaAside}>{primario.nota}</div>
+                                                    {detalle.costos.map(c => (
+                                                        <div key={c.label} style={styles.fichaFila}>
+                                                            <span style={styles.fichaLabel}>{c.label}</span>
+                                                            <span style={styles.fichaValor}>{c.valor}</span>
+                                                        </div>
+                                                    ))}
+                                                    <div style={styles.granTotalFila}>
+                                                        <span style={{ fontSize: '11.5px', fontWeight: 700 }}>Gran total</span>
+                                                        <span style={{ fontFamily: t.fontMono, fontSize: '14px', fontWeight: 600 }}>{detalle.granTotal}</span>
+                                                    </div>
                                                 </>
                                             )}
                                         </div>
+                                    </div>
+
+                                    <div style={styles.accionesPie}>
+                                        <div style={styles.accionesPieHeader}>
+                                            <span style={{ ...styles.asideTitulo, marginBottom: 0 }}>Acciones</span>
+                                            <span onClick={alternarTodasSecciones} style={styles.toggleTodas}>
+                                                {todasAbiertas ? 'Contraer todo' : 'Expandir todo'}
+                                            </span>
+                                        </div>
+                                        <div style={styles.accionesGrid}>
+                                            {accionesDetalle().map(a => (
+                                                <button key={a.label} onClick={a.onClick} style={styles.btnAccion}>{a.label}</button>
+                                            ))}
+                                        </div>
+                                        {primario && (
+                                            <>
+                                                <button onClick={primario.onClick} style={styles.btnPrimarioAside}>{primario.label}</button>
+                                                <div style={styles.notaAside}>{primario.nota}</div>
+                                            </>
+                                        )}
                                     </div>
                                 </>
                             )}
@@ -717,7 +746,7 @@ const DashboardScreen = ({ ots = [], solicitudes = [], eliminarOT, actualizarEst
 
 const styles = {
     raiz: {
-        display: 'flex', flexDirection: 'column', height: '100%', minHeight: '720px',
+        display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0,
         background: t.fondoMain, color: t.textoPrincipal, fontFamily: t.fontUi, fontSize: '13px',
     },
     header: {
@@ -838,6 +867,13 @@ const styles = {
     asideScroll: { flex: 1, minHeight: 0, overflow: 'auto' },
     asideBloque: { padding: '11px 16px 12px', borderBottom: `1px solid ${t.hairlineBloque}` },
     asideTitulo: { fontSize: '9.5px', letterSpacing: '.11em', textTransform: 'uppercase', color: t.textoAtenuado3, marginBottom: '7px' },
+    asideTituloClicable: {
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px',
+        fontSize: '9.5px', letterSpacing: '.11em', textTransform: 'uppercase', color: t.textoAtenuado3,
+        marginBottom: '7px', cursor: 'pointer',
+    },
+    asideTituloDerecha: { display: 'flex', alignItems: 'center', gap: '8px', flex: 'none' },
+    glifoSeccion: { fontFamily: t.fontMono, fontSize: '12px', color: '#a3a29a' },
     fichaFila: { display: 'flex', justifyContent: 'space-between', gap: '10px', padding: '3px 0', fontSize: '11.5px' },
     fichaLabel: { color: t.textoAtenuado2, flex: 'none' },
     fichaValor: { fontFamily: t.fontMono, color: '#262622', minWidth: 0, textAlign: 'right', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
@@ -848,6 +884,9 @@ const styles = {
     tareaPuesto: { fontSize: '10.5px', color: t.textoAtenuado1, textAlign: 'right' },
     tareaDuracion: { fontFamily: t.fontMono, fontSize: '11px', textAlign: 'right', color: t.textoSecundario1 },
     granTotalFila: { display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginTop: '7px', paddingTop: '7px', borderTop: '1px solid rgba(0,0,0,.16)' },
+    accionesPie: { flex: 'none', borderTop: '1px solid rgba(0,0,0,.12)', background: '#fff', padding: '10px 16px 12px' },
+    accionesPieHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '7px' },
+    toggleTodas: { fontSize: '9.5px', color: '#a3a29a', cursor: 'pointer' },
     accionesGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' },
     btnAccion: {
         height: '28px', padding: '0 8px', background: t.superficie, border: `1px solid ${t.bordeZona}`,

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 
-// Paso 5 del rediseño (ver Incomplete web app design/design_handoff_panel_control/README.md §7):
+// Paso 5 del rediseño (ver docs/rediseno/design_handoff_panel_control/README.md §7):
 // 5 tabs (Personal · Equipos y herramientas · Suministros directos · Calendarios · Plantillas),
 // matriz mensual real (usa obtenerHorasParaDia, no la indexación getDay()===0 que asumía el mock —
 // nuestro Calendario real guarda 'config' por nombre de día o por ciclo, no un array plano de 7
@@ -606,7 +606,7 @@ const RecursosScreen = ({
 };
 
 const styles = {
-    raiz: { display: 'flex', flexDirection: 'column', height: '100%', minHeight: '720px', background: t.fondoMain, color: t.textoPrincipal, fontFamily: t.fontUi, fontSize: '13px' },
+    raiz: { display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, background: t.fondoMain, color: t.textoPrincipal, fontFamily: t.fontUi, fontSize: '13px' },
     header: { flex: 'none', height: 46, display: 'flex', alignItems: 'center', gap: 16, padding: '0 16px', background: t.superficie, borderBottom: `1px solid ${t.bordeZona}` },
     h1: { margin: 0, fontSize: 14, fontWeight: 700, letterSpacing: '-.01em', whiteSpace: 'nowrap' },
     subtitulo: { fontSize: 11.5, color: t.textoAtenuado2, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },

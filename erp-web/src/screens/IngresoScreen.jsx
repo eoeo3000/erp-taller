@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-// Paso 3 del rediseño (ver Incomplete web app design/design_handoff_panel_control/README.md §5):
+// Paso 3 del rediseño (ver docs/rediseno/design_handoff_panel_control/README.md §5):
 // formulario de 452px fijo + tabla de solicitudes con filtros en barra (se elimina el dropdown
 // por columna). Mismos tokens que Panel de control (§2). Sin emoji.
 
@@ -287,7 +287,7 @@ const IngresoScreen = ({ solicitudes = [], liberarSolicitudManual, cargarDatos, 
 };
 
 const styles = {
-    raiz: { display: 'flex', flexDirection: 'column', height: '100%', minHeight: '720px', background: t.fondoMain, color: t.textoPrincipal, fontFamily: t.fontUi, fontSize: '13px' },
+    raiz: { display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, background: t.fondoMain, color: t.textoPrincipal, fontFamily: t.fontUi, fontSize: '13px' },
     header: { flex: 'none', height: '46px', display: 'flex', alignItems: 'center', gap: '16px', padding: '0 16px', background: t.superficie, borderBottom: `1px solid ${t.bordeZona}` },
     h1: { margin: 0, fontSize: '14px', fontWeight: 700, letterSpacing: '-.01em', whiteSpace: 'nowrap' },
     subtitulo: { fontSize: '11.5px', color: t.textoAtenuado2, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },

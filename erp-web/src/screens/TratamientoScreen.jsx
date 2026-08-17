@@ -6,7 +6,7 @@ import autoTable from 'jspdf-autotable';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 
-// Paso 4 del rediseño (ver Incomplete web app design/design_handoff_panel_control/README.md §6):
+// Paso 4 del rediseño (ver docs/rediseno/design_handoff_panel_control/README.md §6):
 // pipeline + 7 tabs (se agrega "0 · Informe Inicial", que no estaba en el mock, ver resumen
 // entregado al usuario) + tablas editables + panel de resumen. Mismos tokens que el resto (§2).
 // Sin emoji, sin clases de Bootstrap (había varias reales en el archivo anterior: mb-4, p-3,
@@ -1288,7 +1288,7 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
 };
 
 const styles = {
-    raiz: { display: 'flex', flexDirection: 'column', height: '100%', minHeight: '720px', background: t.fondoMain, color: t.textoPrincipal, fontFamily: t.fontUi, fontSize: '13px' },
+    raiz: { display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, background: t.fondoMain, color: t.textoPrincipal, fontFamily: t.fontUi, fontSize: '13px' },
     header: { flex: 'none', display: 'flex', alignItems: 'baseline', gap: 14, padding: '9px 16px', background: t.superficie, borderBottom: `1px solid ${t.bordeZona}` },
     h1: { margin: 0, fontSize: 14, fontWeight: 700, letterSpacing: '-.01em', whiteSpace: 'nowrap' },
     empresa: { fontSize: 12.5, fontWeight: 600, color: t.textoSecundario1, whiteSpace: 'nowrap' },

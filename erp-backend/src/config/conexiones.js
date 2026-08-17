@@ -1,5 +1,5 @@
 // Gestor de las dos conexiones de Mongo (producción / demo) del modo demostración.
-// Ver Incomplete web app design/design_handoff_panel_control/README.md §9.2:
+// Ver docs/rediseno/design_handoff_panel_control/README.md §9.2:
 // "El servidor mantiene dos conexiones y resuelve la activa por header ... no por
 // una variable global mutable" — por eso cada request se resuelve por separado
 // (ver middlewares/entorno.js) en vez de reasignar una conexión "activa" compartida.

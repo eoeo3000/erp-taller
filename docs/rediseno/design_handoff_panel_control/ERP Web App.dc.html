@@ -10,6 +10,7 @@
 <helmet data-dc-atomics>
 <style>
 *{box-sizing:border-box}
+html,body{height:100%;overflow:hidden}
 body{margin:0;background:#eceae5;font-family:"Helvetica Neue",Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased}
 a{color:oklch(0.48 0.10 250);text-decoration:none}
 a:hover{color:oklch(0.38 0.10 250)}
@@ -18,7 +19,7 @@ button{font-family:inherit}
 ::-webkit-scrollbar-thumb{background:rgba(0,0,0,.18)}
 </style>
 </helmet>
-<div style="display:flex;height:100vh;min-height:720px;width:100%;background:#eceae5;color:#1a1a18;font-size:13px">
+<div style="display:flex;height:100dvh;max-height:100dvh;overflow:hidden;width:100%;background:#eceae5;color:#1a1a18;font-size:13px">
 
   <sc-if value="{{ navVisible }}" hint-placeholder-val="{{ true }}">
   <nav style="width:{{ navW }};flex:none;background:#1c1d1b;color:#e8e7e3;display:flex;flex-direction:column;overflow:hidden">
@@ -52,7 +53,7 @@ button{font-family:inherit}
 
   <div onClick="{{ onToggleNav }}" title="{{ navTitulo }}" style="width:13px;flex:none;display:flex;align-items:center;justify-content:center;background:#1c1d1b;color:rgba(255,255,255,.45);font-family:ui-monospace,Menlo,monospace;font-size:12px;cursor:pointer;border-right:1px solid rgba(0,0,0,.20)" style-hover="color:#fff;background:oklch(0.42 0.10 250)">{{ navGlifo }}</div>
 
-  <main style="flex:1;min-width:0;display:flex;flex-direction:column;background:#f6f5f2">
+  <main style="flex:1;min-width:0;min-height:0;display:flex;flex-direction:column;overflow:hidden;background:#f6f5f2">
 
     <sc-if value="{{ modoDemo }}" hint-placeholder-val="{{ false }}">
       <div style="flex:none;display:flex;align-items:center;gap:10px;height:26px;padding:0 16px;background:oklch(0.55 0.11 65);color:#fff">
@@ -379,17 +380,29 @@ button{font-family:inherit}
 
         <div style="flex:1;min-height:0;overflow:auto">
           <div style="padding:11px 16px 12px;border-bottom:1px solid rgba(0,0,0,.10)">
-            <div style="font-size:9.5px;letter-spacing:.11em;text-transform:uppercase;color:#8a8981;margin-bottom:7px">Ficha</div>
+            <div onClick="{{ sec.onficha }}" title="{{ sec.fichaTitulo }}" style="display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:9.5px;letter-spacing:.11em;text-transform:uppercase;color:#8a8981;cursor:pointer" style-hover="color:#1a1a18">
+              <span>Ficha</span>
+              <span style="font-family:ui-monospace,Menlo,monospace;font-size:12px;line-height:1;color:#a3a29a">{{ sec.fichaGlifo }}</span>
+            </div>
+            <sc-if value="{{ sec.ficha }}" hint-placeholder-val="{{ true }}">
+            <div style="margin-top:7px">
             <sc-for list="{{ det.ficha }}" as="f" hint-placeholder-count="4">
               <div style="display:flex;justify-content:space-between;gap:10px;padding:3px 0;font-size:11.5px">
                 <span style="color:#75746e;flex:none">{{ f.label }}</span>
                 <span style="font-family:ui-monospace,Menlo,monospace;color:#262622;min-width:0;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ f.valor }}</span>
               </div>
             </sc-for>
+            </div>
+            </sc-if>
           </div>
 
           <div style="padding:11px 16px 12px;border-bottom:1px solid rgba(0,0,0,.10)">
-            <div style="font-size:9.5px;letter-spacing:.11em;text-transform:uppercase;color:#8a8981;margin-bottom:7px">Flujo</div>
+            <div onClick="{{ sec.onflujo }}" title="{{ sec.flujoTitulo }}" style="display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:9.5px;letter-spacing:.11em;text-transform:uppercase;color:#8a8981;cursor:pointer" style-hover="color:#1a1a18">
+              <span>Flujo</span>
+              <span style="font-family:ui-monospace,Menlo,monospace;font-size:12px;line-height:1;color:#a3a29a">{{ sec.flujoGlifo }}</span>
+            </div>
+            <sc-if value="{{ sec.flujo }}" hint-placeholder-val="{{ true }}">
+            <div style="margin-top:7px">
             <sc-for list="{{ det.etapas }}" as="e" hint-placeholder-count="8">
               <div style="display:grid;grid-template-columns:14px 1fr auto;align-items:center;gap:8px;height:21px">
                 <span style="font-family:ui-monospace,Menlo,monospace;font-size:10px;color:{{ e.tono }}">{{ e.marca }}</span>
@@ -397,12 +410,20 @@ button{font-family:inherit}
                 <span style="font-family:ui-monospace,Menlo,monospace;font-size:10.5px;color:#a3a29a">{{ e.fecha }}</span>
               </div>
             </sc-for>
+            </div>
+            </sc-if>
           </div>
 
           <div style="padding:11px 16px 12px;border-bottom:1px solid rgba(0,0,0,.10)">
-            <div style="display:flex;justify-content:space-between;font-size:9.5px;letter-spacing:.11em;text-transform:uppercase;color:#8a8981;margin-bottom:7px">
-              <span>Tareas</span><span style="font-family:ui-monospace,Menlo,monospace">{{ det.resumenTareas }}</span>
+            <div onClick="{{ sec.ontareas }}" title="{{ sec.tareasTitulo }}" style="display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:9.5px;letter-spacing:.11em;text-transform:uppercase;color:#8a8981;cursor:pointer" style-hover="color:#1a1a18">
+              <span>Tareas</span>
+              <span style="display:flex;align-items:center;gap:7px">
+                <span style="font-family:ui-monospace,Menlo,monospace">{{ det.resumenTareas }}</span>
+                <span style="font-family:ui-monospace,Menlo,monospace;font-size:12px;line-height:1;color:#a3a29a">{{ sec.tareasGlifo }}</span>
+              </span>
             </div>
+            <sc-if value="{{ sec.tareas }}" hint-placeholder-val="{{ true }}">
+            <div style="margin-top:7px">
             <sc-for list="{{ det.tareas }}" as="t" hint-placeholder-count="4">
               <div style="display:grid;grid-template-columns:1fr 46px 34px;gap:8px;align-items:baseline;padding:5px 0;border-bottom:1px solid rgba(0,0,0,.05)">
                 <span style="font-size:11.5px;line-height:1.35;min-width:0">
@@ -413,10 +434,20 @@ button{font-family:inherit}
                 <span style="font-family:ui-monospace,Menlo,monospace;font-size:11px;text-align:right;color:#3a3a35">{{ t.duracion }}</span>
               </div>
             </sc-for>
+            </div>
+            </sc-if>
           </div>
 
           <div style="padding:11px 16px 12px;border-bottom:1px solid rgba(0,0,0,.10)">
-            <div style="font-size:9.5px;letter-spacing:.11em;text-transform:uppercase;color:#8a8981;margin-bottom:7px">Costos</div>
+            <div onClick="{{ sec.oncostos }}" title="{{ sec.costosTitulo }}" style="display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:9.5px;letter-spacing:.11em;text-transform:uppercase;color:#8a8981;cursor:pointer" style-hover="color:#1a1a18">
+              <span>Costos</span>
+              <span style="display:flex;align-items:center;gap:7px">
+                <span style="font-family:ui-monospace,Menlo,monospace;color:#3a3a35">{{ det.granTotal }}</span>
+                <span style="font-family:ui-monospace,Menlo,monospace;font-size:12px;line-height:1;color:#a3a29a">{{ sec.costosGlifo }}</span>
+              </span>
+            </div>
+            <sc-if value="{{ sec.costos }}" hint-placeholder-val="{{ true }}">
+            <div style="margin-top:7px">
             <sc-for list="{{ det.costos }}" as="c" hint-placeholder-count="4">
               <div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:3px 0;font-size:11.5px">
                 <span style="color:#4a4a44;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ c.label }}</span>
@@ -431,10 +462,21 @@ button{font-family:inherit}
               <span style="font-size:10.5px;color:#8a8981">Margen estimado</span>
               <span style="font-family:ui-monospace,Menlo,monospace;font-size:10.5px;color:#8a8981">{{ det.margen }}</span>
             </div>
+            </div>
+            </sc-if>
           </div>
+        </div>
 
-          <div style="padding:11px 16px 14px">
-            <div style="font-size:9.5px;letter-spacing:.11em;text-transform:uppercase;color:#8a8981;margin-bottom:7px">Acciones</div>
+        <div style="flex:none;padding:10px 16px 12px;background:#fff;border-top:1px solid rgba(0,0,0,.12)">
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:9.5px;letter-spacing:.11em;text-transform:uppercase;color:#8a8981;margin-bottom:7px">
+              <span>Acciones</span>
+              <sc-if value="{{ todoContraido }}" hint-placeholder-val="{{ false }}">
+                <span onClick="{{ onExpandirTodo }}" style="font-size:9.5px;letter-spacing:.06em;color:#a3a29a;cursor:pointer;text-transform:none" style-hover="color:#1a1a18">Expandir todo</span>
+              </sc-if>
+              <sc-if value="{{ noTodoContraido }}" hint-placeholder-val="{{ true }}">
+                <span onClick="{{ onContraerTodo }}" style="font-size:9.5px;letter-spacing:.06em;color:#a3a29a;cursor:pointer;text-transform:none" style-hover="color:#1a1a18">Contraer todo</span>
+              </sc-if>
+            </div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
               <sc-for list="{{ det.acciones }}" as="a" hint-placeholder-count="4">
                 <button onClick="{{ a.onClick }}" style="height:28px;padding:0 8px;background:#fff;border:1px solid rgba(0,0,0,.20);font-size:11.5px;font-weight:600;color:#262622;cursor:pointer;border-radius:2px;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" style-hover="border-color:#1c1d1b;background:#1c1d1b;color:#fff">{{ a.label }}</button>
@@ -442,7 +484,6 @@ button{font-family:inherit}
             </div>
             <button onClick="{{ det.onAvanzar }}" style="width:100%;height:30px;margin-top:6px;background:oklch(0.48 0.10 250);border:1px solid oklch(0.48 0.10 250);color:#fff;font-size:12px;font-weight:700;cursor:pointer;border-radius:2px" style-hover="background:oklch(0.40 0.10 250)">{{ det.accionPrincipal }}</button>
             <div style="font-size:10.5px;color:#8a8981;margin-top:6px;line-height:1.5">{{ det.nota }}</div>
-          </div>
         </div>
       </aside>
       </sc-if>
@@ -1287,6 +1328,7 @@ const CAMPOS = [
 const VISIBLES_BASE = ['ot','cliente','etapa','horas','total'];
 const BASE = {
   navW: 186, asideW: 300, rowH: 40, navOculta: false, asideOculta: false,
+  secciones: { ficha: true, flujo: true, tareas: true, costos: true },
   columnas: CAMPOS.map(c => ({ key: c.key, w: c.w, visible: VISIBLES_BASE.indexOf(c.key) >= 0 })),
 };
 const campo = key => CAMPOS.find(c => c.key === key);
@@ -1297,7 +1339,8 @@ const normalizar = l => {
   CAMPOS.forEach(c => { if (!columnas.find(x => x.key === c.key)) columnas.push({ key: c.key, w: c.w, visible: false }); });
   const cli = columnas.find(c => c.key === 'cliente'); if (cli) cli.visible = true;
   return { navW: (l && l.navW) || BASE.navW, asideW: (l && l.asideW) || BASE.asideW, rowH: (l && l.rowH) || BASE.rowH,
-    navOculta: !!(l && l.navOculta), asideOculta: !!(l && l.asideOculta), columnas };
+    navOculta: !!(l && l.navOculta), asideOculta: !!(l && l.asideOculta),
+    secciones: { ...BASE.secciones, ...((l && l.secciones) || {}) }, columnas };
 };
 const LS = 'erpTaller.disposicion.v2';
 
@@ -1962,6 +2005,18 @@ class Component extends DCLogic {
       asideTitulo: L.asideOculta ? 'Mostrar panel de detalle' : 'Ocultar panel de detalle',
       onToggleNav: () => this.setLayout({ navOculta: !L.navOculta }),
       onToggleAside: () => this.setLayout({ asideOculta: !L.asideOculta }),
+      sec: ['ficha','flujo','tareas','costos'].reduce((acc, k) => {
+        const abierta = L.secciones[k] !== false;
+        acc[k] = abierta;
+        acc[k + 'Glifo'] = abierta ? '−' : '+';
+        acc[k + 'Titulo'] = abierta ? 'Contraer' : 'Expandir';
+        acc['on' + k] = () => this.setLayout({ secciones: { ...L.secciones, [k]: !abierta } });
+        return acc;
+      }, {}),
+      onContraerTodo: () => this.setLayout({ secciones: { ficha:false, flujo:false, tareas:false, costos:false } }),
+      onExpandirTodo: () => this.setLayout({ secciones: { ficha:true, flujo:true, tareas:true, costos:true } }),
+      todoContraido: ['ficha','flujo','tareas','costos'].every(k => L.secciones[k] === false),
+      noTodoContraido: !['ficha','flujo','tareas','costos'].every(k => L.secciones[k] === false),
       grid: '3px ' + cols.map(c => c.key === 'cliente' ? 'minmax(170px,1fr)' : c.w + 'px').join(' '),
       tablaW: (3 + 170 + cols.reduce((s, c) => s + (c.key === 'cliente' ? 0 : c.w), 0) + 10 * cols.length + 29) + 'px',
       dragNav: this.arrastrar('navW', 1, 132, 320),

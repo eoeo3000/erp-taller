@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { headerEntorno, obtenerEntorno, fijarEntorno } from '../utils/entorno';
 
-// Paso 7 del rediseño (ver Incomplete web app design/design_handoff_panel_control/README.md §9.1):
+// Paso 7 del rediseño (ver docs/rediseno/design_handoff_panel_control/README.md §9.1):
 // se respeta el backend existente tal cual — mismos endpoints, mismos módulos, misma lógica de
 // fusión. Solo cambia la presentación: una columna de máx. 860px, marcas ×/· en vez de checkboxes,
 // un único .xlsx (sin exportación JSON), y el resultado de importación llega después de escribir
@@ -467,7 +467,7 @@ export default function ImportExportScreen({ API, cargarDatos }) {
 }
 
 const styles = {
-    raiz: { display: 'flex', flexDirection: 'column', height: '100%', minHeight: '720px', background: t.fondoMain, color: t.textoPrincipal, fontFamily: t.fontUi, fontSize: '13px' },
+    raiz: { display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, background: t.fondoMain, color: t.textoPrincipal, fontFamily: t.fontUi, fontSize: '13px' },
     header: { flex: 'none', height: 46, display: 'flex', alignItems: 'center', gap: 16, padding: '0 16px', background: t.superficie, borderBottom: `1px solid ${t.bordeZona}` },
     h1: { margin: 0, fontSize: 14, fontWeight: 700, letterSpacing: '-.01em', whiteSpace: 'nowrap' },
     subtitulo: { fontSize: 11.5, color: t.textoAtenuado2, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },

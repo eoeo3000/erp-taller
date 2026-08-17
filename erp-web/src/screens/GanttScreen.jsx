@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-// Paso 6 del rediseño (ver Incomplete web app design/design_handoff_panel_control/README.md §8):
+// Paso 6 del rediseño (ver docs/rediseno/design_handoff_panel_control/README.md §8):
 // una sola grilla continua OT → tareas → capacidad (mismo grid-template-columns en las tres),
 // vista semanal, panel derecho con el detalle de sobredemanda de la OT seleccionada en vez de
 // un modal bloqueante. Se mantiene toda la lógica real (verificarDisponibilidad, toggleProgramada,
@@ -22,7 +22,8 @@ const t = {
     bordeZona: 'rgba(0,0,0,.12)',
     hairlineFila: 'rgba(0,0,0,.06)',
     hairlineBloque: 'rgba(0,0,0,.10)',
-    acento: 'oklch(0.42 0.10 250)',
+    acento: 'oklch(0.48 0.10 250)',
+    acentoHover: 'oklch(0.40 0.10 250)',
     verde: 'oklch(0.48 0.10 155)',
     rojo: 'oklch(0.52 0.13 25)',
     cargaOk: '#eef4ef',
@@ -32,7 +33,7 @@ const t = {
 };
 
 const DIAS_L = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
-const GRID = '118px minmax(180px,1fr) 132px 104px 52px 62px 62px repeat(7, minmax(74px,1fr))';
+const GRID = '118px minmax(180px,1fr) 132px 104px 52px 62px 62px repeat(7, minmax(0,1fr))';
 const ESTADOS_ACTIVOS = ['Planificada', 'Programada', 'En Ejecución'];
 const ESTADOS_EJECUTADOS = ['Trabajo Terminado', 'Con Informe', 'Pagada'];
 
@@ -101,6 +102,13 @@ const GanttScreen = ({ recursos = [], ots = [], calendarios = [], obtenerHorasPa
 
     const [otSel, setOtSel] = useState(null);
     const [confirmando, setConfirmando] = useState(false);
+    const [asideOculta, setAsideOculta] = useState(false);
+
+    // Preselecciona la primera OT visible para que el panel no arranque vacío.
+    useEffect(() => {
+        if (!otSel && ots.length > 0) setOtSel(ots[0]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [ots]);
 
     const capacidadDia = (recurso, dia) => obtenerHorasParaDia ? obtenerHorasParaDia(recurso, { fechaCompleta: new Date(dia + 'T00:00:00') }) : 8;
 
@@ -167,7 +175,7 @@ const GanttScreen = ({ recursos = [], ots = [], calendarios = [], obtenerHorasPa
 
             <div style={styles.cuerpo}>
                 <section style={styles.scrollTabla}>
-                    <div style={{ minWidth: 1180 }}>
+                    <div style={{ minWidth: 1228 }}>
                         <div style={styles.filaHeader}>
                             <span style={styles.thCol}>OT · N°</span>
                             <span style={styles.thCol}>Tarea / descripción</span>
@@ -196,10 +204,11 @@ const GanttScreen = ({ recursos = [], ots = [], calendarios = [], obtenerHorasPa
                             const fmtFecha = iso => iso ? new Date(iso + 'T00:00:00').toLocaleDateString('es-CL', { day: '2-digit', month: 'short' }) : '—';
                             const enSemana = diasSemana.some(d => fechasTareas.includes(d));
                             const accionLabel = !puedeProgramar ? 'No disponible' : estaProgramada ? 'Desprogramar' : 'Programar';
+                            const horasSemana = (ot.tareas || []).filter(tt => diasSemana.includes(tt.fecha)).reduce((a, tt) => a + (Number(tt.duracion) || 0), 0);
                             return (
                                 <React.Fragment key={ot._id}>
-                                    <div style={{ ...styles.filaOT, background: otSel?._id === ot._id ? '#f0efeb' : enSemana ? t.fondoMain : t.superficie, borderLeft: `2px solid ${colorEstadoOT(ot.estado)}` }} onClick={() => { setOtSel(ot); setConfirmando(false); }}>
-                                        <span style={styles.celda}>
+                                    <div style={{ ...styles.filaOT, background: otSel?._id === ot._id ? '#f0efeb' : enSemana ? t.fondoMain : t.superficie }} onClick={() => { setOtSel(ot); setConfirmando(false); }}>
+                                        <span style={{ ...styles.celda, borderLeft: `2px solid ${otSel?._id === ot._id ? '#1c1d1b' : 'transparent'}` }}>
                                             <span onClick={(e) => { e.stopPropagation(); navigate('/tratamiento', { state: ot }); }} style={{ fontFamily: t.fontMono, fontSize: 11, fontWeight: 600, color: t.acento, cursor: 'pointer' }}>{ot.numeroOT || 'S/N'}</span>
                                         </span>
                                         <span style={{ ...styles.celda, flexDirection: 'column', alignItems: 'flex-start', justifyContent: 'center', gap: 0 }}>
@@ -217,19 +226,23 @@ const GanttScreen = ({ recursos = [], ots = [], calendarios = [], obtenerHorasPa
                                                 >{accionLabel}</button>
                                             )}
                                         </span>
-                                        <span style={styles.celda} />
+                                        <span style={{ ...styles.celda, justifyContent: 'flex-end', fontFamily: t.fontMono, fontSize: 11 }}>{`${horasSemana} h`}</span>
                                         <span style={{ ...styles.celda, justifyContent: 'flex-end', fontFamily: t.fontMono, fontSize: 10.5, color: t.textoSecundario1 }}>{fmtFecha(fechasTareas[0])}</span>
                                         <span style={{ ...styles.celda, justifyContent: 'flex-end', fontFamily: t.fontMono, fontSize: 10.5, color: t.textoSecundario1, borderRight: `1px solid ${t.hairlineBloque}` }}>{fmtFecha(fechasTareas[fechasTareas.length - 1])}</span>
-                                        {diasSemana.map(dia => <span key={dia} style={{ borderLeft: `1px solid ${t.hairlineFila}` }} />)}
+                                        {diasSemana.map(dia => {
+                                            const f = new Date(dia + 'T00:00:00');
+                                            const esFinde = f.getDay() === 0 || f.getDay() === 6;
+                                            return <span key={dia} style={{ minWidth: 0, overflow: 'hidden', borderLeft: `1px solid ${t.hairlineFila}`, background: esFinde ? '#f4f3ef' : 'transparent' }} />;
+                                        })}
                                     </div>
 
-                                    {ot.tareas?.map((tarea, tIdx) => (
+                                    {(ot.tareas || []).filter(tt => diasSemana.includes(tt.fecha)).sort((a, b) => (a.fecha || '').localeCompare(b.fecha || '')).map((tarea, tIdx) => (
                                         <div key={`${ot._id}-${tIdx}`} style={styles.filaTarea}>
                                             <span style={{ ...styles.celda, paddingLeft: 24, fontFamily: t.fontMono, fontSize: 10.5, color: t.textoDeshabilitado }}>{tIdx + 1}</span>
                                             <span style={{ ...styles.celda, fontSize: 11.5, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{tarea.descripcion}</span>
                                             <span style={{ ...styles.celda, flexDirection: 'column', alignItems: 'flex-start', justifyContent: 'center', gap: 0 }}>
                                                 <span style={{ fontSize: 11, color: t.textoSecundario1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' }}>{(tarea.operarioNombre || []).join(', ') || 'Sin asignar'}</span>
-                                                <span style={{ fontSize: 10, color: t.textoDeshabilitado }}>{tarea.puesto}</span>
+                                                <span style={{ fontSize: 10, color: t.textoDeshabilitado, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' }}>{tarea.puesto}</span>
                                             </span>
                                             <span style={styles.celda} />
                                             <span style={{ ...styles.celda, justifyContent: 'flex-end', fontFamily: t.fontMono, fontSize: 11 }}>{tarea.duracion}h</span>
@@ -237,6 +250,8 @@ const GanttScreen = ({ recursos = [], ots = [], calendarios = [], obtenerHorasPa
                                             <span style={{ ...styles.celda, borderRight: `1px solid ${t.hairlineBloque}` }} />
                                             {diasSemana.map(dia => {
                                                 const hay = tarea.fecha === dia;
+                                                const f = new Date(dia + 'T00:00:00');
+                                                const esFinde = f.getDay() === 0 || f.getDay() === 6;
                                                 let hayExceso = false;
                                                 if (hay) {
                                                     const ids = Array.isArray(tarea.operarioId) ? tarea.operarioId : [tarea.operarioId];
@@ -248,9 +263,9 @@ const GanttScreen = ({ recursos = [], ots = [], calendarios = [], obtenerHorasPa
                                                     });
                                                 }
                                                 return (
-                                                    <span key={dia} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 4, borderLeft: `1px solid ${t.hairlineFila}` }}>
+                                                    <span key={dia} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minWidth: 0, overflow: 'hidden', padding: 4, borderLeft: `1px solid ${t.hairlineFila}`, background: esFinde ? '#f4f3ef' : 'transparent' }}>
                                                         {hay && (
-                                                            <span style={{ width: '100%', height: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', background: hayExceso ? t.rojo : t.acento, color: '#fff', fontFamily: t.fontMono, fontSize: 10, fontWeight: 600, borderRadius: 2 }}>
+                                                            <span style={{ width: '100%', height: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', whiteSpace: 'nowrap', background: hayExceso ? t.rojo : t.acento, color: '#fff', fontFamily: t.fontMono, fontSize: 10, fontWeight: 600, borderRadius: 2 }}>
                                                                 {tarea.hora || ''} · {tarea.duracion}h
                                                             </span>
                                                         )}
@@ -271,11 +286,12 @@ const GanttScreen = ({ recursos = [], ots = [], calendarios = [], obtenerHorasPa
                             const sumaCapacidad = diasSemana.reduce((acc, dia) => acc + capacidadDia(recurso, dia), 0);
                             const pct = sumaCapacidad > 0 ? Math.min(100, Math.round((sumaCarga / sumaCapacidad) * 100)) : 0;
                             const colorBarra = sumaCarga > sumaCapacidad ? t.rojo : sumaCarga > 0 ? t.verde : t.textoDeshabilitado;
+                            const colorResumen = sumaCarga > sumaCapacidad ? t.rojo : t.textoPrincipal;
                             return (
                                 <div key={recurso._id} style={styles.filaCapacidad}>
                                     <span style={{ ...styles.celda, fontSize: 11.5, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{recurso.nombre}</span>
-                                    <span style={{ ...styles.celda, flexDirection: 'column', alignItems: 'flex-start', justifyContent: 'center', gap: 3 }}>
-                                        <span style={{ display: 'flex', gap: 8, fontSize: 10.5, color: t.textoAtenuado3, whiteSpace: 'nowrap', overflow: 'hidden' }}>
+                                    <span style={{ ...styles.celda, flexDirection: 'column', justifyContent: 'center', gap: 3, overflow: 'hidden' }}>
+                                        <span style={{ display: 'flex', gap: 8, width: '100%', fontSize: 10.5, color: t.textoAtenuado3, whiteSpace: 'nowrap', overflow: 'hidden' }}>
                                             <span style={{ flex: 'none' }}>{recurso.puesto}</span>
                                             <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{cal?.nombre || 'Sin turno'}</span>
                                         </span>
@@ -283,16 +299,19 @@ const GanttScreen = ({ recursos = [], ots = [], calendarios = [], obtenerHorasPa
                                             <span style={{ display: 'block', height: 3, background: colorBarra, width: `${pct}%` }} />
                                         </span>
                                     </span>
-                                    <span style={{ ...styles.celda, fontFamily: t.fontMono, fontSize: 10.5, fontWeight: 600, color: colorBarra }}>{sumaCarga}h/{sumaCapacidad}h</span>
+                                    <span style={{ ...styles.celda, fontFamily: t.fontMono, fontSize: 10.5, fontWeight: 600, color: colorResumen }}>{sumaCarga} / {sumaCapacidad} h · {pct} %</span>
                                     <span style={styles.celda} /><span style={styles.celda} /><span style={styles.celda} />
                                     <span style={{ ...styles.celda, borderRight: `1px solid ${t.hairlineBloque}` }} />
                                     {diasSemana.map(dia => {
                                         const carga = mapaCarga[`${String(recurso._id)}-${dia}`] || 0;
                                         const capacidad = capacidadDia(recurso, dia);
                                         const exceso = carga > capacidad;
+                                        const sinDato = capacidad === 0 && carga === 0;
+                                        const f = new Date(dia + 'T00:00:00');
+                                        const esFinde = f.getDay() === 0 || f.getDay() === 6;
                                         return (
-                                            <span key={dia} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: exceso ? t.cargaExceso : carga > 0 ? t.cargaOk : 'transparent', borderLeft: `1px solid ${t.hairlineFila}`, fontFamily: t.fontMono, fontSize: 10.5, fontWeight: 600, color: exceso ? t.rojo : carga > 0 ? t.verde : t.textoDeshabilitado }}>
-                                                {carga}/{capacidad}
+                                            <span key={dia} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 32, minWidth: 0, overflow: 'hidden', background: exceso ? t.cargaExceso : carga > 0 ? t.cargaOk : (esFinde ? '#f4f3ef' : 'transparent'), borderLeft: `1px solid ${t.hairlineFila}`, fontFamily: t.fontMono, fontSize: 10.5, fontWeight: 600, color: exceso ? t.rojo : carga > 0 ? t.textoPrincipal : t.textoDeshabilitado }}>
+                                                {sinDato ? '·' : `${carga} / ${capacidad}`}
                                             </span>
                                         );
                                     })}
@@ -302,61 +321,71 @@ const GanttScreen = ({ recursos = [], ots = [], calendarios = [], obtenerHorasPa
                     </div>
                 </section>
 
-                <aside style={styles.aside}>
-                    {!otSel ? (
-                        <div style={{ padding: 16, color: t.textoAtenuado3, fontSize: 12.5, textAlign: 'center' }}>Seleccioná una OT para ver el detalle.</div>
-                    ) : (
-                        <>
-                            <div style={styles.asideHeader}>
-                                <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-                                    <span style={{ fontFamily: t.fontMono, fontSize: 12, fontWeight: 600 }}>{otSel.numeroOT || 'S/N'}</span>
-                                    <span style={{ fontSize: 10.5, fontWeight: 600, color: t.textoAtenuado2 }}>{otSel.estado}</span>
+                <div
+                    onClick={() => setAsideOculta(v => !v)}
+                    title={asideOculta ? 'Mostrar panel de detalle' : 'Ocultar panel de detalle'}
+                    style={styles.asideTira}
+                >
+                    {asideOculta ? '‹' : '›'}
+                </div>
+
+                {!asideOculta && (
+                    <aside style={styles.aside}>
+                        {!otSel ? (
+                            <div style={{ padding: 16, color: t.textoAtenuado3, fontSize: 12.5, textAlign: 'center' }}>Selecciona una OT para ver el detalle.</div>
+                        ) : (
+                            <>
+                                <div style={styles.asideHeader}>
+                                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+                                        <span style={{ fontFamily: t.fontMono, fontSize: 12, fontWeight: 600 }}>{otSel.numeroOT || 'S/N'}</span>
+                                        <span style={{ fontSize: 10.5, fontWeight: 600, color: t.textoAtenuado2 }}>{otSel.estado}</span>
+                                    </div>
+                                    <div style={{ fontSize: 13.5, fontWeight: 700, marginTop: 4 }}>{otSel.solicitante || 'Cliente'}</div>
+                                    <p style={{ margin: '6px 0 0', fontSize: 11.5, lineHeight: 1.5, color: t.textoSecundario2 }}>{otSel.descripcion}</p>
                                 </div>
-                                <div style={{ fontSize: 13.5, fontWeight: 700, marginTop: 4 }}>{otSel.solicitante || 'Cliente'}</div>
-                                <p style={{ margin: '6px 0 0', fontSize: 11.5, lineHeight: 1.5, color: t.textoSecundario2 }}>{otSel.descripcion}</p>
-                            </div>
 
-                            <div style={styles.asideBloque}>
-                                <div style={styles.tituloSub}>Sobredemanda</div>
-                                {conflictosSel.length === 0 ? (
-                                    <div style={{ fontSize: 11.5, color: t.textoAtenuado1, lineHeight: 1.5 }}>Sin conflictos de capacidad en esta semana.</div>
-                                ) : conflictosSel.map((c, i) => (
-                                    <div key={i} style={{ padding: '6px 0', borderBottom: `1px solid ${t.hairlineFila}` }}>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
-                                            <span style={{ fontSize: 11.5, fontWeight: 600 }}>{c.nombre}</span>
-                                            <span style={{ fontFamily: t.fontMono, fontSize: 11, fontWeight: 600, color: t.rojo }}>+{c.deficit}h</span>
+                                <div style={styles.asideBloque}>
+                                    <div style={styles.tituloSub}>Sobredemanda</div>
+                                    {conflictosSel.length === 0 ? (
+                                        <div style={{ fontSize: 11.5, color: t.textoAtenuado1, lineHeight: 1.5 }}>Sin conflictos de capacidad en esta semana.</div>
+                                    ) : conflictosSel.map((c, i) => (
+                                        <div key={i} style={{ padding: '6px 0', borderBottom: `1px solid ${t.hairlineFila}` }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+                                                <span style={{ fontSize: 11.5, fontWeight: 600 }}>{c.nombre}</span>
+                                                <span style={{ fontFamily: t.fontMono, fontSize: 11, fontWeight: 600, color: t.rojo }}>+{c.deficit}h</span>
+                                            </div>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontSize: 10.5, color: t.textoAtenuado3 }}>
+                                                <span>{c.fecha}</span><span style={{ fontFamily: t.fontMono }}>{c.carga}h sobre {c.capacidad}h</span>
+                                            </div>
                                         </div>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontSize: 10.5, color: t.textoAtenuado3 }}>
-                                            <span>{c.fecha}</span><span style={{ fontFamily: t.fontMono }}>{c.carga}h sobre {c.capacidad}h</span>
+                                    ))}
+                                    {confirmando && (
+                                        <div style={{ marginTop: 10, padding: '8px 10px', background: '#fff', borderLeft: `2px solid ${t.rojo}` }}>
+                                            <div style={{ fontSize: 11.5, color: t.textoSecundario1, lineHeight: 1.5, marginBottom: 8 }}>Programar dejará responsables sobre su capacidad. ¿Continuar?</div>
+                                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+                                                <button onClick={confirmarProgramacion} style={{ height: 26, background: t.rojo, border: `1px solid ${t.rojo}`, color: '#fff', fontSize: 11, fontWeight: 700, cursor: 'pointer', borderRadius: 2 }}>Programar igual</button>
+                                                <button onClick={() => setConfirmando(false)} style={styles.btnSecundario}>Cancelar</button>
+                                            </div>
                                         </div>
-                                    </div>
-                                ))}
-                                {confirmando && (
-                                    <div style={{ marginTop: 10, padding: '8px 10px', background: '#fff', borderLeft: `2px solid ${t.rojo}` }}>
-                                        <div style={{ fontSize: 11.5, color: t.textoSecundario1, lineHeight: 1.5, marginBottom: 8 }}>Programar dejará responsables sobre su capacidad. ¿Continuar?</div>
-                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
-                                            <button onClick={confirmarProgramacion} style={{ height: 26, background: t.rojo, border: `1px solid ${t.rojo}`, color: '#fff', fontSize: 11, fontWeight: 700, cursor: 'pointer', borderRadius: 2 }}>Programar igual</button>
-                                            <button onClick={() => setConfirmando(false)} style={styles.btnSecundario}>Cancelar</button>
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
+                                    )}
+                                </div>
 
-                            <div style={{ padding: '11px 16px 14px' }}>
-                                <div style={styles.tituloSub}>Acciones</div>
-                                <button onClick={() => navigate('/tratamiento', { state: otSel })} style={{ ...styles.btnSecundario, width: '100%' }}>Abrir tratamiento</button>
-                                <div style={{ fontSize: 10.5, color: t.textoAtenuado3, marginTop: 8, lineHeight: 1.5 }}>Solo las OT en estado Planificada o Programada se pueden programar; las cerradas quedan en gris.</div>
-                            </div>
-                        </>
-                    )}
-                </aside>
+                                <div style={{ padding: '11px 16px 14px' }}>
+                                    <div style={styles.tituloSub}>Acciones</div>
+                                    <button onClick={() => navigate('/tratamiento', { state: otSel })} style={{ ...styles.btnSecundario, width: '100%' }}>Abrir tratamiento</button>
+                                    <div style={{ fontSize: 10.5, color: t.textoAtenuado3, marginTop: 8, lineHeight: 1.5 }}>Solo las OT en estado Planificada o Programada se pueden programar; las cerradas quedan en gris.</div>
+                                </div>
+                            </>
+                        )}
+                    </aside>
+                )}
             </div>
         </div>
     );
 };
 
 const styles = {
-    raiz: { display: 'flex', flexDirection: 'column', height: '100%', minHeight: '720px', background: t.fondoMain, color: t.textoPrincipal, fontFamily: t.fontUi, fontSize: '13px' },
+    raiz: { display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, background: t.fondoMain, color: t.textoPrincipal, fontFamily: t.fontUi, fontSize: '13px' },
     header: { flex: 'none', height: 46, display: 'flex', alignItems: 'center', gap: 16, padding: '0 16px', background: t.superficie, borderBottom: `1px solid ${t.bordeZona}` },
     h1: { margin: 0, fontSize: 14, fontWeight: 700, letterSpacing: '-.01em', whiteSpace: 'nowrap' },
     subtitulo: { fontSize: 11.5, color: t.textoAtenuado2, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
@@ -373,11 +402,16 @@ const styles = {
     filaOT: { display: 'grid', gridTemplateColumns: GRID, alignItems: 'stretch', borderBottom: `1px solid ${t.hairlineFila}`, cursor: 'pointer' },
     filaTarea: { display: 'grid', gridTemplateColumns: GRID, alignItems: 'stretch', borderBottom: `1px solid ${t.hairlineFila}` },
     filaCapacidad: { display: 'grid', gridTemplateColumns: GRID, alignItems: 'stretch', borderBottom: `1px solid ${t.hairlineFila}` },
-    filaSeccion: { display: 'flex', alignItems: 'center', height: 30, padding: '0 16px', marginTop: 14, background: t.encabezadoTabla, borderTop: `1px solid ${t.bordeZona}`, borderBottom: `1px solid ${t.hairlineBloque}`, fontSize: 9.5, letterSpacing: '.11em', textTransform: 'uppercase', color: t.textoAtenuado1, fontWeight: 700 },
+    filaSeccion: { display: 'flex', alignItems: 'center', height: 30, padding: '0 16px', marginTop: 14, position: 'sticky', left: 0, background: t.encabezadoTabla, borderTop: `1px solid ${t.bordeZona}`, borderBottom: `1px solid ${t.hairlineBloque}`, fontSize: 9.5, letterSpacing: '.11em', textTransform: 'uppercase', color: t.textoAtenuado1, fontWeight: 700 },
     celda: { display: 'flex', alignItems: 'center', padding: '5px 10px', minWidth: 0 },
     btnAccionFila: { width: '100%', height: 21, padding: '0 6px', background: t.superficie, border: `1px solid ${t.bordeZona}`, fontSize: 10.5, fontWeight: 600, color: '#262622', cursor: 'pointer', borderRadius: 2, whiteSpace: 'nowrap', fontFamily: t.fontUi },
 
-    aside: { width: 284, flex: 'none', display: 'flex', flexDirection: 'column', background: t.fondoMain, borderLeft: `1px solid ${t.bordeZona}`, overflow: 'auto' },
+    asideTira: {
+        width: '13px', flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center',
+        background: t.encabezadoTabla, color: t.textoAtenuado3, fontFamily: t.fontMono, fontSize: '12px',
+        cursor: 'pointer', borderLeft: `1px solid ${t.hairlineBloque}`,
+    },
+    aside: { width: 284, flex: 'none', display: 'flex', flexDirection: 'column', background: t.fondoMain, overflow: 'auto' },
     asideHeader: { padding: '12px 16px 11px', background: t.superficie, borderBottom: `1px solid ${t.bordeZona}` },
     asideBloque: { padding: '11px 16px 12px', borderBottom: `1px solid ${t.hairlineBloque}` },
     tituloSub: { fontSize: 9.5, letterSpacing: '.11em', textTransform: 'uppercase', color: t.textoAtenuado3, marginBottom: 7 },
