@@ -1,14 +1,22 @@
 // controllers/dataController.js
-const Calendario = require('../models/Calendario');
-const EquiposHerramientas = require('../models/equiposHerramientas');
-const OT = require('../models/OT');
-const Recurso = require('../models/Recurso');
-const Solicitud = require('../models/Solicitud');
-const Suministro = require('../models/suministro');
-const Puesto = require('../models/puesto');
-const Plantilla = require('../models/Plantilla');
+const getCalendario = require('../models/Calendario');
+const getEquiposHerramientas = require('../models/equiposHerramientas');
+const getOT = require('../models/OT');
+const getRecurso = require('../models/Recurso');
+const getSolicitud = require('../models/Solicitud');
+const getSuministro = require('../models/suministro');
+const getPuesto = require('../models/puesto');
+const getPlantilla = require('../models/Plantilla');
 
 exports.getAllData = async (req, res) => {
+    const Calendario = getCalendario(req.db);
+    const EquiposHerramientas = getEquiposHerramientas(req.db);
+    const OT = getOT(req.db);
+    const Recurso = getRecurso(req.db);
+    const Solicitud = getSolicitud(req.db);
+    const Suministro = getSuministro(req.db);
+    const Puesto = getPuesto(req.db);
+    const Plantilla = getPlantilla(req.db);
     try {
         const [calendarios, equipos, ots, personal, solicitudes, suministros, puestos, plantillas] = await Promise.all([
             Calendario.find(),

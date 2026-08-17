@@ -29,4 +29,4 @@ const solicitudSchema = new mongoose.Schema({
     collection: 'solicitudes'
 });
 
-module.exports = mongoose.models.Solicitud || mongoose.model('Solicitud', solicitudSchema);
+module.exports = (conn) => conn.models.Solicitud || conn.model('Solicitud', solicitudSchema);

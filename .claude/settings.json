@@ -1,0 +1,28 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node seedCuentas.js)",
+      "Bash(npm install *)",
+      "Bash(node -e \"require\\('./src/routes/index.js'\\); console.log\\('OK'\\)\")",
+      "Bash(git add *)",
+      "Bash(node \"C:\\\\Users\\\\e_ara\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-e-ara-OneDrive-Desktop-Proyectos-ERP\\\\960ca368-cb3f-4ef1-9b2d-0f0752f6f4de\\\\scratchpad\\\\probe-mongo.js\")",
+      "Bash(curl -s -m 10 http://localhost:5000/api/data -o /tmp/data3.json -w \"HTTP %{http_code}\\\\n\")",
+      "Read(//tmp/**)",
+      "Bash(git checkout *)",
+      "Bash(git stash *)",
+      "Bash(npx eslint *)",
+      "Bash(curl -s -m 10 http://localhost:5000/api/data -o /tmp/data4.json -w \"HTTP %{http_code}\\\\n\")",
+      "Bash(node -e ' *)",
+      "Read(//c/Users/e_ara/AppData/Local/Temp/**)",
+      "Bash(curl -s -m 8 \"http://localhost:5000/api/suministros/698b6c9252af6cf17e457031/movimientos\" -w \"\\\\nHTTP %{http_code}\\\\n\")",
+      "Bash(curl -s -m 5 \"http://localhost:5173/src/screens/TratamientoScreen.jsx\")",
+      "Bash(curl -s -m 12 http://localhost:5000/api/data -o /tmp/data5.json -w \"HTTP %{http_code}\\\\n\")",
+      "Bash(curl -s -m 8 http://localhost:5000/api/proveedores -w \"\\\\nHTTP %{http_code}\\\\n\")",
+      "Bash(curl -s -m 8 http://localhost:5000/api/ordenes-compra -w \"\\\\nHTTP %{http_code}\\\\n\")",
+      "Bash(curl -s -m 10 http://localhost:5000/api/data -o /dev/null -w \"HTTP %{http_code}\\\\n\")",
+      "Read(//c/Users/e_ara/OneDrive/Desktop/Proyectos/**)",
+      "Bash(curl -s -o /dev/null -m 5 -w \"HTTP %{http_code}\\\\n\" http://localhost:5173/src/screens/TratamientoScreen.jsx)",
+      "Bash(echo \"exit: $?\")"
+    ]
+  }
+}

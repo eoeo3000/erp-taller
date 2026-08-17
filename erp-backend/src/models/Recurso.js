@@ -39,4 +39,4 @@ const RecursoSchema = new mongoose.Schema({
     toJSON: { flattenMaps: true }
 });
 
-module.exports = mongoose.model('Recurso', RecursoSchema);
+module.exports = (conn) => conn.models.Recurso || conn.model('Recurso', RecursoSchema);

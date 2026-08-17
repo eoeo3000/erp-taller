@@ -1,10 +1,14 @@
 const mongoose = require('mongoose');
-const CuentaContable = require('../models/CuentaContable');
-const AsientoContable = require('../models/AsientoContable');
+const getCuentaContable = require('../models/CuentaContable');
+const getAsientoContable = require('../models/AsientoContable');
 
 // ── HELPERS ───────────────────────────────────────────────────────────────────
-
-async function generarNumeroAsiento() {
+// NOTA: generarNumeroAsiento, crearAsientoAutomatico y anularAsientoPorReferencia no son
+// handlers (req,res) — son helpers invocados internamente (incluso desde otros controllers
+// sin request HTTP propio), así que reciben la conexión explícitamente como parámetro `conn`
+// en vez de leerla de `req.db`.
+async function generarNumeroAsiento(conn) {
+    const AsientoContable = getAsientoContable(conn);
     const ultimo = await AsientoContable.findOne({ numeroAsiento: { $regex: /^ASI-2026-/ } }).sort({ numeroAsiento: -1 });
     let n = 1;
     if (ultimo?.numeroAsiento) {
@@ -18,6 +22,7 @@ async function generarNumeroAsiento() {
 // ── PLAN DE CUENTAS ───────────────────────────────────────────────────────────
 
 exports.getCuentas = async (req, res) => {
+    const CuentaContable = getCuentaContable(req.db);
     try {
         const cuentas = await CuentaContable.find().sort({ codigo: 1 }).lean();
         res.json(cuentas);
@@ -27,6 +32,7 @@ exports.getCuentas = async (req, res) => {
 };
 
 exports.crearCuenta = async (req, res) => {
+    const CuentaContable = getCuentaContable(req.db);
     try {
         const { codigo, nombre, tipo, naturaleza, padreId, descripcion } = req.body;
         const nivel = codigo ? codigo.split('.').length : 1;
@@ -39,6 +45,7 @@ exports.crearCuenta = async (req, res) => {
 };
 
 exports.actualizarCuenta = async (req, res) => {
+    const CuentaContable = getCuentaContable(req.db);
     try {
         const { id } = req.params;
         const { codigo, nombre, tipo, naturaleza, padreId, descripcion, activa } = req.body;
@@ -56,6 +63,8 @@ exports.actualizarCuenta = async (req, res) => {
 };
 
 exports.eliminarCuenta = async (req, res) => {
+    const CuentaContable = getCuentaContable(req.db);
+    const AsientoContable = getAsientoContable(req.db);
     try {
         const { id } = req.params;
         const tieneMovimientos = await AsientoContable.findOne({ 'lineas.cuentaId': id });
@@ -70,6 +79,7 @@ exports.eliminarCuenta = async (req, res) => {
 // ── LIBRO DIARIO ──────────────────────────────────────────────────────────────
 
 exports.getAsientos = async (req, res) => {
+    const AsientoContable = getAsientoContable(req.db);
     try {
         const { desde, hasta, tipo, limite = 200 } = req.query;
         const filtro = {};
@@ -91,6 +101,8 @@ exports.getAsientos = async (req, res) => {
 };
 
 exports.crearAsientoManual = async (req, res) => {
+    const CuentaContable = getCuentaContable(req.db);
+    const AsientoContable = getAsientoContable(req.db);
     try {
         const { fecha, descripcion, lineas: lineasRaw } = req.body;
         if (!lineasRaw || lineasRaw.length < 2) return res.status(400).json({ error: 'El asiento requiere al menos 2 líneas' });
@@ -116,7 +128,7 @@ exports.crearAsientoManual = async (req, res) => {
             return res.status(400).json({ error: `Partida doble no balanceada: Debe ${totalDebe} ≠ Haber ${totalHaber}` });
         }
 
-        const numeroAsiento = await generarNumeroAsiento();
+        const numeroAsiento = await generarNumeroAsiento(req.db);
         const asiento = await AsientoContable.create({
             numeroAsiento,
             fecha,
@@ -136,6 +148,7 @@ exports.crearAsientoManual = async (req, res) => {
 };
 
 exports.anularAsiento = async (req, res) => {
+    const AsientoContable = getAsientoContable(req.db);
     try {
         const { id } = req.params;
         const { motivo } = req.body;
@@ -153,7 +166,7 @@ exports.anularAsiento = async (req, res) => {
             glosa: `REVERSA: ${l.glosa}`
         }));
 
-        const numeroReversa = await generarNumeroAsiento();
+        const numeroReversa = await generarNumeroAsiento(req.db);
         const fechaHoy = new Date().toISOString().slice(0, 10);
 
         const reversa = await AsientoContable.create({
@@ -185,7 +198,9 @@ exports.anularAsiento = async (req, res) => {
 
 // ── FUNCIÓN INTERNA (importada por otros controllers) ─────────────────────────
 
-exports.crearAsientoAutomatico = async (tipoOrigen, referenciaId, referenciaNro, lineasData, fecha, descripcion) => {
+exports.crearAsientoAutomatico = async (tipoOrigen, referenciaId, referenciaNro, lineasData, fecha, descripcion, conn) => {
+    const CuentaContable = getCuentaContable(conn);
+    const AsientoContable = getAsientoContable(conn);
     const lineas = [];
     for (const ld of lineasData) {
         const cuenta = await CuentaContable.findOne({ codigo: ld.codigoCuenta }).lean();
@@ -202,7 +217,7 @@ exports.crearAsientoAutomatico = async (tipoOrigen, referenciaId, referenciaNro,
 
     const totalDebe = lineas.reduce((s, l) => s + l.debe, 0);
     const totalHaber = lineas.reduce((s, l) => s + l.haber, 0);
-    const numeroAsiento = await generarNumeroAsiento();
+    const numeroAsiento = await generarNumeroAsiento(conn);
 
     return AsientoContable.create({
         numeroAsiento,
@@ -218,7 +233,8 @@ exports.crearAsientoAutomatico = async (tipoOrigen, referenciaId, referenciaNro,
     });
 };
 
-exports.anularAsientoPorReferencia = async (tipoOrigen, referenciaId, motivo) => {
+exports.anularAsientoPorReferencia = async (tipoOrigen, referenciaId, motivo, conn) => {
+    const AsientoContable = getAsientoContable(conn);
     const asiento = await AsientoContable.findOne({
         'origen.tipo': tipoOrigen,
         'origen.referenciaId': referenciaId,
@@ -235,7 +251,7 @@ exports.anularAsientoPorReferencia = async (tipoOrigen, referenciaId, motivo) =>
         glosa: `REVERSA: ${l.glosa}`
     }));
 
-    const numeroReversa = await generarNumeroAsiento();
+    const numeroReversa = await generarNumeroAsiento(conn);
     const fechaHoy = new Date().toISOString().slice(0, 10);
 
     const reversa = await AsientoContable.create({
@@ -260,6 +276,8 @@ exports.anularAsientoPorReferencia = async (tipoOrigen, referenciaId, motivo) =>
 // ── LIBRO MAYOR ───────────────────────────────────────────────────────────────
 
 exports.getLibroMayor = async (req, res) => {
+    const AsientoContable = getAsientoContable(req.db);
+    const CuentaContable = getCuentaContable(req.db);
     try {
         const { cuentaId } = req.params;
         const { desde, hasta } = req.query;
@@ -308,6 +326,8 @@ exports.getLibroMayor = async (req, res) => {
 // ── REPORTES ──────────────────────────────────────────────────────────────────
 
 exports.getBalanceComprobacion = async (req, res) => {
+    const AsientoContable = getAsientoContable(req.db);
+    const CuentaContable = getCuentaContable(req.db);
     try {
         const { hasta } = req.query;
         const filtro = { estado: 'vigente', ...(hasta ? { fecha: { $lte: hasta } } : {}) };
@@ -352,6 +372,8 @@ exports.getBalanceComprobacion = async (req, res) => {
 };
 
 exports.getEstadoResultados = async (req, res) => {
+    const AsientoContable = getAsientoContable(req.db);
+    const CuentaContable = getCuentaContable(req.db);
     try {
         const { desde, hasta } = req.query;
         const filtroFecha = {};
@@ -395,6 +417,8 @@ exports.getEstadoResultados = async (req, res) => {
 };
 
 exports.getBalanceGeneral = async (req, res) => {
+    const AsientoContable = getAsientoContable(req.db);
+    const CuentaContable = getCuentaContable(req.db);
     try {
         const { hasta } = req.query;
         const filtro = { estado: 'vigente', ...(hasta ? { fecha: { $lte: hasta } } : {}) };

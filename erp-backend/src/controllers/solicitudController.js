@@ -1,6 +1,7 @@
-const Solicitud = require('../models/Solicitud');
+const getSolicitud = require('../models/Solicitud');
 
-async function generarNumeroSolicitud() {
+async function generarNumeroSolicitud(conn) {
+    const Solicitud = getSolicitud(conn);
     const anio = new Date().getFullYear();
     const prefijo = `SOL-${anio}-`;
     const ultima = await Solicitud.findOne({ numeroSolicitud: { $regex: new RegExp(`^${prefijo}`) } }).sort({ numeroSolicitud: -1 });
@@ -14,6 +15,7 @@ async function generarNumeroSolicitud() {
 }
 
 exports.obtenerSolicitudes = async (req, res) => {
+    const Solicitud = getSolicitud(req.db);
     try {
         // Quitamos el { estado: 'Pendiente' } para recibir TODO
         const solicitudes = await Solicitud.find().sort({ fechaCreacion: -1 });
@@ -24,6 +26,7 @@ exports.obtenerSolicitudes = async (req, res) => {
 };
 
 exports.crearSolicitud = async (req, res) => {
+    const Solicitud = getSolicitud(req.db);
     try {
         const data = {};
 
@@ -47,7 +50,7 @@ exports.crearSolicitud = async (req, res) => {
         if (data.adjuntos === 'undefined') delete data.adjuntos;
 
         if (!data.numeroSolicitud) {
-            data.numeroSolicitud = await generarNumeroSolicitud();
+            data.numeroSolicitud = await generarNumeroSolicitud(req.db);
         }
 
         const nuevaSolicitud = new Solicitud(data);
@@ -66,6 +69,7 @@ exports.crearSolicitud = async (req, res) => {
 };
 
 exports.actualizarEstado = async (req, res) => {
+    const Solicitud = getSolicitud(req.db);
     try {
         const { id } = req.params;
         const { estado } = req.body;

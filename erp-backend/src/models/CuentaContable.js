@@ -11,4 +11,4 @@ const CuentaContableSchema = new mongoose.Schema({
     descripcion:{ type: String, default: '' }
 }, { timestamps: true });
 
-module.exports = mongoose.models.CuentaContable || mongoose.model('CuentaContable', CuentaContableSchema);
+module.exports = (conn) => conn.models.CuentaContable || conn.model('CuentaContable', CuentaContableSchema);

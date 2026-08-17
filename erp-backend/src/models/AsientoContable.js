@@ -31,4 +31,4 @@ const AsientoContableSchema = new mongoose.Schema({
     creadoPor: { type: String, default: 'Sistema' }
 }, { timestamps: true });
 
-module.exports = mongoose.models.AsientoContable || mongoose.model('AsientoContable', AsientoContableSchema);
+module.exports = (conn) => conn.models.AsientoContable || conn.model('AsientoContable', AsientoContableSchema);

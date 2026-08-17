@@ -7,10 +7,10 @@ const EquiposHerramientasSchema = new mongoose.Schema({
     codigo: { type: String },
     estado: {
         type: String,
-        enum: ['Disponible', 'En Uso', 'Mantenimiento', 'Reparación'],
+        enum: ['Disponible', 'Reservado', 'En Uso', 'Mantenimiento', 'Reparación'],
         default: 'Disponible'
     },
     fechaRegistro: { type: Date, default: Date.now }
 });
 
-module.exports = mongoose.model('EquiposHerramientas', EquiposHerramientasSchema);
+module.exports = (conn) => conn.models.EquiposHerramientas || conn.model('EquiposHerramientas', EquiposHerramientasSchema);

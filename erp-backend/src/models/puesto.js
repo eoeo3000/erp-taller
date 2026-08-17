@@ -23,4 +23,4 @@ const PuestoSchema = new mongoose.Schema({
     }
 });
 
-module.exports = mongoose.model('Puesto', PuestoSchema);
+module.exports = (conn) => conn.models.Puesto || conn.model('Puesto', PuestoSchema);

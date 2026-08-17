@@ -22,10 +22,22 @@ const SuministroSchema = new mongoose.Schema({
         enum: ['Transporte', 'Repuesto', 'Insumo', 'Otro'],
         default: 'Insumo'
     },
+    stockActual: {
+        type: Number,
+        default: 0
+    },
+    stockReservado: {
+        type: Number,
+        default: 0
+    },
+    bodega: {
+        type: String,
+        default: ''
+    },
     fechaRegistro: {
         type: Date,
         default: Date.now
     }
 });
 
-module.exports = mongoose.model('Suministro', SuministroSchema);
+module.exports = (conn) => conn.models.Suministro || conn.model('Suministro', SuministroSchema);

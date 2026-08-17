@@ -1,6 +1,7 @@
-const Plantilla = require('../models/Plantilla');
+const getPlantilla = require('../models/Plantilla');
 
 exports.listar = async (req, res) => {
+    const Plantilla = getPlantilla(req.db);
     try {
         const plantillas = await Plantilla.find().sort({ categoria: 1, nombre: 1 });
         res.json(plantillas);
@@ -10,6 +11,7 @@ exports.listar = async (req, res) => {
 };
 
 exports.crear = async (req, res) => {
+    const Plantilla = getPlantilla(req.db);
     try {
         const plantilla = new Plantilla(req.body);
         await plantilla.save();
@@ -20,6 +22,7 @@ exports.crear = async (req, res) => {
 };
 
 exports.actualizar = async (req, res) => {
+    const Plantilla = getPlantilla(req.db);
     try {
         const plantilla = await Plantilla.findByIdAndUpdate(
             req.params.id,
@@ -34,6 +37,7 @@ exports.actualizar = async (req, res) => {
 };
 
 exports.eliminar = async (req, res) => {
+    const Plantilla = getPlantilla(req.db);
     try {
         const plantilla = await Plantilla.findByIdAndDelete(req.params.id);
         if (!plantilla) return res.status(404).json({ error: 'Plantilla no encontrada' });

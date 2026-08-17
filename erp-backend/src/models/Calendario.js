@@ -16,4 +16,4 @@ const CalendarioSchema = new mongoose.Schema({
     }]
 }, { timestamps: true });
 
-module.exports = mongoose.model('Calendario', CalendarioSchema);
+module.exports = (conn) => conn.models.Calendario || conn.model('Calendario', CalendarioSchema);

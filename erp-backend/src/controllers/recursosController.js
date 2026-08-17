@@ -1,7 +1,8 @@
-const Recurso = require('../models/Recurso');
-const Ot = require('../models/OT');
+const getRecurso = require('../models/Recurso');
+const getOt = require('../models/OT');
 // 1. Obtener todos los recursos
 exports.getRecursos = async (req, res) => {
+    const Recurso = getRecurso(req.db);
     try {
         const recursos = await Recurso.find();
         res.json(recursos || []);
@@ -12,6 +13,7 @@ exports.getRecursos = async (req, res) => {
 
 // 2. Crear un recurso nuevo (Ya no usa Date.now(), Mongo crea el _id)
 exports.crearRecurso = async (req, res) => {
+    const Recurso = getRecurso(req.db);
     try {
         const nuevo = new Recurso({
             ...req.body,
@@ -26,6 +28,7 @@ exports.crearRecurso = async (req, res) => {
 
 // 3. Registrar ausencia (Actualizado para MongoDB)
 exports.registrarAusenciaRecurso = async (req, res) => {
+    const Recurso = getRecurso(req.db);
     try {
         const { id } = req.params;
         const { fecha, motivo } = req.body;
@@ -46,6 +49,8 @@ exports.registrarAusenciaRecurso = async (req, res) => {
 // src/controllers/recursosController.js
 
 exports.updateRecurso = async (req, res) => {
+    const Recurso = getRecurso(req.db);
+    const Ot = getOt(req.db);
     try {
         const { id } = req.params;
         const { calendarioId, ajustes, nombre, puesto, fechaInicioCiclo } = req.body;
@@ -108,6 +113,8 @@ exports.getPersonal = async (req, res) => {
 // En controllers/recursosController.js
 
 exports.eliminarRecurso = async (req, res) => {
+    const Recurso = getRecurso(req.db);
+    const Ot = getOt(req.db);
     try {
         const { id } = req.params;
         const resultado = await Recurso.findByIdAndDelete(id);

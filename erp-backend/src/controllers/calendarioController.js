@@ -1,7 +1,9 @@
-const Calendario = require('../models/Calendario');
+const getCalendario = require('../models/Calendario');
+const getRecurso = require('../models/Recurso');
 
 // Obtener todos los calendarios
 exports.getCalendarios = async (req, res) => {
+    const Calendario = getCalendario(req.db);
     try {
         const calendarios = await Calendario.find();
         res.json(calendarios);
@@ -12,6 +14,7 @@ exports.getCalendarios = async (req, res) => {
 
 // Crear o Actualizar Calendario
 exports.guardarCalendario = async (req, res) => {
+    const Calendario = getCalendario(req.db);
     try {
         const { id } = req.params;
         const datos = req.body;
@@ -45,6 +48,8 @@ exports.guardarCalendario = async (req, res) => {
 
 // Eliminar Calendario
 exports.eliminarCalendario = async (req, res) => {
+    const Calendario = getCalendario(req.db);
+    const Recurso = getRecurso(req.db);
     try {
         const { id } = req.params;
 

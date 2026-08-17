@@ -1,22 +1,68 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
+import { headerEntorno, obtenerEntorno, fijarEntorno } from '../utils/entorno';
+
+// Paso 7 del rediseño (ver Incomplete web app design/design_handoff_panel_control/README.md §9.1):
+// se respeta el backend existente tal cual — mismos endpoints, mismos módulos, misma lógica de
+// fusión. Solo cambia la presentación: una columna de máx. 860px, marcas ×/· en vez de checkboxes,
+// un único .xlsx (sin exportación JSON), y el resultado de importación llega después de escribir
+// (no hay dry run). Sin emoji. El modo demostración (§9.2) es el paso 8, no se toca acá.
+
+const t = {
+    fondoMain: '#f6f5f2',
+    superficie: '#ffffff',
+    textoPrincipal: '#1a1a18',
+    textoSecundario1: '#3a3a35',
+    textoSecundario2: '#4a4a44',
+    textoSecundario3: '#57564f',
+    textoAtenuado1: '#6b6a63',
+    textoAtenuado2: '#75746e',
+    textoAtenuado3: '#8a8981',
+    textoDeshabilitado: '#a3a29a',
+    bordeZona: 'rgba(0,0,0,.12)',
+    bordeInput: 'rgba(0,0,0,.18)',
+    hairlineFila: 'rgba(0,0,0,.06)',
+    hairlineBloque: 'rgba(0,0,0,.10)',
+    hoverFila: '#f4f3ef',
+    acento: 'oklch(0.48 0.10 250)',
+    verde: 'oklch(0.48 0.10 155)',
+    ambar: 'oklch(0.55 0.11 65)',
+    ambarBadge: 'oklch(0.50 0.11 65)',
+    rojo: 'oklch(0.52 0.13 25)',
+    fondoOT: '#faf8f6',
+    inerteBg: '#efedea',
+    inerteTexto: '#b5b3ab',
+    fontUi: '"Helvetica Neue", Helvetica, Arial, sans-serif',
+    fontMono: 'ui-monospace, Menlo, monospace',
+};
 
 const EXPORTABLES = [
-    { id: 'recursos',    label: 'Personal (Recursos)',       icono: '👷', desc: 'nombre, puesto, tipo, teléfono, email, tarifaHora' },
-    { id: 'suministros', label: 'Suministros',               icono: '🔩', desc: 'codigo, descripcion, precio, categoria' },
-    { id: 'equipos',     label: 'Equipos y Herramientas',    icono: '🔧', desc: 'nombre, codigo, tipo, estado, precio' },
-    { id: 'puestos',     label: 'Puestos / Especialidades',  icono: '🏷️', desc: 'nombre, costoHora, categoria' },
-    { id: 'ots',         label: 'Órdenes de Trabajo',        icono: '📋', desc: 'numeroOT, solicitante, estado, granTotal, pago…' },
-    { id: 'solicitudes', label: 'Solicitudes',               icono: '📥', desc: 'solicitante, empresa, descripcion, estado, fecha' },
+    { id: 'recursos',    label: 'Personal (Recursos)',      desc: 'nombre, puesto, tipo, telefono, email, tarifaHora' },
+    { id: 'suministros', label: 'Suministros',               desc: 'codigo, descripcion, precio, categoria' },
+    { id: 'equipos',     label: 'Equipos y herramientas',    desc: 'nombre, codigo, tipo, estado, precio' },
+    { id: 'puestos',     label: 'Puestos / especialidades',  desc: 'nombre, costoHora, categoria' },
+    { id: 'ots',         label: 'Órdenes de trabajo',        desc: 'numeroOT, solicitante, estado, granTotal, pago…' },
+    { id: 'solicitudes', label: 'Solicitudes',               desc: 'solicitante, empresa, descripcion, estado, fecha' },
 ];
 
 const IMPORTABLES = [
-    { id: 'recursos',    label: 'Personal (Recursos)',      icono: '👷', columnas: ['nombre *', 'puesto', 'tipo', 'telefono', 'email', 'tarifaHora'] },
-    { id: 'suministros', label: 'Suministros',              icono: '🔩', columnas: ['codigo *', 'descripcion *', 'precio', 'categoria'] },
-    { id: 'equipos',     label: 'Equipos y Herramientas',   icono: '🔧', columnas: ['nombre *', 'codigo', 'tipo', 'estado', 'precio'] },
-    { id: 'puestos',     label: 'Puestos / Especialidades', icono: '🏷️', columnas: ['nombre *', 'costoHora', 'categoria'] },
+    { id: 'recursos',    label: 'Personal (Recursos)',      columnas: ['nombre *', 'puesto', 'tipo', 'telefono', 'email', 'tarifaHora'] },
+    { id: 'suministros', label: 'Suministros',              columnas: ['codigo *', 'descripcion *', 'precio', 'categoria'] },
+    { id: 'equipos',     label: 'Equipos y herramientas',   columnas: ['nombre *', 'codigo', 'tipo', 'estado', 'precio'] },
+    { id: 'puestos',     label: 'Puestos / especialidades', columnas: ['nombre *', 'costoHora', 'categoria'] },
 ];
 
-const ESTADOS_OT = ['Pendiente','Tratada','Planificada','Programada','En Ejecución','Trabajo Terminado','Con Informe','Pagada'];
+const ESTADOS_OT = ['Pendiente', 'Tratada', 'Planificada', 'Programada', 'En Ejecución', 'Trabajo Terminado', 'Con Informe', 'Pagada'];
+
+const GRUPOS_DEMO = [
+    { label: 'Empresas y solicitudes', detalle: '8 empresas ficticias, 14 solicitudes' },
+    { label: 'Órdenes de trabajo', detalle: '12 OT, al menos una por cada etapa del flujo' },
+    { label: 'Personal y calendarios', detalle: '8 personas, 4 calendarios (semanal, rotativo, nocturno)' },
+    { label: 'Catálogo', detalle: '32 ítems entre suministros y equipos/herramientas' },
+    { label: 'Plantillas', detalle: '5 plantillas de tareas y materiales' },
+    { label: 'Reportes de terreno', detalle: '18 reportes con fotos de ejemplo' },
+    { label: 'Pagos', detalle: 'Órdenes en los tres estados: pendiente, parcial y pagado' },
+    { label: 'Historial contable', detalle: '6 meses cerrados de asientos automáticos' },
+];
 
 export default function ImportExportScreen({ API, cargarDatos }) {
     // ── EXPORTAR ──
@@ -29,7 +75,76 @@ export default function ImportExportScreen({ API, cargarDatos }) {
     const [cargando, setCargando] = useState(null);
     const inputRefs = useRef({});
 
-    // ── LÓGICA EXPORTAR ──
+    // ── ENTORNO / MODO DEMOSTRACIÓN (§9.2) ──
+    const [entorno] = useState(obtenerEntorno());
+    const [infoEntornos, setInfoEntornos] = useState(null);
+    const [estadoDemo, setEstadoDemo] = useState(null);
+    const [accionDemo, setAccionDemo] = useState(null); // 'cargando' | 'vaciando' | null
+    const [mostrarVaciar, setMostrarVaciar] = useState(false);
+    const [confirmVaciar, setConfirmVaciar] = useState('');
+
+    const cargarInfoEntornos = useCallback(async () => {
+        try {
+            const r = await fetch(`${API}/demo/info`, { headers: headerEntorno() });
+            setInfoEntornos(await r.json());
+        } catch { /* no crítico: las tarjetas simplemente no muestran BD/host */ }
+    }, [API]);
+
+    const cargarEstadoDemo = useCallback(async () => {
+        if (entorno !== 'demo') { setEstadoDemo(null); return; }
+        try {
+            const r = await fetch(`${API}/demo/estado`, { headers: headerEntorno() });
+            setEstadoDemo(await r.json());
+        } catch { /* no crítico */ }
+    }, [API, entorno]);
+
+    useEffect(() => { cargarInfoEntornos(); }, [cargarInfoEntornos]);
+    useEffect(() => { cargarEstadoDemo(); }, [cargarEstadoDemo]);
+
+    const cambiarEntorno = (valor) => {
+        if (valor === entorno) return;
+        fijarEntorno(valor);
+        window.location.reload();
+    };
+
+    const cargarDemo = async () => {
+        setAccionDemo('cargando');
+        try {
+            const r = await fetch(`${API}/demo/cargar`, { method: 'POST', headers: headerEntorno() });
+            const d = await r.json();
+            if (!r.ok) { setResultado({ error: d.error, modulo: 'Modo demostración' }); return; }
+            await cargarEstadoDemo();
+            if (cargarDatos) cargarDatos();
+        } catch {
+            setResultado({ error: 'No se pudo cargar el juego de demostración', modulo: 'Modo demostración' });
+        } finally {
+            setAccionDemo(null);
+        }
+    };
+
+    const vaciarDemo = async () => {
+        if (confirmVaciar !== 'VACIAR') return;
+        setAccionDemo('vaciando');
+        try {
+            const r = await fetch(`${API}/demo/vaciar`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', ...headerEntorno() },
+                body: JSON.stringify({ confirmacion: confirmVaciar }),
+            });
+            const d = await r.json();
+            if (!r.ok) { setResultado({ error: d.error, modulo: 'Modo demostración' }); return; }
+            setConfirmVaciar('');
+            setMostrarVaciar(false);
+            await cargarEstadoDemo();
+            if (cargarDatos) cargarDatos();
+        } catch {
+            setResultado({ error: 'No se pudo vaciar el entorno demo', modulo: 'Modo demostración' });
+        } finally {
+            setAccionDemo(null);
+        }
+    };
+
+    // ── LÓGICA EXPORTAR (sin cambios de backend) ──
     const toggleSeleccion = (id) => {
         setSeleccionados(prev => {
             const next = new Set(prev);
@@ -37,16 +152,10 @@ export default function ImportExportScreen({ API, cargarDatos }) {
             return next;
         });
     };
+    const seleccionarTodos = () => setSeleccionados(new Set(EXPORTABLES.map(e => e.id)));
+    const seleccionarNinguno = () => setSeleccionados(new Set());
 
-    const toggleTodos = () => {
-        if (seleccionados.size === EXPORTABLES.length) {
-            setSeleccionados(new Set());
-        } else {
-            setSeleccionados(new Set(EXPORTABLES.map(e => e.id)));
-        }
-    };
-
-    const exportar = () => {
+    const exportar = async () => {
         if (!seleccionados.size) return;
         setExportando(true);
         const params = new URLSearchParams({ modulos: [...seleccionados].join(',') });
@@ -56,18 +165,29 @@ export default function ImportExportScreen({ API, cargarDatos }) {
             if (filtroOTs.estado) params.set('otEstado', filtroOTs.estado);
         }
         const url = `${API}/import/exportar/batch?${params}`;
-
-        // Descarga via <a> temporal para poder detectar cuando termina
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = '';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        setTimeout(() => setExportando(false), 2000);
+        try {
+            // fetch + blob (no un <a href> directo) para poder mandar el header X-Entorno:
+            // un enlace de descarga plano no permite headers custom.
+            const r = await fetch(url, { headers: headerEntorno() });
+            if (!r.ok) throw new Error('No se pudo generar el archivo');
+            const blob = await r.blob();
+            const fecha = new Date().toISOString().slice(0, 10);
+            const objUrl = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = objUrl;
+            a.download = `exportacion_erp_${fecha}.xlsx`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(objUrl);
+        } catch {
+            setResultado({ error: 'No se pudo generar el archivo de exportación', modulo: 'Exportar' });
+        } finally {
+            setExportando(false);
+        }
     };
 
-    // ── LÓGICA IMPORTAR ──
+    // ── LÓGICA IMPORTAR (sin dry run: el backend responde después de escribir) ──
     const importar = async (mod, archivo) => {
         if (!archivo) return;
         setCargando(mod.id);
@@ -75,7 +195,7 @@ export default function ImportExportScreen({ API, cargarDatos }) {
         const form = new FormData();
         form.append('archivo', archivo);
         try {
-            const r = await fetch(`${API}/import/${mod.id}`, { method: 'POST', body: form });
+            const r = await fetch(`${API}/import/${mod.id}`, { method: 'POST', headers: headerEntorno(), body: form });
             const d = await r.json();
             if (!r.ok) { setResultado({ error: d.error, modulo: mod.label }); return; }
             setResultado({ ...d, modulo: mod.label });
@@ -88,104 +208,174 @@ export default function ImportExportScreen({ API, cargarDatos }) {
         }
     };
 
-    const descargarPlantilla = (id) => {
-        window.open(`${API}/import/plantilla/${id}`, '_blank');
-    };
+    const descargarPlantilla = (id) => window.open(`${API}/import/plantilla/${id}`, '_blank');
 
-    const s = styles;
-    const todosSeleccionados = seleccionados.size === EXPORTABLES.length;
     const algunoSeleccionado = seleccionados.size > 0;
 
     return (
-        <div style={s.page}>
-            <div style={s.header}>
-                <h2 style={s.titulo}>📊 Importar / Exportar Excel</h2>
-                <p style={s.subtitulo}>Carga y descarga información del ERP en formato .xlsx</p>
-            </div>
+        <div style={styles.raiz}>
+            <header style={styles.header}>
+                <h1 style={styles.h1}>Importar y exportar</h1>
+                <span style={styles.subtitulo}>Carga y descarga de información del ERP en formato .xlsx</span>
+            </header>
 
-            <div style={s.body}>
+            <div style={styles.scroll}>
+                <div style={styles.columna}>
 
-                {/* ═══ RESULTADO IMPORTACIÓN ═══ */}
-                {resultado && (
-                    <div style={{ ...s.alerta, background: resultado.error ? '#fce4ec' : '#e8f5e9', borderColor: resultado.error ? '#e57373' : '#66bb6a' }}>
-                        <div style={{ flex: 1 }}>
-                            <b>{resultado.modulo}</b>
-                            {resultado.error ? (
-                                <p style={{ margin: '4px 0 0', color: '#c62828' }}>❌ {resultado.error}</p>
-                            ) : (
-                                <>
-                                    <p style={{ margin: '4px 0 0', color: '#2e7d32' }}>
-                                        ✅ {resultado.insertados} registros importados de {resultado.total} filas
-                                    </p>
-                                    {resultado.errores?.length > 0 && (
-                                        <details style={{ marginTop: 6 }}>
-                                            <summary style={{ cursor: 'pointer', color: '#e65100', fontSize: 13 }}>
-                                                ⚠️ {resultado.errores.length} filas con error (ver detalle)
-                                            </summary>
-                                            <ul style={{ margin: '6px 0 0', paddingLeft: 20, fontSize: 12, color: '#555' }}>
-                                                {resultado.errores.map((e, i) => <li key={i}>Fila {e.fila}: {e.motivo}</li>)}
-                                            </ul>
-                                        </details>
-                                    )}
-                                </>
+                    {/* ── ENTORNO DE TRABAJO (§9.2) ── */}
+                    <section style={styles.bloque}>
+                        <div style={styles.bloqueHeader}>
+                            <span style={styles.tituloSub}>Entorno de trabajo</span>
+                        </div>
+                        <div style={styles.notaBloque}>Producción son los datos reales del taller. Demostración es una base separada, ficticia, pensada para mostrar el sistema sin riesgo.</div>
+
+                        <div style={styles.gridEntornos}>
+                            {[
+                                { id: 'produccion', nombre: 'Producción', consecuencia: 'Los cambios aquí son reales y afectan al taller.' },
+                                { id: 'demo', nombre: 'Demostración', consecuencia: 'Los datos son ficticios y se pueden vaciar cuando quieras.' },
+                            ].map(env => {
+                                const info = infoEntornos?.[env.id];
+                                const activa = entorno === env.id;
+                                const disponible = info ? info.disponible : env.id === 'produccion';
+                                return (
+                                    <div
+                                        key={env.id}
+                                        onClick={() => disponible && cambiarEntorno(env.id)}
+                                        style={{
+                                            ...styles.tarjetaEntorno,
+                                            borderLeft: activa ? '3px solid #1c1d1b' : `1px solid ${t.bordeZona}`,
+                                            background: activa ? '#f0efeb' : t.superficie,
+                                            cursor: disponible ? 'pointer' : 'not-allowed',
+                                            opacity: disponible ? 1 : .55,
+                                        }}
+                                    >
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                                            <span style={{ fontSize: 13, fontWeight: 700 }}>{env.nombre}</span>
+                                            {activa && <span style={{ fontSize: 9.5, letterSpacing: '.08em', textTransform: 'uppercase', color: t.textoAtenuado2 }}>Activo</span>}
+                                        </div>
+                                        <div style={{ fontFamily: t.fontMono, fontSize: 10.5, color: t.textoAtenuado2, marginTop: 4 }}>
+                                            {info ? (disponible ? `${info.db} · ${info.host}` : 'no configurado (falta MONGO_URI_DEMO)') : '—'}
+                                        </div>
+                                        <div style={{ fontSize: 11, color: t.textoSecundario3, marginTop: 6 }}>{env.consecuencia}</div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </section>
+
+                    {/* ── JUEGO DE DEMOSTRACIÓN (§9.2) ── */}
+                    <section style={styles.bloque}>
+                        <div style={styles.bloqueHeader}>
+                            <span style={styles.tituloSub}>Juego de demostración</span>
+                            {entorno === 'demo' && estadoDemo && (
+                                <span style={{ fontSize: 11, color: t.textoAtenuado2 }}>
+                                    {estadoDemo.cargado ? `Cargado · ${estadoDemo.registros} registros` : 'No cargado'}
+                                    {estadoDemo.cargado && estadoDemo.fecha ? ` · ${new Date(estadoDemo.fecha).toLocaleString('es-CL')}` : ''}
+                                </span>
                             )}
                         </div>
-                        <button style={s.btnCerrar} onClick={() => setResultado(null)}>✕</button>
-                    </div>
-                )}
+                        <div style={styles.notaBloque}>8 grupos de contenido ficticio para explorar el sistema sin usar datos reales.</div>
 
-                <div style={s.doColumnas}>
-
-                    {/* ════════════════════════════════════════ EXPORTAR */}
-                    <div style={s.panel}>
-                        <div style={s.panelHeader}>
-                            <span style={s.panelTitulo}>📤 Exportar a Excel</span>
-                            <span style={{ fontSize: 12, color: '#888' }}>Un archivo con una hoja por módulo seleccionado</span>
-                        </div>
-
-                        {/* Seleccionar todos */}
-                        <label style={s.checkTodos}>
-                            <input
-                                type="checkbox"
-                                checked={todosSeleccionados}
-                                ref={el => el && (el.indeterminate = algunoSeleccionado && !todosSeleccionados)}
-                                onChange={toggleTodos}
-                                style={{ width: 16, height: 16 }}
-                            />
-                            <span style={{ fontWeight: 700, fontSize: 14 }}>Seleccionar todos</span>
-                        </label>
-
-                        <div style={s.listaExport}>
-                            {EXPORTABLES.map(mod => (
-                                <label key={mod.id} style={{ ...s.checkItem, background: seleccionados.has(mod.id) ? '#f0f7ff' : 'white', borderColor: seleccionados.has(mod.id) ? '#90caf9' : '#e0e0e0' }}>
-                                    <input
-                                        type="checkbox"
-                                        checked={seleccionados.has(mod.id)}
-                                        onChange={() => toggleSeleccion(mod.id)}
-                                        style={{ width: 16, height: 16, flexShrink: 0 }}
-                                    />
-                                    <span style={{ fontSize: 18 }}>{mod.icono}</span>
-                                    <div style={{ flex: 1, minWidth: 0 }}>
-                                        <div style={{ fontWeight: 600, fontSize: 14 }}>{mod.label}</div>
-                                        <div style={{ fontSize: 11, color: '#888', fontFamily: 'monospace', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{mod.desc}</div>
-                                    </div>
-                                </label>
+                        <div style={{ display: 'flex', flexDirection: 'column' }}>
+                            {GRUPOS_DEMO.map(g => (
+                                <div key={g.label} style={styles.filaGrupoDemo}>
+                                    <span style={{ fontSize: 12, fontWeight: 600, width: 190, flex: 'none' }}>{g.label}</span>
+                                    <span style={{ fontSize: 11, color: t.textoAtenuado2 }}>{g.detalle}</span>
+                                </div>
                             ))}
                         </div>
 
-                        {/* Filtros OT — solo si está seleccionado */}
+                        {entorno !== 'produccion' ? null : (
+                            <div style={styles.franjaDemoInerte}>Estas acciones solo están disponibles con el entorno de demostración activo.</div>
+                        )}
+
+                        <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+                            <button
+                                onClick={cargarDemo}
+                                disabled={entorno !== 'demo' || accionDemo !== null || estadoDemo?.cargado}
+                                style={entorno === 'demo' && !estadoDemo?.cargado && !accionDemo ? styles.btnSecundario : styles.btnDemoInerte}
+                            >
+                                {accionDemo === 'cargando' && !estadoDemo?.cargado ? 'Cargando…' : 'Cargar'}
+                            </button>
+                            <button
+                                onClick={cargarDemo}
+                                disabled={entorno !== 'demo' || accionDemo !== null || !estadoDemo?.cargado}
+                                style={entorno === 'demo' && estadoDemo?.cargado && !accionDemo ? styles.btnSecundario : styles.btnDemoInerte}
+                            >
+                                {accionDemo === 'cargando' && estadoDemo?.cargado ? 'Regenerando…' : 'Regenerar'}
+                            </button>
+                            <button
+                                onClick={() => setMostrarVaciar(v => !v)}
+                                disabled={entorno !== 'demo' || accionDemo !== null || !estadoDemo?.cargado}
+                                style={entorno === 'demo' && estadoDemo?.cargado && !accionDemo ? styles.btnDemoRojo : styles.btnDemoInerte}
+                            >
+                                Vaciar
+                            </button>
+                        </div>
+
+                        {mostrarVaciar && entorno === 'demo' && (
+                            <div style={styles.filtroOT}>
+                                <div style={{ fontSize: 11.5, color: t.textoSecundario2, marginBottom: 8 }}>
+                                    Esto borra todo el contenido del entorno demo. Escribe <strong>VACIAR</strong> para confirmar.
+                                </div>
+                                <div style={{ display: 'flex', gap: 8 }}>
+                                    <input
+                                        value={confirmVaciar}
+                                        onChange={e => setConfirmVaciar(e.target.value)}
+                                        placeholder="VACIAR"
+                                        style={{ ...styles.inputPlano, width: 140 }}
+                                    />
+                                    <button
+                                        onClick={vaciarDemo}
+                                        disabled={confirmVaciar !== 'VACIAR' || accionDemo !== null}
+                                        style={confirmVaciar === 'VACIAR' && !accionDemo ? styles.btnDemoRojo : styles.btnDemoInerte}
+                                    >
+                                        {accionDemo === 'vaciando' ? 'Vaciando…' : 'Confirmar vaciado'}
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                    </section>
+
+                    {/* ── EXPORTAR ── */}
+                    <section style={styles.bloque}>
+                        <div style={styles.bloqueHeader}>
+                            <span style={styles.tituloSub}>Exportar a Excel</span>
+                            <div style={{ display: 'flex', gap: 10 }}>
+                                <span onClick={seleccionarTodos} style={styles.linkAccion}>Todos</span>
+                                <span onClick={seleccionarNinguno} style={styles.linkAccion}>Ninguno</span>
+                            </div>
+                        </div>
+                        <div style={styles.notaBloque}>Un archivo con una hoja por módulo seleccionado.</div>
+
+                        <div>
+                            {EXPORTABLES.map(mod => {
+                                const sel = seleccionados.has(mod.id);
+                                return (
+                                    <div key={mod.id} onClick={() => toggleSeleccion(mod.id)} style={{ ...styles.filaSeleccion, background: sel ? t.hoverFila : 'transparent' }}>
+                                        <span style={{ fontFamily: t.fontMono, fontSize: 11, color: sel ? t.textoPrincipal : t.textoDeshabilitado, width: 12, flex: 'none' }}>{sel ? '×' : '·'}</span>
+                                        <span style={{ fontSize: 12.5, fontWeight: 600, width: 190, flex: 'none' }}>{mod.label}</span>
+                                        <span style={{ fontFamily: t.fontMono, fontSize: 10, color: t.textoAtenuado3, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{mod.desc}</span>
+                                    </div>
+                                );
+                            })}
+                        </div>
+
                         {seleccionados.has('ots') && (
-                            <div style={s.filtroOT}>
-                                <div style={{ fontWeight: 600, fontSize: 12, color: '#555', marginBottom: 8 }}>📋 Filtros para OTs (opcional)</div>
+                            <div style={styles.filtroOT}>
+                                <div style={styles.tituloSub}>Filtros para OT (opcional)</div>
                                 <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                                    <label style={s.labelFiltro}>Desde
-                                        <input type="date" style={s.inputFiltro} value={filtroOTs.desde} onChange={e => setFiltroOTs(p => ({ ...p, desde: e.target.value }))} />
+                                    <label style={styles.campoLabel}>
+                                        <span style={styles.etiqueta}>Desde</span>
+                                        <input type="date" style={styles.inputPlano} value={filtroOTs.desde} onChange={e => setFiltroOTs(p => ({ ...p, desde: e.target.value }))} />
                                     </label>
-                                    <label style={s.labelFiltro}>Hasta
-                                        <input type="date" style={s.inputFiltro} value={filtroOTs.hasta} onChange={e => setFiltroOTs(p => ({ ...p, hasta: e.target.value }))} />
+                                    <label style={styles.campoLabel}>
+                                        <span style={styles.etiqueta}>Hasta</span>
+                                        <input type="date" style={styles.inputPlano} value={filtroOTs.hasta} onChange={e => setFiltroOTs(p => ({ ...p, hasta: e.target.value }))} />
                                     </label>
-                                    <label style={s.labelFiltro}>Estado
-                                        <select style={s.inputFiltro} value={filtroOTs.estado} onChange={e => setFiltroOTs(p => ({ ...p, estado: e.target.value }))}>
+                                    <label style={styles.campoLabel}>
+                                        <span style={styles.etiqueta}>Estado</span>
+                                        <select style={styles.inputPlano} value={filtroOTs.estado} onChange={e => setFiltroOTs(p => ({ ...p, estado: e.target.value }))}>
                                             <option value="">Todos</option>
                                             {ESTADOS_OT.map(e => <option key={e}>{e}</option>)}
                                         </select>
@@ -195,43 +385,63 @@ export default function ImportExportScreen({ API, cargarDatos }) {
                         )}
 
                         <button
-                            style={{ ...s.btnExportar, opacity: algunoSeleccionado ? 1 : 0.4, cursor: algunoSeleccionado ? 'pointer' : 'not-allowed' }}
                             onClick={exportar}
                             disabled={!algunoSeleccionado || exportando}
+                            style={algunoSeleccionado ? styles.btnPrimario : styles.btnInerte}
                         >
-                            {exportando ? '⏳ Generando…' : `📤 Exportar${algunoSeleccionado ? ` (${seleccionados.size} módulo${seleccionados.size > 1 ? 's' : ''})` : ''}`}
+                            {exportando ? 'Generando…' : `Exportar${algunoSeleccionado ? ` (${seleccionados.size} módulo${seleccionados.size > 1 ? 's' : ''})` : ''}`}
                         </button>
-                    </div>
+                    </section>
 
-                    {/* ════════════════════════════════════════ IMPORTAR */}
-                    <div style={s.panel}>
-                        <div style={s.panelHeader}>
-                            <span style={s.panelTitulo}>📥 Importar desde Excel</span>
-                            <span style={{ fontSize: 12, color: '#888' }}>Descarga la plantilla, complétala y sube el archivo</span>
+                    {/* ── IMPORTAR ── */}
+                    <section style={styles.bloque}>
+                        <div style={styles.bloqueHeader}>
+                            <span style={styles.tituloSub}>Importar desde Excel</span>
                         </div>
+                        <div style={styles.notaBloque}>Descarga la plantilla, complétala y sube el archivo.</div>
 
-                        <div style={s.listaImport}>
-                            {IMPORTABLES.map(mod => (
-                                <div key={mod.id} style={s.importCard}>
-                                    <div style={s.importCardHeader}>
-                                        <span style={{ fontSize: 20 }}>{mod.icono}</span>
-                                        <div>
-                                            <div style={{ fontWeight: 700, fontSize: 14 }}>{mod.label}</div>
-                                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 4 }}>
-                                                {mod.columnas.map(c => (
-                                                    <span key={c} style={{ ...s.colBadge, background: c.includes('*') ? '#fff3e0' : '#f0f2f5', color: c.includes('*') ? '#e65100' : '#555' }}>
-                                                        {c}
-                                                    </span>
-                                                ))}
+                        {resultado && (
+                            <div style={{ ...styles.resultado, borderLeftColor: resultado.error ? t.rojo : (resultado.errores?.length ? t.ambar : t.verde) }}>
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                    <div style={{ fontSize: 12, fontWeight: 700 }}>{resultado.modulo}</div>
+                                    {resultado.error ? (
+                                        <div style={{ fontSize: 11.5, color: t.rojo, marginTop: 3 }}>{resultado.error}</div>
+                                    ) : (
+                                        <>
+                                            <div style={{ fontSize: 11.5, color: t.textoSecundario2, marginTop: 3 }}>
+                                                {resultado.insertados} importados de {resultado.total} filas
                                             </div>
-                                        </div>
+                                            {resultado.errores?.length > 0 && (
+                                                <details style={{ marginTop: 6 }}>
+                                                    <summary style={{ cursor: 'pointer', fontSize: 11, color: t.ambar }}>{resultado.errores.length} fila(s) con error</summary>
+                                                    <ul style={{ margin: '5px 0 0', paddingLeft: 16, fontFamily: t.fontMono, fontSize: 10.5, color: t.textoSecundario3, lineHeight: 1.6 }}>
+                                                        {resultado.errores.map((e, i) => <li key={i}>Fila {e.fila}: {e.motivo}</li>)}
+                                                    </ul>
+                                                </details>
+                                            )}
+                                        </>
+                                    )}
+                                </div>
+                                <span onClick={() => setResultado(null)} style={styles.xResultado}>×</span>
+                            </div>
+                        )}
+
+                        <div style={styles.gridImportar}>
+                            {IMPORTABLES.map(mod => (
+                                <div key={mod.id} style={styles.tarjeta}>
+                                    <div style={{ fontSize: 12.5, fontWeight: 700 }}>{mod.label}</div>
+                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 6 }}>
+                                        {mod.columnas.map(c => {
+                                            const oblig = c.includes('*');
+                                            return (
+                                                <span key={c} style={{ ...styles.badge, background: oblig ? '#fdf3e6' : '#f0efeb', color: oblig ? t.ambarBadge : t.textoSecundario3 }}>{c}</span>
+                                            );
+                                        })}
                                     </div>
-                                    <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-                                        <button style={s.btnPlantilla} onClick={() => descargarPlantilla(mod.id)}>
-                                            📋 Plantilla
-                                        </button>
-                                        <label style={{ ...s.btnImportar, opacity: cargando === mod.id ? 0.6 : 1, cursor: cargando === mod.id ? 'wait' : 'pointer' }}>
-                                            {cargando === mod.id ? '⏳ Cargando…' : '📥 Importar'}
+                                    <div style={{ display: 'flex', gap: 6, marginTop: 10 }}>
+                                        <button onClick={() => descargarPlantilla(mod.id)} style={styles.btnSecundario}>Plantilla</button>
+                                        <label style={{ ...styles.btnImportar, opacity: cargando === mod.id ? .6 : 1, cursor: cargando === mod.id ? 'wait' : 'pointer' }}>
+                                            {cargando === mod.id ? 'Cargando…' : 'Importar'}
                                             <input
                                                 type="file"
                                                 accept=".xlsx,.xls,.csv"
@@ -246,13 +456,10 @@ export default function ImportExportScreen({ API, cargarDatos }) {
                             ))}
                         </div>
 
-                        <div style={s.notaImport}>
-                            <b>* campo obligatorio</b><br />
-                            Suministros y Puestos: si el código/nombre ya existe, se actualiza.<br />
-                            Personal y Equipos: siempre crean registros nuevos.<br />
-                            Filas con error se omiten sin afectar las demás.
+                        <div style={styles.notaPie}>
+                            <strong>*</strong> obligatorio. Suministros y Puestos: si el código/nombre ya existe, se actualiza — Personal y Equipos siempre crean registros nuevos. Las filas con error se omiten sin afectar a las demás.
                         </div>
-                    </div>
+                    </section>
                 </div>
             </div>
         </div>
@@ -260,38 +467,45 @@ export default function ImportExportScreen({ API, cargarDatos }) {
 }
 
 const styles = {
-    page:        { background: '#f0f2f5', minHeight: '100vh', fontFamily: 'system-ui, sans-serif' },
-    header:      { background: '#1a2a3a', padding: '24px 28px' },
-    titulo:      { color: 'white', margin: 0, fontSize: 22, fontWeight: 700 },
-    subtitulo:   { color: 'rgba(255,255,255,0.6)', margin: '6px 0 0', fontSize: 14 },
-    body:        { padding: 24 },
+    raiz: { display: 'flex', flexDirection: 'column', height: '100%', minHeight: '720px', background: t.fondoMain, color: t.textoPrincipal, fontFamily: t.fontUi, fontSize: '13px' },
+    header: { flex: 'none', height: 46, display: 'flex', alignItems: 'center', gap: 16, padding: '0 16px', background: t.superficie, borderBottom: `1px solid ${t.bordeZona}` },
+    h1: { margin: 0, fontSize: 14, fontWeight: 700, letterSpacing: '-.01em', whiteSpace: 'nowrap' },
+    subtitulo: { fontSize: 11.5, color: t.textoAtenuado2, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
 
-    alerta:      { display: 'flex', gap: 12, border: '1px solid', borderRadius: 10, padding: '14px 18px', marginBottom: 20, alignItems: 'flex-start' },
-    btnCerrar:   { background: 'transparent', border: 'none', fontSize: 18, cursor: 'pointer', color: '#888', padding: 0, lineHeight: 1 },
+    scroll: { flex: 1, minHeight: 0, overflow: 'auto' },
+    columna: { maxWidth: 860, margin: '0 auto', padding: 16, display: 'flex', flexDirection: 'column', gap: 20 },
 
-    doColumnas:  { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 20 },
+    bloque: { background: t.superficie, border: `1px solid ${t.bordeZona}`, borderRadius: 2, padding: 16 },
+    bloqueHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' },
+    tituloSub: { fontSize: 9.5, letterSpacing: '.11em', textTransform: 'uppercase', color: t.textoAtenuado3 },
+    notaBloque: { fontSize: 11, color: t.textoAtenuado2, marginTop: 4, marginBottom: 10 },
+    linkAccion: { fontSize: 11, color: t.acento, cursor: 'pointer' },
 
-    panel:       { background: 'white', borderRadius: 12, padding: 24, boxShadow: '0 2px 8px rgba(0,0,0,.07)', display: 'flex', flexDirection: 'column', gap: 16 },
-    panelHeader: { display: 'flex', flexDirection: 'column', gap: 4, borderBottom: '1px solid #f0f0f0', paddingBottom: 14 },
-    panelTitulo: { fontWeight: 800, fontSize: 16, color: '#1a2a3a' },
+    filaSeleccion: { display: 'flex', alignItems: 'center', gap: 10, height: 34, padding: '0 8px', cursor: 'pointer', borderBottom: `1px solid ${t.hairlineFila}` },
 
-    checkTodos:  { display: 'flex', gap: 10, alignItems: 'center', cursor: 'pointer', padding: '10px 14px', background: '#f8fafc', borderRadius: 8, border: '1px solid #e0e0e0' },
-    listaExport: { display: 'flex', flexDirection: 'column', gap: 8 },
-    checkItem:   { display: 'flex', gap: 12, alignItems: 'center', cursor: 'pointer', padding: '10px 14px', borderRadius: 8, border: '1px solid', transition: 'all .15s' },
+    filtroOT: { marginTop: 12, padding: '10px 12px', background: t.fondoOT, borderRadius: 2 },
+    campoLabel: { display: 'flex', flexDirection: 'column', gap: 3 },
+    etiqueta: { fontSize: 9.5, letterSpacing: '.11em', textTransform: 'uppercase', color: t.textoAtenuado2 },
+    inputPlano: { height: 27, padding: '0 8px', border: `1px solid ${t.bordeInput}`, background: t.superficie, fontFamily: 'inherit', fontSize: 12, color: t.textoPrincipal, outline: 'none', borderRadius: 2 },
 
-    filtroOT:    { background: '#fffbf0', border: '1px solid #ffe082', borderRadius: 8, padding: '12px 16px' },
-    labelFiltro: { display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, fontWeight: 600, color: '#555' },
-    inputFiltro: { padding: '6px 10px', border: '1px solid #ddd', borderRadius: 6, fontSize: 13 },
+    btnPrimario: { width: '100%', height: 30, marginTop: 14, background: t.acento, border: `1px solid ${t.acento}`, color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', borderRadius: 2, fontFamily: t.fontUi },
+    btnInerte: { width: '100%', height: 30, marginTop: 14, background: t.inerteBg, border: `1px solid ${t.inerteBg}`, color: t.inerteTexto, fontSize: 12, fontWeight: 700, cursor: 'not-allowed', borderRadius: 2, fontFamily: t.fontUi },
+    btnSecundario: { height: 27, padding: '0 12px', background: t.superficie, border: `1px solid ${t.bordeZona}`, fontSize: 11.5, color: '#262622', cursor: 'pointer', borderRadius: 2, whiteSpace: 'nowrap', fontFamily: t.fontUi },
+    btnImportar: { height: 27, padding: '0 12px', background: t.acento, border: `1px solid ${t.acento}`, color: '#fff', fontSize: 11.5, fontWeight: 600, borderRadius: 2, whiteSpace: 'nowrap', textAlign: 'center', flex: 1, fontFamily: t.fontUi },
 
-    btnExportar: { background: '#1565c0', color: 'white', border: 'none', padding: '13px 20px', borderRadius: 8, fontWeight: 800, fontSize: 15, width: '100%', marginTop: 4 },
+    resultado: { display: 'flex', gap: 10, alignItems: 'flex-start', background: t.fondoMain, borderLeft: '2px solid', padding: '8px 10px', marginBottom: 12 },
+    xResultado: { fontFamily: t.fontMono, fontSize: 13, color: t.textoDeshabilitado, cursor: 'pointer', flex: 'none' },
 
-    listaImport: { display: 'flex', flexDirection: 'column', gap: 12 },
-    importCard:  { border: '1px solid #e8e8e8', borderRadius: 10, padding: '14px 16px' },
-    importCardHeader: { display: 'flex', gap: 12, alignItems: 'flex-start' },
-    colBadge:    { padding: '2px 7px', borderRadius: 10, fontSize: 11, fontFamily: 'monospace' },
+    gridImportar: { display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 },
+    tarjeta: { border: `1px solid ${t.bordeZona}`, borderRadius: 2, padding: '12px 14px' },
+    badge: { padding: '2px 6px', borderRadius: 2, fontSize: 10, fontFamily: t.fontMono },
 
-    btnPlantilla: { background: 'white', color: '#555', border: '1px solid #ddd', padding: '8px 14px', borderRadius: 6, cursor: 'pointer', fontWeight: 600, fontSize: 12, whiteSpace: 'nowrap' },
-    btnImportar:  { background: '#2e7d32', color: 'white', border: 'none', padding: '8px 16px', borderRadius: 6, fontWeight: 700, fontSize: 13, display: 'inline-block', textAlign: 'center', flex: 1 },
+    notaPie: { fontSize: 10.5, color: t.textoAtenuado2, marginTop: 14, lineHeight: 1.6 },
 
-    notaImport:  { background: '#f8fafc', border: '1px solid #e0e0e0', borderRadius: 8, padding: '12px 16px', fontSize: 12, color: '#555', lineHeight: 1.7 },
+    gridEntornos: { display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 },
+    tarjetaEntorno: { borderRadius: 2, padding: '12px 14px', transition: 'background .1s' },
+    filaGrupoDemo: { display: 'flex', alignItems: 'center', gap: 10, height: 28, borderBottom: `1px solid ${t.hairlineFila}` },
+    franjaDemoInerte: { fontSize: 11, color: t.textoAtenuado2, marginTop: 12, padding: '8px 10px', background: t.inerteBg, borderRadius: 2 },
+    btnDemoInerte: { height: 27, padding: '0 14px', background: t.inerteBg, border: `1px solid ${t.inerteBg}`, color: t.inerteTexto, fontSize: 11.5, fontWeight: 600, cursor: 'not-allowed', borderRadius: 2, fontFamily: t.fontUi },
+    btnDemoRojo: { height: 27, padding: '0 14px', background: t.superficie, border: `1px solid ${t.rojo}`, color: t.rojo, fontSize: 11.5, fontWeight: 600, cursor: 'pointer', borderRadius: 2, fontFamily: t.fontUi },
 };

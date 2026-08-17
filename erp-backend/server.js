@@ -1,13 +1,12 @@
 require('dotenv').config();
-const dns = require('dns');
-dns.setServers(['8.8.8.8', '1.1.1.1']);
 const express = require('express');
-const mongoose = require('mongoose');
 const cors = require('cors');
 const path = require('path');
 const fs = require('fs');
 const apiRoutes = require('./src/routes/index');
 const mailRoutes = require('./src/routes/mailRoutes');
+const resolverEntorno = require('./src/middlewares/entorno');
+const { inicializarConexiones } = require('./src/config/conexiones');
 const app = express();
 
 // Middlewares
@@ -20,16 +19,18 @@ app.use('/api/mail', mailRoutes);
 const dir = './uploads';
 if (!fs.existsSync(dir)) fs.mkdirSync(dir);
 
-// --- CONEXIÓN A MONGODB ---
-mongoose.connect(process.env.MONGO_URI)
-    .then(() => console.log("✅ CONECTADO A MONGODB ATLAS"))
-    .catch((err) => console.error("❌ ERROR CONECTANDO A MONGO:", err));
-
 // --- TODAS LAS RUTAS (Incluyendo /data, /solicitudes, /recursos, etc.) ---
-// Al usar /api aquí, todas las rutas del index.js heredarán el prefijo
-app.use('/api', apiRoutes);
+// resolverEntorno resuelve req.db/req.entorno según el header X-Entorno antes de
+// llegar a cualquier controlador (ver src/middlewares/entorno.js).
+app.use('/api', resolverEntorno, apiRoutes);
 
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-    console.log(`🚀 SERVIDOR ERP CORRIENDO EN PUERTO: ${PORT}`);
-});
+
+// --- CONEXIÓN A MONGODB (producción + demo) ---
+inicializarConexiones()
+    .then(() => {
+        app.listen(PORT, () => {
+            console.log(`🚀 SERVIDOR ERP CORRIENDO EN PUERTO: ${PORT}`);
+        });
+    })
+    .catch((err) => console.error("❌ ERROR CONECTANDO A MONGO:", err));

@@ -6,6 +6,29 @@ function NavPortalGuard({ children }) {
   if (loc.pathname.startsWith('/portal')) return null;
   return children;
 }
+
+// Franja ámbar persistente del modo demostración (§9.2 del README de rediseño): visible en
+// todas las pantallas internas mientras el entorno activo sea 'demo', nunca en el portal
+// cliente (esa pantalla la ve un cliente externo, no el staff que alterna de entorno).
+function BannerDemo({ entorno, onVolver }) {
+  const loc = useLocation();
+  if (loc.pathname.startsWith('/portal')) return null;
+  if (entorno !== 'demo') return null;
+  return (
+    <div style={stylesBannerDemo.franja}>
+      <span>Entorno de demostración — estos datos son ficticios, no son del taller.</span>
+      <span onClick={onVolver} style={stylesBannerDemo.accion}>Volver a producción</span>
+    </div>
+  );
+}
+
+const stylesBannerDemo = {
+  franja: {
+    flex: 'none', height: 26, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16,
+    background: 'oklch(0.55 0.11 65)', color: '#ffffff', fontSize: 11, fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif',
+  },
+  accion: { textDecoration: 'underline', cursor: 'pointer', fontWeight: 600 },
+};
 import axios from 'axios';
 import IngresoScreen from './screens/IngresoScreen';
 import TratamientoScreen from './screens/TratamientoScreen';
@@ -15,15 +38,23 @@ import RecursosScreen from './screens/RecursosScreen'
 import React, { useState, useEffect } from 'react';
 import ReporteTerreno from './screens/ReporteTerreno';
 import FinanzasScreen from './screens/FinanzasScreen';
+import ComprasScreen from './screens/ComprasScreen';
 import ContabilidadScreen from './screens/ContabilidadScreen';
 import ImportExportScreen from './screens/ImportExportScreen';
 import PortalClienteScreen from './screens/PortalClienteScreen';
 import useIsMobile from './hooks/useIsMobile';
+import { headerEntorno, obtenerEntorno, fijarEntorno } from './utils/entorno';
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 function App() {
   const isMobile = useIsMobile();
-  const [navAbierto, setNavAbierto] = useState(false);
+  const [navW, setNavW] = useState(186);
+  const [navOculta, setNavOculta] = useState(false);
+  const [ultimaSync, setUltimaSync] = useState(null);
+  const [entornoActivo] = useState(obtenerEntorno());
+  const volverAProduccion = () => { fijarEntorno('produccion'); window.location.reload(); };
+  const [cargando, setCargando] = useState(true);
+  const [errorCarga, setErrorCarga] = useState(null);
   const [recursos, setRecursos] = useState([]);
   const [ots, setOts] = useState([]);
   const [solicitudes, setSolicitudes] = useState([]);
@@ -53,8 +84,13 @@ function App() {
       if (d.puestos) setPuestosDB(d.puestos);
       if (d.plantillas) setPlantillas(d.plantillas);
 
+      setUltimaSync(new Date());
+      setErrorCarga(null);
     } catch (error) {
       console.error("❌ Error en la carga inicial:", error);
+      setErrorCarga('No se pudo conectar con el servidor.');
+    } finally {
+      setCargando(false);
     }
   };
   const actualizarRecurso = async (id, datosActualizados) => {
@@ -217,13 +253,22 @@ function App() {
       }
     }
   };
-  const estiloDinamico = ({ isActive }) => ({
-    ...styles.link,
-    color: isActive ? '#3498db' : 'white',
-    borderBottom: isActive ? '2px solid #3498db' : 'none',
-    padding: isMobile ? '12px 0' : '0 0 5px 0',
-    display: 'block'
-  });
+  // Shell nuevo (ver Incomplete web app design/design_handoff_panel_control/README.md, paso 1):
+  // nav lateral colapsable con ancho arrastrable, en vez del top bar. En móvil arranca colapsada.
+  useEffect(() => { if (isMobile) setNavOculta(true); }, [isMobile]);
+
+  const dragNav = (e) => {
+    e.preventDefault();
+    const x0 = e.clientX;
+    const w0 = navW;
+    const mover = (ev) => setNavW(Math.min(320, Math.max(132, Math.round(w0 + (ev.clientX - x0)))));
+    const soltar = () => {
+      window.removeEventListener('pointermove', mover);
+      window.removeEventListener('pointerup', soltar);
+    };
+    window.addEventListener('pointermove', mover);
+    window.addEventListener('pointerup', soltar);
+  };
   const guardarCalendarioGlobal = async (datos, id) => {
     // URL apuntando explícitamente al BACKEND (Puerto 5000)
     const API_URL = `${API}/calendarios`;
@@ -249,7 +294,7 @@ function App() {
 
       const respuesta = await fetch(`${API}/ots/${id}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...headerEntorno() },
         body: JSON.stringify(datosParaEnviar)
       });
 
@@ -294,7 +339,7 @@ function App() {
     try {
       const respuesta = await fetch(`${API}/ots/${id}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...headerEntorno() },
         body: JSON.stringify(otActualizada)
       });
 
@@ -456,7 +501,7 @@ function App() {
 
       const response = await fetch(`${API}/recursos/${recursoId}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...headerEntorno() },
         body: JSON.stringify(recursoActualizado)
       });
 
@@ -523,7 +568,9 @@ function App() {
         codigo: String(datos.codigo).trim(),
         descripcion: String(datos.descripcion).trim(),
         precio: Number(datos.precio) || 0,
-        categoria: datos.categoria || 'Insumo' // Usamos el default del Schema
+        categoria: datos.categoria || 'Insumo', // Usamos el default del Schema
+        stockActual: Number(datos.stockActual) || 0,
+        bodega: datos.bodega || ''
       };
 
       console.log("📡 Enviando datos limpios al servidor:", datosLimpios);
@@ -578,11 +625,33 @@ function App() {
       return false;
     }
   };
+  const ajustarStockSuministro = async (id, cantidad, motivo) => {
+    try {
+      const res = await axios.put(`${API}/suministros/${id}/stock`, { cantidad: Number(cantidad), motivo: motivo || '' });
+      if (res.status === 200) {
+        setSuministros(prev => prev.map(item => (item._id === id) ? res.data : item));
+        return true;
+      }
+    } catch (error) {
+      console.error("❌ Error al ajustar stock:", error.response?.data || error.message);
+      alert(error.response?.data?.error || 'No se pudo ajustar el stock');
+      return false;
+    }
+  };
+  const obtenerMovimientosStock = async (id) => {
+    try {
+      const res = await axios.get(`${API}/suministros/${id}/movimientos`);
+      return res.data;
+    } catch (error) {
+      console.error("❌ Error al obtener historial de stock:", error.response?.data || error.message);
+      return [];
+    }
+  };
   const crearPuesto = async (nombre, costoHora) => {
     try {
       const response = await fetch(`${API}/puestos`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...headerEntorno() },
         body: JSON.stringify({
           nombre: String(nombre).trim(),
           costoHora: parseFloat(costoHora),
@@ -609,12 +678,34 @@ function App() {
   const eliminarPuesto = async (id) => {
     if (!confirm("¿Seguro que deseas eliminar este puesto?")) return;
     try {
-      const response = await fetch(`${API_URL}/puestos/${id}`, { method: 'DELETE' }); // 🚩
+      const response = await fetch(`${API}/puestos/${id}`, { method: 'DELETE', headers: headerEntorno() });
       if (response.ok) {
         setPuestosDB(puestosDB.filter(p => p._id !== id));
       }
     } catch (error) {
       console.error("Error al eliminar puesto:", error);
+    }
+  };
+
+  // Paso 9 del rediseño (ver design_handoff_panel_control/README.md §4): variantes de disposición
+  // compartidas — la app no tiene usuarios ni roles, así que quedan globales para quien abra la pantalla.
+  const guardarDisposicionGlobal = async (datos) => {
+    try {
+      const res = await axios.post(`${API}/disposiciones`, datos);
+      return { exito: true, disposicion: res.data };
+    } catch (error) {
+      console.error('Error al guardar la disposición:', error);
+      return { exito: false };
+    }
+  };
+
+  const eliminarDisposicionGlobal = async (id) => {
+    try {
+      await axios.delete(`${API}/disposiciones/${id}`);
+      return true;
+    } catch (error) {
+      console.error('Error al eliminar la disposición:', error);
+      return false;
     }
   };
 
@@ -674,6 +765,25 @@ function App() {
     window.open(urlFinal, '_blank');
   };
 
+  const enviarPortalCliente = (solicitud) => {
+    if (!solicitud) return;
+    const telefono = (solicitud.numero || '').replace(/\D/g, '');
+    if (!telefono) {
+      alert('Esta solicitud no tiene un número de contacto registrado.');
+      return;
+    }
+
+    const urlBase = window.location.origin.trim();
+    const codigo = solicitud.numeroSolicitud || solicitud._id;
+    // tab=estado + q= precarga la búsqueda en el Portal del Cliente para que no tenga que tipear el código
+    const linkPortal = `${urlBase}/portal?tab=estado&q=${encodeURIComponent(codigo)}`;
+
+    const mensaje = `Hola ${solicitud.solicitante || ''}, puede seguir el estado de su solicitud *${codigo}* desde nuestro portal:\n\n${linkPortal}`;
+
+    const urlFinal = `https://wa.me/${telefono}?text=${encodeURIComponent(mensaje)}`;
+    window.open(urlFinal, '_blank');
+  };
+
   const actualizarProgresoTarea = async (otId, tareaId, evidencia) => {
     // 1. Buscamos la OT en el estado global
     const otPrev = oTs.find(o => o._id === otId);
@@ -692,53 +802,77 @@ function App() {
     await actualizarOtGlobal(otId, otActualizada);
   };
 
+  // Contadores reales del nav (nada de placeholders) — ver §1 del handoff.
+  const solicitudesSinOT = solicitudes.filter(s => !ots.find(o => String(o.solicitudId) === String(s._id))).length;
+  const otsProgramables = ots.filter(o => o.estado === 'Planificada' || o.estado === 'Aprobada' || o.estado === 'Programada').length;
+  const horaSync = ultimaSync ? ultimaSync.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' }) : '—';
+
+  const navOperacion = [
+    { to: '/', label: 'Ingreso', count: solicitudesSinOT },
+    { to: '/dashboard', label: 'Panel de control', count: ots.length },
+    { to: '/compras', label: 'Compras', count: null },
+    { to: '/gantt', label: 'Programación', count: otsProgramables },
+  ];
+  const navAdmin = [
+    { to: '/recursos', label: 'Recursos' },
+    { to: '/importexport', label: 'Importar / exportar' },
+  ];
+  // Fuera del nav por decisión del cliente (siguen existiendo y accesibles por URL directa):
+  // Finanzas (/finanzas), Contabilidad (/contabilidad), Portal cliente (/portal).
+
   return (
     <Router>
-      <div style={{ width: '100%', minHeight: '100vh', display: 'flex', flexDirection: 'column', overflowX: 'hidden' }}>
+      <div style={styles.raiz}>
         <NavPortalGuard>
-        <nav style={styles.nav}>
-          <div style={styles.logo}>ERP SISTEMA</div>
-          {isMobile ? (
+          {!navOculta && (
             <>
-              <button
-                onClick={() => setNavAbierto(v => !v)}
-                style={styles.hamburger}
-              >
-                {navAbierto ? '✕' : '☰'}
-              </button>
-              {navAbierto && (
-                <div style={styles.menuMobile}>
-                  <NavLink style={estiloDinamico} to="/" onClick={() => setNavAbierto(false)}>📥 SOLICITUDES</NavLink>
-                  <NavLink style={estiloDinamico} to="/dashboard" onClick={() => setNavAbierto(false)}>📊 CONTROL MACRO</NavLink>
-                  <NavLink style={estiloDinamico} to="/gantt" onClick={() => setNavAbierto(false)}>📅 PLANO (GANTT)</NavLink>
-                  <NavLink style={estiloDinamico} to="/recursos" onClick={() => setNavAbierto(false)}>🛠️ RECURSOS</NavLink>
-                  <NavLink style={estiloDinamico} to="/finanzas" onClick={() => setNavAbierto(false)}>💰 FINANZAS</NavLink>
-                  <NavLink style={estiloDinamico} to="/contabilidad" onClick={() => setNavAbierto(false)}>📒 CONTABILIDAD</NavLink>
-                  <NavLink style={estiloDinamico} to="/importexport" onClick={() => setNavAbierto(false)}>📊 EXCEL</NavLink>
-                  <NavLink style={estiloDinamico} to="/portal" onClick={() => setNavAbierto(false)}>🌐 PORTAL CLIENTE</NavLink>
+              <nav style={{ ...styles.nav, width: navW }}>
+                <div style={styles.navMarca}>
+                  <div style={styles.navMarcaTitulo}>Taller ERP</div>
                 </div>
-              )}
-            </>
-          ) : (
-            <>
-              <NavLink style={estiloDinamico} to="/">📥 SOLICITUDES</NavLink>
-              <NavLink style={estiloDinamico} to="/dashboard">📊 CONTROL MACRO</NavLink>
-              <NavLink style={estiloDinamico} to="/gantt">📅 PLANO (GANTT)</NavLink>
-              <NavLink style={estiloDinamico} to="/recursos">🛠️ RECURSOS</NavLink>
-              <NavLink style={estiloDinamico} to="/finanzas">💰 FINANZAS</NavLink>
-              <NavLink style={estiloDinamico} to="/contabilidad">📒 CONTABILIDAD</NavLink>
-              <NavLink style={estiloDinamico} to="/importexport">📊 EXCEL</NavLink>
-              <NavLink style={estiloDinamico} to="/portal">🌐 PORTAL CLIENTE</NavLink>
+                <div style={styles.navGrupo}>
+                  <div style={styles.navGrupoLabel}>Operación</div>
+                  {navOperacion.map(item => (
+                    <NavLink key={item.to} to={item.to}
+                      style={({ isActive }) => ({ ...styles.navItem, ...(isActive ? styles.navItemActivo : {}) })}>
+                      <span style={styles.navItemLabel}>{item.label}</span>
+                      {item.count !== null && <span style={styles.navItemCount}>{item.count}</span>}
+                    </NavLink>
+                  ))}
+                </div>
+                <div style={styles.navGrupo}>
+                  <div style={styles.navGrupoLabel}>Administración</div>
+                  {navAdmin.map(item => (
+                    <NavLink key={item.to} to={item.to}
+                      style={({ isActive }) => ({ ...styles.navItem, ...(isActive ? styles.navItemActivo : {}) })}>
+                      <span style={styles.navItemLabel}>{item.label}</span>
+                    </NavLink>
+                  ))}
+                </div>
+                <div style={styles.navPie}>Sincronizado {horaSync}</div>
+              </nav>
+              <div
+                onPointerDown={dragNav}
+                title="Arrastra para ajustar el ancho de la navegación"
+                style={styles.navSeparador}
+              />
             </>
           )}
-        </nav>
+          <div
+            onClick={() => setNavOculta(v => !v)}
+            title={navOculta ? 'Mostrar navegación' : 'Ocultar navegación'}
+            style={styles.navTira}
+          >
+            {navOculta ? '›' : '‹'}
+          </div>
         </NavPortalGuard>
 
-        <main style={{ flex: 1, width: '100%', backgroundColor: '#f0f2f5' }}>
+        <main style={styles.main}>
+          <BannerDemo entorno={entornoActivo} onVolver={volverAProduccion} />
           <Routes>
             <Route path="/reporte" element={<ReporteTerreno ots={ots} actualizarOtGlobal={actualizarOtGlobal} />} />
-            <Route path="/" element={<IngresoScreen solicitudes={solicitudes} liberarSolicitudManual={liberarSolicitudManual} crearSolicitudGlobal={crearSolicitudGlobal} setSolicitudes={setSolicitudes} cargarDatos={cargarDatos} API={API} ots={ots} />} />
-            <Route path="/dashboard" element={<DashboardScreen solicitudes={solicitudes} ots={ots} eliminarOT={eliminarOT} actualizarEstadoSolicitud={actualizarEstadoSolicitud} recursos={recursos} API={API} />} />
+            <Route path="/" element={<IngresoScreen solicitudes={solicitudes} liberarSolicitudManual={liberarSolicitudManual} crearSolicitudGlobal={crearSolicitudGlobal} setSolicitudes={setSolicitudes} cargarDatos={cargarDatos} API={API} ots={ots} enviarPortalCliente={enviarPortalCliente} cargando={cargando} errorCarga={errorCarga} />} />
+            <Route path="/dashboard" element={<DashboardScreen solicitudes={solicitudes} ots={ots} eliminarOT={eliminarOT} actualizarEstadoSolicitud={actualizarEstadoSolicitud} enviarASupervisor={enviarASupervisor} recursos={recursos} API={API} cargando={cargando} errorCarga={errorCarga} cargarDatos={cargarDatos} guardarDisposicionGlobal={guardarDisposicionGlobal} eliminarDisposicionGlobal={eliminarDisposicionGlobal} />} />
             <Route path="/tratamiento" element={<TratamientoScreen recurso={recursos} puestosDB={puestosDB} enviarASupervisor={enviarASupervisor} componentes={componentes} actualizarOtGlobal={actualizarOtGlobal} editarOtGlobal={editarOtGlobal} cargarDatos={cargarDatos} API={API} recursos={recursos} suministros={suministros} otSeleccionada={otSeleccionada} setOtSeleccionada={setOtSeleccionada} plantillas={plantillas} />} />
             <Route path="/gantt" element={<GanttScreen ots={ots} recursos={recursos} calendarios={calendarios} obtenerHorasParaDia={obtenerHorasParaDia} actualizarOtGlobal={actualizarOtGlobal} cargarDatos={cargarDatos} />} />
             <Route path="/recursos" element={
@@ -757,18 +891,24 @@ function App() {
                 crearSuministro={crearSuministro}
                 eliminarSuministro={eliminarSuministro}
                 actualizarSuministro={actualizarSuministro}
+                ajustarStockSuministro={ajustarStockSuministro}
+                obtenerMovimientosStock={obtenerMovimientosStock}
                 obtenerHorasParaDia={obtenerHorasParaDia}
                 puestosDB={puestosDB}
                 crearPuesto={crearPuesto}
                 eliminarPuesto={eliminarPuesto}
                 actualizarEquipo={actualizarEquipo}
                 guardarCalendarioGlobal={guardarCalendarioGlobal}
+                asignarCalendario={asignarCalendarioGlobal}
+                guardarCambioManualGlobal={guardarCambioManualGlobal}
+                eliminarCalendarioMaestro={eliminarCalendarioMaestro}
                 plantillas={plantillas}
                 crearPlantilla={crearPlantilla}
                 actualizarPlantilla={actualizarPlantilla}
                 eliminarPlantilla={eliminarPlantilla}
               />
             } />
+            <Route path="/compras" element={<ComprasScreen ots={ots} suministros={suministros} />} />
             <Route path="/finanzas" element={<FinanzasScreen recursos={recursos} API={API} />} />
             <Route path="/contabilidad" element={<ContabilidadScreen API={API} />} />
             <Route path="/importexport" element={<ImportExportScreen API={API} cargarDatos={cargarDatos} />} />
@@ -780,45 +920,43 @@ function App() {
   );
 }
 
+// Tokens del handoff (Incomplete web app design/design_handoff_panel_control/README.md §2) — definitivos, sin librerías nuevas.
+const fontUi = '"Helvetica Neue", Helvetica, Arial, sans-serif';
+const fontMono = 'ui-monospace, Menlo, monospace';
+
 const styles = {
+  raiz: {
+    display: 'flex', height: '100vh', minHeight: '720px', width: '100%',
+    background: '#eceae5', color: '#1a1a18', fontSize: '13px', fontFamily: fontUi,
+    overflow: 'hidden',
+  },
   nav: {
-    background: '#1a2a3a',
-    padding: '15px 20px',
-    display: 'flex',
-    gap: '40px',
-    alignItems: 'center',
-    position: 'sticky',
-    top: 0,
-    zIndex: 1000,
-    boxShadow: '0 2px 10px rgba(0,0,0,0.3)',
-    flexWrap: 'wrap'
+    flex: 'none', background: '#1c1d1b', color: '#e8e7e3',
+    display: 'flex', flexDirection: 'column', overflow: 'hidden',
   },
-  logo: { color: '#3498db', fontWeight: 'bold', fontSize: '20px', flex: 1 },
-  link: {
-    color: 'white',
-    textDecoration: 'none',
-    fontWeight: 'bold',
-    fontSize: '13px',
-    letterSpacing: '1px',
-    transition: 'all 0.3s ease'
+  navMarca: { padding: '14px 14px 12px', borderBottom: '1px solid rgba(255,255,255,.09)' },
+  navMarcaTitulo: { fontSize: '12.5px', fontWeight: 700, letterSpacing: '.14em', textTransform: 'uppercase', whiteSpace: 'nowrap' },
+  navGrupo: { padding: '12px 0 4px' },
+  navGrupoLabel: { fontSize: '9.5px', letterSpacing: '.13em', textTransform: 'uppercase', color: 'rgba(255,255,255,.34)', padding: '0 14px 6px', whiteSpace: 'nowrap' },
+  navItem: {
+    display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px',
+    padding: '6px 14px', fontSize: '12.5px', color: 'rgba(255,255,255,.72)', textDecoration: 'none',
+    borderLeft: '2px solid transparent', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
   },
-  hamburger: {
-    background: 'none',
-    border: '1px solid rgba(255,255,255,0.3)',
-    color: 'white',
-    fontSize: '20px',
-    padding: '6px 12px',
-    borderRadius: '6px',
-    cursor: 'pointer'
+  navItemActivo: { background: 'rgba(255,255,255,.10)', borderLeft: '2px solid oklch(0.62 0.11 250)', color: '#fff' },
+  navItemLabel: { minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' },
+  navItemCount: { fontFamily: fontMono, fontSize: '10.5px', color: 'rgba(255,255,255,.36)', flex: 'none' },
+  navPie: {
+    marginTop: 'auto', padding: '10px 14px', borderTop: '1px solid rgba(255,255,255,.09)',
+    fontSize: '10.5px', color: 'rgba(255,255,255,.38)', fontFamily: fontMono, whiteSpace: 'nowrap', overflow: 'hidden',
   },
-  menuMobile: {
-    width: '100%',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '0',
-    borderTop: '1px solid rgba(255,255,255,0.1)',
-    paddingTop: '10px'
-  }
+  navSeparador: { width: '5px', flex: 'none', cursor: 'col-resize', background: '#1c1d1b', borderRight: '1px solid rgba(0,0,0,.18)' },
+  navTira: {
+    width: '13px', flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center',
+    background: '#1c1d1b', color: 'rgba(255,255,255,.45)', fontFamily: fontMono, fontSize: '12px',
+    cursor: 'pointer', borderRight: '1px solid rgba(0,0,0,.20)',
+  },
+  main: { flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', background: '#f6f5f2', overflow: 'auto' },
 };
 
 export default App;

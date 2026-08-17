@@ -1,7 +1,8 @@
-const Solicitud = require('../models/Solicitud');
-const OT = require('../models/OT');
+const getSolicitud = require('../models/Solicitud');
+const getOT = require('../models/OT');
 
-async function generarNumeroSolicitud() {
+async function generarNumeroSolicitud(conn) {
+    const Solicitud = getSolicitud(conn);
     const anio = new Date().getFullYear();
     const prefijo = `SOL-${anio}-`;
     const ultima = await Solicitud.findOne({ numeroSolicitud: { $regex: new RegExp(`^${prefijo}`) } }).sort({ numeroSolicitud: -1 });
@@ -47,6 +48,8 @@ function otPublica(ot) {
 
 // GET /api/portal/buscar?q=<texto>
 exports.buscar = async (req, res) => {
+    const Solicitud = getSolicitud(req.db);
+    const OT = getOT(req.db);
     try {
         const q = (req.query.q || '').trim();
         if (!q) return res.json([]);
@@ -91,6 +94,8 @@ exports.buscar = async (req, res) => {
 
 // GET /api/portal/solicitud/:id  — detalle de una solicitud específica
 exports.detalle = async (req, res) => {
+    const Solicitud = getSolicitud(req.db);
+    const OT = getOT(req.db);
     try {
         const sol = await Solicitud.findById(req.params.id).lean();
         if (!sol) return res.status(404).json({ error: 'Solicitud no encontrada' });
@@ -118,6 +123,7 @@ exports.detalle = async (req, res) => {
 
 // POST /api/portal/solicitud  — crear nueva solicitud desde el portal del cliente
 exports.crearSolicitud = async (req, res) => {
+    const Solicitud = getSolicitud(req.db);
     try {
         const data = {};
         for (const key in req.body) {
@@ -127,7 +133,7 @@ exports.crearSolicitud = async (req, res) => {
             }
         }
         data.origen = data.origen || 'Portal Web';
-        data.numeroSolicitud = await generarNumeroSolicitud();
+        data.numeroSolicitud = await generarNumeroSolicitud(req.db);
 
         const nueva = new Solicitud(data);
         await nueva.save();

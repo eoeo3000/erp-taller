@@ -1,7 +1,8 @@
-const Equipo = require('../models/equiposHerramientas');
+const getEquipo = require('../models/equiposHerramientas');
 
 // 1. Obtener todos los equipos
 exports.getEquipos = async (req, res) => {
+    const Equipo = getEquipo(req.db);
     try {
         const equipos = await Equipo.find().sort({ fechaRegistro: -1 });
         res.json(equipos);
@@ -12,6 +13,7 @@ exports.getEquipos = async (req, res) => {
 
 // 2. Crear un nuevo equipo
 exports.crearEquipo = async (req, res) => {
+    const Equipo = getEquipo(req.db);
     try {
         const nuevoEquipo = new Equipo(req.body);
         await nuevoEquipo.save();
@@ -24,6 +26,7 @@ exports.crearEquipo = async (req, res) => {
 
 // 3. Eliminar un equipo
 exports.eliminarEquipo = async (req, res) => {
+    const Equipo = getEquipo(req.db);
     try {
         const { id } = req.params;
         const equipoEliminado = await Equipo.findByIdAndDelete(id);
@@ -39,6 +42,7 @@ exports.eliminarEquipo = async (req, res) => {
 };
 // 4. Actualizar un equipo existente
 exports.actualizarEquipo = async (req, res) => {
+    const Equipo = getEquipo(req.db);
     try {
         const { id } = req.params;
         const datosActualizados = req.body;

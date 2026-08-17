@@ -1,10 +1,11 @@
-const OT = require('../models/OT');
-const Recurso = require('../models/Recurso');
-const RegistroPago = require('../models/RegistroPagoRecurso');
+const getOT = require('../models/OT');
+const getRecurso = require('../models/Recurso');
+const getRegistroPago = require('../models/RegistroPagoRecurso');
 
 // ── CUENTAS POR COBRAR ──────────────────────────────────────────────────────
 
 exports.getCuentasPorCobrar = async (req, res) => {
+    const OT = getOT(req.db);
     try {
         const ots = await OT.find({
             estado: { $in: ['Con Informe', 'Pagada', 'Trabajo Terminado'] }
@@ -45,6 +46,7 @@ exports.getCuentasPorCobrar = async (req, res) => {
 // ── REGISTROS DE PAGO DE PERSONAL ──────────────────────────────────────────
 
 exports.getRegistrosPago = async (req, res) => {
+    const RegistroPago = getRegistroPago(req.db);
     try {
         const { mes, recursoId } = req.query; // mes: "YYYY-MM"
         const filtro = {};
@@ -59,6 +61,8 @@ exports.getRegistrosPago = async (req, res) => {
 };
 
 exports.crearRegistroPago = async (req, res) => {
+    const Recurso = getRecurso(req.db);
+    const RegistroPago = getRegistroPago(req.db);
     try {
         const { recursoId, fecha, horasTrabajadas, notas } = req.body;
         const recurso = await Recurso.findById(recursoId).lean();
@@ -87,6 +91,7 @@ exports.crearRegistroPago = async (req, res) => {
 };
 
 exports.actualizarRegistroPago = async (req, res) => {
+    const RegistroPago = getRegistroPago(req.db);
     try {
         const { id } = req.params;
         const registro = await RegistroPago.findByIdAndUpdate(id, req.body, { new: true });
@@ -98,6 +103,7 @@ exports.actualizarRegistroPago = async (req, res) => {
 };
 
 exports.eliminarRegistroPago = async (req, res) => {
+    const RegistroPago = getRegistroPago(req.db);
     try {
         await RegistroPago.findByIdAndDelete(req.params.id);
         res.json({ ok: true });
@@ -107,6 +113,7 @@ exports.eliminarRegistroPago = async (req, res) => {
 };
 
 exports.marcarPagado = async (req, res) => {
+    const RegistroPago = getRegistroPago(req.db);
     try {
         const { ids, fechaPago, metodoPago } = req.body;
         await RegistroPago.updateMany(
@@ -124,7 +131,7 @@ exports.marcarPagado = async (req, res) => {
                 await crearAsientoAutomatico('PagoPersonal', null, `PAGO-${fecha}`, [
                     { codigoCuenta: '5.1.2', debe: totalMO, haber: 0, glosa: `Pago personal ${fecha}` },
                     { codigoCuenta: '1.1.2', debe: 0, haber: totalMO, glosa: `Pago personal ${fecha}` }
-                ], fecha, `Pago mano de obra ${fecha} — ${registros.length} registros`);
+                ], fecha, `Pago mano de obra ${fecha} — ${registros.length} registros`, req.db);
             }
         } catch (eContab) {
             console.warn('[Contabilidad] Hook PagoPersonal falló (sin impacto en la operación):', eContab.message);
@@ -139,6 +146,8 @@ exports.marcarPagado = async (req, res) => {
 // ── RESUMEN MENSUAL ─────────────────────────────────────────────────────────
 
 exports.getResumenMensual = async (req, res) => {
+    const OT = getOT(req.db);
+    const RegistroPago = getRegistroPago(req.db);
     try {
         const { mes } = req.query; // "YYYY-MM"
 

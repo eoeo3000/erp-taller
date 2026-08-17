@@ -1,0 +1,3073 @@
+{
+  "puestos": [
+    {
+      "_ref": "p-mecanico",
+      "nombre": "Mecánico Industrial",
+      "costoHora": 9500,
+      "categoria": "Técnico"
+    },
+    {
+      "_ref": "p-soldador",
+      "nombre": "Soldadora Certificada",
+      "costoHora": 11000,
+      "categoria": "Técnico"
+    },
+    {
+      "_ref": "p-electrico",
+      "nombre": "Eléctrico Industrial",
+      "costoHora": 10500,
+      "categoria": "Técnico"
+    },
+    {
+      "_ref": "p-supervisor",
+      "nombre": "Supervisora de Terreno",
+      "costoHora": 14000,
+      "categoria": "Supervisión"
+    },
+    {
+      "_ref": "p-hidraulico",
+      "nombre": "Técnico Hidráulico",
+      "costoHora": 9800,
+      "categoria": "Técnico"
+    },
+    {
+      "_ref": "p-admin",
+      "nombre": "Administradora de Operaciones",
+      "costoHora": 8500,
+      "categoria": "Administrativo"
+    },
+    {
+      "_ref": "p-gruero",
+      "nombre": "Operador de Grúa",
+      "costoHora": 9000,
+      "categoria": "Operativo"
+    },
+    {
+      "_ref": "p-guardia",
+      "nombre": "Guardia de Faena",
+      "costoHora": 6500,
+      "categoria": "Operativo"
+    }
+  ],
+  "cuentasContables": [
+    {
+      "_ref": "c-1101",
+      "codigo": "1101",
+      "nombre": "Caja",
+      "tipo": "Activo",
+      "naturaleza": "Deudora",
+      "nivel": 1,
+      "padreRef": null,
+      "activa": true,
+      "descripcion": ""
+    },
+    {
+      "_ref": "c-1102",
+      "codigo": "1102",
+      "nombre": "Banco Estado Cta Cte",
+      "tipo": "Activo",
+      "naturaleza": "Deudora",
+      "nivel": 1,
+      "padreRef": null,
+      "activa": true,
+      "descripcion": ""
+    },
+    {
+      "_ref": "c-1201",
+      "codigo": "1201",
+      "nombre": "Clientes por Cobrar",
+      "tipo": "Activo",
+      "naturaleza": "Deudora",
+      "nivel": 1,
+      "padreRef": null,
+      "activa": true,
+      "descripcion": ""
+    },
+    {
+      "_ref": "c-1301",
+      "codigo": "1301",
+      "nombre": "Existencias (Insumos)",
+      "tipo": "Activo",
+      "naturaleza": "Deudora",
+      "nivel": 1,
+      "padreRef": null,
+      "activa": true,
+      "descripcion": ""
+    },
+    {
+      "_ref": "c-2101",
+      "codigo": "2101",
+      "nombre": "Proveedores por Pagar",
+      "tipo": "Pasivo",
+      "naturaleza": "Acreedora",
+      "nivel": 1,
+      "padreRef": null,
+      "activa": true,
+      "descripcion": ""
+    },
+    {
+      "_ref": "c-2102",
+      "codigo": "2102",
+      "nombre": "IVA Débito Fiscal",
+      "tipo": "Pasivo",
+      "naturaleza": "Acreedora",
+      "nivel": 1,
+      "padreRef": null,
+      "activa": true,
+      "descripcion": ""
+    },
+    {
+      "_ref": "c-2103",
+      "codigo": "2103",
+      "nombre": "IVA Crédito Fiscal",
+      "tipo": "Activo",
+      "naturaleza": "Deudora",
+      "nivel": 1,
+      "padreRef": null,
+      "activa": true,
+      "descripcion": ""
+    },
+    {
+      "_ref": "c-3101",
+      "codigo": "3101",
+      "nombre": "Capital",
+      "tipo": "Patrimonio",
+      "naturaleza": "Acreedora",
+      "nivel": 1,
+      "padreRef": null,
+      "activa": true,
+      "descripcion": ""
+    },
+    {
+      "_ref": "c-4101",
+      "codigo": "4101",
+      "nombre": "Ingresos por Servicios OT",
+      "tipo": "Ingreso",
+      "naturaleza": "Acreedora",
+      "nivel": 1,
+      "padreRef": null,
+      "activa": true,
+      "descripcion": ""
+    },
+    {
+      "_ref": "c-5101",
+      "codigo": "5101",
+      "nombre": "Costo de Mano de Obra",
+      "tipo": "Gasto",
+      "naturaleza": "Deudora",
+      "nivel": 1,
+      "padreRef": null,
+      "activa": true,
+      "descripcion": ""
+    },
+    {
+      "_ref": "c-5102",
+      "codigo": "5102",
+      "nombre": "Costo de Materiales",
+      "tipo": "Gasto",
+      "naturaleza": "Deudora",
+      "nivel": 1,
+      "padreRef": null,
+      "activa": true,
+      "descripcion": ""
+    },
+    {
+      "_ref": "c-5103",
+      "codigo": "5103",
+      "nombre": "Gastos Generales",
+      "tipo": "Gasto",
+      "naturaleza": "Deudora",
+      "nivel": 1,
+      "padreRef": null,
+      "activa": true,
+      "descripcion": ""
+    }
+  ],
+  "calendarios": [
+    {
+      "_ref": "cal-admin",
+      "nombre": "Turno Administrativo L-V",
+      "tipo": "semanal",
+      "cicloDias": 7,
+      "config": [
+        {
+          "dia": "lunes",
+          "nombreDia": "Lunes",
+          "activo": true,
+          "bloques": [
+            {
+              "inicio": "08:30",
+              "fin": "17:30"
+            }
+          ]
+        },
+        {
+          "dia": "martes",
+          "nombreDia": "Martes",
+          "activo": true,
+          "bloques": [
+            {
+              "inicio": "08:30",
+              "fin": "17:30"
+            }
+          ]
+        },
+        {
+          "dia": "miercoles",
+          "nombreDia": "Miércoles",
+          "activo": true,
+          "bloques": [
+            {
+              "inicio": "08:30",
+              "fin": "17:30"
+            }
+          ]
+        },
+        {
+          "dia": "jueves",
+          "nombreDia": "Jueves",
+          "activo": true,
+          "bloques": [
+            {
+              "inicio": "08:30",
+              "fin": "17:30"
+            }
+          ]
+        },
+        {
+          "dia": "viernes",
+          "nombreDia": "Viernes",
+          "activo": true,
+          "bloques": [
+            {
+              "inicio": "08:30",
+              "fin": "17:30"
+            }
+          ]
+        },
+        {
+          "dia": "sabado",
+          "nombreDia": "Sábado",
+          "activo": false,
+          "bloques": []
+        },
+        {
+          "dia": "domingo",
+          "nombreDia": "Domingo",
+          "activo": false,
+          "bloques": []
+        }
+      ]
+    },
+    {
+      "_ref": "cal-taller",
+      "nombre": "Turno Taller L-V + Sábado AM",
+      "tipo": "semanal",
+      "cicloDias": 7,
+      "config": [
+        {
+          "dia": "lunes",
+          "nombreDia": "Lunes",
+          "activo": true,
+          "bloques": [
+            {
+              "inicio": "08:00",
+              "fin": "18:00"
+            }
+          ]
+        },
+        {
+          "dia": "martes",
+          "nombreDia": "Martes",
+          "activo": true,
+          "bloques": [
+            {
+              "inicio": "08:00",
+              "fin": "18:00"
+            }
+          ]
+        },
+        {
+          "dia": "miercoles",
+          "nombreDia": "Miércoles",
+          "activo": true,
+          "bloques": [
+            {
+              "inicio": "08:00",
+              "fin": "18:00"
+            }
+          ]
+        },
+        {
+          "dia": "jueves",
+          "nombreDia": "Jueves",
+          "activo": true,
+          "bloques": [
+            {
+              "inicio": "08:00",
+              "fin": "18:00"
+            }
+          ]
+        },
+        {
+          "dia": "viernes",
+          "nombreDia": "Viernes",
+          "activo": true,
+          "bloques": [
+            {
+              "inicio": "08:00",
+              "fin": "18:00"
+            }
+          ]
+        },
+        {
+          "dia": "sabado",
+          "nombreDia": "Sábado",
+          "activo": true,
+          "bloques": [
+            {
+              "inicio": "08:00",
+              "fin": "13:00"
+            }
+          ]
+        },
+        {
+          "dia": "domingo",
+          "nombreDia": "Domingo",
+          "activo": false,
+          "bloques": []
+        }
+      ]
+    },
+    {
+      "_ref": "cal-rotativo",
+      "nombre": "Turno Terreno Rotativo 7x7",
+      "tipo": "rotativo",
+      "cicloDias": 14,
+      "config": [
+        {
+          "dia": "1",
+          "nombreDia": "Día 1",
+          "activo": true,
+          "bloques": [
+            {
+              "inicio": "08:00",
+              "fin": "19:00"
+            }
+          ]
+        },
+        {
+          "dia": "2",
+          "nombreDia": "Día 2",
+          "activo": true,
+          "bloques": [
+            {
+              "inicio": "08:00",
+              "fin": "19:00"
+            }
+          ]
+        },
+        {
+          "dia": "3",
+          "nombreDia": "Día 3",
+          "activo": true,
+          "bloques": [
+            {
+              "inicio": "08:00",
+              "fin": "19:00"
+            }
+          ]
+        },
+        {
+          "dia": "4",
+          "nombreDia": "Día 4",
+          "activo": true,
+          "bloques": [
+            {
+              "inicio": "08:00",
+              "fin": "19:00"
+            }
+          ]
+        },
+        {
+          "dia": "5",
+          "nombreDia": "Día 5",
+          "activo": true,
+          "bloques": [
+            {
+              "inicio": "08:00",
+              "fin": "19:00"
+            }
+          ]
+        },
+        {
+          "dia": "6",
+          "nombreDia": "Día 6",
+          "activo": true,
+          "bloques": [
+            {
+              "inicio": "08:00",
+              "fin": "19:00"
+            }
+          ]
+        },
+        {
+          "dia": "7",
+          "nombreDia": "Día 7",
+          "activo": true,
+          "bloques": [
+            {
+              "inicio": "08:00",
+              "fin": "19:00"
+            }
+          ]
+        },
+        {
+          "dia": "8",
+          "nombreDia": "Día 8",
+          "activo": false,
+          "bloques": []
+        },
+        {
+          "dia": "9",
+          "nombreDia": "Día 9",
+          "activo": false,
+          "bloques": []
+        },
+        {
+          "dia": "10",
+          "nombreDia": "Día 10",
+          "activo": false,
+          "bloques": []
+        },
+        {
+          "dia": "11",
+          "nombreDia": "Día 11",
+          "activo": false,
+          "bloques": []
+        },
+        {
+          "dia": "12",
+          "nombreDia": "Día 12",
+          "activo": false,
+          "bloques": []
+        },
+        {
+          "dia": "13",
+          "nombreDia": "Día 13",
+          "activo": false,
+          "bloques": []
+        },
+        {
+          "dia": "14",
+          "nombreDia": "Día 14",
+          "activo": false,
+          "bloques": []
+        }
+      ]
+    },
+    {
+      "_ref": "cal-nocturno",
+      "nombre": "Turno Nocturno Guardia",
+      "tipo": "semanal",
+      "cicloDias": 7,
+      "config": [
+        {
+          "dia": "lunes",
+          "nombreDia": "Lunes",
+          "activo": true,
+          "bloques": [
+            {
+              "inicio": "20:00",
+              "fin": "08:00"
+            }
+          ]
+        },
+        {
+          "dia": "martes",
+          "nombreDia": "Martes",
+          "activo": false,
+          "bloques": []
+        },
+        {
+          "dia": "miercoles",
+          "nombreDia": "Miércoles",
+          "activo": true,
+          "bloques": [
+            {
+              "inicio": "20:00",
+              "fin": "08:00"
+            }
+          ]
+        },
+        {
+          "dia": "jueves",
+          "nombreDia": "Jueves",
+          "activo": false,
+          "bloques": []
+        },
+        {
+          "dia": "viernes",
+          "nombreDia": "Viernes",
+          "activo": true,
+          "bloques": [
+            {
+              "inicio": "20:00",
+              "fin": "08:00"
+            }
+          ]
+        },
+        {
+          "dia": "sabado",
+          "nombreDia": "Sábado",
+          "activo": false,
+          "bloques": []
+        },
+        {
+          "dia": "domingo",
+          "nombreDia": "Domingo",
+          "activo": true,
+          "bloques": [
+            {
+              "inicio": "20:00",
+              "fin": "08:00"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "recursos": [
+    {
+      "_ref": "r-manuel",
+      "nombre": "Manuel Zúñiga",
+      "puesto": "Mecánico Industrial",
+      "tipo": "Interno",
+      "calendarioRef": "cal-taller",
+      "telefono": "+56 9 8123 4501",
+      "email": "manuel.zuniga@maestranzavergara.cl",
+      "tarifaHora": 9500,
+      "fechaInicioCiclo": {
+        "$diasTexto": -400
+      },
+      "ausencias": []
+    },
+    {
+      "_ref": "r-patricia",
+      "nombre": "Patricia Elgueta",
+      "puesto": "Soldadora Certificada",
+      "tipo": "Interno",
+      "calendarioRef": "cal-taller",
+      "telefono": "+56 9 8123 4502",
+      "email": "patricia.elgueta@maestranzavergara.cl",
+      "tarifaHora": 11000,
+      "fechaInicioCiclo": {
+        "$diasTexto": -380
+      },
+      "ausencias": []
+    },
+    {
+      "_ref": "r-jorge",
+      "nombre": "Jorge Huenchullán",
+      "puesto": "Eléctrico Industrial",
+      "tipo": "Interno",
+      "calendarioRef": "cal-taller",
+      "telefono": "+56 9 8123 4503",
+      "email": "jorge.huenchullan@maestranzavergara.cl",
+      "tarifaHora": 10500,
+      "fechaInicioCiclo": {
+        "$diasTexto": -300
+      },
+      "ausencias": []
+    },
+    {
+      "_ref": "r-camila",
+      "nombre": "Camila Reyes",
+      "puesto": "Supervisora de Terreno",
+      "tipo": "Interno",
+      "calendarioRef": "cal-rotativo",
+      "telefono": "+56 9 8123 4504",
+      "email": "camila.reyes@maestranzavergara.cl",
+      "tarifaHora": 14000,
+      "fechaInicioCiclo": {
+        "$diasTexto": -14
+      },
+      "ausencias": []
+    },
+    {
+      "_ref": "r-diego",
+      "nombre": "Diego Fuentes",
+      "puesto": "Técnico Hidráulico",
+      "tipo": "Interno",
+      "calendarioRef": "cal-rotativo",
+      "telefono": "+56 9 8123 4505",
+      "email": "diego.fuentes@maestranzavergara.cl",
+      "tarifaHora": 9800,
+      "fechaInicioCiclo": {
+        "$diasTexto": -14
+      },
+      "ausencias": []
+    },
+    {
+      "_ref": "r-francisca",
+      "nombre": "Francisca Molina",
+      "puesto": "Administradora de Operaciones",
+      "tipo": "Interno",
+      "calendarioRef": "cal-admin",
+      "telefono": "+56 9 8123 4506",
+      "email": "francisca.molina@maestranzavergara.cl",
+      "tarifaHora": 8500,
+      "fechaInicioCiclo": {
+        "$diasTexto": -600
+      },
+      "ausencias": []
+    },
+    {
+      "_ref": "r-rodrigo",
+      "nombre": "Rodrigo Salgado",
+      "puesto": "Operador de Grúa",
+      "tipo": "Externo",
+      "calendarioRef": "cal-taller",
+      "telefono": "+56 9 8123 4507",
+      "email": "rodrigo.salgado@maestranzavergara.cl",
+      "tarifaHora": 9000,
+      "fechaInicioCiclo": {
+        "$diasTexto": -90
+      },
+      "ausencias": []
+    },
+    {
+      "_ref": "r-ignacio",
+      "nombre": "Ignacio Bravo",
+      "puesto": "Guardia de Faena",
+      "tipo": "Interno",
+      "calendarioRef": "cal-nocturno",
+      "telefono": "+56 9 8123 4508",
+      "email": "ignacio.bravo@maestranzavergara.cl",
+      "tarifaHora": 6500,
+      "fechaInicioCiclo": {
+        "$diasTexto": -200
+      },
+      "ausencias": []
+    }
+  ],
+  "suministros": [
+    {
+      "_ref": "s-1",
+      "codigo": "SUM-001",
+      "descripcion": "Filtro de aceite hidráulico",
+      "precio": 12500,
+      "categoria": "Repuesto",
+      "stockActual": 40,
+      "stockReservado": 4,
+      "bodega": "Bodega Central"
+    },
+    {
+      "_ref": "s-2",
+      "codigo": "SUM-002",
+      "descripcion": "Correa trapezoidal A-52",
+      "precio": 8900,
+      "categoria": "Repuesto",
+      "stockActual": 25,
+      "stockReservado": 0,
+      "bodega": "Bodega Central"
+    },
+    {
+      "_ref": "s-3",
+      "codigo": "SUM-003",
+      "descripcion": "Electrodo 6011 3.2mm (kg)",
+      "precio": 3200,
+      "categoria": "Insumo",
+      "stockActual": 120,
+      "stockReservado": 20,
+      "bodega": "Bodega Central"
+    },
+    {
+      "_ref": "s-4",
+      "codigo": "SUM-004",
+      "descripcion": "Grasa multiuso EP2 (balde 15kg)",
+      "precio": 45000,
+      "categoria": "Insumo",
+      "stockActual": 8,
+      "stockReservado": 0,
+      "bodega": "Bodega Central"
+    },
+    {
+      "_ref": "s-5",
+      "codigo": "SUM-005",
+      "descripcion": "Guantes de cuero reforzado (par)",
+      "precio": 5200,
+      "categoria": "Insumo",
+      "stockActual": 60,
+      "stockReservado": 6,
+      "bodega": "Bodega Central"
+    },
+    {
+      "_ref": "s-6",
+      "codigo": "SUM-006",
+      "descripcion": "Disco de corte 14\"",
+      "precio": 4100,
+      "categoria": "Insumo",
+      "stockActual": 90,
+      "stockReservado": 10,
+      "bodega": "Bodega Central"
+    },
+    {
+      "_ref": "s-7",
+      "codigo": "SUM-007",
+      "descripcion": "Manguera hidráulica 1/2\" (metro)",
+      "precio": 6800,
+      "categoria": "Repuesto",
+      "stockActual": 150,
+      "stockReservado": 0,
+      "bodega": "Bodega Central"
+    },
+    {
+      "_ref": "s-8",
+      "codigo": "SUM-008",
+      "descripcion": "Rodamiento 6205-2RS",
+      "precio": 7300,
+      "categoria": "Repuesto",
+      "stockActual": 35,
+      "stockReservado": 2,
+      "bodega": "Bodega Central"
+    },
+    {
+      "_ref": "s-9",
+      "codigo": "SUM-009",
+      "descripcion": "Pintura anticorrosiva (galón)",
+      "precio": 28000,
+      "categoria": "Insumo",
+      "stockActual": 20,
+      "stockReservado": 0,
+      "bodega": "Bodega Central"
+    },
+    {
+      "_ref": "s-10",
+      "codigo": "SUM-010",
+      "descripcion": "Combustible diésel (litro)",
+      "precio": 980,
+      "categoria": "Transporte",
+      "stockActual": 500,
+      "stockReservado": 0,
+      "bodega": "Bodega Terreno"
+    },
+    {
+      "_ref": "s-11",
+      "codigo": "SUM-011",
+      "descripcion": "Retén de eje 40x62x8",
+      "precio": 4500,
+      "categoria": "Repuesto",
+      "stockActual": 22,
+      "stockReservado": 0,
+      "bodega": "Bodega Central"
+    },
+    {
+      "_ref": "s-12",
+      "codigo": "SUM-012",
+      "descripcion": "Cable de acero 3/8\" (metro)",
+      "precio": 3900,
+      "categoria": "Repuesto",
+      "stockActual": 200,
+      "stockReservado": 15,
+      "bodega": "Bodega Central"
+    },
+    {
+      "_ref": "s-13",
+      "codigo": "SUM-013",
+      "descripcion": "Solvente desengrasante (litro)",
+      "precio": 3400,
+      "categoria": "Insumo",
+      "stockActual": 45,
+      "stockReservado": 0,
+      "bodega": "Bodega Central"
+    },
+    {
+      "_ref": "s-14",
+      "codigo": "SUM-014",
+      "descripcion": "Perno hexagonal M12x60 (unidad)",
+      "precio": 350,
+      "categoria": "Repuesto",
+      "stockActual": 400,
+      "stockReservado": 40,
+      "bodega": "Bodega Central"
+    },
+    {
+      "_ref": "s-15",
+      "codigo": "SUM-015",
+      "descripcion": "Flete menor local",
+      "precio": 25000,
+      "categoria": "Transporte",
+      "stockActual": 0,
+      "stockReservado": 0,
+      "bodega": ""
+    },
+    {
+      "_ref": "s-16",
+      "codigo": "SUM-016",
+      "descripcion": "Cinta aislante eléctrica",
+      "precio": 1800,
+      "categoria": "Insumo",
+      "stockActual": 75,
+      "stockReservado": 0,
+      "bodega": "Bodega Central"
+    },
+    {
+      "_ref": "s-17",
+      "codigo": "SUM-017",
+      "descripcion": "Terminal eléctrico ojal 10mm",
+      "precio": 220,
+      "categoria": "Repuesto",
+      "stockActual": 300,
+      "stockReservado": 0,
+      "bodega": "Bodega Central"
+    },
+    {
+      "_ref": "s-18",
+      "codigo": "SUM-018",
+      "descripcion": "Arriendo de generador diario",
+      "precio": 55000,
+      "categoria": "Otro",
+      "stockActual": 0,
+      "stockReservado": 0,
+      "bodega": ""
+    }
+  ],
+  "equipos": [
+    {
+      "_ref": "e-1",
+      "nombre": "Grúa horquilla 3 ton",
+      "tipo": "Maquinaria",
+      "precio": 85000,
+      "codigo": "EQ-001",
+      "estado": "Disponible"
+    },
+    {
+      "_ref": "e-2",
+      "nombre": "Soldadora inversora 200A",
+      "tipo": "Herramienta",
+      "precio": 420000,
+      "codigo": "EQ-002",
+      "estado": "Disponible"
+    },
+    {
+      "_ref": "e-3",
+      "nombre": "Compresor de aire 50L",
+      "tipo": "Herramienta",
+      "precio": 180000,
+      "codigo": "EQ-003",
+      "estado": "En Uso"
+    },
+    {
+      "_ref": "e-4",
+      "nombre": "Multímetro digital industrial",
+      "tipo": "Instrumento",
+      "precio": 65000,
+      "codigo": "EQ-004",
+      "estado": "Disponible"
+    },
+    {
+      "_ref": "e-5",
+      "nombre": "Amoladora angular 7\"",
+      "tipo": "Herramienta",
+      "precio": 95000,
+      "codigo": "EQ-005",
+      "estado": "Disponible"
+    },
+    {
+      "_ref": "e-6",
+      "nombre": "Generador diésel 10kVA",
+      "tipo": "Maquinaria",
+      "precio": 1200000,
+      "codigo": "EQ-006",
+      "estado": "Mantenimiento"
+    },
+    {
+      "_ref": "e-7",
+      "nombre": "Grúa pluma 5 ton",
+      "tipo": "Maquinaria",
+      "precio": 2500000,
+      "codigo": "EQ-007",
+      "estado": "Reservado"
+    },
+    {
+      "_ref": "e-8",
+      "nombre": "Taladro magnético",
+      "tipo": "Herramienta",
+      "precio": 310000,
+      "codigo": "EQ-008",
+      "estado": "Disponible"
+    },
+    {
+      "_ref": "e-9",
+      "nombre": "Termómetro infrarrojo",
+      "tipo": "Instrumento",
+      "precio": 45000,
+      "codigo": "EQ-009",
+      "estado": "Disponible"
+    },
+    {
+      "_ref": "e-10",
+      "nombre": "Elevador hidráulico 2 ton",
+      "tipo": "Maquinaria",
+      "precio": 680000,
+      "codigo": "EQ-010",
+      "estado": "Disponible"
+    },
+    {
+      "_ref": "e-11",
+      "nombre": "Llave de impacto neumática",
+      "tipo": "Herramienta",
+      "precio": 150000,
+      "codigo": "EQ-011",
+      "estado": "En Uso"
+    },
+    {
+      "_ref": "e-12",
+      "nombre": "Manómetro de presión industrial",
+      "tipo": "Instrumento",
+      "precio": 38000,
+      "codigo": "EQ-012",
+      "estado": "Disponible"
+    },
+    {
+      "_ref": "e-13",
+      "nombre": "Andamio modular (juego)",
+      "tipo": "Herramienta",
+      "precio": 320000,
+      "codigo": "EQ-013",
+      "estado": "Reparación"
+    },
+    {
+      "_ref": "e-14",
+      "nombre": "Camioneta de servicio 4x4",
+      "tipo": "Maquinaria",
+      "precio": 18000000,
+      "codigo": "EQ-014",
+      "estado": "Disponible"
+    }
+  ],
+  "plantillas": [
+    {
+      "nombre": "Mantención preventiva bomba centrífuga",
+      "descripcion": "Revisión, lubricación y cambio de sellos de bomba centrífuga industrial",
+      "categoria": "Mantención",
+      "procedimiento": "Detener equipo, bloquear energía, desmontar acople, revisar sellos y rodamientos, lubricar y re-montar.",
+      "tareas": [
+        {
+          "descripcion": "Bloqueo y aislamiento de energía (LOTO)",
+          "puesto": "Eléctrico Industrial",
+          "duracion": 1
+        },
+        {
+          "descripcion": "Desmontaje de acople y revisión de sellos",
+          "puesto": "Mecánico Industrial",
+          "duracion": 3
+        },
+        {
+          "descripcion": "Lubricación y re-montaje",
+          "puesto": "Mecánico Industrial",
+          "duracion": 2
+        }
+      ],
+      "componentes": [
+        {
+          "codigo": "SUM-001",
+          "descripcion": "Filtro de aceite hidráulico",
+          "cantidad": 1,
+          "precio": 12500,
+          "tipo": "Material"
+        },
+        {
+          "codigo": "SUM-008",
+          "descripcion": "Rodamiento 6205-2RS",
+          "cantidad": 2,
+          "precio": 7300,
+          "tipo": "Material"
+        }
+      ],
+      "logistica": [
+        {
+          "descripcion": "Flete menor local",
+          "cantidad": 1,
+          "unidad": "viaje",
+          "precio": 25000
+        }
+      ]
+    },
+    {
+      "nombre": "Instalación tablero eléctrico industrial",
+      "descripcion": "Montaje y conexionado de tablero eléctrico trifásico",
+      "categoria": "Instalación",
+      "procedimiento": "Fijar gabinete, tender canalizaciones, conexionar protecciones, medir y certificar.",
+      "tareas": [
+        {
+          "descripcion": "Montaje de gabinete y canalizaciones",
+          "puesto": "Eléctrico Industrial",
+          "duracion": 4
+        },
+        {
+          "descripcion": "Conexionado de protecciones y circuitos",
+          "puesto": "Eléctrico Industrial",
+          "duracion": 5
+        },
+        {
+          "descripcion": "Pruebas de aislación y puesta en marcha",
+          "puesto": "Eléctrico Industrial",
+          "duracion": 2
+        }
+      ],
+      "componentes": [
+        {
+          "codigo": "SUM-016",
+          "descripcion": "Cinta aislante eléctrica",
+          "cantidad": 4,
+          "precio": 1800,
+          "tipo": "Material"
+        },
+        {
+          "codigo": "SUM-017",
+          "descripcion": "Terminal eléctrico ojal 10mm",
+          "cantidad": 20,
+          "precio": 220,
+          "tipo": "Material"
+        }
+      ],
+      "logistica": []
+    },
+    {
+      "nombre": "Reparación estructural de estanque",
+      "descripcion": "Reparación de plancha corroída y refuerzo estructural en estanque metálico",
+      "categoria": "Reparación",
+      "procedimiento": "Vaciar y ventilar estanque, cortar sección dañada, soldar refuerzo, pintar con anticorrosivo.",
+      "tareas": [
+        {
+          "descripcion": "Corte y preparación de plancha",
+          "puesto": "Soldadora Certificada",
+          "duracion": 3
+        },
+        {
+          "descripcion": "Soldadura de refuerzo estructural",
+          "puesto": "Soldadora Certificada",
+          "duracion": 6
+        },
+        {
+          "descripcion": "Pintura anticorrosiva",
+          "puesto": "Mecánico Industrial",
+          "duracion": 2
+        }
+      ],
+      "componentes": [
+        {
+          "codigo": "SUM-003",
+          "descripcion": "Electrodo 6011 3.2mm (kg)",
+          "cantidad": 5,
+          "precio": 3200,
+          "tipo": "Material"
+        },
+        {
+          "codigo": "SUM-009",
+          "descripcion": "Pintura anticorrosiva (galón)",
+          "cantidad": 2,
+          "precio": 28000,
+          "tipo": "Material"
+        }
+      ],
+      "logistica": [
+        {
+          "descripcion": "Arriendo de generador diario",
+          "cantidad": 2,
+          "unidad": "día",
+          "precio": 55000
+        }
+      ]
+    },
+    {
+      "nombre": "Overhaul de motor diésel",
+      "descripcion": "Reacondicionamiento completo de motor diésel estacionario",
+      "categoria": "Mantención mayor",
+      "procedimiento": "Desarmar motor, medir tolerancias, cambiar retenes y rodamientos críticos, re-armar y probar.",
+      "tareas": [
+        {
+          "descripcion": "Desarme y diagnóstico",
+          "puesto": "Mecánico Industrial",
+          "duracion": 4
+        },
+        {
+          "descripcion": "Cambio de retenes y rodamientos",
+          "puesto": "Mecánico Industrial",
+          "duracion": 6
+        },
+        {
+          "descripcion": "Re-armado y prueba en banco",
+          "puesto": "Técnico Hidráulico",
+          "duracion": 4
+        }
+      ],
+      "componentes": [
+        {
+          "codigo": "SUM-011",
+          "descripcion": "Retén de eje 40x62x8",
+          "cantidad": 3,
+          "precio": 4500,
+          "tipo": "Material"
+        },
+        {
+          "codigo": "SUM-004",
+          "descripcion": "Grasa multiuso EP2 (balde 15kg)",
+          "cantidad": 1,
+          "precio": 45000,
+          "tipo": "Material"
+        }
+      ],
+      "logistica": []
+    },
+    {
+      "nombre": "Inspección y certificación de grúa horquilla",
+      "descripcion": "Inspección técnica reglamentaria y certificación anual",
+      "categoria": "Inspección",
+      "procedimiento": "Revisar sistema hidráulico, frenos, horquillas y estructura; emitir informe de certificación.",
+      "tareas": [
+        {
+          "descripcion": "Inspección visual y funcional",
+          "puesto": "Supervisora de Terreno",
+          "duracion": 2
+        },
+        {
+          "descripcion": "Revisión de sistema hidráulico y frenos",
+          "puesto": "Técnico Hidráulico",
+          "duracion": 3
+        }
+      ],
+      "componentes": [],
+      "logistica": []
+    }
+  ],
+  "solicitudes": [
+    {
+      "_ref": "sol-1",
+      "solicitante": "Rodrigo Iturra",
+      "empresaSolicitante": "Pesquera Austral SpA",
+      "correo": "rodrigo.iturra@pesqueraaustral.cl",
+      "numero": "+56 9 7700000",
+      "direccion": "Camino Industrial s/n, Parque Industrial",
+      "descripcion": "Falla en bomba de agua de proceso, requiere revisión urgente",
+      "origen": "WhatsApp",
+      "estado": "Convertida",
+      "fechaHoraSolicitud": {
+        "$diasFecha": -60
+      },
+      "fechaEjecucionSolicitada": {
+        "$diasFecha": -50
+      },
+      "plazoEjecucionSugerido": "15 días hábiles",
+      "numeroSolicitud": "SOL-2026-0001"
+    },
+    {
+      "_ref": "sol-2",
+      "solicitante": "Marcela Vidal",
+      "empresaSolicitante": "Constructora Los Álamos",
+      "correo": "marcela.vidal@losalamos.cl",
+      "numero": "+56 9 7700137",
+      "direccion": "Camino Industrial s/n, Parque Industrial",
+      "descripcion": "Instalación de tablero eléctrico para nueva línea de producción",
+      "origen": "Correo",
+      "estado": "Convertida",
+      "fechaHoraSolicitud": {
+        "$diasFecha": -56
+      },
+      "fechaEjecucionSolicitada": {
+        "$diasFecha": -46
+      },
+      "plazoEjecucionSugerido": "15 días hábiles",
+      "numeroSolicitud": "SOL-2026-0002"
+    },
+    {
+      "_ref": "sol-3",
+      "solicitante": "Cristián Paredes",
+      "empresaSolicitante": "Frigorífico San Rafael",
+      "correo": "cristian.paredes@frigosanrafael.cl",
+      "numero": "+56 9 7700274",
+      "direccion": "Camino Industrial s/n, Parque Industrial",
+      "descripcion": "Reparación de estructura metálica con corrosión visible",
+      "origen": "Teléfono",
+      "estado": "Convertida",
+      "fechaHoraSolicitud": {
+        "$diasFecha": -52
+      },
+      "fechaEjecucionSolicitada": {
+        "$diasFecha": -42
+      },
+      "plazoEjecucionSugerido": "15 días hábiles",
+      "numeroSolicitud": "SOL-2026-0003"
+    },
+    {
+      "_ref": "sol-4",
+      "solicitante": "Andrea Muñoz",
+      "empresaSolicitante": "Minera Cordillera Ltda.",
+      "correo": "andrea.munoz@mineracordillera.cl",
+      "numero": "+56 9 7700411",
+      "direccion": "Camino Industrial s/n, Parque Industrial",
+      "descripcion": "Mantención preventiva programada de motor diésel de respaldo",
+      "origen": "WhatsApp",
+      "estado": "Convertida",
+      "fechaHoraSolicitud": {
+        "$diasFecha": -48
+      },
+      "fechaEjecucionSolicitada": {
+        "$diasFecha": -38
+      },
+      "plazoEjecucionSugerido": "15 días hábiles",
+      "numeroSolicitud": "SOL-2026-0004"
+    },
+    {
+      "_ref": "sol-5",
+      "solicitante": "Felipe Concha",
+      "empresaSolicitante": "Transportes Bío Bío",
+      "correo": "felipe.concha@transportesbiobio.cl",
+      "numero": "+56 9 7700548",
+      "direccion": "Camino Industrial s/n, Parque Industrial",
+      "descripcion": "Certificación anual de grúa horquilla",
+      "origen": "Correo",
+      "estado": "Convertida",
+      "fechaHoraSolicitud": {
+        "$diasFecha": -44
+      },
+      "fechaEjecucionSolicitada": {
+        "$diasFecha": -34
+      },
+      "plazoEjecucionSugerido": "15 días hábiles",
+      "numeroSolicitud": "SOL-2026-0005"
+    },
+    {
+      "_ref": "sol-6",
+      "solicitante": "Soledad Aravena",
+      "empresaSolicitante": "Agrícola Las Vertientes",
+      "correo": "soledad.aravena@lasvertientes.cl",
+      "numero": "+56 9 7700685",
+      "direccion": "Camino Industrial s/n, Parque Industrial",
+      "descripcion": "Fuga hidráulica en elevador de carga",
+      "origen": "Teléfono",
+      "estado": "Convertida",
+      "fechaHoraSolicitud": {
+        "$diasFecha": -40
+      },
+      "fechaEjecucionSolicitada": {
+        "$diasFecha": -30
+      },
+      "plazoEjecucionSugerido": "15 días hábiles",
+      "numeroSolicitud": "SOL-2026-0006"
+    },
+    {
+      "_ref": "sol-7",
+      "solicitante": "Hugo Sanhueza",
+      "empresaSolicitante": "Puerto Coronel Terminal",
+      "correo": "hugo.sanhueza@puertocoronel.cl",
+      "numero": "+56 9 7700822",
+      "direccion": "Camino Industrial s/n, Parque Industrial",
+      "descripcion": "Habilitación eléctrica de bodega nueva",
+      "origen": "WhatsApp",
+      "estado": "Convertida",
+      "fechaHoraSolicitud": {
+        "$diasFecha": -36
+      },
+      "fechaEjecucionSolicitada": {
+        "$diasFecha": -26
+      },
+      "plazoEjecucionSugerido": "15 días hábiles",
+      "numeroSolicitud": "SOL-2026-0007"
+    },
+    {
+      "_ref": "sol-8",
+      "solicitante": "Bárbara Ceballos",
+      "empresaSolicitante": "Viña Los Robles",
+      "correo": "barbara.ceballos@vinalosrobles.cl",
+      "numero": "+56 9 7700959",
+      "direccion": "Camino Industrial s/n, Parque Industrial",
+      "descripcion": "Soldadura de refuerzo en pasarela de acceso",
+      "origen": "Correo",
+      "estado": "Convertida",
+      "fechaHoraSolicitud": {
+        "$diasFecha": -32
+      },
+      "fechaEjecucionSolicitada": {
+        "$diasFecha": -22
+      },
+      "plazoEjecucionSugerido": "15 días hábiles",
+      "numeroSolicitud": "SOL-2026-0008"
+    },
+    {
+      "_ref": "sol-9",
+      "solicitante": "Rodrigo Iturra",
+      "empresaSolicitante": "Pesquera Austral SpA",
+      "correo": "rodrigo.iturra@pesqueraaustral.cl",
+      "numero": "+56 9 7701096",
+      "direccion": "Camino Industrial s/n, Parque Industrial",
+      "descripcion": "Diagnóstico de vibración anómala en compresor",
+      "origen": "Teléfono",
+      "estado": "Convertida",
+      "fechaHoraSolicitud": {
+        "$diasFecha": -28
+      },
+      "fechaEjecucionSolicitada": {
+        "$diasFecha": -18
+      },
+      "plazoEjecucionSugerido": "15 días hábiles",
+      "numeroSolicitud": "SOL-2026-0009"
+    },
+    {
+      "_ref": "sol-10",
+      "solicitante": "Marcela Vidal",
+      "empresaSolicitante": "Constructora Los Álamos",
+      "correo": "marcela.vidal@losalamos.cl",
+      "numero": "+56 9 7701233",
+      "direccion": "Camino Industrial s/n, Parque Industrial",
+      "descripcion": "Cambio de rodamientos en cinta transportadora",
+      "origen": "WhatsApp",
+      "estado": "Convertida",
+      "fechaHoraSolicitud": {
+        "$diasFecha": -24
+      },
+      "fechaEjecucionSolicitada": {
+        "$diasFecha": -14
+      },
+      "plazoEjecucionSugerido": "15 días hábiles",
+      "numeroSolicitud": "SOL-2026-0010"
+    },
+    {
+      "_ref": "sol-11",
+      "solicitante": "Cristián Paredes",
+      "empresaSolicitante": "Frigorífico San Rafael",
+      "correo": "cristian.paredes@frigosanrafael.cl",
+      "numero": "+56 9 7701370",
+      "direccion": "Camino Industrial s/n, Parque Industrial",
+      "descripcion": "Revisión de sistema de frenos de grúa pluma",
+      "origen": "Correo",
+      "estado": "Convertida",
+      "fechaHoraSolicitud": {
+        "$diasFecha": -20
+      },
+      "fechaEjecucionSolicitada": {
+        "$diasFecha": -10
+      },
+      "plazoEjecucionSugerido": "15 días hábiles",
+      "numeroSolicitud": "SOL-2026-0011"
+    },
+    {
+      "_ref": "sol-12",
+      "solicitante": "Andrea Muñoz",
+      "empresaSolicitante": "Minera Cordillera Ltda.",
+      "correo": "andrea.munoz@mineracordillera.cl",
+      "numero": "+56 9 7701507",
+      "direccion": "Camino Industrial s/n, Parque Industrial",
+      "descripcion": "Instalación de generador de respaldo",
+      "origen": "Teléfono",
+      "estado": "Convertida",
+      "fechaHoraSolicitud": {
+        "$diasFecha": -16
+      },
+      "fechaEjecucionSolicitada": {
+        "$diasFecha": -6
+      },
+      "plazoEjecucionSugerido": "15 días hábiles",
+      "numeroSolicitud": "SOL-2026-0012"
+    },
+    {
+      "_ref": "sol-13",
+      "solicitante": "Felipe Concha",
+      "empresaSolicitante": "Transportes Bío Bío",
+      "correo": "felipe.concha@transportesbiobio.cl",
+      "numero": "+56 9 7701644",
+      "direccion": "Camino Industrial s/n, Parque Industrial",
+      "descripcion": "Mantención correctiva de sistema hidráulico",
+      "origen": "WhatsApp",
+      "estado": "Pendiente",
+      "fechaHoraSolicitud": {
+        "$diasFecha": -12
+      },
+      "fechaEjecucionSolicitada": {
+        "$diasFecha": -2
+      },
+      "plazoEjecucionSugerido": "15 días hábiles",
+      "numeroSolicitud": "SOL-2026-0013"
+    },
+    {
+      "_ref": "sol-14",
+      "solicitante": "Soledad Aravena",
+      "empresaSolicitante": "Agrícola Las Vertientes",
+      "correo": "soledad.aravena@lasvertientes.cl",
+      "numero": "+56 9 7701781",
+      "direccion": "Camino Industrial s/n, Parque Industrial",
+      "descripcion": "Inspección de tuberías y válvulas de proceso",
+      "origen": "Correo",
+      "estado": "Pendiente",
+      "fechaHoraSolicitud": {
+        "$diasFecha": -8
+      },
+      "fechaEjecucionSolicitada": {
+        "$diasFecha": 2
+      },
+      "plazoEjecucionSugerido": "15 días hábiles",
+      "numeroSolicitud": "SOL-2026-0014"
+    }
+  ],
+  "ots": [
+    {
+      "_ref": "ot-1",
+      "numeroOT": "OT-2026-0001",
+      "solicitante": "Rodrigo Iturra",
+      "solicitudRef": "sol-1",
+      "descripcion": "Falla en bomba de agua de proceso, requiere revisión urgente",
+      "estado": "Pendiente",
+      "origen": "Manual",
+      "prioridad": "Baja",
+      "tecnicoAsignado": "",
+      "tareas": [],
+      "componentes": [],
+      "logistica": [],
+      "reportes": [],
+      "granTotal": 0,
+      "pago": {
+        "estado": "Pendiente",
+        "montoPagado": 0,
+        "fechaPago": "",
+        "metodoPago": "Transferencia",
+        "referencia": "",
+        "notas": "",
+        "anulado": false,
+        "fechaAnulacion": "",
+        "motivoAnulacion": ""
+      }
+    },
+    {
+      "_ref": "ot-2",
+      "numeroOT": "OT-2026-0002",
+      "solicitante": "Marcela Vidal",
+      "solicitudRef": "sol-2",
+      "descripcion": "Instalación de tablero eléctrico para nueva línea de producción",
+      "estado": "Tratada",
+      "origen": "Manual",
+      "prioridad": "Media",
+      "tecnicoAsignado": "",
+      "tareas": [],
+      "componentes": [],
+      "logistica": [],
+      "reportes": [],
+      "granTotal": 0,
+      "pago": {
+        "estado": "Pendiente",
+        "montoPagado": 0,
+        "fechaPago": "",
+        "metodoPago": "Transferencia",
+        "referencia": "",
+        "notas": "",
+        "anulado": false,
+        "fechaAnulacion": "",
+        "motivoAnulacion": ""
+      },
+      "informeEvaluacion": {
+        "fecha": {
+          "$diasTexto": -37
+        },
+        "responsable": "Camila Reyes",
+        "condicionesSitio": "Faena de Constructora Los Álamos, acceso vehicular disponible, EPP obligatorio.",
+        "fotos": [],
+        "recursosObservados": "Se requiere personal técnico y equipo de izaje menor.",
+        "riesgos": "Trabajo en altura media, superficies con aceite residual.",
+        "metodologia": "Bloqueo de energía, ejecución por etapas, verificación final con cliente.",
+        "completo": true,
+        "tareas": [],
+        "componentes": [],
+        "logistica": []
+      }
+    },
+    {
+      "_ref": "ot-3",
+      "numeroOT": "OT-2026-0003",
+      "solicitante": "Cristián Paredes",
+      "solicitudRef": "sol-3",
+      "descripcion": "Reparación de estructura metálica con corrosión visible",
+      "estado": "Planificada",
+      "origen": "Manual",
+      "prioridad": "Alta",
+      "tecnicoAsignado": "",
+      "tareas": [
+        {
+          "descripcion": "Diagnóstico inicial en terreno",
+          "puesto": "Mecánico Industrial",
+          "duracion": 2,
+          "fecha": {
+            "$diasTexto": -14
+          },
+          "hora": "08:30",
+          "operarioRefs": [
+            "r-manuel"
+          ],
+          "valorHora": 9500,
+          "completada": false
+        },
+        {
+          "descripcion": "Ejecución de trabajo principal",
+          "puesto": "Soldadora Certificada",
+          "duracion": 4,
+          "fecha": {
+            "$diasTexto": -13
+          },
+          "hora": "09:00",
+          "operarioRefs": [
+            "r-patricia",
+            "r-jorge"
+          ],
+          "valorHora": 11000,
+          "completada": false
+        }
+      ],
+      "componentes": [
+        {
+          "codigo": "SUM-001",
+          "descripcion": "Filtro de aceite hidráulico",
+          "cantidad": 2,
+          "precio": 12500,
+          "tipo": "Material"
+        },
+        {
+          "codigo": "EQ-002",
+          "descripcion": "Soldadora inversora 200A",
+          "cantidad": 1,
+          "precio": 0,
+          "tipo": "Equipo"
+        }
+      ],
+      "logistica": [
+        {
+          "unidad": "Camioneta 01",
+          "patente": "HJKL-23",
+          "descripcion": "Traslado de personal y equipo",
+          "cantidad": 1,
+          "precio": 25000
+        }
+      ],
+      "reportes": [],
+      "granTotal": 113000,
+      "pago": {
+        "estado": "Pendiente",
+        "montoPagado": 0,
+        "fechaPago": "",
+        "metodoPago": "Transferencia",
+        "referencia": "",
+        "notas": "",
+        "anulado": false,
+        "fechaAnulacion": "",
+        "motivoAnulacion": ""
+      },
+      "informeEvaluacion": {
+        "fecha": {
+          "$diasTexto": -34
+        },
+        "responsable": "Camila Reyes",
+        "condicionesSitio": "Faena de Frigorífico San Rafael, acceso vehicular disponible, EPP obligatorio.",
+        "fotos": [],
+        "recursosObservados": "Se requiere personal técnico y equipo de izaje menor.",
+        "riesgos": "Trabajo en altura media, superficies con aceite residual.",
+        "metodologia": "Bloqueo de energía, ejecución por etapas, verificación final con cliente.",
+        "completo": true,
+        "tareas": [],
+        "componentes": [],
+        "logistica": []
+      }
+    },
+    {
+      "_ref": "ot-4",
+      "numeroOT": "OT-2026-0004",
+      "solicitante": "Andrea Muñoz",
+      "solicitudRef": "sol-4",
+      "descripcion": "Mantención preventiva programada de motor diésel de respaldo",
+      "estado": "Aprobada",
+      "origen": "Manual",
+      "prioridad": "Urgente",
+      "tecnicoAsignado": "",
+      "tareas": [
+        {
+          "descripcion": "Diagnóstico inicial en terreno",
+          "puesto": "Mecánico Industrial",
+          "duracion": 2,
+          "fecha": {
+            "$diasTexto": -11
+          },
+          "hora": "08:30",
+          "operarioRefs": [
+            "r-manuel"
+          ],
+          "valorHora": 9500,
+          "completada": false
+        },
+        {
+          "descripcion": "Ejecución de trabajo principal",
+          "puesto": "Soldadora Certificada",
+          "duracion": 4,
+          "fecha": {
+            "$diasTexto": -10
+          },
+          "hora": "09:00",
+          "operarioRefs": [
+            "r-patricia",
+            "r-jorge"
+          ],
+          "valorHora": 11000,
+          "completada": false
+        }
+      ],
+      "componentes": [
+        {
+          "codigo": "SUM-001",
+          "descripcion": "Filtro de aceite hidráulico",
+          "cantidad": 2,
+          "precio": 12500,
+          "tipo": "Material"
+        },
+        {
+          "codigo": "EQ-002",
+          "descripcion": "Soldadora inversora 200A",
+          "cantidad": 1,
+          "precio": 0,
+          "tipo": "Equipo"
+        }
+      ],
+      "logistica": [
+        {
+          "unidad": "Camioneta 01",
+          "patente": "HJKL-23",
+          "descripcion": "Traslado de personal y equipo",
+          "cantidad": 1,
+          "precio": 25000
+        }
+      ],
+      "reportes": [],
+      "granTotal": 113000,
+      "pago": {
+        "estado": "Pendiente",
+        "montoPagado": 0,
+        "fechaPago": "",
+        "metodoPago": "Transferencia",
+        "referencia": "",
+        "notas": "",
+        "anulado": false,
+        "fechaAnulacion": "",
+        "motivoAnulacion": ""
+      },
+      "informeEvaluacion": {
+        "fecha": {
+          "$diasTexto": -31
+        },
+        "responsable": "Camila Reyes",
+        "condicionesSitio": "Faena de Minera Cordillera Ltda., acceso vehicular disponible, EPP obligatorio.",
+        "fotos": [],
+        "recursosObservados": "Se requiere personal técnico y equipo de izaje menor.",
+        "riesgos": "Trabajo en altura media, superficies con aceite residual.",
+        "metodologia": "Bloqueo de energía, ejecución por etapas, verificación final con cliente.",
+        "completo": true,
+        "tareas": [],
+        "componentes": [],
+        "logistica": []
+      }
+    },
+    {
+      "_ref": "ot-5",
+      "numeroOT": "OT-2026-0005",
+      "solicitante": "Felipe Concha",
+      "solicitudRef": "sol-5",
+      "descripcion": "Certificación anual de grúa horquilla",
+      "estado": "Rechazada",
+      "origen": "Manual",
+      "prioridad": "Baja",
+      "tecnicoAsignado": "",
+      "tareas": [
+        {
+          "descripcion": "Diagnóstico inicial en terreno",
+          "puesto": "Mecánico Industrial",
+          "duracion": 2,
+          "fecha": {
+            "$diasTexto": -8
+          },
+          "hora": "08:30",
+          "operarioRefs": [
+            "r-manuel"
+          ],
+          "valorHora": 9500,
+          "completada": false
+        },
+        {
+          "descripcion": "Ejecución de trabajo principal",
+          "puesto": "Soldadora Certificada",
+          "duracion": 4,
+          "fecha": {
+            "$diasTexto": -7
+          },
+          "hora": "09:00",
+          "operarioRefs": [
+            "r-patricia",
+            "r-jorge"
+          ],
+          "valorHora": 11000,
+          "completada": false
+        }
+      ],
+      "componentes": [
+        {
+          "codigo": "SUM-001",
+          "descripcion": "Filtro de aceite hidráulico",
+          "cantidad": 2,
+          "precio": 12500,
+          "tipo": "Material"
+        },
+        {
+          "codigo": "EQ-002",
+          "descripcion": "Soldadora inversora 200A",
+          "cantidad": 1,
+          "precio": 0,
+          "tipo": "Equipo"
+        }
+      ],
+      "logistica": [
+        {
+          "unidad": "Camioneta 01",
+          "patente": "HJKL-23",
+          "descripcion": "Traslado de personal y equipo",
+          "cantidad": 1,
+          "precio": 25000
+        }
+      ],
+      "reportes": [],
+      "granTotal": 113000,
+      "pago": {
+        "estado": "Pendiente",
+        "montoPagado": 0,
+        "fechaPago": "",
+        "metodoPago": "Transferencia",
+        "referencia": "",
+        "notas": "",
+        "anulado": false,
+        "fechaAnulacion": "",
+        "motivoAnulacion": ""
+      },
+      "informeEvaluacion": {
+        "fecha": {
+          "$diasTexto": -28
+        },
+        "responsable": "Camila Reyes",
+        "condicionesSitio": "Faena de Transportes Bío Bío, acceso vehicular disponible, EPP obligatorio.",
+        "fotos": [],
+        "recursosObservados": "Se requiere personal técnico y equipo de izaje menor.",
+        "riesgos": "Trabajo en altura media, superficies con aceite residual.",
+        "metodologia": "Bloqueo de energía, ejecución por etapas, verificación final con cliente.",
+        "completo": true,
+        "tareas": [],
+        "componentes": [],
+        "logistica": []
+      }
+    },
+    {
+      "_ref": "ot-6",
+      "numeroOT": "OT-2026-0006",
+      "solicitante": "Soledad Aravena",
+      "solicitudRef": "sol-6",
+      "descripcion": "Fuga hidráulica en elevador de carga",
+      "estado": "Programada",
+      "origen": "Manual",
+      "prioridad": "Media",
+      "tecnicoAsignado": "",
+      "tareas": [
+        {
+          "descripcion": "Diagnóstico inicial en terreno",
+          "puesto": "Mecánico Industrial",
+          "duracion": 2,
+          "fecha": {
+            "$diasTexto": -5
+          },
+          "hora": "08:30",
+          "operarioRefs": [
+            "r-manuel"
+          ],
+          "valorHora": 9500,
+          "completada": false
+        },
+        {
+          "descripcion": "Ejecución de trabajo principal",
+          "puesto": "Soldadora Certificada",
+          "duracion": 4,
+          "fecha": {
+            "$diasTexto": -4
+          },
+          "hora": "09:00",
+          "operarioRefs": [
+            "r-patricia",
+            "r-jorge"
+          ],
+          "valorHora": 11000,
+          "completada": false
+        }
+      ],
+      "componentes": [
+        {
+          "codigo": "SUM-001",
+          "descripcion": "Filtro de aceite hidráulico",
+          "cantidad": 2,
+          "precio": 12500,
+          "tipo": "Material"
+        },
+        {
+          "codigo": "EQ-002",
+          "descripcion": "Soldadora inversora 200A",
+          "cantidad": 1,
+          "precio": 0,
+          "tipo": "Equipo"
+        }
+      ],
+      "logistica": [
+        {
+          "unidad": "Camioneta 01",
+          "patente": "HJKL-23",
+          "descripcion": "Traslado de personal y equipo",
+          "cantidad": 1,
+          "precio": 25000
+        }
+      ],
+      "reportes": [],
+      "granTotal": 113000,
+      "pago": {
+        "estado": "Pendiente",
+        "montoPagado": 0,
+        "fechaPago": "",
+        "metodoPago": "Transferencia",
+        "referencia": "",
+        "notas": "",
+        "anulado": false,
+        "fechaAnulacion": "",
+        "motivoAnulacion": ""
+      },
+      "informeEvaluacion": {
+        "fecha": {
+          "$diasTexto": -25
+        },
+        "responsable": "Camila Reyes",
+        "condicionesSitio": "Faena de Agrícola Las Vertientes, acceso vehicular disponible, EPP obligatorio.",
+        "fotos": [],
+        "recursosObservados": "Se requiere personal técnico y equipo de izaje menor.",
+        "riesgos": "Trabajo en altura media, superficies con aceite residual.",
+        "metodologia": "Bloqueo de energía, ejecución por etapas, verificación final con cliente.",
+        "completo": true,
+        "tareas": [],
+        "componentes": [],
+        "logistica": []
+      },
+      "fechaInicio": {
+        "$diasFecha": -3
+      },
+      "fechaEntrega": {
+        "$diasFecha": 5
+      }
+    },
+    {
+      "_ref": "ot-7",
+      "numeroOT": "OT-2026-0007",
+      "solicitante": "Hugo Sanhueza",
+      "solicitudRef": "sol-7",
+      "descripcion": "Habilitación eléctrica de bodega nueva",
+      "estado": "En Ejecución",
+      "origen": "Manual",
+      "prioridad": "Alta",
+      "tecnicoAsignado": "",
+      "tareas": [
+        {
+          "descripcion": "Diagnóstico inicial en terreno",
+          "puesto": "Mecánico Industrial",
+          "duracion": 2,
+          "fecha": {
+            "$diasTexto": -2
+          },
+          "hora": "08:30",
+          "operarioRefs": [
+            "r-manuel"
+          ],
+          "valorHora": 9500,
+          "completada": false
+        },
+        {
+          "descripcion": "Ejecución de trabajo principal",
+          "puesto": "Soldadora Certificada",
+          "duracion": 4,
+          "fecha": {
+            "$diasTexto": -1
+          },
+          "hora": "09:00",
+          "operarioRefs": [
+            "r-patricia",
+            "r-jorge"
+          ],
+          "valorHora": 11000,
+          "completada": false
+        }
+      ],
+      "componentes": [
+        {
+          "codigo": "SUM-001",
+          "descripcion": "Filtro de aceite hidráulico",
+          "cantidad": 2,
+          "precio": 12500,
+          "tipo": "Material"
+        },
+        {
+          "codigo": "EQ-002",
+          "descripcion": "Soldadora inversora 200A",
+          "cantidad": 1,
+          "precio": 0,
+          "tipo": "Equipo"
+        }
+      ],
+      "logistica": [
+        {
+          "unidad": "Camioneta 01",
+          "patente": "HJKL-23",
+          "descripcion": "Traslado de personal y equipo",
+          "cantidad": 1,
+          "precio": 25000
+        }
+      ],
+      "reportes": [
+        {
+          "fecha": {
+            "$diasFecha": -3
+          },
+          "tareaId": "",
+          "comentario": "Avance registrado en terreno — visita 1.",
+          "foto": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI2NDAiIGhlaWdodD0iNDgwIj48cmVjdCB3aWR0aD0iNjQwIiBoZWlnaHQ9IjQ4MCIgZmlsbD0iIzU3NTY0ZiIvPjx0ZXh0IHg9IjMyMCIgeT0iMjQwIiBmb250LWZhbWlseT0iSGVsdmV0aWNhLEFyaWFsLHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMjgiIGZpbGw9IiNmZmZmZmYiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGRvbWluYW50LWJhc2VsaW5lPSJtaWRkbGUiPlJlcG9ydGUgMTwvdGV4dD48L3N2Zz4=",
+          "usuario": "Camila Reyes"
+        },
+        {
+          "fecha": {
+            "$diasFecha": -2
+          },
+          "tareaId": "",
+          "comentario": "Avance registrado en terreno — visita 2.",
+          "foto": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI2NDAiIGhlaWdodD0iNDgwIj48cmVjdCB3aWR0aD0iNjQwIiBoZWlnaHQ9IjQ4MCIgZmlsbD0iIzZiNmE2MyIvPjx0ZXh0IHg9IjMyMCIgeT0iMjQwIiBmb250LWZhbWlseT0iSGVsdmV0aWNhLEFyaWFsLHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMjgiIGZpbGw9IiNmZmZmZmYiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGRvbWluYW50LWJhc2VsaW5lPSJtaWRkbGUiPlJlcG9ydGUgMjwvdGV4dD48L3N2Zz4=",
+          "usuario": "Diego Fuentes"
+        },
+        {
+          "fecha": {
+            "$diasFecha": -1
+          },
+          "tareaId": "",
+          "comentario": "Avance registrado en terreno — visita 3.",
+          "foto": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI2NDAiIGhlaWdodD0iNDgwIj48cmVjdCB3aWR0aD0iNjQwIiBoZWlnaHQ9IjQ4MCIgZmlsbD0iIzhhODk4MSIvPjx0ZXh0IHg9IjMyMCIgeT0iMjQwIiBmb250LWZhbWlseT0iSGVsdmV0aWNhLEFyaWFsLHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMjgiIGZpbGw9IiNmZmZmZmYiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGRvbWluYW50LWJhc2VsaW5lPSJtaWRkbGUiPlJlcG9ydGUgMzwvdGV4dD48L3N2Zz4=",
+          "usuario": "Camila Reyes"
+        }
+      ],
+      "granTotal": 113000,
+      "pago": {
+        "estado": "Pendiente",
+        "montoPagado": 0,
+        "fechaPago": "",
+        "metodoPago": "Transferencia",
+        "referencia": "",
+        "notas": "",
+        "anulado": false,
+        "fechaAnulacion": "",
+        "motivoAnulacion": ""
+      },
+      "informeEvaluacion": {
+        "fecha": {
+          "$diasTexto": -22
+        },
+        "responsable": "Camila Reyes",
+        "condicionesSitio": "Faena de Puerto Coronel Terminal, acceso vehicular disponible, EPP obligatorio.",
+        "fotos": [],
+        "recursosObservados": "Se requiere personal técnico y equipo de izaje menor.",
+        "riesgos": "Trabajo en altura media, superficies con aceite residual.",
+        "metodologia": "Bloqueo de energía, ejecución por etapas, verificación final con cliente.",
+        "completo": true,
+        "tareas": [],
+        "componentes": [],
+        "logistica": []
+      },
+      "fechaInicio": {
+        "$diasFecha": 0
+      },
+      "fechaEntrega": {
+        "$diasFecha": 8
+      }
+    },
+    {
+      "_ref": "ot-8",
+      "numeroOT": "OT-2026-0008",
+      "solicitante": "Bárbara Ceballos",
+      "solicitudRef": "sol-8",
+      "descripcion": "Soldadura de refuerzo en pasarela de acceso",
+      "estado": "En Ejecución",
+      "origen": "Manual",
+      "prioridad": "Urgente",
+      "tecnicoAsignado": "",
+      "tareas": [
+        {
+          "descripcion": "Diagnóstico inicial en terreno",
+          "puesto": "Mecánico Industrial",
+          "duracion": 2,
+          "fecha": {
+            "$diasTexto": 1
+          },
+          "hora": "08:30",
+          "operarioRefs": [
+            "r-manuel"
+          ],
+          "valorHora": 9500,
+          "completada": false
+        },
+        {
+          "descripcion": "Ejecución de trabajo principal",
+          "puesto": "Soldadora Certificada",
+          "duracion": 4,
+          "fecha": {
+            "$diasTexto": 2
+          },
+          "hora": "09:00",
+          "operarioRefs": [
+            "r-patricia",
+            "r-jorge"
+          ],
+          "valorHora": 11000,
+          "completada": false
+        }
+      ],
+      "componentes": [
+        {
+          "codigo": "SUM-001",
+          "descripcion": "Filtro de aceite hidráulico",
+          "cantidad": 2,
+          "precio": 12500,
+          "tipo": "Material"
+        },
+        {
+          "codigo": "EQ-002",
+          "descripcion": "Soldadora inversora 200A",
+          "cantidad": 1,
+          "precio": 0,
+          "tipo": "Equipo"
+        }
+      ],
+      "logistica": [
+        {
+          "unidad": "Camioneta 01",
+          "patente": "HJKL-23",
+          "descripcion": "Traslado de personal y equipo",
+          "cantidad": 1,
+          "precio": 25000
+        }
+      ],
+      "reportes": [
+        {
+          "fecha": {
+            "$diasFecha": -2
+          },
+          "tareaId": "",
+          "comentario": "Avance registrado en terreno — visita 1.",
+          "foto": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI2NDAiIGhlaWdodD0iNDgwIj48cmVjdCB3aWR0aD0iNjQwIiBoZWlnaHQ9IjQ4MCIgZmlsbD0iIzNhM2EzNSIvPjx0ZXh0IHg9IjMyMCIgeT0iMjQwIiBmb250LWZhbWlseT0iSGVsdmV0aWNhLEFyaWFsLHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMjgiIGZpbGw9IiNmZmZmZmYiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGRvbWluYW50LWJhc2VsaW5lPSJtaWRkbGUiPlJlcG9ydGUgNDwvdGV4dD48L3N2Zz4=",
+          "usuario": "Camila Reyes"
+        },
+        {
+          "fecha": {
+            "$diasFecha": -1
+          },
+          "tareaId": "",
+          "comentario": "Avance registrado en terreno — visita 2.",
+          "foto": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI2NDAiIGhlaWdodD0iNDgwIj48cmVjdCB3aWR0aD0iNjQwIiBoZWlnaHQ9IjQ4MCIgZmlsbD0iIzU3NTY0ZiIvPjx0ZXh0IHg9IjMyMCIgeT0iMjQwIiBmb250LWZhbWlseT0iSGVsdmV0aWNhLEFyaWFsLHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMjgiIGZpbGw9IiNmZmZmZmYiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGRvbWluYW50LWJhc2VsaW5lPSJtaWRkbGUiPlJlcG9ydGUgNTwvdGV4dD48L3N2Zz4=",
+          "usuario": "Camila Reyes"
+        }
+      ],
+      "granTotal": 113000,
+      "pago": {
+        "estado": "Pendiente",
+        "montoPagado": 0,
+        "fechaPago": "",
+        "metodoPago": "Transferencia",
+        "referencia": "",
+        "notas": "",
+        "anulado": false,
+        "fechaAnulacion": "",
+        "motivoAnulacion": ""
+      },
+      "informeEvaluacion": {
+        "fecha": {
+          "$diasTexto": -19
+        },
+        "responsable": "Camila Reyes",
+        "condicionesSitio": "Faena de Viña Los Robles, acceso vehicular disponible, EPP obligatorio.",
+        "fotos": [],
+        "recursosObservados": "Se requiere personal técnico y equipo de izaje menor.",
+        "riesgos": "Trabajo en altura media, superficies con aceite residual.",
+        "metodologia": "Bloqueo de energía, ejecución por etapas, verificación final con cliente.",
+        "completo": true,
+        "tareas": [],
+        "componentes": [],
+        "logistica": []
+      },
+      "fechaInicio": {
+        "$diasFecha": 3
+      },
+      "fechaEntrega": {
+        "$diasFecha": 11
+      }
+    },
+    {
+      "_ref": "ot-9",
+      "numeroOT": "OT-2026-0009",
+      "solicitante": "Rodrigo Iturra",
+      "solicitudRef": "sol-9",
+      "descripcion": "Diagnóstico de vibración anómala en compresor",
+      "estado": "Trabajo Terminado",
+      "origen": "Manual",
+      "prioridad": "Baja",
+      "tecnicoAsignado": "",
+      "tareas": [
+        {
+          "descripcion": "Diagnóstico inicial en terreno",
+          "puesto": "Mecánico Industrial",
+          "duracion": 2,
+          "fecha": {
+            "$diasTexto": 4
+          },
+          "hora": "08:30",
+          "operarioRefs": [
+            "r-manuel"
+          ],
+          "valorHora": 9500,
+          "completada": true
+        },
+        {
+          "descripcion": "Ejecución de trabajo principal",
+          "puesto": "Soldadora Certificada",
+          "duracion": 4,
+          "fecha": {
+            "$diasTexto": 5
+          },
+          "hora": "09:00",
+          "operarioRefs": [
+            "r-patricia",
+            "r-jorge"
+          ],
+          "valorHora": 11000,
+          "completada": true
+        }
+      ],
+      "componentes": [
+        {
+          "codigo": "SUM-001",
+          "descripcion": "Filtro de aceite hidráulico",
+          "cantidad": 2,
+          "precio": 12500,
+          "tipo": "Material"
+        },
+        {
+          "codigo": "EQ-002",
+          "descripcion": "Soldadora inversora 200A",
+          "cantidad": 1,
+          "precio": 0,
+          "tipo": "Equipo"
+        }
+      ],
+      "logistica": [
+        {
+          "unidad": "Camioneta 01",
+          "patente": "HJKL-23",
+          "descripcion": "Traslado de personal y equipo",
+          "cantidad": 1,
+          "precio": 25000
+        }
+      ],
+      "reportes": [
+        {
+          "fecha": {
+            "$diasFecha": -8
+          },
+          "tareaId": "",
+          "comentario": "Avance registrado en terreno — visita 1.",
+          "foto": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI2NDAiIGhlaWdodD0iNDgwIj48cmVjdCB3aWR0aD0iNjQwIiBoZWlnaHQ9IjQ4MCIgZmlsbD0iIzZiNmE2MyIvPjx0ZXh0IHg9IjMyMCIgeT0iMjQwIiBmb250LWZhbWlseT0iSGVsdmV0aWNhLEFyaWFsLHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMjgiIGZpbGw9IiNmZmZmZmYiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGRvbWluYW50LWJhc2VsaW5lPSJtaWRkbGUiPlJlcG9ydGUgNjwvdGV4dD48L3N2Zz4=",
+          "usuario": "Camila Reyes"
+        },
+        {
+          "fecha": {
+            "$diasFecha": -7
+          },
+          "tareaId": "",
+          "comentario": "Avance registrado en terreno — visita 2.",
+          "foto": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI2NDAiIGhlaWdodD0iNDgwIj48cmVjdCB3aWR0aD0iNjQwIiBoZWlnaHQ9IjQ4MCIgZmlsbD0iIzhhODk4MSIvPjx0ZXh0IHg9IjMyMCIgeT0iMjQwIiBmb250LWZhbWlseT0iSGVsdmV0aWNhLEFyaWFsLHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMjgiIGZpbGw9IiNmZmZmZmYiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGRvbWluYW50LWJhc2VsaW5lPSJtaWRkbGUiPlJlcG9ydGUgNzwvdGV4dD48L3N2Zz4=",
+          "usuario": "Diego Fuentes"
+        },
+        {
+          "fecha": {
+            "$diasFecha": -6
+          },
+          "tareaId": "",
+          "comentario": "Avance registrado en terreno — visita 3.",
+          "foto": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI2NDAiIGhlaWdodD0iNDgwIj48cmVjdCB3aWR0aD0iNjQwIiBoZWlnaHQ9IjQ4MCIgZmlsbD0iIzNhM2EzNSIvPjx0ZXh0IHg9IjMyMCIgeT0iMjQwIiBmb250LWZhbWlseT0iSGVsdmV0aWNhLEFyaWFsLHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMjgiIGZpbGw9IiNmZmZmZmYiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGRvbWluYW50LWJhc2VsaW5lPSJtaWRkbGUiPlJlcG9ydGUgODwvdGV4dD48L3N2Zz4=",
+          "usuario": "Camila Reyes"
+        },
+        {
+          "fecha": {
+            "$diasFecha": -5
+          },
+          "tareaId": "",
+          "comentario": "Avance registrado en terreno — visita 4.",
+          "foto": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI2NDAiIGhlaWdodD0iNDgwIj48cmVjdCB3aWR0aD0iNjQwIiBoZWlnaHQ9IjQ4MCIgZmlsbD0iIzU3NTY0ZiIvPjx0ZXh0IHg9IjMyMCIgeT0iMjQwIiBmb250LWZhbWlseT0iSGVsdmV0aWNhLEFyaWFsLHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMjgiIGZpbGw9IiNmZmZmZmYiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGRvbWluYW50LWJhc2VsaW5lPSJtaWRkbGUiPlJlcG9ydGUgOTwvdGV4dD48L3N2Zz4=",
+          "usuario": "Diego Fuentes"
+        }
+      ],
+      "granTotal": 113000,
+      "pago": {
+        "estado": "Pendiente",
+        "montoPagado": 0,
+        "fechaPago": "",
+        "metodoPago": "Transferencia",
+        "referencia": "",
+        "notas": "",
+        "anulado": false,
+        "fechaAnulacion": "",
+        "motivoAnulacion": ""
+      },
+      "informeEvaluacion": {
+        "fecha": {
+          "$diasTexto": -16
+        },
+        "responsable": "Camila Reyes",
+        "condicionesSitio": "Faena de Pesquera Austral SpA, acceso vehicular disponible, EPP obligatorio.",
+        "fotos": [],
+        "recursosObservados": "Se requiere personal técnico y equipo de izaje menor.",
+        "riesgos": "Trabajo en altura media, superficies con aceite residual.",
+        "metodologia": "Bloqueo de energía, ejecución por etapas, verificación final con cliente.",
+        "completo": true,
+        "tareas": [],
+        "componentes": [],
+        "logistica": []
+      },
+      "fechaInicio": {
+        "$diasFecha": 6
+      },
+      "fechaEntrega": {
+        "$diasFecha": 14
+      }
+    },
+    {
+      "_ref": "ot-10",
+      "numeroOT": "OT-2026-0010",
+      "solicitante": "Marcela Vidal",
+      "solicitudRef": "sol-10",
+      "descripcion": "Cambio de rodamientos en cinta transportadora",
+      "estado": "Con Informe",
+      "origen": "Manual",
+      "prioridad": "Media",
+      "tecnicoAsignado": "",
+      "tareas": [
+        {
+          "descripcion": "Diagnóstico inicial en terreno",
+          "puesto": "Mecánico Industrial",
+          "duracion": 2,
+          "fecha": {
+            "$diasTexto": 7
+          },
+          "hora": "08:30",
+          "operarioRefs": [
+            "r-manuel"
+          ],
+          "valorHora": 9500,
+          "completada": true
+        },
+        {
+          "descripcion": "Ejecución de trabajo principal",
+          "puesto": "Soldadora Certificada",
+          "duracion": 4,
+          "fecha": {
+            "$diasTexto": 8
+          },
+          "hora": "09:00",
+          "operarioRefs": [
+            "r-patricia",
+            "r-jorge"
+          ],
+          "valorHora": 11000,
+          "completada": true
+        }
+      ],
+      "componentes": [
+        {
+          "codigo": "SUM-001",
+          "descripcion": "Filtro de aceite hidráulico",
+          "cantidad": 2,
+          "precio": 12500,
+          "tipo": "Material"
+        },
+        {
+          "codigo": "EQ-002",
+          "descripcion": "Soldadora inversora 200A",
+          "cantidad": 1,
+          "precio": 0,
+          "tipo": "Equipo"
+        }
+      ],
+      "logistica": [
+        {
+          "unidad": "Camioneta 01",
+          "patente": "HJKL-23",
+          "descripcion": "Traslado de personal y equipo",
+          "cantidad": 1,
+          "precio": 25000
+        }
+      ],
+      "reportes": [
+        {
+          "fecha": {
+            "$diasFecha": -12
+          },
+          "tareaId": "",
+          "comentario": "Avance registrado en terreno — visita 1.",
+          "foto": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI2NDAiIGhlaWdodD0iNDgwIj48cmVjdCB3aWR0aD0iNjQwIiBoZWlnaHQ9IjQ4MCIgZmlsbD0iIzZiNmE2MyIvPjx0ZXh0IHg9IjMyMCIgeT0iMjQwIiBmb250LWZhbWlseT0iSGVsdmV0aWNhLEFyaWFsLHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMjgiIGZpbGw9IiNmZmZmZmYiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGRvbWluYW50LWJhc2VsaW5lPSJtaWRkbGUiPlJlcG9ydGUgMTA8L3RleHQ+PC9zdmc+",
+          "usuario": "Camila Reyes"
+        },
+        {
+          "fecha": {
+            "$diasFecha": -11
+          },
+          "tareaId": "",
+          "comentario": "Avance registrado en terreno — visita 2.",
+          "foto": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI2NDAiIGhlaWdodD0iNDgwIj48cmVjdCB3aWR0aD0iNjQwIiBoZWlnaHQ9IjQ4MCIgZmlsbD0iIzhhODk4MSIvPjx0ZXh0IHg9IjMyMCIgeT0iMjQwIiBmb250LWZhbWlseT0iSGVsdmV0aWNhLEFyaWFsLHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMjgiIGZpbGw9IiNmZmZmZmYiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGRvbWluYW50LWJhc2VsaW5lPSJtaWRkbGUiPlJlcG9ydGUgMTE8L3RleHQ+PC9zdmc+",
+          "usuario": "Diego Fuentes"
+        },
+        {
+          "fecha": {
+            "$diasFecha": -10
+          },
+          "tareaId": "",
+          "comentario": "Avance registrado en terreno — visita 3.",
+          "foto": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI2NDAiIGhlaWdodD0iNDgwIj48cmVjdCB3aWR0aD0iNjQwIiBoZWlnaHQ9IjQ4MCIgZmlsbD0iIzNhM2EzNSIvPjx0ZXh0IHg9IjMyMCIgeT0iMjQwIiBmb250LWZhbWlseT0iSGVsdmV0aWNhLEFyaWFsLHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMjgiIGZpbGw9IiNmZmZmZmYiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGRvbWluYW50LWJhc2VsaW5lPSJtaWRkbGUiPlJlcG9ydGUgMTI8L3RleHQ+PC9zdmc+",
+          "usuario": "Ignacio Bravo"
+        },
+        {
+          "fecha": {
+            "$diasFecha": -9
+          },
+          "tareaId": "",
+          "comentario": "Avance registrado en terreno — visita 4.",
+          "foto": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI2NDAiIGhlaWdodD0iNDgwIj48cmVjdCB3aWR0aD0iNjQwIiBoZWlnaHQ9IjQ4MCIgZmlsbD0iIzU3NTY0ZiIvPjx0ZXh0IHg9IjMyMCIgeT0iMjQwIiBmb250LWZhbWlseT0iSGVsdmV0aWNhLEFyaWFsLHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMjgiIGZpbGw9IiNmZmZmZmYiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGRvbWluYW50LWJhc2VsaW5lPSJtaWRkbGUiPlJlcG9ydGUgMTM8L3RleHQ+PC9zdmc+",
+          "usuario": "Camila Reyes"
+        },
+        {
+          "fecha": {
+            "$diasFecha": -8
+          },
+          "tareaId": "",
+          "comentario": "Avance registrado en terreno — visita 5.",
+          "foto": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI2NDAiIGhlaWdodD0iNDgwIj48cmVjdCB3aWR0aD0iNjQwIiBoZWlnaHQ9IjQ4MCIgZmlsbD0iIzZiNmE2MyIvPjx0ZXh0IHg9IjMyMCIgeT0iMjQwIiBmb250LWZhbWlseT0iSGVsdmV0aWNhLEFyaWFsLHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMjgiIGZpbGw9IiNmZmZmZmYiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGRvbWluYW50LWJhc2VsaW5lPSJtaWRkbGUiPlJlcG9ydGUgMTQ8L3RleHQ+PC9zdmc+",
+          "usuario": "Diego Fuentes"
+        }
+      ],
+      "granTotal": 113000,
+      "pago": {
+        "estado": "Parcial",
+        "montoPagado": 45200,
+        "fechaPago": {
+          "$diasTexto": -6
+        },
+        "metodoPago": "Transferencia",
+        "referencia": "TRF-88213",
+        "notas": "Anticipo recibido",
+        "anulado": false,
+        "fechaAnulacion": "",
+        "motivoAnulacion": ""
+      },
+      "informeEvaluacion": {
+        "fecha": {
+          "$diasTexto": -13
+        },
+        "responsable": "Camila Reyes",
+        "condicionesSitio": "Faena de Constructora Los Álamos, acceso vehicular disponible, EPP obligatorio.",
+        "fotos": [],
+        "recursosObservados": "Se requiere personal técnico y equipo de izaje menor.",
+        "riesgos": "Trabajo en altura media, superficies con aceite residual.",
+        "metodologia": "Bloqueo de energía, ejecución por etapas, verificación final con cliente.",
+        "completo": true,
+        "tareas": [],
+        "componentes": [],
+        "logistica": []
+      },
+      "fechaInicio": {
+        "$diasFecha": 9
+      },
+      "fechaEntrega": {
+        "$diasFecha": 17
+      }
+    },
+    {
+      "_ref": "ot-11",
+      "numeroOT": "OT-2026-0011",
+      "solicitante": "Cristián Paredes",
+      "solicitudRef": "sol-11",
+      "descripcion": "Revisión de sistema de frenos de grúa pluma",
+      "estado": "Pagada",
+      "origen": "Manual",
+      "prioridad": "Alta",
+      "tecnicoAsignado": "",
+      "tareas": [
+        {
+          "descripcion": "Diagnóstico inicial en terreno",
+          "puesto": "Mecánico Industrial",
+          "duracion": 2,
+          "fecha": {
+            "$diasTexto": 10
+          },
+          "hora": "08:30",
+          "operarioRefs": [
+            "r-manuel"
+          ],
+          "valorHora": 9500,
+          "completada": true
+        },
+        {
+          "descripcion": "Ejecución de trabajo principal",
+          "puesto": "Soldadora Certificada",
+          "duracion": 4,
+          "fecha": {
+            "$diasTexto": 11
+          },
+          "hora": "09:00",
+          "operarioRefs": [
+            "r-patricia",
+            "r-jorge"
+          ],
+          "valorHora": 11000,
+          "completada": true
+        }
+      ],
+      "componentes": [
+        {
+          "codigo": "SUM-001",
+          "descripcion": "Filtro de aceite hidráulico",
+          "cantidad": 2,
+          "precio": 12500,
+          "tipo": "Material"
+        },
+        {
+          "codigo": "EQ-002",
+          "descripcion": "Soldadora inversora 200A",
+          "cantidad": 1,
+          "precio": 0,
+          "tipo": "Equipo"
+        }
+      ],
+      "logistica": [
+        {
+          "unidad": "Camioneta 01",
+          "patente": "HJKL-23",
+          "descripcion": "Traslado de personal y equipo",
+          "cantidad": 1,
+          "precio": 25000
+        }
+      ],
+      "reportes": [
+        {
+          "fecha": {
+            "$diasFecha": -25
+          },
+          "tareaId": "",
+          "comentario": "Avance registrado en terreno — visita 1.",
+          "foto": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI2NDAiIGhlaWdodD0iNDgwIj48cmVjdCB3aWR0aD0iNjQwIiBoZWlnaHQ9IjQ4MCIgZmlsbD0iIzhhODk4MSIvPjx0ZXh0IHg9IjMyMCIgeT0iMjQwIiBmb250LWZhbWlseT0iSGVsdmV0aWNhLEFyaWFsLHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMjgiIGZpbGw9IiNmZmZmZmYiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGRvbWluYW50LWJhc2VsaW5lPSJtaWRkbGUiPlJlcG9ydGUgMTU8L3RleHQ+PC9zdmc+",
+          "usuario": "Camila Reyes"
+        },
+        {
+          "fecha": {
+            "$diasFecha": -24
+          },
+          "tareaId": "",
+          "comentario": "Avance registrado en terreno — visita 2.",
+          "foto": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI2NDAiIGhlaWdodD0iNDgwIj48cmVjdCB3aWR0aD0iNjQwIiBoZWlnaHQ9IjQ4MCIgZmlsbD0iIzNhM2EzNSIvPjx0ZXh0IHg9IjMyMCIgeT0iMjQwIiBmb250LWZhbWlseT0iSGVsdmV0aWNhLEFyaWFsLHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMjgiIGZpbGw9IiNmZmZmZmYiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGRvbWluYW50LWJhc2VsaW5lPSJtaWRkbGUiPlJlcG9ydGUgMTY8L3RleHQ+PC9zdmc+",
+          "usuario": "Camila Reyes"
+        }
+      ],
+      "granTotal": 113000,
+      "pago": {
+        "estado": "Pagado",
+        "montoPagado": 113000,
+        "fechaPago": {
+          "$diasTexto": -20
+        },
+        "metodoPago": "Transferencia",
+        "referencia": "TRF-88010",
+        "notas": "Pago total recibido",
+        "anulado": false,
+        "fechaAnulacion": "",
+        "motivoAnulacion": ""
+      },
+      "informeEvaluacion": {
+        "fecha": {
+          "$diasTexto": -10
+        },
+        "responsable": "Camila Reyes",
+        "condicionesSitio": "Faena de Frigorífico San Rafael, acceso vehicular disponible, EPP obligatorio.",
+        "fotos": [],
+        "recursosObservados": "Se requiere personal técnico y equipo de izaje menor.",
+        "riesgos": "Trabajo en altura media, superficies con aceite residual.",
+        "metodologia": "Bloqueo de energía, ejecución por etapas, verificación final con cliente.",
+        "completo": true,
+        "tareas": [],
+        "componentes": [],
+        "logistica": []
+      },
+      "fechaInicio": {
+        "$diasFecha": 12
+      },
+      "fechaEntrega": {
+        "$diasFecha": 20
+      }
+    },
+    {
+      "_ref": "ot-12",
+      "numeroOT": "OT-2026-0012",
+      "solicitante": "Andrea Muñoz",
+      "solicitudRef": "sol-12",
+      "descripcion": "Instalación de generador de respaldo",
+      "estado": "Pagada",
+      "origen": "Manual",
+      "prioridad": "Urgente",
+      "tecnicoAsignado": "",
+      "tareas": [
+        {
+          "descripcion": "Diagnóstico inicial en terreno",
+          "puesto": "Mecánico Industrial",
+          "duracion": 2,
+          "fecha": {
+            "$diasTexto": 13
+          },
+          "hora": "08:30",
+          "operarioRefs": [
+            "r-manuel"
+          ],
+          "valorHora": 9500,
+          "completada": true
+        },
+        {
+          "descripcion": "Ejecución de trabajo principal",
+          "puesto": "Soldadora Certificada",
+          "duracion": 4,
+          "fecha": {
+            "$diasTexto": 14
+          },
+          "hora": "09:00",
+          "operarioRefs": [
+            "r-patricia",
+            "r-jorge"
+          ],
+          "valorHora": 11000,
+          "completada": true
+        }
+      ],
+      "componentes": [
+        {
+          "codigo": "SUM-001",
+          "descripcion": "Filtro de aceite hidráulico",
+          "cantidad": 2,
+          "precio": 12500,
+          "tipo": "Material"
+        },
+        {
+          "codigo": "EQ-002",
+          "descripcion": "Soldadora inversora 200A",
+          "cantidad": 1,
+          "precio": 0,
+          "tipo": "Equipo"
+        }
+      ],
+      "logistica": [
+        {
+          "unidad": "Camioneta 01",
+          "patente": "HJKL-23",
+          "descripcion": "Traslado de personal y equipo",
+          "cantidad": 1,
+          "precio": 25000
+        }
+      ],
+      "reportes": [
+        {
+          "fecha": {
+            "$diasFecha": -30
+          },
+          "tareaId": "",
+          "comentario": "Avance registrado en terreno — visita 1.",
+          "foto": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI2NDAiIGhlaWdodD0iNDgwIj48cmVjdCB3aWR0aD0iNjQwIiBoZWlnaHQ9IjQ4MCIgZmlsbD0iIzU3NTY0ZiIvPjx0ZXh0IHg9IjMyMCIgeT0iMjQwIiBmb250LWZhbWlseT0iSGVsdmV0aWNhLEFyaWFsLHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMjgiIGZpbGw9IiNmZmZmZmYiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGRvbWluYW50LWJhc2VsaW5lPSJtaWRkbGUiPlJlcG9ydGUgMTc8L3RleHQ+PC9zdmc+",
+          "usuario": "Diego Fuentes"
+        },
+        {
+          "fecha": {
+            "$diasFecha": -29
+          },
+          "tareaId": "",
+          "comentario": "Avance registrado en terreno — visita 2.",
+          "foto": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI2NDAiIGhlaWdodD0iNDgwIj48cmVjdCB3aWR0aD0iNjQwIiBoZWlnaHQ9IjQ4MCIgZmlsbD0iIzZiNmE2MyIvPjx0ZXh0IHg9IjMyMCIgeT0iMjQwIiBmb250LWZhbWlseT0iSGVsdmV0aWNhLEFyaWFsLHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMjgiIGZpbGw9IiNmZmZmZmYiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGRvbWluYW50LWJhc2VsaW5lPSJtaWRkbGUiPlJlcG9ydGUgMTg8L3RleHQ+PC9zdmc+",
+          "usuario": "Diego Fuentes"
+        }
+      ],
+      "granTotal": 113000,
+      "pago": {
+        "estado": "Pagado",
+        "montoPagado": 113000,
+        "fechaPago": {
+          "$diasTexto": -25
+        },
+        "metodoPago": "Transferencia",
+        "referencia": "TRF-88011",
+        "notas": "Pago total recibido",
+        "anulado": false,
+        "fechaAnulacion": "",
+        "motivoAnulacion": ""
+      },
+      "informeEvaluacion": {
+        "fecha": {
+          "$diasTexto": -7
+        },
+        "responsable": "Camila Reyes",
+        "condicionesSitio": "Faena de Minera Cordillera Ltda., acceso vehicular disponible, EPP obligatorio.",
+        "fotos": [],
+        "recursosObservados": "Se requiere personal técnico y equipo de izaje menor.",
+        "riesgos": "Trabajo en altura media, superficies con aceite residual.",
+        "metodologia": "Bloqueo de energía, ejecución por etapas, verificación final con cliente.",
+        "completo": true,
+        "tareas": [],
+        "componentes": [],
+        "logistica": []
+      },
+      "fechaInicio": {
+        "$diasFecha": 15
+      },
+      "fechaEntrega": {
+        "$diasFecha": 23
+      }
+    }
+  ],
+  "asientosContables": [
+    {
+      "numeroAsiento": "AS-2026-0001",
+      "fecha": {
+        "$diasTexto": -175
+      },
+      "descripcion": "Facturación de servicios OT — mes cerrado (6 meses atrás)",
+      "tipo": "automatico",
+      "origen": {
+        "tipo": "OT",
+        "referenciaId": null,
+        "referenciaNro": "OT-2026-0001"
+      },
+      "lineas": [
+        {
+          "cuentaRef": "c-1201",
+          "cuentaCodigo": "1201",
+          "cuentaNombre": "Clientes por Cobrar",
+          "debe": 1620000,
+          "haber": 0,
+          "glosa": "Venta de servicios"
+        },
+        {
+          "cuentaRef": "c-4101",
+          "cuentaCodigo": "4101",
+          "cuentaNombre": "Ingresos por Servicios OT",
+          "debe": 0,
+          "haber": 1620000,
+          "glosa": "Venta de servicios"
+        }
+      ],
+      "totalDebe": 1620000,
+      "totalHaber": 1620000,
+      "estado": "vigente",
+      "creadoPor": "Sistema"
+    },
+    {
+      "numeroAsiento": "AS-2026-0002",
+      "fecha": {
+        "$diasTexto": -172
+      },
+      "descripcion": "Costo de mano de obra y materiales — mes cerrado (6 meses atrás)",
+      "tipo": "automatico",
+      "origen": {
+        "tipo": "OT",
+        "referenciaId": null,
+        "referenciaNro": "OT-2026-0001"
+      },
+      "lineas": [
+        {
+          "cuentaRef": "c-5101",
+          "cuentaCodigo": "5101",
+          "cuentaNombre": "Costo de Mano de Obra",
+          "debe": 668000,
+          "haber": 0,
+          "glosa": "Costo de personal asignado"
+        },
+        {
+          "cuentaRef": "c-2101",
+          "cuentaCodigo": "2101",
+          "cuentaNombre": "Proveedores por Pagar",
+          "debe": 0,
+          "haber": 668000,
+          "glosa": "Costo de personal asignado"
+        }
+      ],
+      "totalDebe": 668000,
+      "totalHaber": 668000,
+      "estado": "vigente",
+      "creadoPor": "Sistema"
+    },
+    {
+      "numeroAsiento": "AS-2026-0003",
+      "fecha": {
+        "$diasTexto": -145
+      },
+      "descripcion": "Facturación de servicios OT — mes cerrado (5 meses atrás)",
+      "tipo": "automatico",
+      "origen": {
+        "tipo": "OT",
+        "referenciaId": null,
+        "referenciaNro": "OT-2026-0002"
+      },
+      "lineas": [
+        {
+          "cuentaRef": "c-1201",
+          "cuentaCodigo": "1201",
+          "cuentaNombre": "Clientes por Cobrar",
+          "debe": 1600000,
+          "haber": 0,
+          "glosa": "Venta de servicios"
+        },
+        {
+          "cuentaRef": "c-4101",
+          "cuentaCodigo": "4101",
+          "cuentaNombre": "Ingresos por Servicios OT",
+          "debe": 0,
+          "haber": 1600000,
+          "glosa": "Venta de servicios"
+        }
+      ],
+      "totalDebe": 1600000,
+      "totalHaber": 1600000,
+      "estado": "vigente",
+      "creadoPor": "Sistema"
+    },
+    {
+      "numeroAsiento": "AS-2026-0004",
+      "fecha": {
+        "$diasTexto": -142
+      },
+      "descripcion": "Costo de mano de obra y materiales — mes cerrado (5 meses atrás)",
+      "tipo": "automatico",
+      "origen": {
+        "tipo": "OT",
+        "referenciaId": null,
+        "referenciaNro": "OT-2026-0002"
+      },
+      "lineas": [
+        {
+          "cuentaRef": "c-5101",
+          "cuentaCodigo": "5101",
+          "cuentaNombre": "Costo de Mano de Obra",
+          "debe": 660000,
+          "haber": 0,
+          "glosa": "Costo de personal asignado"
+        },
+        {
+          "cuentaRef": "c-2101",
+          "cuentaCodigo": "2101",
+          "cuentaNombre": "Proveedores por Pagar",
+          "debe": 0,
+          "haber": 660000,
+          "glosa": "Costo de personal asignado"
+        }
+      ],
+      "totalDebe": 660000,
+      "totalHaber": 660000,
+      "estado": "vigente",
+      "creadoPor": "Sistema"
+    },
+    {
+      "numeroAsiento": "AS-2026-0005",
+      "fecha": {
+        "$diasTexto": -115
+      },
+      "descripcion": "Facturación de servicios OT — mes cerrado (4 meses atrás)",
+      "tipo": "automatico",
+      "origen": {
+        "tipo": "OT",
+        "referenciaId": null,
+        "referenciaNro": "OT-2026-0003"
+      },
+      "lineas": [
+        {
+          "cuentaRef": "c-1201",
+          "cuentaCodigo": "1201",
+          "cuentaNombre": "Clientes por Cobrar",
+          "debe": 1580000,
+          "haber": 0,
+          "glosa": "Venta de servicios"
+        },
+        {
+          "cuentaRef": "c-4101",
+          "cuentaCodigo": "4101",
+          "cuentaNombre": "Ingresos por Servicios OT",
+          "debe": 0,
+          "haber": 1580000,
+          "glosa": "Venta de servicios"
+        }
+      ],
+      "totalDebe": 1580000,
+      "totalHaber": 1580000,
+      "estado": "vigente",
+      "creadoPor": "Sistema"
+    },
+    {
+      "numeroAsiento": "AS-2026-0006",
+      "fecha": {
+        "$diasTexto": -112
+      },
+      "descripcion": "Costo de mano de obra y materiales — mes cerrado (4 meses atrás)",
+      "tipo": "automatico",
+      "origen": {
+        "tipo": "OT",
+        "referenciaId": null,
+        "referenciaNro": "OT-2026-0003"
+      },
+      "lineas": [
+        {
+          "cuentaRef": "c-5101",
+          "cuentaCodigo": "5101",
+          "cuentaNombre": "Costo de Mano de Obra",
+          "debe": 652000,
+          "haber": 0,
+          "glosa": "Costo de personal asignado"
+        },
+        {
+          "cuentaRef": "c-2101",
+          "cuentaCodigo": "2101",
+          "cuentaNombre": "Proveedores por Pagar",
+          "debe": 0,
+          "haber": 652000,
+          "glosa": "Costo de personal asignado"
+        }
+      ],
+      "totalDebe": 652000,
+      "totalHaber": 652000,
+      "estado": "vigente",
+      "creadoPor": "Sistema"
+    },
+    {
+      "numeroAsiento": "AS-2026-0007",
+      "fecha": {
+        "$diasTexto": -85
+      },
+      "descripcion": "Facturación de servicios OT — mes cerrado (3 meses atrás)",
+      "tipo": "automatico",
+      "origen": {
+        "tipo": "OT",
+        "referenciaId": null,
+        "referenciaNro": "OT-2026-0004"
+      },
+      "lineas": [
+        {
+          "cuentaRef": "c-1201",
+          "cuentaCodigo": "1201",
+          "cuentaNombre": "Clientes por Cobrar",
+          "debe": 1560000,
+          "haber": 0,
+          "glosa": "Venta de servicios"
+        },
+        {
+          "cuentaRef": "c-4101",
+          "cuentaCodigo": "4101",
+          "cuentaNombre": "Ingresos por Servicios OT",
+          "debe": 0,
+          "haber": 1560000,
+          "glosa": "Venta de servicios"
+        }
+      ],
+      "totalDebe": 1560000,
+      "totalHaber": 1560000,
+      "estado": "vigente",
+      "creadoPor": "Sistema"
+    },
+    {
+      "numeroAsiento": "AS-2026-0008",
+      "fecha": {
+        "$diasTexto": -82
+      },
+      "descripcion": "Costo de mano de obra y materiales — mes cerrado (3 meses atrás)",
+      "tipo": "automatico",
+      "origen": {
+        "tipo": "OT",
+        "referenciaId": null,
+        "referenciaNro": "OT-2026-0004"
+      },
+      "lineas": [
+        {
+          "cuentaRef": "c-5101",
+          "cuentaCodigo": "5101",
+          "cuentaNombre": "Costo de Mano de Obra",
+          "debe": 644000,
+          "haber": 0,
+          "glosa": "Costo de personal asignado"
+        },
+        {
+          "cuentaRef": "c-2101",
+          "cuentaCodigo": "2101",
+          "cuentaNombre": "Proveedores por Pagar",
+          "debe": 0,
+          "haber": 644000,
+          "glosa": "Costo de personal asignado"
+        }
+      ],
+      "totalDebe": 644000,
+      "totalHaber": 644000,
+      "estado": "vigente",
+      "creadoPor": "Sistema"
+    },
+    {
+      "numeroAsiento": "AS-2026-0009",
+      "fecha": {
+        "$diasTexto": -55
+      },
+      "descripcion": "Facturación de servicios OT — mes cerrado (2 meses atrás)",
+      "tipo": "automatico",
+      "origen": {
+        "tipo": "OT",
+        "referenciaId": null,
+        "referenciaNro": "OT-2026-0005"
+      },
+      "lineas": [
+        {
+          "cuentaRef": "c-1201",
+          "cuentaCodigo": "1201",
+          "cuentaNombre": "Clientes por Cobrar",
+          "debe": 1540000,
+          "haber": 0,
+          "glosa": "Venta de servicios"
+        },
+        {
+          "cuentaRef": "c-4101",
+          "cuentaCodigo": "4101",
+          "cuentaNombre": "Ingresos por Servicios OT",
+          "debe": 0,
+          "haber": 1540000,
+          "glosa": "Venta de servicios"
+        }
+      ],
+      "totalDebe": 1540000,
+      "totalHaber": 1540000,
+      "estado": "vigente",
+      "creadoPor": "Sistema"
+    },
+    {
+      "numeroAsiento": "AS-2026-0010",
+      "fecha": {
+        "$diasTexto": -52
+      },
+      "descripcion": "Costo de mano de obra y materiales — mes cerrado (2 meses atrás)",
+      "tipo": "automatico",
+      "origen": {
+        "tipo": "OT",
+        "referenciaId": null,
+        "referenciaNro": "OT-2026-0005"
+      },
+      "lineas": [
+        {
+          "cuentaRef": "c-5101",
+          "cuentaCodigo": "5101",
+          "cuentaNombre": "Costo de Mano de Obra",
+          "debe": 636000,
+          "haber": 0,
+          "glosa": "Costo de personal asignado"
+        },
+        {
+          "cuentaRef": "c-2101",
+          "cuentaCodigo": "2101",
+          "cuentaNombre": "Proveedores por Pagar",
+          "debe": 0,
+          "haber": 636000,
+          "glosa": "Costo de personal asignado"
+        }
+      ],
+      "totalDebe": 636000,
+      "totalHaber": 636000,
+      "estado": "vigente",
+      "creadoPor": "Sistema"
+    },
+    {
+      "numeroAsiento": "AS-2026-0011",
+      "fecha": {
+        "$diasTexto": -25
+      },
+      "descripcion": "Facturación de servicios OT — mes cerrado (1 meses atrás)",
+      "tipo": "automatico",
+      "origen": {
+        "tipo": "OT",
+        "referenciaId": null,
+        "referenciaNro": "OT-2026-0006"
+      },
+      "lineas": [
+        {
+          "cuentaRef": "c-1201",
+          "cuentaCodigo": "1201",
+          "cuentaNombre": "Clientes por Cobrar",
+          "debe": 1520000,
+          "haber": 0,
+          "glosa": "Venta de servicios"
+        },
+        {
+          "cuentaRef": "c-4101",
+          "cuentaCodigo": "4101",
+          "cuentaNombre": "Ingresos por Servicios OT",
+          "debe": 0,
+          "haber": 1520000,
+          "glosa": "Venta de servicios"
+        }
+      ],
+      "totalDebe": 1520000,
+      "totalHaber": 1520000,
+      "estado": "vigente",
+      "creadoPor": "Sistema"
+    },
+    {
+      "numeroAsiento": "AS-2026-0012",
+      "fecha": {
+        "$diasTexto": -22
+      },
+      "descripcion": "Costo de mano de obra y materiales — mes cerrado (1 meses atrás)",
+      "tipo": "automatico",
+      "origen": {
+        "tipo": "OT",
+        "referenciaId": null,
+        "referenciaNro": "OT-2026-0006"
+      },
+      "lineas": [
+        {
+          "cuentaRef": "c-5101",
+          "cuentaCodigo": "5101",
+          "cuentaNombre": "Costo de Mano de Obra",
+          "debe": 628000,
+          "haber": 0,
+          "glosa": "Costo de personal asignado"
+        },
+        {
+          "cuentaRef": "c-2101",
+          "cuentaCodigo": "2101",
+          "cuentaNombre": "Proveedores por Pagar",
+          "debe": 0,
+          "haber": 628000,
+          "glosa": "Costo de personal asignado"
+        }
+      ],
+      "totalDebe": 628000,
+      "totalHaber": 628000,
+      "estado": "vigente",
+      "creadoPor": "Sistema"
+    }
+  ]
+}

@@ -1,566 +1,336 @@
-import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-// Recibimos 'solicitudes' como prop desde App.jsx para actualización automática
-const IngresoScreen = ({ solicitudes = [], liberarSolicitudManual, cargarDatos, API, crearSolicitudGlobal, ots = [] }) => {
-    const [form, setForm] = useState({
-        solicitante: '',
-        empresaSolicitante: '',
-        correo: '',
-        numero: '',
-        direccion: '',
-        descripcion: '',
-        origen: 'WhatsApp',
-        fechaEjecucionSolicitada: '',
-        plazoEjecucionSugerido: '',
-        adjuntos: ''
-    });
-    const [menuAbierto, setMenuAbierto] = useState(null);
-    const [filtros, setFiltros] = useState({
-        estado: '',
-        empresa: '',
-        solicitante: ''
-    });
-    const navigate = useNavigate();
-    const [archivo, setArchivo] = useState(null);
-    // src/screens/IngresoScreen.jsx
-    useEffect(() => {
-        const cerrarMenu = (e) => {
-            // Si el clic no fue en un botón de filtro o dentro del dropdown, cerramos
-            if (!e.target.closest('.contenedor-filtro')) {
-                setMenuAbierto(null);
-            }
-        };
-        window.addEventListener('click', cerrarMenu);
-        return () => window.removeEventListener('click', cerrarMenu);
-    }, []);
+// Paso 3 del rediseño (ver Incomplete web app design/design_handoff_panel_control/README.md §5):
+// formulario de 452px fijo + tabla de solicitudes con filtros en barra (se elimina el dropdown
+// por columna). Mismos tokens que Panel de control (§2). Sin emoji.
 
-    // Cambiamos hasolcindleCrear en IngresoScreen.jsx
+const t = {
+    fondoMain: '#f6f5f2',
+    superficie: '#ffffff',
+    textoPrincipal: '#1a1a18',
+    textoSecundario1: '#3a3a35',
+    textoSecundario2: '#4a4a44',
+    textoAtenuado1: '#6b6a63',
+    textoAtenuado2: '#75746e',
+    textoAtenuado3: '#8a8981',
+    textoDeshabilitado: '#a3a29a',
+    encabezadoTabla: '#e4e2dc',
+    barraFiltrosPie: '#f0efeb',
+    hoverFila: '#f4f3ef',
+    hairlineFila: 'rgba(0,0,0,.06)',
+    hairlineBloque: 'rgba(0,0,0,.10)',
+    bordeZona: 'rgba(0,0,0,.12)',
+    bordeInput: 'rgba(0,0,0,.18)',
+    acento: 'oklch(0.48 0.10 250)',
+    acentoHover: 'oklch(0.40 0.10 250)',
+    pagoPagado: 'oklch(0.48 0.10 155)',
+    pagoParcial: 'oklch(0.55 0.11 65)',
+    pagoPendiente: 'oklch(0.52 0.13 25)',
+    fontUi: '"Helvetica Neue", Helvetica, Arial, sans-serif',
+    fontMono: 'ui-monospace, Menlo, monospace',
+};
+
+// SLA: mide el tiempo que la Solicitud lleva sin tratar (fechaHoraSolicitud -> ahora).
+// Se congela una vez que la OT vinculada llega a 'Tratada' o más allá (ver docs/funcionalidades-v2.md, Gap 5).
+const calcularSLA = (s, otEncontrada) => {
+    if (otEncontrada && otEncontrada.estado !== 'Pendiente') return null;
+    const inicio = new Date(s.fechaHoraSolicitud || s.fechaCreacion || s.createdAt);
+    if (isNaN(inicio.getTime())) return null;
+    const horas = (Date.now() - inicio.getTime()) / 3600000;
+    const color = horas < 24 ? t.pagoPagado : horas < 48 ? t.pagoParcial : t.pagoPendiente;
+    const texto = horas < 1 ? '<1 h' : horas < 48 ? `${Math.floor(horas)} h` : `${Math.floor(horas / 24)} d`;
+    return { color, texto };
+};
+
+const colorEstado = (estadoFinal, tieneOT) => {
+    if (estadoFinal === 'Rechazada') return t.pagoPendiente;
+    return tieneOT ? t.pagoPagado : t.pagoParcial;
+};
+
+const fmtFecha = (iso) => {
+    const d = iso ? new Date(iso) : null;
+    return d && !isNaN(d.getTime()) ? d.toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—';
+};
+
+const FORM_VACIO = {
+    solicitante: '', empresaSolicitante: '', correo: '', numero: '', direccion: '',
+    descripcion: '', origen: 'WhatsApp', fechaEjecucionSolicitada: '', plazoEjecucionSugerido: '', adjuntos: '',
+};
+
+const GRID = '34px minmax(150px,1.4fr) minmax(120px,1fr) 104px 96px 84px 132px 150px';
+const TABLA_MIN_W = 34 + 150 + 120 + 104 + 96 + 84 + 132 + 150 + 10 * 8 + 32;
+
+// Recibimos 'solicitudes' como prop desde App.jsx para actualización automática
+const IngresoScreen = ({ solicitudes = [], liberarSolicitudManual, cargarDatos, API, crearSolicitudGlobal, ots = [], enviarPortalCliente, cargando, errorCarga }) => {
+    const navigate = useNavigate();
+    const [form, setForm] = useState(FORM_VACIO);
+    const [archivo, setArchivo] = useState(null);
+    const [aviso, setAviso] = useState(null); // { texto, tono: 'error' | 'ok' }
+    const [filtroEstado, setFiltroEstado] = useState('');
+    const [filtroTexto, setFiltroTexto] = useState('');
+
+    const set = (campo) => (e) => setForm(prev => ({ ...prev, [campo]: e.target.value }));
+
     const handleCrear = async () => {
-        // 2. Validación extendida
-        if (!form.solicitante || !form.empresaSolicitante || !form.descripcion) {
-            alert("Por favor completa los campos obligatorios: Solicitante, Empresa y Descripción.");
+        if (!form.empresaSolicitante || !form.solicitante || !form.descripcion) {
+            setAviso({ texto: 'Completa los campos obligatorios: empresa, solicitante y descripción.', tono: 'error' });
             return;
         }
-
-        // --- CAMBIO CLAVE ---
-        // Pasamos el 'form' Y el 'archivo' a la función de App.js
         const exito = await crearSolicitudGlobal(form, archivo);
-
         if (exito) {
-            // 3. Limpiamos todos los campos y el archivo
-            setForm({
-                solicitante: '',
-                empresaSolicitante: '',
-                correo: '',
-                numero: '',
-                direccion: '',
-                descripcion: '',
-                origen: 'WhatsApp',
-                fechaEjecucionSolicitada: '',
-                plazoEjecucionSugerido: '',
-                adjuntos: ''
-            });
-            setArchivo(null); // Reset del archivo seleccionado
-
-            // Opcional: Resetear el input file manualmente si usas un ref
-            alert("✅ Solicitud registrada con éxito");
+            setForm(FORM_VACIO);
+            setArchivo(null);
+            setAviso({ texto: 'Solicitud registrada con éxito.', tono: 'ok' });
+        } else {
+            setAviso({ texto: 'No se pudo registrar la solicitud. Intenta nuevamente.', tono: 'error' });
         }
     };
 
-    const manejarCambioFiltro = (columna, valor) => {
-        setFiltros(prev => ({ ...prev, [columna]: valor }));
-    };
+    const campos = [
+        { key: 'empresaSolicitante', label: 'Empresa *', placeholder: 'Razón social', span: 2 },
+        { key: 'solicitante', label: 'Solicitante *', placeholder: 'Nombre y apellido', span: 2 },
+        { key: 'correo', label: 'Correo', placeholder: 'correo@empresa.cl', span: 2, type: 'email' },
+        { key: 'numero', label: 'Teléfono', placeholder: '+56 9…', span: 2 },
+        { key: 'direccion', label: 'Dirección del servicio', placeholder: 'Calle, ciudad, planta', span: 4 },
+        { key: 'fechaEjecucionSolicitada', label: 'Fecha de ejecución', span: 2, type: 'date' },
+        { key: 'plazoEjecucionSugerido', label: 'Plazo sugerido', placeholder: 'Ej: 5 días hábiles', span: 2 },
+    ];
+
+    const estados = ['Pendiente', 'Aprobada', 'Rechazada', 'Tratada'];
+    const chipsEstado = [
+        { key: '', label: `Todos (${solicitudes.length})` },
+        ...estados.map(e => ({ key: e, label: `${e} (${solicitudes.filter(s => s.estado === e).length})` })),
+    ];
+
+    const q = filtroTexto.trim().toLowerCase();
     const solicitudesFiltradas = solicitudes.filter(s => {
-        // Comparamos cada criterio. Si el filtro está vacío, deja pasar todo (true)
-        const cumpleEstado = !filtros.estado || s.estado === filtros.estado;
-
-        const cumpleEmpresa = !filtros.empresa ||
-            s.empresaSolicitante?.toLowerCase().includes(filtros.empresa.toLowerCase());
-
-        const cumpleSolicitante = !filtros.solicitante ||
-            s.solicitante?.toLowerCase().includes(filtros.solicitante.toLowerCase());
-
-        return cumpleEstado && cumpleEmpresa && cumpleSolicitante;
+        const cumpleEstado = !filtroEstado || s.estado === filtroEstado;
+        const cumpleTexto = !q || `${s.empresaSolicitante || ''} ${s.solicitante || ''}`.toLowerCase().includes(q);
+        return cumpleEstado && cumpleTexto;
     });
+
     return (
-        <div style={styles.container}>
-            <div style={styles.card}>
-                <h2 style={{ color: '#2c3e50', marginBottom: '20px' }}>📋 Nueva Solicitud de Servicio</h2>
+        <div style={styles.raiz}>
+            <header style={styles.header}>
+                <h1 style={styles.h1}>Ingreso de solicitudes</h1>
+                <span style={styles.subtitulo}>Registro de requerimientos antes de convertirlos en OT</span>
+            </header>
 
-                {/* Grid principal del formulario */}
-                <div style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
-                    gap: '15px'
-                }}>
-
-                    {/* --- DATOS DEL CLIENTE --- */}
-                    <div style={styles.inputGroup}>
-                        <label style={styles.label}>Empresa Solicitante *</label>
-                        <input
-                            style={styles.input}
-                            placeholder="Nombre de la empresa"
-                            value={form.empresaSolicitante}
-                            onChange={e => setForm({ ...form, empresaSolicitante: e.target.value })}
-                        />
-                    </div>
-
-                    <div style={styles.inputGroup}>
-                        <label style={styles.label}>Nombre Solicitante *</label>
-                        <input
-                            style={styles.input}
-                            placeholder="Quién solicita"
-                            value={form.solicitante}
-                            onChange={e => setForm({ ...form, solicitante: e.target.value })}
-                        />
-                    </div>
-
-                    <div style={styles.inputGroup}>
-                        <label style={styles.label}>Correo Electrónico</label>
-                        <input
-                            style={styles.input}
-                            type="email"
-                            placeholder="ejemplo@correo.com"
-                            value={form.correo}
-                            onChange={e => setForm({ ...form, correo: e.target.value })}
-                        />
-                    </div>
-
-                    <div style={styles.inputGroup}>
-                        <label style={styles.label}>Número de Contacto</label>
-                        <input
-                            style={styles.input}
-                            placeholder="+56 9..."
-                            value={form.numero}
-                            onChange={e => setForm({ ...form, numero: e.target.value })}
-                        />
-                    </div>
-
-                    <div style={styles.inputGroup}>
-                        <label style={styles.label}>Dirección del Servicio</label>
-                        <input
-                            style={styles.input}
-                            placeholder="Calle, Ciudad, Planta"
-                            value={form.direccion}
-                            onChange={e => setForm({ ...form, direccion: e.target.value })}
-                        />
-                    </div>
-
-                    {/* --- PLANIFICACIÓN SUGERIDA --- */}
-                    <div style={styles.inputGroup}>
-                        <label style={styles.label}>Fecha Ejecución Solicitada</label>
-                        <input
-                            style={styles.input}
-                            type="date"
-                            value={form.fechaEjecucionSolicitada}
-                            onChange={e => setForm({ ...form, fechaEjecucionSolicitada: e.target.value })}
-                        />
-                    </div>
-
-                    <div style={styles.inputGroup}>
-                        <label style={styles.label}>Plazo Sugerido</label>
-                        <input
-                            style={styles.input}
-                            placeholder="Ej: 48 horas / 5 días"
-                            value={form.plazoEjecucionSugerido}
-                            onChange={e => setForm({ ...form, plazoEjecucionSugerido: e.target.value })}
-                        />
-                    </div>
-
-                    <div style={styles.inputGroup}>
-                        <label style={styles.label}>Canal de Origen</label>
-                        <select
-                            style={styles.input}
-                            value={form.origen}
-                            onChange={e => setForm({ ...form, origen: e.target.value })}
-                        >
-                            <option value="WhatsApp">WhatsApp</option>
-                            <option value="Correo">Correo</option>
-                            <option value="Llamada">Llamada</option>
-                            <option value="Presencial">Presencial</option>
-                        </select>
-                    </div>
-
-                    {/* --- DESCRIPCIÓN (Ocupa todo el ancho) --- */}
-                    <div style={{ ...styles.inputGroup, gridColumn: '1 / -1' }}>
-                        <label style={styles.label}>Descripción Detallada *</label>
-                        <textarea
-                            style={{ ...styles.input, minHeight: '100px', resize: 'vertical' }}
-                            placeholder="Explique el requerimiento técnico..."
-                            value={form.descripcion}
-                            onChange={e => setForm({ ...form, descripcion: e.target.value })}
-                        />
-                    </div>
+            {errorCarga && (
+                <div style={styles.franjaError}>
+                    <span>{errorCarga}</span>
+                    <button onClick={() => cargarDatos?.()} style={styles.btnReintentar}>Reintentar</button>
                 </div>
-                <div style={{ ...styles.inputGroup, gridColumn: '1 / -1' }}>
-                    <label style={styles.label}>📎 Adjuntar Archivo o Documentación</label>
-                    <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-                        {/* Campo de texto (opcional por si quieren pegar un link) */}
-                        <input
-                            style={{ ...styles.input, flex: 1 }}
-                            placeholder={archivo ? `Archivo seleccionado: ${archivo.name}` : "Seleccione un archivo o pegue un link..."}
-                            value={form.adjuntos}
-                            onChange={e => setForm({ ...form, adjuntos: e.target.value })}
-                            readOnly={!!archivo} // Si hay archivo físico, bloqueamos el texto para evitar confusiones
-                        />
+            )}
 
-                        {/* Input de archivo real (oculto) */}
-                        <input
-                            type="file"
-                            id="file-upload"
-                            style={{ display: 'none' }}
-                            onChange={(e) => setArchivo(e.target.files[0])}
-                        />
+            <div style={styles.cuerpo}>
+                {/* Formulario */}
+                <section style={styles.formSeccion}>
+                    <div style={{ padding: '13px 16px 8px' }}>
+                        <div style={styles.tituloBloque}>Nueva solicitud de servicio</div>
+                        <div style={styles.formGrid}>
+                            {campos.map(c => (
+                                <label key={c.key} style={{ ...styles.campoLabel, gridColumn: `span ${c.span}` }}>
+                                    <span style={styles.etiqueta}>{c.label}</span>
+                                    <input
+                                        type={c.type || 'text'}
+                                        value={form[c.key]}
+                                        onChange={set(c.key)}
+                                        placeholder={c.placeholder}
+                                        style={styles.input}
+                                    />
+                                </label>
+                            ))}
 
-                        {/* Botón que dispara el selector de archivos */}
-                        <button
-                            type="button"
-                            onClick={() => document.getElementById('file-upload').click()}
-                            style={{
-                                ...styles.btnSecundario,
-                                backgroundColor: archivo ? '#e8f5e9' : '#ecf0f1',
-                                borderColor: archivo ? '#27ae60' : '#bdc3c7'
-                            }}
-                        >
-                            {archivo ? '✅ Cambiar' : '📁 Explorar'}
-                        </button>
+                            <label style={{ ...styles.campoLabel, gridColumn: 'span 2' }}>
+                                <span style={styles.etiqueta}>Canal de origen</span>
+                                <select value={form.origen} onChange={set('origen')} style={styles.input}>
+                                    <option value="WhatsApp">WhatsApp</option>
+                                    <option value="Correo">Correo</option>
+                                    <option value="Llamada">Llamada</option>
+                                    <option value="Presencial">Presencial</option>
+                                </select>
+                            </label>
 
-                        {/* Botón para quitar el archivo si se equivocan */}
-                        {archivo && (
-                            <button
-                                type="button"
-                                onClick={() => setArchivo(null)}
-                                style={{ background: 'none', border: 'none', color: 'red', cursor: 'pointer' }}
-                            >
-                                ✕
-                            </button>
+                            <label style={{ ...styles.campoLabel, gridColumn: 'span 2' }}>
+                                <span style={styles.etiqueta}>Adjunto</span>
+                                <div style={{ display: 'flex', gap: 6 }}>
+                                    <input
+                                        value={archivo ? archivo.name : form.adjuntos}
+                                        onChange={set('adjuntos')}
+                                        placeholder="Plano, foto o enlace"
+                                        readOnly={!!archivo}
+                                        style={{ ...styles.input, flex: 1, minWidth: 0 }}
+                                    />
+                                    <input type="file" id="file-upload" style={{ display: 'none' }} onChange={e => setArchivo(e.target.files[0])} />
+                                    <button type="button" onClick={() => document.getElementById('file-upload').click()} style={styles.btnSecundario}>
+                                        {archivo ? 'Cambiar' : 'Examinar'}
+                                    </button>
+                                    {archivo && <button type="button" onClick={() => setArchivo(null)} style={styles.btnSecundario}>Quitar</button>}
+                                </div>
+                            </label>
+
+                            <label style={{ ...styles.campoLabel, gridColumn: 'span 4' }}>
+                                <span style={styles.etiqueta}>Descripción detallada *</span>
+                                <textarea
+                                    value={form.descripcion}
+                                    onChange={set('descripcion')}
+                                    placeholder="Requerimiento técnico, alcance, condiciones de la faena"
+                                    rows={5}
+                                    style={{ ...styles.input, minHeight: 96, lineHeight: 1.5, resize: 'vertical' }}
+                                />
+                            </label>
+                        </div>
+
+                        {aviso && (
+                            <div style={{ ...styles.avisoFranja, borderLeftColor: aviso.tono === 'error' ? t.pagoPendiente : t.acento }}>
+                                {aviso.texto}
+                            </div>
                         )}
+
+                        <div style={{ display: 'flex', gap: 6, marginTop: 12, paddingBottom: 14, alignItems: 'center' }}>
+                            <button onClick={handleCrear} style={styles.btnPrimario}>Generar solicitud</button>
+                            <button onClick={() => { setForm(FORM_VACIO); setArchivo(null); setAviso(null); }} style={styles.btnSecundario}>Limpiar</button>
+                            <span style={{ marginLeft: 'auto', fontSize: '10.5px', color: t.textoAtenuado3 }}>* obligatorio</span>
+                        </div>
                     </div>
-                    <small style={{ color: '#7f8c8d', fontSize: '11px' }}>
-                        {archivo
-                            ? `Listo para subir: ${archivo.name} (${(archivo.size / 1024).toFixed(1)} KB)`
-                            : "* Adjunte planos, fotos del equipo o términos de referencia."}
-                    </small>
-                </div>
-                <div style={{ marginTop: '20px', display: 'flex', justifyContent: 'flex-end' }}>
-                    <button onClick={handleCrear} style={styles.btnPrimario}>
-                        💾 Generar Solicitud de Servicio
-                    </button>
-                </div>
-            </div>
-            {/* RECTÁNGULO INFERIOR: TABLA */}
-            <div style={styles.card}>
-                <h2 style={{ marginBottom: '15px' }}>Solicitudes Ingresadas</h2>
-                <div style={styles.contenedorScrollTabla}>
-                    <table style={styles.tablaAnchoFijo}>
-                        <thead>
-                            <tr style={{ borderBottom: '2px solid #eee', textAlign: 'left', color: '#7f8c8d' }}>
-                                <th style={{ ...styles.th, width: '30px' }}>N°</th>
+                </section>
 
-                                {/* COLUMNA ESTADO */}
-                                <th style={{ ...styles.th, width: '80px', position: 'relative' }}>
-                                    <div style={styles.headerCell}>
-                                        <span>Estado</span>
-                                        <button
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                setMenuAbierto(menuAbierto === 'estado' ? null : 'estado');
-                                            }}
-                                            style={styles.btnFiltro}
-                                        >
-                                            {filtros.estado ? '✅' : '▼'}
-                                        </button>
-                                    </div>
+                {/* Tabla */}
+                <section style={styles.tablaSeccion}>
+                    <div style={styles.barraFiltros}>
+                        <span style={styles.etiquetaBarra}>Solicitudes ingresadas</span>
+                        <input
+                            value={filtroTexto}
+                            onChange={e => setFiltroTexto(e.target.value)}
+                            placeholder="Filtrar empresa o solicitante"
+                            style={styles.filtroInput}
+                        />
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 2, minWidth: 0 }}>
+                            {chipsEstado.map(c => (
+                                <button key={c.key || 'todos'} onClick={() => setFiltroEstado(c.key)} style={styles.btnFiltro}>
+                                    {filtroEstado === c.key ? '▪ ' : ''}{c.label}
+                                </button>
+                            ))}
+                        </div>
+                        <span style={styles.resumenBarra}>{solicitudesFiltradas.length} de {solicitudes.length}</span>
+                    </div>
 
-                                    {menuAbierto === 'estado' && (
-                                        <div style={styles.dropdownDirecto}>
-                                            {['', 'Pendiente', 'Aprobada', 'Rechazada', 'Tratada'].map((opcion) => (
-                                                <div
-                                                    key={opcion}
-                                                    onClick={() => {
-                                                        manejarCambioFiltro('estado', opcion);
-                                                        setMenuAbierto(null); // Se cierra inmediatamente
-                                                    }}
-                                                    style={{
-                                                        ...styles.itemMenu,
-                                                        backgroundColor: filtros.estado === opcion ? '#f0f7ff' : 'transparent',
-                                                        fontWeight: filtros.estado === opcion ? 'bold' : 'normal'
-                                                    }}
-                                                >
-                                                    {opcion === '' ? 'Mostrar Todos' : opcion}
-                                                </div>
-                                            ))}
-                                        </div>
-                                    )}
-                                </th>
+                    <div style={styles.scrollTabla}>
+                        <div style={{ minWidth: TABLA_MIN_W }}>
+                            <div style={styles.encabezadoFila}>
+                                <span>N°</span><span>Empresa</span><span>Solicitante</span><span>Estado</span>
+                                <span>Origen</span><span style={{ textAlign: 'right' }}>Ingresada</span><span>Adjunto</span><span />
+                            </div>
 
-                                <th style={{ ...styles.th, width: '100px' }}>Solicitante</th>
-                                <th style={{ ...styles.th, width: '120px' }}>Nombre Solicitante</th>
-                                <th style={{ ...styles.th, width: '120px' }}>Adjunto</th>
-                                <th style={{ ...styles.th, width: '120px' }}>Acción</th>
-                            </tr>
-                        </thead>
+                            {cargando && Array.from({ length: 6 }).map((_, i) => (
+                                <div key={`esqueleto-${i}`} style={styles.fila}>
+                                    {Array.from({ length: 8 }).map((__, j) => (
+                                        <span key={j}><span style={{ display: 'block', height: 9, borderRadius: 2, background: t.hoverFila, width: j === 1 ? '75%' : '90%' }} /></span>
+                                    ))}
+                                </div>
+                            ))}
 
-                        <tbody>
-                            {solicitudesFiltradas && solicitudesFiltradas.map((s, index) => {
-                                // --- ESTA LÓGICA DEBE ESTAR AQUÍ DENTRO ---
-                                // 1. Buscamos si hay una OT vinculada para ESTA solicitud 's'
-                                const otEncontrada = (ots || []).find(item => item.solicitudId === s._id || item._id === s._id);
-
-                                // 2. Determinamos el estado real (priorizando el de la OT si existe)
+                            {!cargando && solicitudesFiltradas.map((s, index) => {
+                                const otEncontrada = ots.find(o => o.solicitudId === s._id || o._id === s._id);
                                 const estadoFinal = otEncontrada ? otEncontrada.estado : s.estado;
-
-                                // 3. Definimos si "Ya tiene OT" para el botón
                                 const yaTieneOT = !!otEncontrada || ['Tratada', 'Planificada', 'Programada', 'En Ejecución', 'Trabajo Terminado', 'Con Informe', 'Pagada'].includes(estadoFinal);
+                                const sla = calcularSLA(s, otEncontrada);
 
                                 return (
-                                    <tr key={s._id || index} style={{
-                                        borderBottom: '1px solid #eee',
-                                        backgroundColor: yaTieneOT ? '#f9f9f9' : 'white'
-                                    }}>
-                                        <td style={styles.td}>{index + 1}</td>
-
-                                        <td style={{
-                                            ...styles.td,
-                                            fontWeight: 'bold',
-                                            color: yaTieneOT ? '#27ae60' : '#f39c12'
-                                        }}>
-                                            <span style={styles.badge}>
-                                                {estadoFinal || 'Pendiente'}
-                                            </span>
-                                        </td>
-
-                                        <td style={styles.td}>{s.empresaSolicitante || '---'}</td>
-
-                                        <td style={{ ...styles.td, opacity: yaTieneOT ? 0.6 : 1 }}>
-                                            {s.solicitante}
-                                        </td>
-
-                                        <td style={styles.td}>
+                                    <div key={s._id || index} style={styles.fila}>
+                                        <span style={styles.celdaMono}>{String(index + 1).padStart(2, '0')}</span>
+                                        <span style={styles.celdaEmpresa}>{s.empresaSolicitante || '—'}</span>
+                                        <span style={styles.celdaTexto}>{s.solicitante || '—'}</span>
+                                        <span style={{ minWidth: 0 }}>
+                                            <span style={{ ...styles.celdaEstado, color: colorEstado(estadoFinal, yaTieneOT) }}>{estadoFinal || 'Pendiente'}</span>
+                                            {sla && <span style={{ display: 'block', fontFamily: t.fontMono, fontSize: '10px', color: sla.color }}>SLA {sla.texto}</span>}
+                                        </span>
+                                        <span style={styles.celdaAtenuada}>{s.origen || '—'}</span>
+                                        <span style={styles.celdaFecha}>{fmtFecha(s.fechaCreacion || s.fechaHoraSolicitud)}</span>
+                                        <span style={{ ...styles.celdaAtenuada, color: s.adjuntos ? t.acento : t.textoDeshabilitado }}>
                                             {s.adjuntos ? (
-                                                <a
-                                                    href={`${API.replace('/api', '')}${s.adjuntos}`}
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
-                                                    style={styles.linkAdjunto}
-                                                >
-                                                    📎 Ver Archivo
+                                                <a href={`${API.replace('/api', '')}${s.adjuntos}`} target="_blank" rel="noopener noreferrer" style={{ color: t.acento }}>
+                                                    Ver archivo
                                                 </a>
-                                            ) : (
-                                                <span style={{ color: '#ccc' }}>---</span>
-                                            )}
-                                        </td>
-
-                                        <td style={styles.td}>
+                                            ) : '—'}
+                                        </span>
+                                        <span style={{ display: 'flex', gap: 4 }}>
                                             <button
-                                                onClick={() => {
-                                                    const datosParaTratamiento = {
-                                                        ...(otEncontrada || s),
-                                                        solicitudId: s._id,
-                                                    };
-                                                    navigate('/tratamiento', { state: datosParaTratamiento });
-                                                }}
-                                                style={yaTieneOT ? styles.btnEdit : styles.btnTratar}
+                                                onClick={() => navigate('/tratamiento', { state: { ...(otEncontrada || s), solicitudId: s._id } })}
+                                                style={styles.btnFilaPrincipal}
                                             >
-                                                {yaTieneOT ? '📝 Ver OT' : '⚙️ Tratar'}
+                                                {yaTieneOT ? 'Ver OT' : 'Tratar'}
                                             </button>
-                                        </td>
-                                    </tr>
+                                            <button
+                                                onClick={() => enviarPortalCliente?.(s)}
+                                                title="Enviar link del Portal del Cliente por WhatsApp"
+                                                style={styles.btnFilaSecundario}
+                                            >
+                                                WhatsApp
+                                            </button>
+                                        </span>
+                                    </div>
                                 );
                             })}
-                        </tbody>
-                    </table>
-                </div>
 
+                            {!cargando && solicitudesFiltradas.length === 0 && (
+                                <div style={styles.sinResultados}>Sin solicitudes que coincidan.</div>
+                            )}
+                        </div>
+                    </div>
+                </section>
             </div>
         </div>
     );
 };
 
 const styles = {
-    contenedorScrollTabla: {
-        width: '100%',
-        overflowX: 'auto',       // Activa el scroll horizontal
-        overflowY: 'visible',    // Permite ver el dropdown
-        paddingBottom: '100px',  // Espacio para que el menú no se corte
-        marginBottom: '-100px',  // Elimina el espacio sobrante del fondo
-    },
-    tablaAnchoFijo: {
-        width: '100%',
-        minWidth: '1000px',      // Fuerza a que no se amontonen las columnas
-        borderCollapse: 'collapse',
-        tableLayout: 'fixed'     // Mantiene anchos de columna estables
-    },
-    dropdownDirecto: {
-        position: 'absolute',
-        top: '100%',
-        left: '0',
-        zIndex: 1000,            // Por encima de todo
-        backgroundColor: 'white',
-        border: '1px solid #ddd',
-        borderRadius: '8px',
-        boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-        width: '180px',
-        marginTop: '5px'
-    },
-    th: {
-        padding: '12px 10px',
-        backgroundColor: '#f8f9fa',
-        fontSize: '13px'
-    },
-    itemMenu: {
-        padding: '10px 15px',
-        fontSize: '13px',
-        color: '#333',
-        cursor: 'pointer',
-        textAlign: 'left',
-        transition: 'background 0.2s',
-        borderBottom: '1px solid #f5f5f5',
-        // Hover: esto es mejor ponerlo en un CSS real, 
-        // pero puedes simularlo con onMouseEnter/Leave si prefieres
-    },
-    inputFiltroColumna: {
-        width: '100%',
-        padding: '6px',
-        fontSize: '12px',
-        border: '1px solid #ddd',
-        borderRadius: '4px',
-        outline: 'none',
-        boxSizing: 'border-box'
-    },
-    headerCell: {
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        gap: '5px'
-    },
-    btnFiltro: {
-        background: '#f1f3f5',
-        border: '1px solid #dee2e6',
-        borderRadius: '4px',
-        padding: '2px 6px',
-        cursor: 'pointer',
-        fontSize: '10px'
-    },
-    dropdown: {
-        position: 'absolute',
-        top: '100%',
-        left: '50%', // Se mueve a la mitad del botón
-        transform: 'translateX(-50%)', // Se retrocede la mitad de su propio ancho
-        zIndex: 1000,
-        backgroundColor: 'white',
-        border: '1px solid #ddd',
-        borderRadius: '8px',
-        padding: '12px',
-        boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
-        width: '220px', // Puedes ajustarlo según necesites
-        marginTop: '8px',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '10px'
-    },
-    inputPop: {
-        width: '100%',
-        padding: '8px',
-        borderRadius: '4px',
-        border: '1px solid #ccc',
-        fontSize: '13px',
-        boxSizing: 'border-box',
-        outline: 'none'
-    },
-    btnCerrar: {
-        backgroundColor: '#3498db',
-        color: 'white',
-        border: 'none',
-        padding: '6px',
-        borderRadius: '4px',
-        cursor: 'pointer',
-        fontSize: '12px'
-    },
-    headerContenedor: {
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between'
-    },
-    btnIconFiltro: {
-        background: 'none',
-        border: 'none',
-        cursor: 'pointer',
-        color: '#95a5a6',
-        fontSize: '10px',
-        padding: '2px 5px'
-    },
-    popover: {
-        position: 'absolute',
-        top: '100%',
-        left: '0',
-        backgroundColor: 'white',
-        border: '1px solid #ddd',
-        borderRadius: '6px',
-        padding: '10px',
-        boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-        zIndex: 1000, // Asegura que esté por encima de todo
-        width: '180px',
-        marginTop: '5px'
-    },
-    inputFiltro: {
-        width: '100%',
-        padding: '8px',
-        border: '1px solid #ccc',
-        borderRadius: '4px',
-        fontSize: '13px',
-        boxSizing: 'border-box',
-        outline: 'none'
-    },
-    // En IngresoScreen.jsx
-    container: {
-        width: '100%',
-        maxWidth: '1200px',
-        margin: '0 auto',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '20px',
-        padding: 'clamp(10px, 3vw, 20px)',
-        boxSizing: 'border-box'
-    },
-    btnTratar: { background: '#f39c12', color: 'white', border: 'none', padding: '5px 10px', borderRadius: '4px', cursor: 'pointer' },
-    btnEdit: { background: '#27ae60', color: 'white', border: 'none', padding: '5px 10px', borderRadius: '4px', cursor: 'pointer' },
-    card: {
-        background: 'white',
-        minHeight: '400px',
-        padding: 'clamp(12px, 3vw, 25px)',
-        borderRadius: '12px',
-        boxShadow: '0 4px 6px rgba(0,0,0,0.05)'
-    },
-    inputGroup: {
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '6px'
-    },
-    label: {
-        fontSize: '13px',
-        fontWeight: 'bold',
-        color: '#4b5563' // Gris oscuro profesional
-    },
+    raiz: { display: 'flex', flexDirection: 'column', height: '100%', minHeight: '720px', background: t.fondoMain, color: t.textoPrincipal, fontFamily: t.fontUi, fontSize: '13px' },
+    header: { flex: 'none', height: '46px', display: 'flex', alignItems: 'center', gap: '16px', padding: '0 16px', background: t.superficie, borderBottom: `1px solid ${t.bordeZona}` },
+    h1: { margin: 0, fontSize: '14px', fontWeight: 700, letterSpacing: '-.01em', whiteSpace: 'nowrap' },
+    subtitulo: { fontSize: '11.5px', color: t.textoAtenuado2, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
+    franjaError: { flex: 'none', display: 'flex', alignItems: 'center', gap: 12, padding: '8px 16px', background: t.pagoPendiente, color: '#fff', fontSize: 12 },
+    btnReintentar: { marginLeft: 'auto', height: 22, padding: '0 10px', background: 'rgba(255,255,255,.18)', border: '1px solid rgba(255,255,255,.4)', color: '#fff', fontSize: 11, fontWeight: 600, cursor: 'pointer', borderRadius: 2, fontFamily: t.fontUi, flex: 'none' },
+    cuerpo: { flex: 1, minHeight: 0, display: 'flex' },
+
+    formSeccion: { width: '452px', flex: 'none', minWidth: 0, overflow: 'auto', background: t.superficie, borderRight: `1px solid ${t.bordeZona}` },
+    tituloBloque: { fontSize: '9.5px', letterSpacing: '.11em', textTransform: 'uppercase', color: t.textoAtenuado3, marginBottom: '9px' },
+    formGrid: { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '9px 10px' },
+    campoLabel: { display: 'flex', flexDirection: 'column', gap: '3px', minWidth: 0 },
+    etiqueta: { fontSize: '9.5px', letterSpacing: '.11em', textTransform: 'uppercase', color: t.textoAtenuado2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
     input: {
-        padding: '12px',
-        borderRadius: '8px',
-        border: '1px solid #d1d5db',
-        fontSize: '14px',
-        outline: 'none'
+        height: '27px', minWidth: 0, padding: '0 8px', border: `1px solid ${t.bordeInput}`, background: t.superficie,
+        fontFamily: 'inherit', fontSize: '12px', color: t.textoPrincipal, outline: 'none', borderRadius: '2px',
     },
-    btnPrimario: {
-        background: '#2563eb',
-        color: 'white',
-        border: 'none',
-        padding: '14px 28px',
-        cursor: 'pointer',
-        borderRadius: '8px',
-        fontWeight: 'bold',
-        fontSize: '15px'
-    }
+    avisoFranja: { marginTop: '10px', padding: '7px 10px', background: t.barraFiltrosPie, borderLeft: `2px solid ${t.acento}`, fontSize: '11.5px', color: t.textoSecundario1 },
+    btnPrimario: { height: '30px', padding: '0 14px', background: t.acento, border: `1px solid ${t.acento}`, color: '#fff', fontSize: '12px', fontWeight: 700, cursor: 'pointer', borderRadius: '2px', fontFamily: t.fontUi },
+    btnSecundario: { height: '30px', padding: '0 12px', background: t.superficie, border: `1px solid ${t.bordeZona}`, fontSize: '12px', color: '#262622', cursor: 'pointer', borderRadius: '2px', whiteSpace: 'nowrap', fontFamily: t.fontUi },
+
+    tablaSeccion: { flex: 1, minWidth: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' },
+    barraFiltros: { flex: 'none', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '4px 6px', padding: '7px 16px', background: t.barraFiltrosPie, borderBottom: `1px solid ${t.hairlineBloque}` },
+    etiquetaBarra: { fontSize: '9.5px', letterSpacing: '.11em', textTransform: 'uppercase', color: t.textoAtenuado2, flex: 'none' },
+    filtroInput: { height: '23px', width: '210px', padding: '0 8px', border: `1px solid ${t.bordeInput}`, background: t.superficie, fontFamily: 'inherit', fontSize: '11.5px', outline: 'none', borderRadius: '2px' },
+    btnFiltro: { height: '23px', padding: '0 8px', background: 'transparent', border: '1px solid transparent', fontSize: '11px', color: '#57564f', cursor: 'pointer', borderRadius: '2px', whiteSpace: 'nowrap', fontFamily: t.fontUi },
+    resumenBarra: { marginLeft: 'auto', flex: 'none', fontFamily: t.fontMono, fontSize: '11px', color: t.textoAtenuado3, whiteSpace: 'nowrap' },
+
+    scrollTabla: { flex: 1, minHeight: 0, minWidth: 0, overflow: 'auto', background: t.superficie },
+    encabezadoFila: {
+        position: 'sticky', top: 0, zIndex: 2, display: 'grid', gridTemplateColumns: GRID, gap: '10px', alignItems: 'center',
+        height: '26px', padding: '0 16px', background: t.encabezadoTabla, borderBottom: `1px solid ${t.bordeZona}`,
+        fontSize: '9.5px', letterSpacing: '.1em', textTransform: 'uppercase', color: t.textoAtenuado1, fontWeight: 700,
+    },
+    fila: { display: 'grid', gridTemplateColumns: GRID, gap: '10px', alignItems: 'center', height: '36px', padding: '0 16px', borderBottom: `1px solid ${t.hairlineFila}` },
+    celdaMono: { fontFamily: t.fontMono, fontSize: '11px', color: t.textoDeshabilitado },
+    celdaEmpresa: { minWidth: 0, fontSize: '12.5px', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
+    celdaTexto: { minWidth: 0, fontSize: '11.5px', color: t.textoSecundario1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
+    celdaEstado: { display: 'block', fontSize: '11px', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
+    celdaAtenuada: { minWidth: 0, fontSize: '11px', color: t.textoAtenuado1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
+    celdaFecha: { fontFamily: t.fontMono, fontSize: '11px', color: '#57564f', textAlign: 'right' },
+    btnFilaPrincipal: { height: '23px', padding: '0 8px', background: t.superficie, border: `1px solid ${t.bordeZona}`, fontSize: '11px', fontWeight: 600, color: '#262622', cursor: 'pointer', borderRadius: '2px', whiteSpace: 'nowrap', fontFamily: t.fontUi },
+    btnFilaSecundario: { height: '23px', padding: '0 8px', background: 'transparent', border: `1px solid ${t.bordeZona}`, fontSize: '11px', color: '#57564f', cursor: 'pointer', borderRadius: '2px', whiteSpace: 'nowrap', fontFamily: t.fontUi },
+    sinResultados: { padding: '40px 16px', textAlign: 'center', fontSize: '14px', color: t.textoAtenuado3 },
 };
 
 export default IngresoScreen;

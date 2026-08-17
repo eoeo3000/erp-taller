@@ -1,0 +1,2106 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#eceae5;font-family:"Helvetica Neue",Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased}
+a{color:oklch(0.48 0.10 250);text-decoration:none}
+a:hover{color:oklch(0.38 0.10 250)}
+button{font-family:inherit}
+::-webkit-scrollbar{width:9px;height:9px}
+::-webkit-scrollbar-thumb{background:rgba(0,0,0,.18)}
+</style>
+</helmet>
+<div style="display:flex;height:100vh;min-height:720px;width:100%;background:#eceae5;color:#1a1a18;font-size:13px">
+
+  <sc-if value="{{ navVisible }}" hint-placeholder-val="{{ true }}">
+  <nav style="width:{{ navW }};flex:none;background:#1c1d1b;color:#e8e7e3;display:flex;flex-direction:column;overflow:hidden">
+    <div style="padding:14px 14px 12px;border-bottom:1px solid rgba(255,255,255,.09)">
+      <div style="font-size:12.5px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;white-space:nowrap">Taller ERP</div>
+      <div style="font-size:10.5px;color:rgba(255,255,255,.42);margin-top:3px;font-family:ui-monospace,Menlo,monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Maestranza Vergara Ltda.</div>
+    </div>
+    <div style="padding:12px 0 4px">
+      <div style="font-size:9.5px;letter-spacing:.13em;text-transform:uppercase;color:rgba(255,255,255,.34);padding:0 14px 6px;white-space:nowrap">Operación</div>
+      <sc-for list="{{ navOperacion }}" as="item" hint-placeholder-count="5">
+        <div onClick="{{ item.onClick }}" style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 14px;font-size:12.5px;color:{{ item.tono }};background:{{ item.fondo }};cursor:pointer;border-left:2px solid {{ item.borde }}" style-hover="background:rgba(255,255,255,.10);color:#fff">
+          <span style="min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ item.label }}</span>
+          <span style="font-family:ui-monospace,Menlo,monospace;font-size:10.5px;color:rgba(255,255,255,.36);flex:none">{{ item.count }}</span>
+        </div>
+      </sc-for>
+    </div>
+    <div style="padding:10px 0 4px">
+      <div style="font-size:9.5px;letter-spacing:.13em;text-transform:uppercase;color:rgba(255,255,255,.34);padding:0 14px 6px;white-space:nowrap">Administración</div>
+      <sc-for list="{{ navAdmin }}" as="item" hint-placeholder-count="5">
+        <div onClick="{{ item.onClick }}" style="padding:6px 14px;font-size:12.5px;color:{{ item.tono }};background:{{ item.fondo }};cursor:pointer;border-left:2px solid {{ item.borde }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis" style-hover="background:rgba(255,255,255,.10);color:#fff">{{ item.label }}</div>
+      </sc-for>
+    </div>
+    <div style="margin-top:auto;padding:10px 14px;border-top:1px solid rgba(255,255,255,.09);font-size:10.5px;color:rgba(255,255,255,.38);font-family:ui-monospace,Menlo,monospace;line-height:1.6;white-space:nowrap;overflow:hidden">
+      <div>Sincronizado {{ horaSync }}</div>
+      <div>R. Vergara · Planificación</div>
+    </div>
+  </nav>
+
+  <div onPointerDown="{{ dragNav }}" title="Arrastra para ajustar el ancho de la navegación" style="width:5px;flex:none;cursor:col-resize;background:#1c1d1b;border-right:1px solid rgba(0,0,0,.18)" style-hover="background:oklch(0.48 0.10 250)"></div>
+  </sc-if>
+
+  <div onClick="{{ onToggleNav }}" title="{{ navTitulo }}" style="width:13px;flex:none;display:flex;align-items:center;justify-content:center;background:#1c1d1b;color:rgba(255,255,255,.45);font-family:ui-monospace,Menlo,monospace;font-size:12px;cursor:pointer;border-right:1px solid rgba(0,0,0,.20)" style-hover="color:#fff;background:oklch(0.42 0.10 250)">{{ navGlifo }}</div>
+
+  <main style="flex:1;min-width:0;display:flex;flex-direction:column;background:#f6f5f2">
+
+    <sc-if value="{{ modoDemo }}" hint-placeholder-val="{{ false }}">
+      <div style="flex:none;display:flex;align-items:center;gap:10px;height:26px;padding:0 16px;background:oklch(0.55 0.11 65);color:#fff">
+        <span style="font-size:9.5px;letter-spacing:.11em;text-transform:uppercase;font-weight:700;flex:none">Demostración</span>
+        <span style="font-size:11px;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ bannerDemo }}</span>
+        <button onClick="{{ onSalirDemo }}" style="margin-left:auto;flex:none;height:18px;padding:0 8px;background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.45);color:#fff;font-size:10.5px;font-weight:600;cursor:pointer;border-radius:2px;white-space:nowrap" style-hover="background:#fff;color:oklch(0.45 0.11 65)">Volver a producción</button>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ esDatos }}" hint-placeholder-val="{{ false }}">
+    <div style="display:flex;flex-direction:column;min-height:0;flex:1">
+      <header style="flex:none;height:46px;display:flex;align-items:center;gap:16px;padding:0 16px;background:#fff;border-bottom:1px solid rgba(0,0,0,.12)">
+        <h1 style="margin:0;font-size:14px;font-weight:700;letter-spacing:-.01em;white-space:nowrap">Importar y exportar</h1>
+        <span style="font-size:11.5px;color:#75746e;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Entorno de trabajo, juego de demostración y respaldos</span>
+      </header>
+
+      <div style="flex:1;min-height:0;display:flex">
+        <section style="flex:1;min-width:0;overflow:auto;background:#fff">
+          <div style="max-width:860px;padding:14px 16px 24px">
+
+            <div style="font-size:9.5px;letter-spacing:.11em;text-transform:uppercase;color:#8a8981;margin-bottom:8px">Entorno de trabajo</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+              <sc-for list="{{ dat.entornos }}" as="e" hint-placeholder-count="2">
+                <div onClick="{{ e.onClick }}" style="padding:10px 12px;background:{{ e.fondo }};border:1px solid rgba(0,0,0,.16);border-left:3px solid {{ e.marca }};cursor:pointer;border-radius:2px" style-hover="border-color:#1c1d1b">
+                  <div style="display:flex;align-items:baseline;gap:8px">
+                    <span style="font-size:12.5px;font-weight:700">{{ e.nombre }}</span>
+                    <span style="font-family:ui-monospace,Menlo,monospace;font-size:10.5px;color:{{ e.tono }};font-weight:600">{{ e.bd }}</span>
+                  </div>
+                  <div style="font-family:ui-monospace,Menlo,monospace;font-size:10px;color:#a3a29a;margin-top:2px">{{ e.host }}</div>
+                  <p style="margin:6px 0 0;font-size:11px;line-height:1.45;color:#57564f;text-wrap:pretty">{{ e.nota }}</p>
+                  <div style="font-size:10.5px;font-weight:600;color:#75746e;margin-top:7px">{{ e.etiqueta }}</div>
+                </div>
+              </sc-for>
+            </div>
+
+            <div style="height:1px;background:rgba(0,0,0,.10);margin:16px 0"></div>
+
+            <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:8px">
+              <span style="font-size:9.5px;letter-spacing:.11em;text-transform:uppercase;color:#8a8981">Juego de demostración</span>
+              <span style="font-size:10.5px;font-weight:600;color:{{ dat.demoTono }};min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ dat.demoEstado }}</span>
+            </div>
+
+            <sc-if value="{{ dat.avisoProduccion }}" hint-placeholder-val="{{ true }}">
+              <div style="padding:8px 10px;margin-bottom:9px;background:#f0efeb;border-left:2px solid oklch(0.55 0.11 65);font-size:11.5px;color:#3a3a35;line-height:1.45">Estás en Producción. Cambia al entorno de demostración para poder cargar o vaciar el juego de datos.</div>
+            </sc-if>
+
+            <div style="border:1px solid rgba(0,0,0,.12);border-radius:2px">
+              <sc-for list="{{ dat.contenido }}" as="c" hint-placeholder-count="8">
+                <div style="display:grid;grid-template-columns:minmax(160px,1fr) minmax(200px,1.3fr) 60px;gap:10px;align-items:baseline;padding:6px 12px;border-bottom:1px solid rgba(0,0,0,.06)">
+                  <span style="font-size:11.5px;color:#1a1a18;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ c.label }}</span>
+                  <span style="font-size:10.5px;color:#8a8981;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ c.detalle }}</span>
+                  <span style="font-family:ui-monospace,Menlo,monospace;font-size:11px;text-align:right;color:#3a3a35">{{ c.n }}</span>
+                </div>
+              </sc-for>
+              <div style="display:flex;flex-wrap:wrap;gap:6px;padding:9px 12px">
+                <button onClick="{{ dat.onCargar }}" style="height:28px;padding:0 12px;background:{{ dat.accionFondo }};border:1px solid {{ dat.accionBorde }};color:{{ dat.accionTono }};font-size:12px;font-weight:700;cursor:{{ dat.demoCursor }};border-radius:2px;white-space:nowrap">Cargar demostración</button>
+                <button onClick="{{ dat.onRegenerar }}" style="height:28px;padding:0 11px;background:{{ dat.secFondo }};border:1px solid {{ dat.secBorde }};font-size:12px;font-weight:600;color:{{ dat.secTono }};cursor:{{ dat.demoCursor }};border-radius:2px;white-space:nowrap">Regenerar</button>
+                <button onClick="{{ dat.onVaciar }}" style="height:28px;padding:0 11px;background:{{ dat.secFondo }};border:1px solid {{ dat.secBorde }};font-size:12px;font-weight:600;color:{{ dat.rojoTono }};cursor:{{ dat.demoCursor }};border-radius:2px;white-space:nowrap">Vaciar</button>
+              </div>
+              <sc-if value="{{ dat.pedirVaciar }}" hint-placeholder-val="{{ false }}">
+                <div style="padding:10px 12px;border-top:1px solid rgba(0,0,0,.10);background:#faf8f6">
+                  <div style="font-size:11.5px;color:#3a3a35;line-height:1.45;margin-bottom:8px">Se eliminarán los 119 registros de <strong>erp_taller_demo</strong>. Escribe VACIAR para confirmar.</div>
+                  <div style="display:flex;gap:6px">
+                    <input value="{{ dat.palabra }}" onChange="{{ dat.onPalabra }}" placeholder="VACIAR" style="height:27px;width:150px;padding:0 8px;border:1px solid rgba(0,0,0,.20);font-family:ui-monospace,Menlo,monospace;font-size:12px;letter-spacing:.06em;outline:none;border-radius:2px" style-focus="border-color:oklch(0.52 0.13 25)" />
+                    <button onClick="{{ dat.onConfirmarVaciar }}" style="height:27px;padding:0 12px;background:{{ dat.vaciarFondo }};border:1px solid {{ dat.vaciarBorde }};color:{{ dat.vaciarTono }};font-size:12px;font-weight:700;cursor:{{ dat.vaciarCursor }};border-radius:2px">Vaciar base de demostración</button>
+                    <button onClick="{{ dat.onCancelar }}" style="height:27px;padding:0 11px;background:#fff;border:1px solid rgba(0,0,0,.20);font-size:12px;color:#262622;cursor:pointer;border-radius:2px" style-hover="border-color:#1c1d1b">Cancelar</button>
+                  </div>
+                </div>
+              </sc-if>
+            </div>
+
+            <div style="height:1px;background:rgba(0,0,0,.10);margin:16px 0"></div>
+
+            <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:8px">
+              <span style="font-size:9.5px;letter-spacing:.11em;text-transform:uppercase;color:#8a8981">Exportar a Excel</span>
+              <span style="font-family:ui-monospace,Menlo,monospace;font-size:10.5px;color:#8a8981;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ dat.totalExporta }}</span>
+              <span style="margin-left:auto;display:flex;gap:4px;flex:none">
+                <button onClick="{{ dat.onTodos }}" style="height:20px;padding:0 8px;background:#fff;border:1px solid rgba(0,0,0,.18);font-size:10.5px;color:#3a3a35;cursor:pointer;border-radius:2px" style-hover="border-color:#1c1d1b">Todos</button>
+                <button onClick="{{ dat.onNinguno }}" style="height:20px;padding:0 8px;background:#fff;border:1px solid rgba(0,0,0,.18);font-size:10.5px;color:#3a3a35;cursor:pointer;border-radius:2px" style-hover="border-color:#1c1d1b">Ninguno</button>
+              </span>
+            </div>
+            <div style="border:1px solid rgba(0,0,0,.12);border-radius:2px">
+              <sc-for list="{{ dat.modulos }}" as="m" hint-placeholder-count="6">
+                <div onClick="{{ m.onClick }}" style="display:grid;grid-template-columns:16px minmax(150px,1fr) minmax(200px,1.4fr);gap:10px;align-items:center;padding:5px 12px;background:{{ m.fondo }};border-bottom:1px solid rgba(0,0,0,.06);cursor:pointer" style-hover="background:#f4f3ef">
+                  <span style="font-family:ui-monospace,Menlo,monospace;font-size:11px;color:{{ m.tono }}">{{ m.marca }}</span>
+                  <span style="font-size:11.5px;color:{{ m.tono }};min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ m.label }}</span>
+                  <span style="font-family:ui-monospace,Menlo,monospace;font-size:10px;color:#a3a29a;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ m.cols }}</span>
+                </div>
+              </sc-for>
+              <sc-if value="{{ dat.filtrosOT }}" hint-placeholder-val="{{ false }}">
+                <div style="padding:9px 12px;background:#faf8f6;border-bottom:1px solid rgba(0,0,0,.06)">
+                  <div style="font-size:9.5px;letter-spacing:.11em;text-transform:uppercase;color:#75746e;margin-bottom:7px">Filtros para OTs · opcional</div>
+                  <div style="display:flex;flex-wrap:wrap;gap:8px">
+                    <label style="display:flex;flex-direction:column;gap:3px">
+                      <span style="font-size:10px;color:#8a8981">Desde</span>
+                      <input value="{{ dat.otDesde }}" onChange="{{ dat.onOtDesde }}" placeholder="dd-mm-aaaa" style="height:25px;width:112px;padding:0 7px;border:1px solid rgba(0,0,0,.18);font-family:ui-monospace,Menlo,monospace;font-size:11.5px;outline:none;border-radius:2px" style-focus="border-color:oklch(0.48 0.10 250)" />
+                    </label>
+                    <label style="display:flex;flex-direction:column;gap:3px">
+                      <span style="font-size:10px;color:#8a8981">Hasta</span>
+                      <input value="{{ dat.otHasta }}" onChange="{{ dat.onOtHasta }}" placeholder="dd-mm-aaaa" style="height:25px;width:112px;padding:0 7px;border:1px solid rgba(0,0,0,.18);font-family:ui-monospace,Menlo,monospace;font-size:11.5px;outline:none;border-radius:2px" style-focus="border-color:oklch(0.48 0.10 250)" />
+                    </label>
+                    <label style="display:flex;flex-direction:column;gap:3px">
+                      <span style="font-size:10px;color:#8a8981">Estado</span>
+                      <select value="{{ dat.otEstado }}" onChange="{{ dat.onOtEstado }}" style="height:25px;width:168px;padding:0 5px;border:1px solid rgba(0,0,0,.18);background:#fff;font-family:inherit;font-size:11.5px;outline:none;border-radius:2px" style-focus="border-color:oklch(0.48 0.10 250)">
+                        <sc-for list="{{ dat.estadosOT }}" as="e" hint-placeholder-count="9">
+                          <option value="{{ e.valor }}">{{ e.label }}</option>
+                        </sc-for>
+                      </select>
+                    </label>
+                  </div>
+                </div>
+              </sc-if>
+              <div style="padding:9px 12px">
+                <button style="height:28px;padding:0 14px;background:{{ dat.exportaFondo }};border:1px solid {{ dat.exportaBorde }};color:{{ dat.exportaTono }};font-size:12px;font-weight:600;cursor:{{ dat.exportaCursor }};border-radius:2px;white-space:nowrap">{{ dat.exportaLabel }}</button>
+              </div>
+            </div>
+
+            <div style="height:1px;background:rgba(0,0,0,.10);margin:16px 0"></div>
+
+            <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:8px">
+              <span style="font-size:9.5px;letter-spacing:.11em;text-transform:uppercase;color:#8a8981">Importar desde Excel</span>
+              <span style="font-size:10.5px;color:#8a8981;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Descarga la plantilla, complétala y sube el archivo · un módulo por vez</span>
+            </div>
+
+            <sc-if value="{{ dat.hayResultado }}" hint-placeholder-val="{{ false }}">
+              <div style="padding:9px 12px;margin-bottom:9px;background:#fff;border:1px solid rgba(0,0,0,.12);border-left:2px solid {{ dat.resultadoBorde }}">
+                <div style="display:flex;align-items:baseline;gap:8px">
+                  <span style="font-size:11.5px;font-weight:700">{{ dat.resultado.modulo }}</span>
+                  <span style="font-family:ui-monospace,Menlo,monospace;font-size:11px;color:#3a3a35;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ dat.resumenImport }}</span>
+                  <span onClick="{{ dat.onCerrarResultado }}" style="margin-left:auto;flex:none;font-family:ui-monospace,Menlo,monospace;font-size:12px;color:#a3a29a;cursor:pointer;padding:0 3px" style-hover="color:#1a1a18">×</span>
+                </div>
+                <sc-if value="{{ dat.hayErrores }}" hint-placeholder-val="{{ false }}">
+                  <div style="margin-top:7px;padding-top:7px;border-top:1px solid rgba(0,0,0,.08)">
+                    <div style="font-size:10.5px;font-weight:600;color:oklch(0.50 0.11 65);margin-bottom:4px">{{ dat.totalErrores }}</div>
+                    <sc-for list="{{ dat.erroresImport }}" as="e" hint-placeholder-count="0">
+                      <div style="font-family:ui-monospace,Menlo,monospace;font-size:10.5px;color:#57564f;padding:1px 0">{{ e.texto }}</div>
+                    </sc-for>
+                  </div>
+                </sc-if>
+              </div>
+            </sc-if>
+
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+              <sc-for list="{{ dat.importables }}" as="m" hint-placeholder-count="4">
+                <div style="padding:10px 12px;border:1px solid rgba(0,0,0,.12);border-radius:2px">
+                  <div style="font-size:12px;font-weight:700">{{ m.label }}</div>
+                  <div style="display:flex;flex-wrap:wrap;gap:3px;margin-top:6px">
+                    <sc-for list="{{ m.columnas }}" as="c" hint-placeholder-count="4">
+                      <span style="padding:1px 6px;background:{{ c.fondo }};color:{{ c.tono }};font-family:ui-monospace,Menlo,monospace;font-size:10px;border-radius:2px;white-space:nowrap">{{ c.label }}</span>
+                    </sc-for>
+                  </div>
+                  <div style="font-size:10.5px;color:#8a8981;margin-top:6px;line-height:1.4">{{ m.regla }}</div>
+                  <div style="display:flex;gap:6px;margin-top:8px">
+                    <button onClick="{{ m.onPlantilla }}" style="height:26px;padding:0 10px;background:#fff;border:1px solid rgba(0,0,0,.20);font-size:11.5px;font-weight:600;color:#262622;cursor:pointer;border-radius:2px;white-space:nowrap" style-hover="border-color:#1c1d1b">Plantilla</button>
+                    <button onClick="{{ m.onImportar }}" style="flex:1;height:26px;padding:0 10px;background:#1c1d1b;border:1px solid #1c1d1b;color:#fff;font-size:11.5px;font-weight:600;cursor:pointer;border-radius:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" style-hover="background:oklch(0.42 0.10 250);border-color:oklch(0.42 0.10 250)">{{ m.etiqueta }}</button>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+            <div style="font-size:10.5px;color:#8a8981;margin-top:9px;line-height:1.6">
+              <strong style="color:oklch(0.50 0.11 65)">*</strong> campo obligatorio. Las filas con error se omiten sin afectar a las demás; el resultado indica cuántas se insertaron y qué falló en cada fila. Órdenes de trabajo y solicitudes se pueden exportar, pero no importar.
+            </div>
+
+          </div>
+        </section>
+      </div>
+    </div>
+    </sc-if>
+
+    <sc-if value="{{ esPanel }}" hint-placeholder-val="{{ true }}">
+    <header style="flex:none;height:46px;display:flex;align-items:center;gap:16px;padding:0 16px;background:#fff;border-bottom:1px solid rgba(0,0,0,.12)">
+      <h1 style="margin:0;font-size:14px;font-weight:700;letter-spacing:-.01em;white-space:nowrap">Panel de control</h1>
+      <span style="font-size:11.5px;color:#75746e;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Solicitudes y órdenes de trabajo activas</span>
+      <div style="margin-left:auto;display:flex;align-items:center;gap:8px;flex:none">
+        <input value="{{ consulta }}" onChange="{{ onConsulta }}" placeholder="Buscar cliente, OT o solicitante" style="width:240px;height:27px;padding:0 9px;border:1px solid rgba(0,0,0,.18);background:#fff;font-size:12px;color:#1a1a18;outline:none;border-radius:2px" style-focus="border-color:oklch(0.48 0.10 250)" />
+        <button onClick="{{ onNuevaSolicitud }}" style="height:27px;padding:0 12px;background:#1c1d1b;color:#fff;border:1px solid #1c1d1b;font-size:12px;font-weight:600;border-radius:2px;cursor:pointer;white-space:nowrap" style-hover="background:oklch(0.42 0.10 250);border-color:oklch(0.42 0.10 250)">Nueva solicitud</button>
+      </div>
+    </header>
+
+    <div style="flex:none;position:relative;display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;padding:5px 16px;background:#e9e7e2;border-bottom:1px solid rgba(0,0,0,.10)">
+      <span style="font-size:9.5px;letter-spacing:.11em;text-transform:uppercase;color:#75746e;flex:none">Disposición</span>
+
+      <button onClick="{{ onMenuColumnas }}" style="height:20px;padding:0 9px;background:#fff;border:1px solid rgba(0,0,0,.20);font-size:11px;font-weight:600;color:#262622;cursor:pointer;border-radius:2px;white-space:nowrap;flex:none" style-hover="border-color:#1c1d1b">{{ etiquetaColumnas }}</button>
+
+      <div style="display:flex;gap:2px;flex:none">
+        <sc-for list="{{ densidades }}" as="d" hint-placeholder-count="3">
+          <button onClick="{{ d.onClick }}" style="height:20px;padding:0 8px;background:#fff;border:1px solid rgba(0,0,0,.16);font-size:11px;color:#3a3a35;cursor:pointer;border-radius:2px;white-space:nowrap" style-hover="border-color:#1c1d1b">{{ d.marca }}{{ d.label }}</button>
+        </sc-for>
+      </div>
+
+      <span style="width:1px;height:16px;background:rgba(0,0,0,.14);flex:none"></span>
+
+      <div style="display:flex;gap:3px;min-width:0;flex-wrap:wrap">
+        <sc-if value="{{ sinVariantes }}" hint-placeholder-val="{{ true }}">
+          <span style="font-size:11px;color:#8a8981;white-space:nowrap">Sin variantes guardadas</span>
+        </sc-if>
+        <sc-for list="{{ variantes }}" as="v" hint-placeholder-count="0">
+          <span onClick="{{ v.onClick }}" style="display:flex;align-items:center;gap:5px;height:20px;padding:0 4px 0 8px;background:#fff;border:1px solid rgba(0,0,0,.16);font-size:11px;color:#262622;cursor:pointer;border-radius:2px;white-space:nowrap" style-hover="border-color:#1c1d1b">
+            <span>{{ v.nombre }}</span>
+            <span onClick="{{ v.onEliminar }}" title="Eliminar variante" style="padding:0 3px;color:#a3a29a;font-family:ui-monospace,Menlo,monospace" style-hover="color:oklch(0.52 0.13 25)">×</span>
+          </span>
+        </sc-for>
+      </div>
+
+      <div style="margin-left:auto;display:flex;align-items:center;gap:6px;flex:none">
+        <span style="font-family:ui-monospace,Menlo,monospace;font-size:10.5px;color:#8a8981;white-space:nowrap">{{ medidas }}</span>
+        <sc-if value="{{ guardando }}" hint-placeholder-val="{{ false }}">
+          <input value="{{ nombreNueva }}" onChange="{{ onNombre }}" placeholder="Nombre de la variante" style="width:150px;height:20px;padding:0 7px;border:1px solid rgba(0,0,0,.20);font-size:11px;outline:none;border-radius:2px" style-focus="border-color:oklch(0.48 0.10 250)" />
+        </sc-if>
+        <sc-if value="{{ guardando }}" hint-placeholder-val="{{ false }}">
+          <button onClick="{{ onConfirmarGuardar }}" style="height:20px;padding:0 9px;background:oklch(0.48 0.10 250);border:1px solid oklch(0.48 0.10 250);color:#fff;font-size:11px;font-weight:600;cursor:pointer;border-radius:2px;white-space:nowrap">Confirmar</button>
+        </sc-if>
+        <button onClick="{{ onAbrirGuardar }}" style="height:20px;padding:0 9px;background:#fff;border:1px solid rgba(0,0,0,.20);font-size:11px;font-weight:600;color:#262622;cursor:pointer;border-radius:2px;white-space:nowrap" style-hover="border-color:#1c1d1b">Guardar variante</button>
+        <button onClick="{{ onRestablecer }}" style="height:20px;padding:0 9px;background:transparent;border:1px solid transparent;font-size:11px;color:#75746e;cursor:pointer;border-radius:2px;white-space:nowrap" style-hover="border-color:rgba(0,0,0,.20);color:#262622">Restablecer</button>
+      </div>
+
+      <sc-if value="{{ menuColumnas }}" hint-placeholder-val="{{ false }}">
+        <div style="position:absolute;top:28px;left:96px;z-index:20;width:296px;max-height:340px;overflow:auto;background:#fff;border:1px solid rgba(0,0,0,.22);box-shadow:0 8px 24px rgba(0,0,0,.14);border-radius:2px">
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 11px;border-bottom:1px solid rgba(0,0,0,.10)">
+            <span style="font-size:9.5px;letter-spacing:.11em;text-transform:uppercase;color:#75746e">Campos de la tabla</span>
+            <span onClick="{{ onMenuColumnas }}" style="font-family:ui-monospace,Menlo,monospace;font-size:12px;color:#a3a29a;cursor:pointer;padding:0 2px" style-hover="color:#1a1a18">×</span>
+          </div>
+          <sc-for list="{{ catalogo }}" as="c" hint-placeholder-count="12">
+            <div onClick="{{ c.onToggle }}" style="display:grid;grid-template-columns:16px 1fr auto auto;align-items:center;gap:8px;padding:5px 11px;cursor:pointer;border-bottom:1px solid rgba(0,0,0,.05)" style-hover="background:#f4f3ef">
+              <span style="font-family:ui-monospace,Menlo,monospace;font-size:11px;color:{{ c.tono }}">{{ c.marca }}</span>
+              <span style="font-size:11.5px;color:{{ c.tono }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ c.label }}</span>
+              <span style="font-size:10px;color:#a3a29a;font-family:ui-monospace,Menlo,monospace">{{ c.origen }}</span>
+              <span onClick="{{ c.onSubir }}" title="Mover a la izquierda" style="font-family:ui-monospace,Menlo,monospace;font-size:11px;color:#a3a29a;padding:0 4px" style-hover="color:#1a1a18">‹</span>
+            </div>
+          </sc-for>
+          <div style="padding:8px 11px;font-size:10.5px;color:#8a8981;line-height:1.5">Se guarda dentro de la variante junto con anchos y densidad.</div>
+        </div>
+      </sc-if>
+    </div>
+
+    <sc-if value="{{ mostrarKpis }}" hint-placeholder-val="{{ true }}">
+      <div style="flex:none;display:flex;flex-wrap:wrap;background:#fff;border-bottom:1px solid rgba(0,0,0,.12)">
+        <sc-for list="{{ kpis }}" as="k" hint-placeholder-count="4">
+          <div style="flex:1 1 170px;min-width:150px;padding:9px 16px;border-right:1px solid rgba(0,0,0,.08)">
+            <div style="font-size:9.5px;letter-spacing:.11em;text-transform:uppercase;color:#8a8981;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ k.label }}</div>
+            <div style="display:flex;align-items:baseline;gap:6px;margin-top:3px">
+              <span style="font-family:ui-monospace,Menlo,monospace;font-size:18px;font-weight:600;letter-spacing:-.02em;white-space:nowrap">{{ k.valor }}</span>
+              <span style="font-size:10.5px;color:#8a8981;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ k.nota }}</span>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+    </sc-if>
+
+    <div style="flex:1;min-height:0;display:flex">
+
+      <section style="flex:1;min-width:0;overflow:hidden;display:flex;flex-direction:column">
+
+        <div style="flex:none;display:flex;flex-wrap:wrap;align-items:center;gap:4px 2px;padding:7px 16px;background:#f0efeb;border-bottom:1px solid rgba(0,0,0,.10)">
+          <sc-for list="{{ filtros }}" as="f" hint-placeholder-count="4">
+            <button onClick="{{ f.onClick }}" style="height:23px;padding:0 10px;background:transparent;border:1px solid transparent;font-size:11.5px;color:#57564f;cursor:pointer;border-radius:2px;white-space:nowrap" style-hover="background:rgba(0,0,0,.06)">{{ f.label }}</button>
+          </sc-for>
+          <div style="margin-left:auto;display:flex;align-items:center;gap:10px;flex:none;white-space:nowrap;font-size:11px;color:#8a8981;font-family:ui-monospace,Menlo,monospace">
+            <span>{{ resumenFiltro }}</span>
+            <button onClick="{{ onOrden }}" style="height:23px;padding:0 9px;background:#fff;border:1px solid rgba(0,0,0,.18);font-size:11px;color:#3a3a35;cursor:pointer;border-radius:2px;font-family:inherit" style-hover="border-color:#1c1d1b">{{ ordenLabel }}</button>
+          </div>
+        </div>
+
+        <div style="flex:1;min-height:0;min-width:0;overflow:auto;background:#fff">
+          <div style="min-width:{{ tablaW }}">
+          <div style="position:sticky;top:0;z-index:2;display:grid;grid-template-columns:{{ grid }};gap:10px;align-items:center;height:26px;padding:0 16px 0 13px;background:#e4e2dc;border-bottom:1px solid rgba(0,0,0,.14);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:#6b6a63;font-weight:700">
+            <span></span>
+            <sc-for list="{{ encabezados }}" as="h" hint-placeholder-count="5">
+              <span style="position:relative;min-width:0;text-align:{{ h.align }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ h.label }}<sc-if value="{{ h.ajustable }}" hint-placeholder-val="{{ true }}"><span onPointerDown="{{ h.onDrag }}" title="Arrastra para ajustar el ancho" style="position:absolute;top:-6px;right:-8px;width:9px;height:26px;cursor:col-resize;background:rgba(0,0,0,.10)" style-hover="background:oklch(0.48 0.10 250)"></span></sc-if></span>
+            </sc-for>
+          </div>
+          <sc-for list="{{ filas }}" as="row" hint-placeholder-count="9">
+            <div onClick="{{ row.onSelect }}" style="display:grid;grid-template-columns:{{ grid }};gap:10px;align-items:center;height:{{ rowH }};padding:0 16px 0 13px;border-bottom:1px solid rgba(0,0,0,.06);cursor:pointer" style-hover="background:#f4f3ef">
+              <span style="width:3px;height:{{ rowH }};background:{{ row.marca }}"></span>
+              <sc-for list="{{ row.celdas }}" as="c" hint-placeholder-count="5">
+                <span style="min-width:0;overflow:hidden">
+                  <sc-if value="{{ c.esCliente }}" hint-placeholder-val="{{ false }}">
+                    <span style="display:block;min-width:0">
+                      <span style="display:block;font-size:12.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ c.principal }}</span>
+                      <span style="display:flex;gap:6px;font-size:10.5px;color:#8a8981;white-space:nowrap;overflow:hidden">
+                        <span style="color:{{ c.color }};font-weight:600;flex:none">{{ c.etiqueta }}</span>
+                        <span style="overflow:hidden;text-overflow:ellipsis">{{ c.secundario }}</span>
+                      </span>
+                    </span>
+                  </sc-if>
+                  <sc-if value="{{ c.esEtapa }}" hint-placeholder-val="{{ false }}">
+                    <span style="display:block;min-width:0">
+                      <span style="display:block;font-size:11.5px;color:#3a3a35;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ c.principal }}</span>
+                      <span style="display:block;height:3px;margin-top:4px;background:rgba(0,0,0,.09)">
+                        <span style="display:block;height:3px;background:{{ c.color }};width:{{ c.pct }}"></span>
+                      </span>
+                    </span>
+                  </sc-if>
+                  <sc-if value="{{ c.esTexto }}" hint-placeholder-val="{{ true }}">
+                    <span style="display:block;text-align:{{ c.align }};font-family:{{ c.familia }};font-size:11.5px;font-weight:{{ c.peso }};color:{{ c.color }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ c.principal }}</span>
+                  </sc-if>
+                </span>
+              </sc-for>
+            </div>
+          </sc-for>
+          </div>
+        </div>
+
+        <div style="flex:none;display:flex;align-items:center;gap:18px;height:28px;padding:0 16px;background:#f0efeb;border-top:1px solid rgba(0,0,0,.10);font-size:11px;color:#6b6a63;font-family:ui-monospace,Menlo,monospace;overflow:hidden">
+          <span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ pieTotales }}</span>
+          <span style="margin-left:auto;flex:none">Actualiza cada 30 s</span>
+        </div>
+      </section>
+
+      <div onClick="{{ onToggleAside }}" title="{{ asideTitulo }}" style="width:13px;flex:none;display:flex;align-items:center;justify-content:center;background:#e4e2dc;color:#8a8981;font-family:ui-monospace,Menlo,monospace;font-size:12px;cursor:pointer;border-left:1px solid rgba(0,0,0,.10)" style-hover="color:#1a1a18;background:#d8d5cd">{{ asideGlifo }}</div>
+      <sc-if value="{{ asideVisible }}" hint-placeholder-val="{{ true }}">
+      <div onPointerDown="{{ dragAside }}" title="Arrastra para ajustar el ancho del panel de detalle" style="width:5px;flex:none;cursor:col-resize;background:#e4e2dc;border-left:1px solid rgba(0,0,0,.10);border-right:1px solid rgba(0,0,0,.10)" style-hover="background:oklch(0.48 0.10 250)"></div>
+
+      <aside style="width:{{ asideW }};flex:none;display:flex;flex-direction:column;background:#f6f5f2;min-height:0;overflow:hidden">
+        <div style="flex:none;padding:12px 16px 11px;background:#fff;border-bottom:1px solid rgba(0,0,0,.12)">
+          <div style="display:flex;align-items:baseline;gap:8px">
+            <span style="font-family:ui-monospace,Menlo,monospace;font-size:12.5px;font-weight:600;white-space:nowrap">{{ det.numero }}</span>
+            <span style="font-size:10.5px;color:#8a8981;font-family:ui-monospace,Menlo,monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ det.fecha }}</span>
+          </div>
+          <div style="font-size:14.5px;font-weight:700;margin-top:5px;letter-spacing:-.01em">{{ det.empresa }}</div>
+          <div style="font-size:11.5px;color:#6b6a63;margin-top:2px">{{ det.contacto }}</div>
+          <p style="margin:9px 0 0;font-size:11.5px;line-height:1.5;color:#4a4a44;text-wrap:pretty">{{ det.descripcion }}</p>
+        </div>
+
+        <div style="flex:1;min-height:0;overflow:auto">
+          <div style="padding:11px 16px 12px;border-bottom:1px solid rgba(0,0,0,.10)">
+            <div style="font-size:9.5px;letter-spacing:.11em;text-transform:uppercase;color:#8a8981;margin-bottom:7px">Ficha</div>
+            <sc-for list="{{ det.ficha }}" as="f" hint-placeholder-count="4">
+              <div style="display:flex;justify-content:space-between;gap:10px;padding:3px 0;font-size:11.5px">
+                <span style="color:#75746e;flex:none">{{ f.label }}</span>
+                <span style="font-family:ui-monospace,Menlo,monospace;color:#262622;min-width:0;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ f.valor }}</span>
+              </div>
+            </sc-for>
+          </div>
+
+          <div style="padding:11px 16px 12px;border-bottom:1px solid rgba(0,0,0,.10)">
+            <div style="font-size:9.5px;letter-spacing:.11em;text-transform:uppercase;color:#8a8981;margin-bottom:7px">Flujo</div>
+            <sc-for list="{{ det.etapas }}" as="e" hint-placeholder-count="8">
+              <div style="display:grid;grid-template-columns:14px 1fr auto;align-items:center;gap:8px;height:21px">
+                <span style="font-family:ui-monospace,Menlo,monospace;font-size:10px;color:{{ e.tono }}">{{ e.marca }}</span>
+                <span style="font-size:11.5px;color:{{ e.tono }};font-weight:{{ e.peso }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ e.label }}</span>
+                <span style="font-family:ui-monospace,Menlo,monospace;font-size:10.5px;color:#a3a29a">{{ e.fecha }}</span>
+              </div>
+            </sc-for>
+          </div>
+
+          <div style="padding:11px 16px 12px;border-bottom:1px solid rgba(0,0,0,.10)">
+            <div style="display:flex;justify-content:space-between;font-size:9.5px;letter-spacing:.11em;text-transform:uppercase;color:#8a8981;margin-bottom:7px">
+              <span>Tareas</span><span style="font-family:ui-monospace,Menlo,monospace">{{ det.resumenTareas }}</span>
+            </div>
+            <sc-for list="{{ det.tareas }}" as="t" hint-placeholder-count="4">
+              <div style="display:grid;grid-template-columns:1fr 46px 34px;gap:8px;align-items:baseline;padding:5px 0;border-bottom:1px solid rgba(0,0,0,.05)">
+                <span style="font-size:11.5px;line-height:1.35;min-width:0">
+                  <span style="display:block;color:#262622">{{ t.descripcion }}</span>
+                  <span style="display:block;font-size:10.5px;color:#8a8981">{{ t.asignados }}</span>
+                </span>
+                <span style="font-size:10.5px;color:#6b6a63;text-align:right">{{ t.puesto }}</span>
+                <span style="font-family:ui-monospace,Menlo,monospace;font-size:11px;text-align:right;color:#3a3a35">{{ t.duracion }}</span>
+              </div>
+            </sc-for>
+          </div>
+
+          <div style="padding:11px 16px 12px;border-bottom:1px solid rgba(0,0,0,.10)">
+            <div style="font-size:9.5px;letter-spacing:.11em;text-transform:uppercase;color:#8a8981;margin-bottom:7px">Costos</div>
+            <sc-for list="{{ det.costos }}" as="c" hint-placeholder-count="4">
+              <div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:3px 0;font-size:11.5px">
+                <span style="color:#4a4a44;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ c.label }}</span>
+                <span style="font-family:ui-monospace,Menlo,monospace;color:#262622;flex:none">{{ c.valor }}</span>
+              </div>
+            </sc-for>
+            <div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:7px;padding-top:7px;border-top:1px solid rgba(0,0,0,.16)">
+              <span style="font-size:11.5px;font-weight:700">Gran total</span>
+              <span style="font-family:ui-monospace,Menlo,monospace;font-size:14px;font-weight:600">{{ det.granTotal }}</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:3px">
+              <span style="font-size:10.5px;color:#8a8981">Margen estimado</span>
+              <span style="font-family:ui-monospace,Menlo,monospace;font-size:10.5px;color:#8a8981">{{ det.margen }}</span>
+            </div>
+          </div>
+
+          <div style="padding:11px 16px 14px">
+            <div style="font-size:9.5px;letter-spacing:.11em;text-transform:uppercase;color:#8a8981;margin-bottom:7px">Acciones</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+              <sc-for list="{{ det.acciones }}" as="a" hint-placeholder-count="4">
+                <button onClick="{{ a.onClick }}" style="height:28px;padding:0 8px;background:#fff;border:1px solid rgba(0,0,0,.20);font-size:11.5px;font-weight:600;color:#262622;cursor:pointer;border-radius:2px;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" style-hover="border-color:#1c1d1b;background:#1c1d1b;color:#fff">{{ a.label }}</button>
+              </sc-for>
+            </div>
+            <button onClick="{{ det.onAvanzar }}" style="width:100%;height:30px;margin-top:6px;background:oklch(0.48 0.10 250);border:1px solid oklch(0.48 0.10 250);color:#fff;font-size:12px;font-weight:700;cursor:pointer;border-radius:2px" style-hover="background:oklch(0.40 0.10 250)">{{ det.accionPrincipal }}</button>
+            <div style="font-size:10.5px;color:#8a8981;margin-top:6px;line-height:1.5">{{ det.nota }}</div>
+          </div>
+        </div>
+      </aside>
+      </sc-if>
+    </div>
+    </sc-if>
+
+    <sc-if value="{{ esProgramacion }}" hint-placeholder-val="{{ false }}">
+    <div style="display:flex;flex-direction:column;min-height:0;flex:1">
+      <header style="flex:none;height:46px;display:flex;align-items:center;gap:16px;padding:0 16px;background:#fff;border-bottom:1px solid rgba(0,0,0,.12)">
+        <h1 style="margin:0;font-size:14px;font-weight:700;letter-spacing:-.01em;white-space:nowrap">Programación</h1>
+        <span style="font-size:11.5px;color:#75746e;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Plano de ejecución y capacidad real del taller</span>
+      </header>
+
+      <div style="flex:none;display:flex;align-items:center;gap:8px;padding:6px 16px;background:#e9e7e2;border-bottom:1px solid rgba(0,0,0,.10)">
+        <button onClick="{{ prog.onAnterior }}" style="height:20px;padding:0 9px;background:#fff;border:1px solid rgba(0,0,0,.18);font-size:11px;color:#3a3a35;cursor:pointer;border-radius:2px;white-space:nowrap" style-hover="border-color:#1c1d1b">Semana anterior</button>
+        <span style="font-family:ui-monospace,Menlo,monospace;font-size:11.5px;font-weight:600;white-space:nowrap">{{ prog.semana }}</span>
+        <button onClick="{{ prog.onSiguiente }}" style="height:20px;padding:0 9px;background:#fff;border:1px solid rgba(0,0,0,.18);font-size:11px;color:#3a3a35;cursor:pointer;border-radius:2px;white-space:nowrap" style-hover="border-color:#1c1d1b">Semana siguiente</button>
+        <span style="margin-left:auto;font-size:10.5px;color:#8a8981;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">La barra roja marca tarea sobre capacidad del responsable</span>
+      </div>
+
+      <div style="flex:1;min-height:0;display:flex">
+        <section style="flex:1;min-width:0;overflow:auto;background:#fff">
+          <div style="min-width:1180px">
+
+            <div style="position:sticky;top:0;z-index:3;display:grid;grid-template-columns:118px minmax(180px,1fr) 132px 104px 52px 62px 62px repeat(7,minmax(74px,1fr));gap:0;align-items:stretch;background:#e4e2dc;border-bottom:1px solid rgba(0,0,0,.14)">
+              <span style="padding:0 10px;height:32px;display:flex;align-items:center;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:#6b6a63;font-weight:700">OT · N°</span>
+              <span style="padding:0 10px;height:32px;display:flex;align-items:center;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:#6b6a63;font-weight:700">Tarea / descripción</span>
+              <span style="padding:0 10px;height:32px;display:flex;align-items:center;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:#6b6a63;font-weight:700">Responsable</span>
+              <span style="padding:0 8px;height:32px;display:flex;align-items:center;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:#6b6a63;font-weight:700">Estado</span>
+              <span style="padding:0 6px;height:32px;display:flex;align-items:center;justify-content:flex-end;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:#6b6a63;font-weight:700">Hrs</span>
+              <span style="padding:0 6px;height:32px;display:flex;align-items:center;justify-content:flex-end;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:#6b6a63;font-weight:700">Inicio</span>
+              <span style="padding:0 6px;height:32px;display:flex;align-items:center;justify-content:flex-end;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:#6b6a63;font-weight:700">Fin</span>
+              <sc-for list="{{ prog.dias }}" as="d" hint-placeholder-count="7">
+                <span style="height:32px;display:flex;flex-direction:column;align-items:center;justify-content:center;background:{{ d.fondo }};border-left:1px solid rgba(0,0,0,.06)">
+                  <span style="font-size:8.5px;color:{{ d.tono }};letter-spacing:.06em">{{ d.letra }}</span>
+                  <span style="font-family:ui-monospace,Menlo,monospace;font-size:10px;font-weight:600;color:{{ d.tono }}">{{ d.etiqueta }}</span>
+                </span>
+              </sc-for>
+            </div>
+
+            <sc-for list="{{ prog.filas }}" as="f" hint-placeholder-count="12">
+              <div onClick="{{ f.onSelect }}" style="display:grid;grid-template-columns:118px minmax(180px,1fr) 132px 104px 52px 62px 62px repeat(7,minmax(74px,1fr));align-items:stretch;background:{{ f.fondo }};border-bottom:1px solid rgba(0,0,0,.06)">
+                <span style="display:flex;align-items:center;gap:6px;padding:5px 10px;border-left:2px solid {{ f.marca }};min-width:0">
+                  <sc-if value="{{ f.esOT }}" hint-placeholder-val="{{ true }}">
+                    <span style="font-family:ui-monospace,Menlo,monospace;font-size:11px;font-weight:600;color:oklch(0.42 0.10 250);cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ f.num }}</span>
+                  </sc-if>
+                  <sc-if value="{{ f.esTarea }}" hint-placeholder-val="{{ false }}">
+                    <span style="font-family:ui-monospace,Menlo,monospace;font-size:10.5px;color:#b5b3ab;padding-left:14px">{{ f.num }}</span>
+                  </sc-if>
+                </span>
+                <span style="display:flex;flex-direction:column;justify-content:center;padding:5px 10px;min-width:0">
+                  <sc-if value="{{ f.esOT }}" hint-placeholder-val="{{ true }}">
+                    <span style="display:block;font-size:12px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ f.empresa }}</span>
+                  </sc-if>
+                  <sc-if value="{{ f.esTarea }}" hint-placeholder-val="{{ false }}">
+                    <span style="display:block;font-size:11.5px;color:#262622;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ f.empresa }}</span>
+                  </sc-if>
+                  <span style="display:block;font-size:10.5px;color:#8a8981;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ f.descripcion }}</span>
+                </span>
+                <span style="display:flex;flex-direction:column;justify-content:center;padding:5px 10px;min-width:0">
+                  <sc-if value="{{ f.esTarea }}" hint-placeholder-val="{{ false }}">
+                    <span style="min-width:0">
+                      <span style="display:block;font-size:11px;color:#3a3a35;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ f.responsable }}</span>
+                      <span style="display:block;font-size:10px;color:#a3a29a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ f.puesto }}</span>
+                    </span>
+                  </sc-if>
+                  <sc-if value="{{ f.esOT }}" hint-placeholder-val="{{ true }}">
+                    <span style="font-size:10.5px;font-weight:600;color:{{ f.estadoTono }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ f.estado }}</span>
+                  </sc-if>
+                </span>
+                <span style="display:flex;align-items:center;padding:5px 8px;min-width:0">
+                  <sc-if value="{{ f.esOT }}" hint-placeholder-val="{{ true }}">
+                    <button onClick="{{ f.onAccion }}" style="width:100%;height:21px;padding:0 6px;background:#fff;border:1px solid rgba(0,0,0,.20);font-size:10.5px;font-weight:600;color:#262622;cursor:pointer;border-radius:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" style-hover="border-color:#1c1d1b;background:#1c1d1b;color:#fff">{{ f.accion }}</button>
+                  </sc-if>
+                </span>
+                <span style="display:flex;align-items:center;justify-content:flex-end;padding:5px 6px;font-family:ui-monospace,Menlo,monospace;font-size:11px;color:#3a3a35;white-space:nowrap">{{ f.horas }}</span>
+                <span style="display:flex;align-items:center;justify-content:flex-end;padding:5px 6px;font-family:ui-monospace,Menlo,monospace;font-size:10.5px;color:#57564f;white-space:nowrap">{{ f.inicio }}</span>
+                <span style="display:flex;align-items:center;justify-content:flex-end;padding:5px 6px;font-family:ui-monospace,Menlo,monospace;font-size:10.5px;color:#57564f;white-space:nowrap;border-right:1px solid rgba(0,0,0,.08)">{{ f.fin }}</span>
+                <sc-for list="{{ f.celdas }}" as="c" hint-placeholder-count="7">
+                  <span style="min-height:34px;display:flex;align-items:center;justify-content:center;padding:4px 5px;background:{{ c.fondo }};border-left:1px solid rgba(0,0,0,.05)">
+                    <sc-if value="{{ c.hay }}" hint-placeholder-val="{{ false }}">
+                      <span style="width:100%;height:22px;display:flex;align-items:center;justify-content:center;background:{{ c.fondo }};color:{{ c.tono }};font-family:ui-monospace,Menlo,monospace;font-size:10px;font-weight:600;border-radius:2px;white-space:nowrap;overflow:hidden">{{ c.texto }}</span>
+                    </sc-if>
+                  </span>
+                </sc-for>
+              </div>
+            </sc-for>
+
+            <div style="display:flex;align-items:center;height:30px;padding:0 16px;margin-top:14px;background:#e4e2dc;border-top:1px solid rgba(0,0,0,.12);border-bottom:1px solid rgba(0,0,0,.14);font-size:9.5px;letter-spacing:.11em;text-transform:uppercase;color:#6b6a63;font-weight:700;position:sticky;left:0">Disponibilidad de personal · carga / capacidad</div>
+
+            <sc-for list="{{ prog.capacidad }}" as="r" hint-placeholder-count="8">
+              <div style="display:grid;grid-template-columns:118px minmax(180px,1fr) 132px 104px 52px 62px 62px repeat(7,minmax(74px,1fr));align-items:stretch;border-bottom:1px solid rgba(0,0,0,.06)">
+                <span style="display:flex;align-items:center;padding:5px 10px;font-size:11.5px;font-weight:600;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.nombre }}</span>
+                <span style="display:flex;flex-direction:column;justify-content:center;padding:5px 10px;min-width:0">
+                  <span style="display:flex;gap:8px;font-size:10.5px;color:#8a8981;white-space:nowrap;overflow:hidden">
+                    <span style="flex:none">{{ r.puesto }}</span>
+                    <span style="overflow:hidden;text-overflow:ellipsis">{{ r.turno }}</span>
+                  </span>
+                  <span style="display:block;height:3px;margin-top:4px;background:rgba(0,0,0,.09)">
+                    <span style="display:block;height:3px;background:{{ r.barra }};width:{{ r.pct }}"></span>
+                  </span>
+                </span>
+                <span style="display:flex;align-items:center;padding:5px 10px;font-family:ui-monospace,Menlo,monospace;font-size:10.5px;font-weight:600;color:{{ r.tono }};min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.resumen }}</span>
+                <span></span><span></span><span></span><span style="border-right:1px solid rgba(0,0,0,.08)"></span>
+                <sc-for list="{{ r.celdas }}" as="c" hint-placeholder-count="7">
+                  <span style="min-height:32px;display:flex;align-items:center;justify-content:center;background:{{ c.fondo }};border-left:1px solid rgba(0,0,0,.05);font-family:ui-monospace,Menlo,monospace;font-size:10.5px;font-weight:{{ c.peso }};color:{{ c.tono }}">{{ c.texto }}</span>
+                </sc-for>
+              </div>
+            </sc-for>
+
+            <div style="height:14px"></div>
+          </div>
+        </section>
+
+      <div onClick="{{ onToggleAside }}" title="{{ asideTitulo }}" style="width:13px;flex:none;display:flex;align-items:center;justify-content:center;background:#e4e2dc;color:#8a8981;font-family:ui-monospace,Menlo,monospace;font-size:12px;cursor:pointer;border-left:1px solid rgba(0,0,0,.10)" style-hover="color:#1a1a18;background:#d8d5cd">{{ asideGlifo }}</div>
+      <sc-if value="{{ asideVisible }}" hint-placeholder-val="{{ true }}">
+        <aside style="width:284px;flex:none;display:flex;flex-direction:column;background:#f6f5f2;min-height:0;overflow:auto;border-left:1px solid rgba(0,0,0,.12)">
+          <div style="padding:12px 16px 11px;background:#fff;border-bottom:1px solid rgba(0,0,0,.12)">
+            <div style="display:flex;align-items:baseline;gap:8px">
+              <span style="font-family:ui-monospace,Menlo,monospace;font-size:12px;font-weight:600;white-space:nowrap">{{ prog.detalle.num }}</span>
+              <span style="font-size:10.5px;font-weight:600;color:#75746e;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ prog.detalle.estado }}</span>
+            </div>
+            <div style="font-size:13.5px;font-weight:700;margin-top:4px;letter-spacing:-.01em">{{ prog.detalle.empresa }}</div>
+            <p style="margin:6px 0 0;font-size:11.5px;line-height:1.5;color:#4a4a44;text-wrap:pretty">{{ prog.detalle.descripcion }}</p>
+          </div>
+
+          <div style="padding:11px 16px 12px;border-bottom:1px solid rgba(0,0,0,.10)">
+            <div style="font-size:9.5px;letter-spacing:.11em;text-transform:uppercase;color:#8a8981;margin-bottom:7px">Sobredemanda</div>
+            <sc-if value="{{ prog.detalle.sinConflictos }}" hint-placeholder-val="{{ true }}">
+              <div style="font-size:11.5px;color:#6b6a63;line-height:1.5">Sin conflictos de capacidad en esta semana.</div>
+            </sc-if>
+            <sc-for list="{{ prog.detalle.conflictos }}" as="c" hint-placeholder-count="0">
+              <div style="padding:6px 0;border-bottom:1px solid rgba(0,0,0,.06)">
+                <div style="display:flex;justify-content:space-between;gap:8px">
+                  <span style="font-size:11.5px;font-weight:600;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ c.nombre }}</span>
+                  <span style="font-family:ui-monospace,Menlo,monospace;font-size:11px;font-weight:600;color:oklch(0.52 0.13 25);flex:none">{{ c.exceso }}</span>
+                </div>
+                <div style="display:flex;justify-content:space-between;gap:8px;font-size:10.5px;color:#8a8981">
+                  <span>{{ c.fecha }}</span><span style="font-family:ui-monospace,Menlo,monospace">{{ c.detalle }}</span>
+                </div>
+              </div>
+            </sc-for>
+            <sc-if value="{{ prog.detalle.aviso }}" hint-placeholder-val="{{ false }}">
+              <div style="margin-top:10px;padding:8px 10px;background:#fff;border-left:2px solid oklch(0.52 0.13 25)">
+                <div style="font-size:11.5px;color:#3a3a35;line-height:1.5;margin-bottom:8px">Programar dejará responsables sobre su capacidad. ¿Continuar?</div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+                  <button onClick="{{ prog.detalle.onForzar }}" style="height:26px;background:oklch(0.52 0.13 25);border:1px solid oklch(0.52 0.13 25);color:#fff;font-size:11px;font-weight:700;cursor:pointer;border-radius:2px">Programar igual</button>
+                  <button onClick="{{ prog.detalle.onCancelar }}" style="height:26px;background:#fff;border:1px solid rgba(0,0,0,.20);font-size:11px;font-weight:600;color:#262622;cursor:pointer;border-radius:2px" style-hover="border-color:#1c1d1b">Cancelar</button>
+                </div>
+              </div>
+            </sc-if>
+          </div>
+
+          <div style="padding:11px 16px 14px">
+            <div style="font-size:9.5px;letter-spacing:.11em;text-transform:uppercase;color:#8a8981;margin-bottom:7px">Acciones</div>
+            <button onClick="{{ prog.detalle.onAbrir }}" style="width:100%;height:28px;background:#fff;border:1px solid rgba(0,0,0,.20);font-size:11.5px;font-weight:600;color:#262622;cursor:pointer;border-radius:2px" style-hover="border-color:#1c1d1b;background:#1c1d1b;color:#fff">Abrir tratamiento</button>
+            <div style="font-size:10.5px;color:#8a8981;margin-top:8px;line-height:1.5">Solo las OT en estado Planificada o Programada se pueden programar; las cerradas quedan en gris.</div>
+          </div>
+        </aside>
+        </sc-if>
+      </div>
+    </div>
+    </sc-if>
+
+    <sc-if value="{{ esRecursos }}" hint-placeholder-val="{{ false }}">
+    <div style="display:flex;flex-direction:column;min-height:0;flex:1">
+      <header style="flex:none;height:46px;display:flex;align-items:center;gap:16px;padding:0 16px;background:#fff;border-bottom:1px solid rgba(0,0,0,.12)">
+        <h1 style="margin:0;font-size:14px;font-weight:700;letter-spacing:-.01em;white-space:nowrap">Recursos</h1>
+        <span style="font-size:11.5px;color:#75746e;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Personal, activos, catálogo y turnos que alimentan la programación</span>
+      </header>
+
+      <div style="flex:none;display:flex;flex-wrap:wrap;gap:1px;padding:0 16px;background:#f0efeb;border-bottom:1px solid rgba(0,0,0,.10)">
+        <sc-for list="{{ rec.tabs }}" as="t" hint-placeholder-count="5">
+          <button onClick="{{ t.onClick }}" style="height:31px;padding:0 12px;background:{{ t.fondo }};border:0;border-bottom:2px solid {{ t.borde }};font-size:11.5px;font-weight:{{ t.peso }};color:{{ t.tono }};cursor:pointer;white-space:nowrap" style-hover="background:#fff">{{ t.label }}</button>
+        </sc-for>
+      </div>
+
+      <div style="flex:1;min-height:0;display:flex">
+        <section style="flex:1;min-width:0;overflow:hidden;display:flex;flex-direction:column;background:#fff">
+
+          <sc-if value="{{ rec.esPersonal }}" hint-placeholder-val="{{ true }}">
+            <div style="flex:none;display:flex;align-items:center;gap:8px;padding:6px 16px;background:#e9e7e2;border-bottom:1px solid rgba(0,0,0,.10)">
+              <span style="font-size:9.5px;letter-spacing:.11em;text-transform:uppercase;color:#75746e;flex:none">Carga horaria</span>
+              <button onClick="{{ rec.onMesAnterior }}" style="height:20px;padding:0 8px;background:#fff;border:1px solid rgba(0,0,0,.18);font-size:11px;color:#3a3a35;cursor:pointer;border-radius:2px" style-hover="border-color:#1c1d1b">Anterior</button>
+              <span style="font-family:ui-monospace,Menlo,monospace;font-size:11.5px;font-weight:600;min-width:132px;text-align:center">{{ rec.mes }}</span>
+              <button onClick="{{ rec.onMesSiguiente }}" style="height:20px;padding:0 8px;background:#fff;border:1px solid rgba(0,0,0,.18);font-size:11px;color:#3a3a35;cursor:pointer;border-radius:2px" style-hover="border-color:#1c1d1b">Siguiente</button>
+              <span style="font-size:10.5px;color:#8a8981;margin-left:8px;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Clic en una celda alterna entre turno y día libre; el ámbar marca ajuste manual</span>
+            </div>
+            <div style="flex:1;min-height:0;min-width:0;overflow:auto">
+              <div style="min-width:{{ rec.matrizW }}">
+                <div style="position:sticky;top:0;z-index:3;display:flex;background:#e4e2dc;border-bottom:1px solid rgba(0,0,0,.14)">
+                  <span style="width:188px;flex:none;padding:0 10px;height:30px;display:flex;align-items:center;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:#6b6a63;font-weight:700;background:#e4e2dc;position:sticky;left:0;z-index:4">Recurso · turno</span>
+                  <span style="width:52px;flex:none;height:30px;display:flex;align-items:center;justify-content:flex-end;padding-right:8px;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:#6b6a63;font-weight:700">Mes</span>
+                  <sc-for list="{{ rec.dias }}" as="d" hint-placeholder-count="31">
+                    <span style="width:27px;flex:none;height:30px;display:flex;flex-direction:column;align-items:center;justify-content:center;background:{{ d.fondo }};border-left:1px solid rgba(0,0,0,.05)">
+                      <span style="font-size:8.5px;color:{{ d.tono }}">{{ d.letra }}</span>
+                      <span style="font-family:ui-monospace,Menlo,monospace;font-size:10px;font-weight:600;color:{{ d.tono }}">{{ d.n }}</span>
+                    </span>
+                  </sc-for>
+                </div>
+                <sc-for list="{{ rec.personal }}" as="r" hint-placeholder-count="8">
+                  <div style="display:flex;border-bottom:1px solid rgba(0,0,0,.06)">
+                    <span style="width:188px;flex:none;padding:5px 10px;background:#fff;position:sticky;left:0;z-index:2;border-right:1px solid rgba(0,0,0,.08)">
+                      <span style="display:block;font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.nombre }}</span>
+                      <span style="display:flex;gap:6px;font-size:10.5px;white-space:nowrap;overflow:hidden">
+                        <span style="color:#8a8981;flex:none">{{ r.puesto }}</span>
+                        <span style="color:{{ r.calTono }};overflow:hidden;text-overflow:ellipsis">{{ r.calNombre }}</span>
+                      </span>
+                    </span>
+                    <span style="width:52px;flex:none;display:flex;align-items:center;justify-content:flex-end;padding-right:8px;font-family:ui-monospace,Menlo,monospace;font-size:11px;font-weight:600;color:#3a3a35">{{ r.total }}</span>
+                    <sc-for list="{{ r.celdas }}" as="c" hint-placeholder-count="31">
+                      <span onClick="{{ c.onClick }}" style="width:27px;flex:none;height:38px;display:flex;align-items:center;justify-content:center;background:{{ c.fondo }};border-left:1px solid rgba(0,0,0,.05);border-top:2px solid {{ c.borde }};font-family:ui-monospace,Menlo,monospace;font-size:11px;color:{{ c.tono }};cursor:pointer" style-hover="outline:1px solid oklch(0.48 0.10 250);outline-offset:-1px">{{ c.valor }}</span>
+                    </sc-for>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ rec.esEquipos }}" hint-placeholder-val="{{ false }}">
+            <div style="flex:1;min-height:0;overflow:auto">
+              <div style="min-width:660px">
+                <div style="position:sticky;top:0;z-index:2;display:grid;grid-template-columns:120px minmax(220px,1fr) 116px 116px 116px;gap:10px;align-items:center;height:26px;padding:0 16px;background:#e4e2dc;border-bottom:1px solid rgba(0,0,0,.14);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:#6b6a63;font-weight:700">
+                  <span>Código</span><span>Modelo</span><span>Tipo</span><span style="text-align:right">Valor</span><span style="text-align:right">Estado</span>
+                </div>
+                <sc-for list="{{ rec.equipos }}" as="e" hint-placeholder-count="6">
+                  <div style="display:grid;grid-template-columns:120px minmax(220px,1fr) 116px 116px 116px;gap:10px;align-items:center;height:34px;padding:0 16px;border-bottom:1px solid rgba(0,0,0,.06)" style-hover="background:#f4f3ef">
+                    <span style="font-family:ui-monospace,Menlo,monospace;font-size:11px;color:#3a3a35">{{ e.codigo }}</span>
+                    <span style="min-width:0;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ e.nombre }}</span>
+                    <span style="font-size:11.5px;color:#6b6a63">{{ e.tipo }}</span>
+                    <span style="font-family:ui-monospace,Menlo,monospace;font-size:11.5px;text-align:right">{{ e.precio }}</span>
+                    <span style="font-size:11px;font-weight:600;color:{{ e.tono }};text-align:right">{{ e.estado }}</span>
+                  </div>
+                </sc-for>
+                <div style="padding:8px 16px">
+                  <button style="height:24px;padding:0 10px;background:#fff;border:1px dashed rgba(0,0,0,.28);font-size:11.5px;color:#57564f;cursor:pointer;border-radius:2px" style-hover="border-color:#1c1d1b;color:#1a1a18">Agregar activo</button>
+                </div>
+              </div>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ rec.esSuministros }}" hint-placeholder-val="{{ false }}">
+            <div style="flex:1;min-height:0;overflow:auto">
+              <div style="min-width:600px">
+                <div style="position:sticky;top:0;z-index:2;display:grid;grid-template-columns:132px minmax(240px,1fr) 124px 116px;gap:10px;align-items:center;height:26px;padding:0 16px;background:#e4e2dc;border-bottom:1px solid rgba(0,0,0,.14);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:#6b6a63;font-weight:700">
+                  <span>Código</span><span>Descripción</span><span>Categoría</span><span style="text-align:right">Precio</span>
+                </div>
+                <sc-for list="{{ rec.suministros }}" as="x" hint-placeholder-count="6">
+                  <div style="display:grid;grid-template-columns:132px minmax(240px,1fr) 124px 116px;gap:10px;align-items:center;height:34px;padding:0 16px;border-bottom:1px solid rgba(0,0,0,.06)" style-hover="background:#f4f3ef">
+                    <span style="font-family:ui-monospace,Menlo,monospace;font-size:11px;color:#3a3a35">{{ x.codigo }}</span>
+                    <span style="min-width:0;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ x.descripcion }}</span>
+                    <span style="font-size:11.5px;color:#6b6a63">{{ x.categoria }}</span>
+                    <span style="font-family:ui-monospace,Menlo,monospace;font-size:11.5px;text-align:right">{{ x.precio }}</span>
+                  </div>
+                </sc-for>
+                <div style="padding:8px 16px">
+                  <button style="height:24px;padding:0 10px;background:#fff;border:1px dashed rgba(0,0,0,.28);font-size:11.5px;color:#57564f;cursor:pointer;border-radius:2px" style-hover="border-color:#1c1d1b;color:#1a1a18">Registrar suministro</button>
+                </div>
+              </div>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ rec.esCalendarios }}" hint-placeholder-val="{{ false }}">
+            <div style="flex:1;min-height:0;overflow:auto">
+              <div style="min-width:560px">
+                <div style="position:sticky;top:0;z-index:2;display:grid;grid-template-columns:3px minmax(200px,1fr) 150px 196px 72px;gap:10px;align-items:center;height:26px;padding:0 16px 0 13px;background:#e4e2dc;border-bottom:1px solid rgba(0,0,0,.14);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:#6b6a63;font-weight:700">
+                  <span></span><span>Calendario</span><span>Tipo</span><span>Semana · horas por día</span><span style="text-align:right">Ciclo</span>
+                </div>
+                <sc-for list="{{ rec.calendarios }}" as="c" hint-placeholder-count="4">
+                  <div onClick="{{ c.onClick }}" style="display:grid;grid-template-columns:3px minmax(200px,1fr) 150px 196px 72px;gap:10px;align-items:center;min-height:40px;padding:4px 16px 4px 13px;border-bottom:1px solid rgba(0,0,0,.06);cursor:pointer" style-hover="background:#f4f3ef">
+                    <span style="width:3px;height:32px;background:{{ c.marca }}"></span>
+                    <span style="min-width:0">
+                      <span style="display:block;font-size:12.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ c.nombre }}</span>
+                      <span style="display:block;font-size:10.5px;color:#8a8981;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ c.bloques }}</span>
+                    </span>
+                    <span style="font-size:11.5px;color:#6b6a63;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ c.tipo }}</span>
+                    <span style="display:flex;gap:2px">
+                      <sc-for list="{{ c.semana }}" as="d" hint-placeholder-count="7">
+                        <span style="width:26px;display:flex;flex-direction:column;align-items:center;gap:1px">
+                          <span style="font-size:8.5px;color:#a3a29a">{{ d.letra }}</span>
+                          <span style="font-family:ui-monospace,Menlo,monospace;font-size:11px;color:{{ d.tono }}">{{ d.valor }}</span>
+                        </span>
+                      </sc-for>
+                    </span>
+                    <span style="font-family:ui-monospace,Menlo,monospace;font-size:11.5px;text-align:right;color:#3a3a35">{{ c.totalSemana }}</span>
+                  </div>
+                </sc-for>
+                <div style="padding:8px 16px">
+                  <button style="height:24px;padding:0 10px;background:#fff;border:1px dashed rgba(0,0,0,.28);font-size:11.5px;color:#57564f;cursor:pointer;border-radius:2px" style-hover="border-color:#1c1d1b;color:#1a1a18">Nuevo calendario</button>
+                </div>
+              </div>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ rec.esPlantillas }}" hint-placeholder-val="{{ false }}">
+            <div style="flex:1;min-height:0;overflow:auto">
+              <div style="min-width:560px">
+                <div style="position:sticky;top:0;z-index:2;display:grid;grid-template-columns:minmax(200px,1fr) 140px minmax(220px,1.2fr);gap:10px;align-items:center;height:26px;padding:0 16px;background:#e4e2dc;border-bottom:1px solid rgba(0,0,0,.14);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:#6b6a63;font-weight:700">
+                  <span>Hoja de ruta</span><span>Categoría</span><span>Composición</span>
+                </div>
+                <sc-for list="{{ rec.plantillas }}" as="p" hint-placeholder-count="5">
+                  <div style="display:grid;grid-template-columns:minmax(200px,1fr) 140px minmax(220px,1.2fr);gap:10px;align-items:center;min-height:42px;padding:5px 16px;border-bottom:1px solid rgba(0,0,0,.06)" style-hover="background:#f4f3ef">
+                    <span style="min-width:0">
+                      <span style="display:block;font-size:12.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ p.nombre }}</span>
+                      <span style="display:block;font-size:10.5px;color:#8a8981;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ p.descripcion }}</span>
+                    </span>
+                    <span style="font-size:11.5px;color:#6b6a63">{{ p.categoria }}</span>
+                    <span style="font-family:ui-monospace,Menlo,monospace;font-size:11px;color:#57564f;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ p.composicion }}</span>
+                  </div>
+                </sc-for>
+                <div style="padding:8px 16px">
+                  <button style="height:24px;padding:0 10px;background:#fff;border:1px dashed rgba(0,0,0,.28);font-size:11.5px;color:#57564f;cursor:pointer;border-radius:2px" style-hover="border-color:#1c1d1b;color:#1a1a18">Nueva hoja de ruta</button>
+                </div>
+              </div>
+            </div>
+          </sc-if>
+
+        </section>
+
+      <div onClick="{{ onToggleAside }}" title="{{ asideTitulo }}" style="width:13px;flex:none;display:flex;align-items:center;justify-content:center;background:#e4e2dc;color:#8a8981;font-family:ui-monospace,Menlo,monospace;font-size:12px;cursor:pointer;border-left:1px solid rgba(0,0,0,.10)" style-hover="color:#1a1a18;background:#d8d5cd">{{ asideGlifo }}</div>
+      <sc-if value="{{ asideVisible }}" hint-placeholder-val="{{ true }}">
+        <aside style="width:264px;flex:none;display:flex;flex-direction:column;background:#f6f5f2;min-height:0;overflow:auto;border-left:1px solid rgba(0,0,0,.12)">
+          <div style="padding:11px 16px 12px;border-bottom:1px solid rgba(0,0,0,.10)">
+            <div style="font-size:9.5px;letter-spacing:.11em;text-transform:uppercase;color:#8a8981;margin-bottom:7px">Resumen</div>
+            <sc-for list="{{ rec.resumen }}" as="r" hint-placeholder-count="5">
+              <div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:3px 0;font-size:11.5px">
+                <span style="color:#4a4a44;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.label }}</span>
+                <span style="font-family:ui-monospace,Menlo,monospace;color:#262622;flex:none">{{ r.valor }}</span>
+              </div>
+            </sc-for>
+            <button onClick="{{ rec.onLimpiarAjustes }}" style="width:100%;height:26px;margin-top:9px;background:#fff;border:1px solid rgba(0,0,0,.20);font-size:11.5px;color:#262622;cursor:pointer;border-radius:2px" style-hover="border-color:#1c1d1b">Descartar ajustes manuales</button>
+          </div>
+
+          <sc-if value="{{ rec.esPersonal }}" hint-placeholder-val="{{ true }}">
+            <div style="padding:11px 16px 12px;border-bottom:1px solid rgba(0,0,0,.10)">
+              <div style="font-size:9.5px;letter-spacing:.11em;text-transform:uppercase;color:#8a8981;margin-bottom:7px">Puestos</div>
+              <sc-for list="{{ rec.puestos }}" as="p" hint-placeholder-count="7">
+                <div style="display:flex;justify-content:space-between;gap:10px;padding:3px 0;font-size:11.5px;border-bottom:1px solid rgba(0,0,0,.05)">
+                  <span style="color:#3a3a35;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ p.label }}</span>
+                  <span style="font-family:ui-monospace,Menlo,monospace;color:#8a8981;flex:none">{{ p.cuenta }}</span>
+                </div>
+              </sc-for>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:10px">
+                <button style="height:26px;background:#fff;border:1px solid rgba(0,0,0,.20);font-size:11.5px;font-weight:600;color:#262622;cursor:pointer;border-radius:2px" style-hover="border-color:#1c1d1b;background:#1c1d1b;color:#fff">Integrante</button>
+                <button style="height:26px;background:#fff;border:1px solid rgba(0,0,0,.20);font-size:11.5px;font-weight:600;color:#262622;cursor:pointer;border-radius:2px" style-hover="border-color:#1c1d1b;background:#1c1d1b;color:#fff">Puesto</button>
+              </div>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ rec.esCalendarios }}" hint-placeholder-val="{{ false }}">
+            <div style="padding:11px 16px 14px">
+              <div style="font-size:9.5px;letter-spacing:.11em;text-transform:uppercase;color:#8a8981;margin-bottom:7px">{{ rec.calDetalle.nombre }}</div>
+              <div style="font-size:10.5px;color:#8a8981;margin-bottom:8px">{{ rec.calDetalle.tipo }}</div>
+              <sc-for list="{{ rec.calDetalle.dias }}" as="d" hint-placeholder-count="7">
+                <div style="display:grid;grid-template-columns:76px 1fr auto;gap:8px;align-items:baseline;padding:4px 0;border-bottom:1px solid rgba(0,0,0,.05);font-size:11.5px">
+                  <span style="color:{{ d.tono }}">{{ d.dia }}</span>
+                  <span style="font-size:10.5px;color:#8a8981;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ d.bloque }}</span>
+                  <span style="font-family:ui-monospace,Menlo,monospace;color:{{ d.tono }}">{{ d.horas }}</span>
+                </div>
+              </sc-for>
+              <div style="display:flex;justify-content:space-between;margin-top:8px;padding-top:8px;border-top:1px solid rgba(0,0,0,.16)">
+                <span style="font-size:11.5px;font-weight:700">Total</span>
+                <span style="font-family:ui-monospace,Menlo,monospace;font-size:12.5px;font-weight:600">{{ rec.calDetalle.total }}</span>
+              </div>
+            </div>
+          </sc-if>
+        </aside>
+        </sc-if>
+      </div>
+    </div>
+    </sc-if>
+
+    <sc-if value="{{ esIngreso }}" hint-placeholder-val="{{ false }}">
+    <div style="display:flex;flex-direction:column;min-height:0;flex:1">
+      <header style="flex:none;height:46px;display:flex;align-items:center;gap:16px;padding:0 16px;background:#fff;border-bottom:1px solid rgba(0,0,0,.12)">
+        <h1 style="margin:0;font-size:14px;font-weight:700;letter-spacing:-.01em;white-space:nowrap">Ingreso de solicitudes</h1>
+        <span style="font-size:11.5px;color:#75746e;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Registro de requerimientos antes de convertirlos en OT</span>
+      </header>
+
+      <div style="flex:1;min-height:0;display:flex">
+
+        <section style="width:452px;flex:none;min-width:0;overflow:auto;background:#fff;border-right:1px solid rgba(0,0,0,.12)">
+          <div style="padding:13px 16px 8px">
+            <div style="font-size:9.5px;letter-spacing:.11em;text-transform:uppercase;color:#8a8981;margin-bottom:9px">Nueva solicitud de servicio</div>
+            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:9px 10px">
+              <sc-for list="{{ ing.campos }}" as="c" hint-placeholder-count="7">
+                <label style="display:flex;flex-direction:column;gap:3px;grid-column:{{ c.ancho }};min-width:0">
+                  <span style="font-size:9.5px;letter-spacing:.11em;text-transform:uppercase;color:#75746e;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ c.label }}</span>
+                  <input value="{{ c.valor }}" onChange="{{ c.onChange }}" placeholder="{{ c.ph }}" style="height:27px;min-width:0;padding:0 8px;border:1px solid rgba(0,0,0,.18);background:#fff;font-family:inherit;font-size:12px;color:#1a1a18;outline:none;border-radius:2px" style-focus="border-color:oklch(0.48 0.10 250)" />
+                </label>
+              </sc-for>
+              <label style="display:flex;flex-direction:column;gap:3px;grid-column:span 2;min-width:0">
+                <span style="font-size:9.5px;letter-spacing:.11em;text-transform:uppercase;color:#75746e">Canal de origen</span>
+                <select value="{{ ing.origen }}" onChange="{{ ing.onOrigen }}" style="height:27px;min-width:0;padding:0 6px;border:1px solid rgba(0,0,0,.18);background:#fff;font-family:inherit;font-size:12px;color:#1a1a18;outline:none;border-radius:2px" style-focus="border-color:oklch(0.48 0.10 250)">
+                  <sc-for list="{{ ing.origenes }}" as="o" hint-placeholder-count="4">
+                    <option value="{{ o.valor }}">{{ o.label }}</option>
+                  </sc-for>
+                </select>
+              </label>
+              <label style="display:flex;flex-direction:column;gap:3px;grid-column:span 2;min-width:0">
+                <span style="font-size:9.5px;letter-spacing:.11em;text-transform:uppercase;color:#75746e">Adjunto</span>
+                <input value="{{ ing.adjunto }}" onChange="{{ ing.onAdjunto }}" placeholder="Plano, foto o enlace" style="height:27px;min-width:0;padding:0 8px;border:1px solid rgba(0,0,0,.18);background:#fff;font-family:inherit;font-size:12px;color:#1a1a18;outline:none;border-radius:2px" style-focus="border-color:oklch(0.48 0.10 250)" />
+              </label>
+              <label style="display:flex;flex-direction:column;gap:3px;grid-column:span 4;min-width:0">
+                <span style="font-size:9.5px;letter-spacing:.11em;text-transform:uppercase;color:#75746e">Descripción detallada *</span>
+                <textarea value="{{ ing.descripcion }}" onChange="{{ ing.onDescripcion }}" placeholder="Requerimiento técnico, alcance, condiciones de la faena" rows="5" style="min-height:96px;padding:7px 8px;border:1px solid rgba(0,0,0,.18);background:#fff;font-family:inherit;font-size:12px;line-height:1.5;color:#1a1a18;outline:none;border-radius:2px;resize:vertical" style-focus="border-color:oklch(0.48 0.10 250)"></textarea>
+              </label>
+            </div>
+
+            <sc-if value="{{ ing.hayAviso }}" hint-placeholder-val="{{ false }}">
+              <div style="margin-top:10px;padding:7px 10px;background:#f0efeb;border-left:2px solid oklch(0.48 0.10 250);font-size:11.5px;color:#3a3a35">{{ ing.aviso }}</div>
+            </sc-if>
+
+            <div style="display:flex;gap:6px;margin-top:12px;padding-bottom:14px">
+              <button onClick="{{ ing.onCrear }}" style="height:30px;padding:0 14px;background:oklch(0.48 0.10 250);border:1px solid oklch(0.48 0.10 250);color:#fff;font-size:12px;font-weight:700;cursor:pointer;border-radius:2px" style-hover="background:oklch(0.40 0.10 250)">Generar solicitud</button>
+              <button onClick="{{ ing.onLimpiar }}" style="height:30px;padding:0 12px;background:#fff;border:1px solid rgba(0,0,0,.20);font-size:12px;color:#262622;cursor:pointer;border-radius:2px" style-hover="border-color:#1c1d1b">Limpiar</button>
+              <span style="margin-left:auto;align-self:center;font-size:10.5px;color:#8a8981">* obligatorio</span>
+            </div>
+          </div>
+        </section>
+
+        <section style="flex:1;min-width:0;overflow:hidden;display:flex;flex-direction:column">
+          <div style="flex:none;display:flex;flex-wrap:wrap;align-items:center;gap:4px 6px;padding:7px 16px;background:#f0efeb;border-bottom:1px solid rgba(0,0,0,.10)">
+            <span style="font-size:9.5px;letter-spacing:.11em;text-transform:uppercase;color:#75746e;flex:none">Solicitudes ingresadas</span>
+            <input value="{{ ing.filtroTexto }}" onChange="{{ ing.onFiltroTexto }}" placeholder="Filtrar empresa o solicitante" style="height:23px;width:210px;padding:0 8px;border:1px solid rgba(0,0,0,.18);background:#fff;font-family:inherit;font-size:11.5px;outline:none;border-radius:2px" style-focus="border-color:oklch(0.48 0.10 250)" />
+            <div style="display:flex;flex-wrap:wrap;gap:2px;min-width:0">
+              <sc-for list="{{ ing.estadosFiltro }}" as="e" hint-placeholder-count="10">
+                <button onClick="{{ e.onClick }}" style="height:23px;padding:0 8px;background:transparent;border:1px solid transparent;font-size:11px;color:#57564f;cursor:pointer;border-radius:2px;white-space:nowrap" style-hover="background:rgba(0,0,0,.06)">{{ e.marca }}{{ e.label }}</button>
+              </sc-for>
+            </div>
+            <span style="margin-left:auto;flex:none;font-family:ui-monospace,Menlo,monospace;font-size:11px;color:#8a8981;white-space:nowrap">{{ ing.resumen }}</span>
+          </div>
+
+          <div style="flex:1;min-height:0;min-width:0;overflow:auto;background:#fff">
+            <div style="min-width:820px">
+              <div style="position:sticky;top:0;z-index:2;display:grid;grid-template-columns:34px minmax(150px,1.4fr) minmax(120px,1fr) 104px 96px 84px 132px 72px;gap:10px;align-items:center;height:26px;padding:0 16px;background:#e4e2dc;border-bottom:1px solid rgba(0,0,0,.14);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:#6b6a63;font-weight:700">
+                <span>N°</span><span>Empresa</span><span>Solicitante</span><span>Estado</span>
+                <span>Origen</span><span style="text-align:right">Ingresada</span><span>Adjunto</span><span></span>
+              </div>
+              <sc-for list="{{ ing.solicitudes }}" as="s" hint-placeholder-count="9">
+                <div style="display:grid;grid-template-columns:34px minmax(150px,1.4fr) minmax(120px,1fr) 104px 96px 84px 132px 72px;gap:10px;align-items:center;height:36px;padding:0 16px;border-bottom:1px solid rgba(0,0,0,.06)" style-hover="background:#f4f3ef">
+                  <span style="font-family:ui-monospace,Menlo,monospace;font-size:11px;color:#a3a29a">{{ s.n }}</span>
+                  <span style="min-width:0;font-size:12.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ s.empresa }}</span>
+                  <span style="min-width:0;font-size:11.5px;color:#3a3a35;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ s.solicitante }}</span>
+                  <span style="min-width:0;font-size:11px;font-weight:600;color:{{ s.tono }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ s.estado }}</span>
+                  <span style="min-width:0;font-size:11px;color:#6b6a63;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ s.origen }}</span>
+                  <span style="font-family:ui-monospace,Menlo,monospace;font-size:11px;color:#57564f;text-align:right">{{ s.fecha }}</span>
+                  <span style="min-width:0;font-size:11px;color:{{ s.adjuntoTono }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ s.adjunto }}</span>
+                  <button onClick="{{ s.onAccion }}" style="height:23px;padding:0 8px;background:#fff;border:1px solid rgba(0,0,0,.20);font-size:11px;font-weight:600;color:#262622;cursor:pointer;border-radius:2px;white-space:nowrap" style-hover="border-color:#1c1d1b;background:#1c1d1b;color:#fff">{{ s.accion }}</button>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+    </sc-if>
+
+    <sc-if value="{{ esTratamiento }}" hint-placeholder-val="{{ false }}">
+    <div style="display:flex;flex-direction:column;min-height:0;flex:1">
+
+      <header style="flex:none;display:flex;align-items:baseline;gap:14px;padding:9px 16px;background:#fff;border-bottom:1px solid rgba(0,0,0,.12)">
+        <h1 style="margin:0;font-size:14px;font-weight:700;letter-spacing:-.01em;white-space:nowrap">{{ trat.numero }}</h1>
+        <span style="font-size:12.5px;font-weight:600;color:#262622;white-space:nowrap">{{ trat.empresa }}</span>
+        <span style="font-size:11.5px;color:#75746e;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ trat.referencia }}</span>
+        <button onClick="{{ trat.onVolver }}" style="margin-left:auto;flex:none;height:24px;padding:0 10px;background:#fff;border:1px solid rgba(0,0,0,.20);font-size:11.5px;color:#262622;cursor:pointer;border-radius:2px;white-space:nowrap" style-hover="border-color:#1c1d1b">Volver al panel</button>
+      </header>
+
+      <div style="flex:none;display:flex;flex-wrap:wrap;align-items:center;gap:2px 16px;padding:6px 16px;background:#e9e7e2;border-bottom:1px solid rgba(0,0,0,.10)">
+        <sc-for list="{{ trat.pipeline }}" as="e" hint-placeholder-count="8">
+          <span style="display:flex;align-items:center;gap:5px;white-space:nowrap">
+            <span style="font-family:ui-monospace,Menlo,monospace;font-size:10px;color:{{ e.tono }}">{{ e.marca }}</span>
+            <span style="font-size:11px;color:{{ e.tono }};font-weight:{{ e.peso }}">{{ e.label }}</span>
+          </span>
+        </sc-for>
+      </div>
+
+      <div style="flex:1;min-height:0;display:flex">
+
+        <section style="flex:1;min-width:0;overflow:hidden;display:flex;flex-direction:column">
+
+          <div style="flex:none;display:flex;flex-wrap:wrap;gap:1px;padding:0 16px;background:#f0efeb;border-bottom:1px solid rgba(0,0,0,.10)">
+            <sc-for list="{{ trat.tabs }}" as="t" hint-placeholder-count="6">
+              <button onClick="{{ t.onClick }}" style="height:31px;padding:0 12px;background:{{ t.fondo }};border:0;border-bottom:2px solid {{ t.borde }};font-size:11.5px;font-weight:{{ t.peso }};color:{{ t.tono }};cursor:pointer;white-space:nowrap" style-hover="background:#fff">{{ t.label }}</button>
+            </sc-for>
+          </div>
+
+          <div style="flex:1;min-height:0;min-width:0;overflow:auto;background:#fff">
+
+            <sc-if value="{{ trat.esTareas }}" hint-placeholder-val="{{ true }}">
+              <div style="min-width:940px">
+                <div style="position:sticky;top:0;z-index:2;display:grid;grid-template-columns:minmax(200px,1fr) 118px 132px 52px 68px 62px 84px 96px 24px;gap:8px;align-items:center;height:26px;padding:0 16px;background:#e4e2dc;border-bottom:1px solid rgba(0,0,0,.14);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:#6b6a63;font-weight:700">
+                  <span>Descripción</span><span>Puesto</span><span>Responsable</span>
+                  <span style="text-align:right">Hrs</span><span style="text-align:right">Fecha</span>
+                  <span style="text-align:right">Hora</span><span style="text-align:right">$/hora</span>
+                  <span style="text-align:right">Subtotal</span><span></span>
+                </div>
+                <sc-for list="{{ trat.tareas }}" as="t" hint-placeholder-count="4">
+                  <div style="display:grid;grid-template-columns:minmax(200px,1fr) 118px 132px 52px 68px 62px 84px 96px 24px;gap:8px;align-items:center;padding:4px 16px;border-bottom:1px solid rgba(0,0,0,.06)" style-hover="background:#fbfaf8">
+                    <input value="{{ t.descripcion }}" onChange="{{ t.onDesc }}" style="height:24px;min-width:0;padding:0 6px;border:1px solid transparent;background:transparent;font-family:inherit;font-size:11.5px;color:#1a1a18;outline:none;border-radius:2px" style-hover="border-color:rgba(0,0,0,.14)" style-focus="border-color:oklch(0.48 0.10 250);background:#fff" />
+                    <input value="{{ t.puesto }}" onChange="{{ t.onPuesto }}" style="height:24px;min-width:0;padding:0 6px;border:1px solid transparent;background:transparent;font-family:inherit;font-size:11.5px;color:#3a3a35;outline:none;border-radius:2px" style-hover="border-color:rgba(0,0,0,.14)" style-focus="border-color:oklch(0.48 0.10 250);background:#fff" />
+                    <input value="{{ t.responsable }}" onChange="{{ t.onResp }}" style="height:24px;min-width:0;padding:0 6px;border:1px solid transparent;background:transparent;font-family:inherit;font-size:11.5px;color:#3a3a35;outline:none;border-radius:2px" style-hover="border-color:rgba(0,0,0,.14)" style-focus="border-color:oklch(0.48 0.10 250);background:#fff" />
+                    <input value="{{ t.duracion }}" onChange="{{ t.onDur }}" type="number" style="height:24px;min-width:0;padding:0 4px;border:1px solid transparent;background:transparent;font-family:ui-monospace,Menlo,monospace;font-size:11.5px;color:#1a1a18;text-align:right;outline:none;border-radius:2px" style-hover="border-color:rgba(0,0,0,.14)" style-focus="border-color:oklch(0.48 0.10 250);background:#fff" />
+                    <input value="{{ t.fecha }}" onChange="{{ t.onFecha }}" style="height:24px;min-width:0;padding:0 4px;border:1px solid transparent;background:transparent;font-family:ui-monospace,Menlo,monospace;font-size:11.5px;color:#3a3a35;text-align:right;outline:none;border-radius:2px" style-hover="border-color:rgba(0,0,0,.14)" style-focus="border-color:oklch(0.48 0.10 250);background:#fff" />
+                    <input value="{{ t.hora }}" onChange="{{ t.onHora }}" style="height:24px;min-width:0;padding:0 4px;border:1px solid transparent;background:transparent;font-family:ui-monospace,Menlo,monospace;font-size:11.5px;color:#3a3a35;text-align:right;outline:none;border-radius:2px" style-hover="border-color:rgba(0,0,0,.14)" style-focus="border-color:oklch(0.48 0.10 250);background:#fff" />
+                    <input value="{{ t.valorHora }}" onChange="{{ t.onValor }}" type="number" style="height:24px;min-width:0;padding:0 4px;border:1px solid transparent;background:transparent;font-family:ui-monospace,Menlo,monospace;font-size:11.5px;color:#3a3a35;text-align:right;outline:none;border-radius:2px" style-hover="border-color:rgba(0,0,0,.14)" style-focus="border-color:oklch(0.48 0.10 250);background:#fff" />
+                    <span style="font-family:ui-monospace,Menlo,monospace;font-size:11.5px;text-align:right;color:#1a1a18">{{ t.subtotal }}</span>
+                    <span onClick="{{ t.onQuitar }}" title="Quitar tarea" style="font-family:ui-monospace,Menlo,monospace;font-size:12px;color:#c9c7c0;cursor:pointer;text-align:center" style-hover="color:oklch(0.52 0.13 25)">×</span>
+                  </div>
+                </sc-for>
+                <div style="padding:8px 16px">
+                  <button onClick="{{ trat.onAgregarTarea }}" style="height:24px;padding:0 10px;background:#fff;border:1px dashed rgba(0,0,0,.28);font-size:11.5px;color:#57564f;cursor:pointer;border-radius:2px" style-hover="border-color:#1c1d1b;color:#1a1a18">Agregar tarea</button>
+                </div>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ trat.esMateriales }}" hint-placeholder-val="{{ false }}">
+              <div style="min-width:760px">
+                <div style="position:sticky;top:0;z-index:2;display:grid;grid-template-columns:104px 128px minmax(200px,1fr) 62px 96px 100px 24px;gap:8px;align-items:center;height:26px;padding:0 16px;background:#e4e2dc;border-bottom:1px solid rgba(0,0,0,.14);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:#6b6a63;font-weight:700">
+                  <span>Tipo</span><span>Código</span><span>Descripción</span>
+                  <span style="text-align:right">Cant.</span><span style="text-align:right">Unitario</span>
+                  <span style="text-align:right">Subtotal</span><span></span>
+                </div>
+                <sc-for list="{{ trat.materiales }}" as="m" hint-placeholder-count="4">
+                  <div style="display:grid;grid-template-columns:104px 128px minmax(200px,1fr) 62px 96px 100px 24px;gap:8px;align-items:center;padding:4px 16px;border-bottom:1px solid rgba(0,0,0,.06)" style-hover="background:#fbfaf8">
+                    <input value="{{ m.tipo }}" onChange="{{ m.onTipo }}" style="height:24px;min-width:0;padding:0 6px;border:1px solid transparent;background:transparent;font-family:inherit;font-size:11.5px;color:#3a3a35;outline:none;border-radius:2px" style-hover="border-color:rgba(0,0,0,.14)" style-focus="border-color:oklch(0.48 0.10 250);background:#fff" />
+                    <input value="{{ m.codigo }}" onChange="{{ m.onCodigo }}" style="height:24px;min-width:0;padding:0 6px;border:1px solid transparent;background:transparent;font-family:ui-monospace,Menlo,monospace;font-size:11px;color:#3a3a35;outline:none;border-radius:2px" style-hover="border-color:rgba(0,0,0,.14)" style-focus="border-color:oklch(0.48 0.10 250);background:#fff" />
+                    <input value="{{ m.descripcion }}" onChange="{{ m.onDesc }}" style="height:24px;min-width:0;padding:0 6px;border:1px solid transparent;background:transparent;font-family:inherit;font-size:11.5px;color:#1a1a18;outline:none;border-radius:2px" style-hover="border-color:rgba(0,0,0,.14)" style-focus="border-color:oklch(0.48 0.10 250);background:#fff" />
+                    <input value="{{ m.cantidad }}" onChange="{{ m.onCant }}" type="number" style="height:24px;min-width:0;padding:0 4px;border:1px solid transparent;background:transparent;font-family:ui-monospace,Menlo,monospace;font-size:11.5px;color:#1a1a18;text-align:right;outline:none;border-radius:2px" style-hover="border-color:rgba(0,0,0,.14)" style-focus="border-color:oklch(0.48 0.10 250);background:#fff" />
+                    <input value="{{ m.precio }}" onChange="{{ m.onPrecio }}" type="number" style="height:24px;min-width:0;padding:0 4px;border:1px solid transparent;background:transparent;font-family:ui-monospace,Menlo,monospace;font-size:11.5px;color:#3a3a35;text-align:right;outline:none;border-radius:2px" style-hover="border-color:rgba(0,0,0,.14)" style-focus="border-color:oklch(0.48 0.10 250);background:#fff" />
+                    <span style="font-family:ui-monospace,Menlo,monospace;font-size:11.5px;text-align:right">{{ m.subtotal }}</span>
+                    <span onClick="{{ m.onQuitar }}" title="Quitar ítem" style="font-family:ui-monospace,Menlo,monospace;font-size:12px;color:#c9c7c0;cursor:pointer;text-align:center" style-hover="color:oklch(0.52 0.13 25)">×</span>
+                  </div>
+                </sc-for>
+                <div style="padding:8px 16px">
+                  <button onClick="{{ trat.onAgregarMaterial }}" style="height:24px;padding:0 10px;background:#fff;border:1px dashed rgba(0,0,0,.28);font-size:11.5px;color:#57564f;cursor:pointer;border-radius:2px" style-hover="border-color:#1c1d1b;color:#1a1a18">Agregar ítem</button>
+                </div>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ trat.esLogistica }}" hint-placeholder-val="{{ false }}">
+              <div style="min-width:760px">
+                <div style="position:sticky;top:0;z-index:2;display:grid;grid-template-columns:96px 96px minmax(200px,1fr) 62px 96px 100px 24px;gap:8px;align-items:center;height:26px;padding:0 16px;background:#e4e2dc;border-bottom:1px solid rgba(0,0,0,.14);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:#6b6a63;font-weight:700">
+                  <span>Unidad</span><span>Patente</span><span>Descripción</span>
+                  <span style="text-align:right">Cant.</span><span style="text-align:right">Unitario</span>
+                  <span style="text-align:right">Subtotal</span><span></span>
+                </div>
+                <sc-for list="{{ trat.logistica }}" as="l" hint-placeholder-count="3">
+                  <div style="display:grid;grid-template-columns:96px 96px minmax(200px,1fr) 62px 96px 100px 24px;gap:8px;align-items:center;padding:4px 16px;border-bottom:1px solid rgba(0,0,0,.06)" style-hover="background:#fbfaf8">
+                    <input value="{{ l.unidad }}" onChange="{{ l.onUnidad }}" style="height:24px;min-width:0;padding:0 6px;border:1px solid transparent;background:transparent;font-family:ui-monospace,Menlo,monospace;font-size:11px;color:#3a3a35;outline:none;border-radius:2px" style-hover="border-color:rgba(0,0,0,.14)" style-focus="border-color:oklch(0.48 0.10 250);background:#fff" />
+                    <input value="{{ l.patente }}" onChange="{{ l.onPatente }}" style="height:24px;min-width:0;padding:0 6px;border:1px solid transparent;background:transparent;font-family:ui-monospace,Menlo,monospace;font-size:11px;color:#3a3a35;outline:none;border-radius:2px" style-hover="border-color:rgba(0,0,0,.14)" style-focus="border-color:oklch(0.48 0.10 250);background:#fff" />
+                    <input value="{{ l.descripcion }}" onChange="{{ l.onDesc }}" style="height:24px;min-width:0;padding:0 6px;border:1px solid transparent;background:transparent;font-family:inherit;font-size:11.5px;color:#1a1a18;outline:none;border-radius:2px" style-hover="border-color:rgba(0,0,0,.14)" style-focus="border-color:oklch(0.48 0.10 250);background:#fff" />
+                    <input value="{{ l.cantidad }}" onChange="{{ l.onCant }}" type="number" style="height:24px;min-width:0;padding:0 4px;border:1px solid transparent;background:transparent;font-family:ui-monospace,Menlo,monospace;font-size:11.5px;color:#1a1a18;text-align:right;outline:none;border-radius:2px" style-hover="border-color:rgba(0,0,0,.14)" style-focus="border-color:oklch(0.48 0.10 250);background:#fff" />
+                    <input value="{{ l.precio }}" onChange="{{ l.onPrecio }}" type="number" style="height:24px;min-width:0;padding:0 4px;border:1px solid transparent;background:transparent;font-family:ui-monospace,Menlo,monospace;font-size:11.5px;color:#3a3a35;text-align:right;outline:none;border-radius:2px" style-hover="border-color:rgba(0,0,0,.14)" style-focus="border-color:oklch(0.48 0.10 250);background:#fff" />
+                    <span style="font-family:ui-monospace,Menlo,monospace;font-size:11.5px;text-align:right">{{ l.subtotal }}</span>
+                    <span onClick="{{ l.onQuitar }}" title="Quitar ítem" style="font-family:ui-monospace,Menlo,monospace;font-size:12px;color:#c9c7c0;cursor:pointer;text-align:center" style-hover="color:oklch(0.52 0.13 25)">×</span>
+                  </div>
+                </sc-for>
+                <div style="padding:8px 16px">
+                  <button onClick="{{ trat.onAgregarLogistica }}" style="height:24px;padding:0 10px;background:#fff;border:1px dashed rgba(0,0,0,.28);font-size:11.5px;color:#57564f;cursor:pointer;border-radius:2px" style-hover="border-color:#1c1d1b;color:#1a1a18">Agregar ítem</button>
+                </div>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ trat.esCotizacion }}" hint-placeholder-val="{{ false }}">
+              <div style="max-width:620px;padding:16px">
+                <div style="font-size:9.5px;letter-spacing:.11em;text-transform:uppercase;color:#8a8981;margin-bottom:9px">Cotización técnica y comercial</div>
+                <sc-for list="{{ trat.cotizacion }}" as="c" hint-placeholder-count="3">
+                  <div style="display:grid;grid-template-columns:1fr auto;gap:12px;padding:7px 0;border-bottom:1px solid rgba(0,0,0,.08)">
+                    <span style="min-width:0">
+                      <span style="display:block;font-size:12px;color:#1a1a18">{{ c.label }}</span>
+                      <span style="display:block;font-size:10.5px;color:#8a8981">{{ c.detalle }}</span>
+                    </span>
+                    <span style="font-family:ui-monospace,Menlo,monospace;font-size:12.5px;align-self:center">{{ c.valor }}</span>
+                  </div>
+                </sc-for>
+                <div style="display:flex;justify-content:space-between;padding:9px 0 3px;margin-top:6px;border-top:1px solid rgba(0,0,0,.16)">
+                  <span style="font-size:12px;font-weight:700">Total neto</span>
+                  <span style="font-family:ui-monospace,Menlo,monospace;font-size:15px;font-weight:600">{{ trat.neto }}</span>
+                </div>
+                <div style="display:flex;justify-content:space-between;padding:2px 0;font-size:11.5px;color:#6b6a63">
+                  <span>IVA 19 %</span>
+                  <span style="font-family:ui-monospace,Menlo,monospace">{{ trat.iva }}</span>
+                </div>
+                <div style="display:flex;justify-content:space-between;padding:6px 0 0;margin-top:6px;border-top:1px solid rgba(0,0,0,.10)">
+                  <span style="font-size:12px;font-weight:700">Total bruto</span>
+                  <span style="font-family:ui-monospace,Menlo,monospace;font-size:15px;font-weight:600">{{ trat.bruto }}</span>
+                </div>
+                <div style="font-size:10.5px;color:#8a8981;margin-top:12px;line-height:1.5">El PDF se genera con encabezado de cliente, plan de trabajo, cronograma y traslados, y queda adjunto al envío al solicitante.</div>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ trat.esEjecucion }}" hint-placeholder-val="{{ false }}">
+              <div style="max-width:720px;padding:16px">
+                <div style="font-size:9.5px;letter-spacing:.11em;text-transform:uppercase;color:#8a8981;margin-bottom:9px">Reportes de terreno</div>
+                <sc-for list="{{ trat.reportes }}" as="r" hint-placeholder-count="3">
+                  <div style="padding:9px 0;border-bottom:1px solid rgba(0,0,0,.08)">
+                    <div style="display:flex;gap:10px;align-items:baseline">
+                      <span style="font-family:ui-monospace,Menlo,monospace;font-size:11px;color:#3a3a35">{{ r.fecha }}</span>
+                      <span style="font-size:11.5px;font-weight:600">{{ r.autor }}</span>
+                      <span style="margin-left:auto;font-size:10.5px;color:#8a8981">{{ r.foto }}</span>
+                    </div>
+                    <p style="margin:4px 0 0;font-size:11.5px;line-height:1.5;color:#4a4a44;text-wrap:pretty">{{ r.texto }}</p>
+                  </div>
+                </sc-for>
+                <div style="font-size:10.5px;color:#8a8981;margin-top:12px;line-height:1.5">Los reportes llegan desde el enlace con token que recibe el supervisor; no requiere cuenta. Anular un reporte devuelve la OT a Trabajo terminado.</div>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ trat.esPago }}" hint-placeholder-val="{{ false }}">
+              <div style="max-width:520px;padding:16px">
+                <div style="font-size:9.5px;letter-spacing:.11em;text-transform:uppercase;color:#8a8981;margin-bottom:9px">Registro de pago</div>
+                <div style="display:flex;gap:2px;margin-bottom:12px">
+                  <sc-for list="{{ trat.estados }}" as="e" hint-placeholder-count="3">
+                    <button onClick="{{ e.onClick }}" style="height:24px;padding:0 11px;background:#fff;border:1px solid rgba(0,0,0,.18);font-size:11.5px;color:#3a3a35;cursor:pointer;border-radius:2px" style-hover="border-color:#1c1d1b">{{ e.label }}</button>
+                  </sc-for>
+                </div>
+                <div style="display:grid;grid-template-columns:130px 1fr;gap:8px 12px;align-items:center">
+                  <span style="font-size:11.5px;color:#57564f">Monto pagado</span>
+                  <input value="{{ trat.pago.montoPagado }}" onChange="{{ trat.onMonto }}" type="number" style="height:26px;padding:0 8px;border:1px solid rgba(0,0,0,.18);font-family:ui-monospace,Menlo,monospace;font-size:11.5px;outline:none;border-radius:2px" style-focus="border-color:oklch(0.48 0.10 250)" />
+                  <span style="font-size:11.5px;color:#57564f">Fecha de pago</span>
+                  <input value="{{ trat.pago.fechaPago }}" onChange="{{ trat.onFechaPago }}" placeholder="dd-mm-aaaa" style="height:26px;padding:0 8px;border:1px solid rgba(0,0,0,.18);font-family:ui-monospace,Menlo,monospace;font-size:11.5px;outline:none;border-radius:2px" style-focus="border-color:oklch(0.48 0.10 250)" />
+                  <span style="font-size:11.5px;color:#57564f">Método</span>
+                  <select value="{{ trat.pago.metodoPago }}" onChange="{{ trat.onMetodo }}" style="height:26px;padding:0 6px;border:1px solid rgba(0,0,0,.18);background:#fff;font-family:inherit;font-size:11.5px;color:#1a1a18;outline:none;border-radius:2px" style-focus="border-color:oklch(0.48 0.10 250)">
+                    <sc-for list="{{ trat.metodosSel }}" as="m" hint-placeholder-count="4">
+                      <option value="{{ m.valor }}">{{ m.label }}</option>
+                    </sc-for>
+                  </select>
+                  <span style="font-size:11.5px;color:#57564f">Referencia</span>
+                  <input value="{{ trat.pago.referencia }}" onChange="{{ trat.onReferencia }}" placeholder="N° de transferencia o documento" style="height:26px;padding:0 8px;border:1px solid rgba(0,0,0,.18);font-family:ui-monospace,Menlo,monospace;font-size:11.5px;outline:none;border-radius:2px" style-focus="border-color:oklch(0.48 0.10 250)" />
+                </div>
+                <div style="font-size:10.5px;color:#8a8981;margin-top:12px;line-height:1.5">Registrar el pago completo cierra la OT y la deja en estado Pagada. Anular el pago la devuelve a Con informe.</div>
+              </div>
+            </sc-if>
+
+          </div>
+        </section>
+
+      <div onClick="{{ onToggleAside }}" title="{{ asideTitulo }}" style="width:13px;flex:none;display:flex;align-items:center;justify-content:center;background:#e4e2dc;color:#8a8981;font-family:ui-monospace,Menlo,monospace;font-size:12px;cursor:pointer;border-left:1px solid rgba(0,0,0,.10)" style-hover="color:#1a1a18;background:#d8d5cd">{{ asideGlifo }}</div>
+      <sc-if value="{{ asideVisible }}" hint-placeholder-val="{{ true }}">
+        <aside style="width:{{ asideW }};flex:none;display:flex;flex-direction:column;background:#f6f5f2;min-height:0;overflow:hidden;border-left:1px solid rgba(0,0,0,.12)">
+          <div style="flex:none;padding:12px 16px 11px;background:#fff;border-bottom:1px solid rgba(0,0,0,.12)">
+            <div style="font-size:9.5px;letter-spacing:.11em;text-transform:uppercase;color:#8a8981;margin-bottom:7px">Requerimiento</div>
+            <p style="margin:0;font-size:11.5px;line-height:1.5;color:#4a4a44;text-wrap:pretty">{{ trat.descripcion }}</p>
+          </div>
+          <div style="flex:1;min-height:0;overflow:auto">
+            <div style="padding:11px 16px 12px;border-bottom:1px solid rgba(0,0,0,.10)">
+              <div style="display:flex;justify-content:space-between;font-size:9.5px;letter-spacing:.11em;text-transform:uppercase;color:#8a8981;margin-bottom:7px">
+                <span>Resumen</span><span style="font-family:ui-monospace,Menlo,monospace">{{ trat.horas }}</span>
+              </div>
+              <sc-for list="{{ trat.resumen }}" as="r" hint-placeholder-count="3">
+                <div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:3px 0;font-size:11.5px">
+                  <span style="color:#4a4a44;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.label }}</span>
+                  <span style="font-family:ui-monospace,Menlo,monospace;color:#262622;flex:none">{{ r.valor }}</span>
+                </div>
+              </sc-for>
+              <div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:7px;padding-top:7px;border-top:1px solid rgba(0,0,0,.16)">
+                <span style="font-size:11.5px;font-weight:700">Total neto</span>
+                <span style="font-family:ui-monospace,Menlo,monospace;font-size:14px;font-weight:600">{{ trat.neto }}</span>
+              </div>
+              <div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:3px">
+                <span style="font-size:10.5px;color:#8a8981">Total bruto con IVA</span>
+                <span style="font-family:ui-monospace,Menlo,monospace;font-size:10.5px;color:#8a8981">{{ trat.bruto }}</span>
+              </div>
+            </div>
+            <div style="padding:11px 16px 14px">
+              <div style="font-size:9.5px;letter-spacing:.11em;text-transform:uppercase;color:#8a8981;margin-bottom:7px">Acciones</div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+                <sc-for list="{{ trat.acciones }}" as="a" hint-placeholder-count="4">
+                  <button onClick="{{ a.onClick }}" style="height:28px;padding:0 8px;background:#fff;border:1px solid rgba(0,0,0,.20);font-size:11.5px;font-weight:600;color:#262622;cursor:pointer;border-radius:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" style-hover="border-color:#1c1d1b;background:#1c1d1b;color:#fff">{{ a.label }}</button>
+                </sc-for>
+              </div>
+              <button style="width:100%;height:30px;margin-top:6px;background:oklch(0.48 0.10 250);border:1px solid oklch(0.48 0.10 250);color:#fff;font-size:12px;font-weight:700;cursor:pointer;border-radius:2px" style-hover="background:oklch(0.40 0.10 250)">Enviar al supervisor</button>
+              <div style="font-size:10.5px;color:#8a8981;margin-top:6px;line-height:1.5">Genera el PDF, envía el correo y abre WhatsApp con el enlace de confirmación.</div>
+            </div>
+          </div>
+        </aside>
+        </sc-if>
+      </div>
+    </div>
+    </sc-if>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;mostrarKpis&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Vista&quot;}}">
+const ETAPAS = ['Solicitud','Tratamiento','Planificada','Programada','Ejecución','Terminado','Con informe','Pagada'];
+const CLP = n => '$ ' + Math.round(n).toLocaleString('es-CL');
+const dias = f => { const [d, m, y] = f.split('-').map(Number); return Date.UTC(y, m - 1, d); };
+
+const DATA = [
+  { id:1, numero:'OT-2026-0148', empresa:'Maestranza Andes Sur', faena:'Planta Coronel · línea 3', contacto:'Patricio Silva · Jefe de mantención', fecha:'12-08-2026', ejecucion:'19-08-2026', supervisor:'R. Vergara', oc:'OC-88412', etapaIdx:4, descripcion:'Reparación de estructura de tolva alimentadora: cambio de placas de desgaste, refuerzo de costillas y alineamiento de chute de descarga.',
+    tareas:[{descripcion:'Desmontaje de placas de desgaste',puesto:'Maestro 1ª',duracion:'16 h',asignados:'J. Muñoz, C. Reyes'},{descripcion:'Corte y biselado de refuerzos',puesto:'Soldador',duracion:'22 h',asignados:'L. Farías'},{descripcion:'Soldadura MIG en terreno',puesto:'Soldador',duracion:'28 h',asignados:'L. Farías, D. Pinto'},{descripcion:'Alineamiento y control dimensional',puesto:'Supervisor',duracion:'8 h',asignados:'R. Vergara'}],
+    costos:[{label:'Mano de obra · 74 h',valor:CLP(3182000)},{label:'Materiales y consumibles',valor:CLP(1420000)},{label:'Logística · 2 traslados',valor:CLP(380000)},{label:'Arriendo equipos',valor:CLP(240000)}], total:5222000, margen:'27,4 %', pago:'Pendiente' },
+  { id:2, numero:'OT-2026-0147', empresa:'Agroindustrial Los Nogales', faena:'Bodega seca · Rancagua', contacto:'Marcela Ibáñez · Compras', fecha:'11-08-2026', ejecucion:'18-08-2026', supervisor:'C. Reyes', oc:'OC-88377', etapaIdx:6, descripcion:'Fabricación e instalación de barandas de seguridad en pasarela de despacho, según norma interna de la planta.',
+    tareas:[{descripcion:'Fabricación de módulos en taller',puesto:'Maestro 1ª',duracion:'34 h',asignados:'C. Reyes'},{descripcion:'Granallado y pintura epóxica',puesto:'Pintor',duracion:'12 h',asignados:'E. Soto'},{descripcion:'Montaje en pasarela',puesto:'Maestro 2ª',duracion:'18 h',asignados:'D. Pinto, J. Muñoz'}],
+    costos:[{label:'Mano de obra · 64 h',valor:CLP(2496000)},{label:'Materiales y consumibles',valor:CLP(2140000)},{label:'Logística · 1 traslado',valor:CLP(190000)},{label:'Arriendo equipos',valor:CLP(0)}], total:4826000, margen:'31,0 %', pago:'Parcial' },
+  { id:3, numero:'OT-2026-0146', empresa:'Transportes Quilicura', faena:'Taller central', contacto:'Hugo Peña · Operaciones', fecha:'08-08-2026', ejecucion:'14-08-2026', supervisor:'R. Vergara', oc:'OC-88290', etapaIdx:7, descripcion:'Recuperación de chasis de semirremolque: enderezado, cambio de largueros y verificación de geometría.',
+    tareas:[{descripcion:'Diagnóstico y levantamiento',puesto:'Supervisor',duracion:'6 h',asignados:'R. Vergara'},{descripcion:'Cambio de largueros',puesto:'Maestro 1ª',duracion:'40 h',asignados:'C. Reyes, J. Muñoz'},{descripcion:'Control de geometría',puesto:'Técnico',duracion:'10 h',asignados:'F. Araya'}],
+    costos:[{label:'Mano de obra · 56 h',valor:CLP(2184000)},{label:'Materiales y consumibles',valor:CLP(1680000)},{label:'Logística',valor:CLP(120000)},{label:'Arriendo equipos',valor:CLP(310000)}], total:4294000, margen:'24,8 %', pago:'Pagado' },
+  { id:4, numero:'OT-2026-0145', empresa:'Pesquera Bahía Norte', faena:'Muelle 2 · Talcahuano', contacto:'Ignacio Rojas · Mantención', fecha:'07-08-2026', ejecucion:'21-08-2026', supervisor:'D. Pinto', oc:'OC-88201', etapaIdx:3, descripcion:'Cambio de cañerías de proceso en sala de bombas, incluye prueba hidráulica y certificación de soldaduras.',
+    tareas:[{descripcion:'Prefabricado de spools',puesto:'Soldador',duracion:'26 h',asignados:'L. Farías'},{descripcion:'Montaje en sala de bombas',puesto:'Maestro 1ª',duracion:'30 h',asignados:'J. Muñoz, D. Pinto'},{descripcion:'Prueba hidráulica',puesto:'Técnico',duracion:'8 h',asignados:'F. Araya'}],
+    costos:[{label:'Mano de obra · 64 h',valor:CLP(2688000)},{label:'Materiales y consumibles',valor:CLP(3260000)},{label:'Logística · 3 traslados',valor:CLP(540000)},{label:'Arriendo equipos',valor:CLP(420000)}], total:6908000, margen:'22,1 %', pago:'Pendiente' },
+  { id:5, numero:'OT-2026-0144', empresa:'Constructora Vallenar', faena:'Obra Av. Matta', contacto:'Sofía Cárdenas · Jefa de obra', fecha:'05-08-2026', ejecucion:'25-08-2026', supervisor:'C. Reyes', oc:'OC-88150', etapaIdx:2, descripcion:'Fabricación de 18 marcos metálicos para vanos de fachada, con entrega parcializada en dos despachos.',
+    tareas:[{descripcion:'Trazado y corte de perfiles',puesto:'Maestro 2ª',duracion:'20 h',asignados:'D. Pinto'},{descripcion:'Armado y soldadura de marcos',puesto:'Soldador',duracion:'36 h',asignados:'L. Farías, C. Reyes'}],
+    costos:[{label:'Mano de obra · 56 h',valor:CLP(2072000)},{label:'Materiales y consumibles',valor:CLP(1890000)},{label:'Logística · 2 traslados',valor:CLP(260000)},{label:'Arriendo equipos',valor:CLP(0)}], total:4222000, margen:'29,6 %', pago:'Pendiente' },
+  { id:6, numero:'OT-2026-0143', empresa:'Frigorífico Puerto Montt', faena:'Cámara 4', contacto:'Álvaro Díaz · Mantención', fecha:'04-08-2026', ejecucion:'16-08-2026', supervisor:'J. Muñoz', oc:'OC-88044', etapaIdx:5, descripcion:'Reemplazo de rieles de puerta corredera y ajuste de sellos térmicos en cámara de congelado.',
+    tareas:[{descripcion:'Retiro de rieles antiguos',puesto:'Maestro 2ª',duracion:'10 h',asignados:'J. Muñoz'},{descripcion:'Instalación de rieles nuevos',puesto:'Maestro 1ª',duracion:'18 h',asignados:'C. Reyes'},{descripcion:'Ajuste de sellos y pruebas',puesto:'Técnico',duracion:'6 h',asignados:'F. Araya'}],
+    costos:[{label:'Mano de obra · 34 h',valor:CLP(1326000)},{label:'Materiales y consumibles',valor:CLP(980000)},{label:'Logística · 1 traslado',valor:CLP(310000)},{label:'Arriendo equipos',valor:CLP(0)}], total:2616000, margen:'33,2 %', pago:'Parcial' },
+  { id:7, numero:'—', empresa:'Minera Cerro Blanco', faena:'Planta de chancado', contacto:'Verónica Lagos · Contratos', fecha:'14-08-2026', ejecucion:'—', supervisor:'—', oc:'—', etapaIdx:0, descripcion:'Solicitud de cotización para recambio de revestimientos en chute principal. Requiere visita técnica antes de cotizar.',
+    tareas:[], costos:[{label:'Mano de obra',valor:'—'},{label:'Materiales y consumibles',valor:'—'},{label:'Logística',valor:'—'},{label:'Arriendo equipos',valor:'—'}], total:0, margen:'—', pago:'Sin OT' },
+  { id:8, numero:'—', empresa:'Vinos del Maipo', faena:'Sala de barricas', contacto:'Tomás Herrera · Producción', fecha:'13-08-2026', ejecucion:'—', supervisor:'—', oc:'—', etapaIdx:0, descripcion:'Fabricación de racks de barricas en acero galvanizado, 24 unidades. Plazo solicitado: 6 semanas.',
+    tareas:[], costos:[{label:'Mano de obra',valor:'—'},{label:'Materiales y consumibles',valor:'—'},{label:'Logística',valor:'—'},{label:'Arriendo equipos',valor:'—'}], total:0, margen:'—', pago:'Sin OT' },
+  { id:9, numero:'OT-2026-0142', empresa:'Papelera Bío Bío', faena:'Línea de secado', contacto:'Camila Fuentes · Proyectos', fecha:'01-08-2026', ejecucion:'27-08-2026', supervisor:'L. Farías', oc:'OC-87980', etapaIdx:1, descripcion:'Reparación de ductos de extracción con cambio parcial de tramos y refuerzo de soportería.',
+    tareas:[{descripcion:'Levantamiento en terreno',puesto:'Supervisor',duracion:'8 h',asignados:'R. Vergara'},{descripcion:'Prefabricado de tramos',puesto:'Soldador',duracion:'24 h',asignados:'L. Farías'}],
+    costos:[{label:'Mano de obra · 32 h',valor:CLP(1344000)},{label:'Materiales y consumibles',valor:CLP(1120000)},{label:'Logística',valor:CLP(180000)},{label:'Arriendo equipos',valor:CLP(0)}], total:2644000, margen:'26,0 %', pago:'Pendiente' },
+];
+
+const FECHAS_ETAPA = ['12-08','12-08','13-08','14-08','17-08','','',''];
+const DIAS_L = ['D','L','M','X','J','V','S'];
+const CALENDARIOS = [
+  { id:'c1', nombre:'Diurno 08:00–17:00', tipo:'Semanal', horas:[0,8,8,8,8,8,0], bloques:'08:00–13:00 · 14:00–17:00' },
+  { id:'c2', nombre:'Turno 4x3 · 10 h', tipo:'Rotativo · ciclo 7', horas:[0,10,10,10,10,0,0], bloques:'07:00–18:00' },
+  { id:'c3', nombre:'Media jornada AM', tipo:'Semanal', horas:[0,5,5,5,5,5,0], bloques:'08:00–13:00' },
+  { id:'c4', nombre:'Extendido con sábado', tipo:'Semanal', horas:[0,9,9,9,9,9,5], bloques:'08:00–18:00 · sáb 08:00–13:00' },
+];
+const PERSONAL = [
+  { id:'r1', nombre:'Rodrigo Vergara', puesto:'Supervisor', cal:'c1', inicio:'02-01-2024', valor:21000 },
+  { id:'r2', nombre:'Carlos Reyes', puesto:'Maestro 1ª', cal:'c1', inicio:'15-03-2024', valor:16800 },
+  { id:'r3', nombre:'Luis Farías', puesto:'Soldador', cal:'c2', inicio:'04-06-2024', valor:16800 },
+  { id:'r4', nombre:'Daniel Pinto', puesto:'Maestro 2ª', cal:'c1', inicio:'22-07-2024', valor:14500 },
+  { id:'r5', nombre:'Javier Muñoz', puesto:'Maestro 2ª', cal:'c2', inicio:'09-09-2024', valor:14500 },
+  { id:'r6', nombre:'Felipe Araya', puesto:'Técnico', cal:'c4', inicio:'13-01-2025', valor:15200 },
+  { id:'r7', nombre:'Esteban Soto', puesto:'Pintor', cal:'c3', inicio:'03-03-2025', valor:13800 },
+  { id:'r8', nombre:'Marcos Leiva', puesto:'Ayudante', cal:'', inicio:'28-04-2025', valor:9800 },
+];
+const EQUIPOS = [
+  { codigo:'EQ-SOL-04', nombre:'Máquina soldadora MIG 400 A', tipo:'Equipo', precio:1480000, estado:'En uso' },
+  { codigo:'EQ-GEN-15', nombre:'Generador diésel 15 kVA', tipo:'Equipo', precio:2350000, estado:'Disponible' },
+  { codigo:'HE-ESM-09', nombre:'Esmeril angular 9"', tipo:'Herramienta', precio:189000, estado:'Disponible' },
+  { codigo:'HE-TAL-02', nombre:'Taladro magnético', tipo:'Herramienta', precio:640000, estado:'En mantención' },
+  { codigo:'EQ-COM-03', nombre:'Compresor 500 L', tipo:'Equipo', precio:1120000, estado:'En uso' },
+  { codigo:'HE-TOR-01', nombre:'Torque hidráulico', tipo:'Herramienta', precio:980000, estado:'Disponible' },
+];
+const SUMINISTROS = [
+  { codigo:'ELEC-7018', descripcion:'Electrodo 7018 · caja 5 kg', precio:18400, categoria:'Insumo' },
+  { codigo:'DISC-CORT', descripcion:'Disco de corte 9" · unidad', precio:3900, categoria:'Insumo' },
+  { codigo:'ALIM-CUAD', descripcion:'Alimentación cuadrilla · persona/día', precio:9500, categoria:'Logística' },
+  { codigo:'TRAS-CAM', descripcion:'Traslado camión 3/4 · viaje', precio:120000, categoria:'Logística' },
+  { codigo:'EXAM-ALT', descripcion:'Examen de altura física', precio:6500, categoria:'Servicio' },
+  { codigo:'BANO-QUIM', descripcion:'Arriendo baño químico · semana', precio:78000, categoria:'Logística' },
+];
+const PLANTILLAS = [
+  { nombre:'Cambio de placas de desgaste', categoria:'Mantenimiento', descripcion:'Tolvas y chutes con revestimiento antidesgaste.', tareas:5, equipos:4, suministros:3 },
+  { nombre:'Fabricación de barandas', categoria:'Montaje', descripcion:'Pasarelas y plataformas según norma interna.', tareas:4, equipos:3, suministros:2 },
+  { nombre:'Recuperación de chasis', categoria:'Reparación', descripcion:'Enderezado y cambio de largueros.', tareas:6, equipos:5, suministros:4 },
+  { nombre:'Cambio de cañerías de proceso', categoria:'Instalación', descripcion:'Prefabricado de spools y prueba hidráulica.', tareas:7, equipos:4, suministros:5 },
+  { nombre:'Inspección dimensional', categoria:'Inspección', descripcion:'Control de geometría con informe.', tareas:3, equipos:2, suministros:1 },
+];
+const PUESTOS = ['Supervisor','Maestro 1ª','Maestro 2ª','Soldador','Técnico','Pintor','Ayudante'];
+const MESES_C = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+const ENTORNOS = [
+  { key:'produccion', nombre:'Producción', bd:'erp_taller', host:'cluster0.mongodb.net', nota:'Datos reales del taller. Toda escritura queda en la operación.' },
+  { key:'demo', nombre:'Demostración', bd:'erp_taller_demo', host:'cluster0.mongodb.net', nota:'Base separada. Nada de lo que se haga aquí llega a producción.' },
+];
+const EXPORTABLES = [
+  { key:'recursos', label:'Personal (Recursos)', cols:'nombre, puesto, tipo, telefono, email, tarifaHora' },
+  { key:'suministros', label:'Suministros', cols:'codigo, descripcion, precio, categoria' },
+  { key:'equipos', label:'Equipos y herramientas', cols:'nombre, codigo, tipo, estado, precio' },
+  { key:'puestos', label:'Puestos / especialidades', cols:'nombre, costoHora, categoria' },
+  { key:'ots', label:'Órdenes de trabajo', cols:'numeroOT, solicitante, estado, granTotal, pago…' },
+  { key:'solicitudes', label:'Solicitudes', cols:'solicitante, empresa, descripcion, estado, fecha' },
+];
+const IMPORTABLES = [
+  { key:'recursos', label:'Personal (Recursos)', columnas:['nombre *','puesto','tipo','telefono','email','tarifaHora'], regla:'Siempre crea registros nuevos' },
+  { key:'suministros', label:'Suministros', columnas:['codigo *','descripcion *','precio','categoria'], regla:'Si el código existe, se actualiza' },
+  { key:'equipos', label:'Equipos y herramientas', columnas:['nombre *','codigo','tipo','estado','precio'], regla:'Siempre crea registros nuevos' },
+  { key:'puestos', label:'Puestos / especialidades', columnas:['nombre *','costoHora','categoria'], regla:'Si el nombre existe, se actualiza' },
+];
+const ESTADOS_OT_IE = ['Pendiente','Tratada','Planificada','Programada','En Ejecución','Trabajo Terminado','Con Informe','Pagada'];
+const RESULTADOS = {
+  recursos: { insertados:11, total:12, errores:[{ fila:7, motivo:'nombre vacío' }] },
+  suministros: { insertados:38, total:41, errores:[{ fila:12, motivo:'codigo duplicado en el archivo' },{ fila:19, motivo:'precio no numérico' },{ fila:33, motivo:'descripcion vacía' }] },
+  equipos: { insertados:24, total:24, errores:[] },
+  puestos: { insertados:7, total:7, errores:[] },
+};
+const DEMO_CONTENIDO = [
+  { label:'Clientes y solicitudes', detalle:'8 empresas · 14 solicitudes', n:'22' },
+  { label:'OTs en todas las etapas', detalle:'12 OTs, al menos una por etapa', n:'12' },
+  { label:'Personal con turnos', detalle:'8 personas · 4 calendarios', n:'12' },
+  { label:'Catálogo', detalle:'Equipos, herramientas y suministros', n:'32' },
+  { label:'Plantillas', detalle:'5 hojas de ruta con tareas y materiales', n:'5' },
+  { label:'Reportes de terreno', detalle:'18 reportes con fotos de ejemplo', n:'18' },
+  { label:'Pagos y cobranza', detalle:'Pagado, parcial y pendiente', n:'12' },
+  { label:'Historial', detalle:'6 meses cerrados para los gráficos', n:'6' },
+];
+
+const PROG = [
+  { num:'OT-2026-0148', empresa:'Maestranza Andes Sur', estado:'Programada', descripcion:'Reparación de tolva alimentadora · Planta Coronel',
+    tareas:[
+      { descripcion:'Desmontaje de placas de desgaste', puesto:'Maestro 1ª', asignados:['r2','r5'], horas:8, semana:0, dia:1, hora:'08:00' },
+      { descripcion:'Corte y biselado de refuerzos', puesto:'Soldador', asignados:['r3'], horas:10, semana:0, dia:2, hora:'07:30' },
+      { descripcion:'Soldadura MIG en terreno', puesto:'Soldador', asignados:['r3'], horas:10, semana:0, dia:3, hora:'07:30' },
+      { descripcion:'Alineamiento y control dimensional', puesto:'Supervisor', asignados:['r1'], horas:8, semana:0, dia:4, hora:'09:00' },
+    ] },
+  { num:'OT-2026-0145', empresa:'Pesquera Bahía Norte', estado:'Planificada', descripcion:'Cambio de cañerías en sala de bombas · Muelle 2',
+    tareas:[
+      { descripcion:'Prefabricado de spools', puesto:'Soldador', asignados:['r3'], horas:8, semana:0, dia:2, hora:'14:00' },
+      { descripcion:'Montaje en sala de bombas', puesto:'Maestro 1ª', asignados:['r2','r4'], horas:9, semana:0, dia:4, hora:'08:00' },
+      { descripcion:'Prueba hidráulica', puesto:'Técnico', asignados:['r6'], horas:8, semana:1, dia:1, hora:'08:00' },
+    ] },
+  { num:'OT-2026-0144', empresa:'Constructora Vallenar', estado:'Planificada', descripcion:'Fabricación de 18 marcos metálicos · Obra Av. Matta',
+    tareas:[
+      { descripcion:'Trazado y corte de perfiles', puesto:'Maestro 2ª', asignados:['r4'], horas:8, semana:0, dia:0, hora:'08:00' },
+      { descripcion:'Armado y soldadura de marcos', puesto:'Soldador', asignados:['r3','r2'], horas:9, semana:1, dia:2, hora:'08:00' },
+    ] },
+  { num:'OT-2026-0143', empresa:'Frigorífico Puerto Montt', estado:'Terminado', descripcion:'Rieles de puerta corredera · Cámara 4',
+    tareas:[
+      { descripcion:'Instalación de rieles nuevos', puesto:'Maestro 1ª', asignados:['r2'], horas:8, semana:0, dia:0, hora:'08:00' },
+    ] },
+];
+const SEMANAS = [
+  { num:34, inicio:[2026,7,17] },
+  { num:35, inicio:[2026,7,24] },
+];
+const horasDe = d => d.tareas.reduce((x, t) => x + parseInt(t.duracion || 0, 10), 0);
+
+const CAMPOS = [
+  { key:'ot',        label:'N° de OT',            corto:'OT',        origen:'ot.numeroOT',    w:76,  align:'left',  tipo:'texto', mono:true },
+  { key:'cliente',   label:'Cliente / faena',     corto:'Cliente / faena', origen:'solicitud', w:0, align:'left', tipo:'cliente', fija:true },
+  { key:'etapa',     label:'Etapa + avance',      corto:'Etapa',     origen:'ot.estado',      w:104, align:'left',  tipo:'etapa' },
+  { key:'horas',     label:'Horas planificadas',  corto:'Horas',     origen:'ot.tareas',      w:58,  align:'right', tipo:'texto', mono:true },
+  { key:'total',     label:'Total neto',          corto:'Total',     origen:'ot.granTotal',   w:92,  align:'right', tipo:'texto', mono:true },
+  { key:'pago',      label:'Estado de pago',      corto:'Pago',      origen:'ot.pago',        w:80,  align:'right', tipo:'texto' },
+  { key:'creacion',  label:'Fecha de creación',   corto:'Ingresada', origen:'fechaCreacion',  w:84,  align:'right', tipo:'texto', mono:true },
+  { key:'ejecucion', label:'Fecha de ejecución',  corto:'Ejecución', origen:'fechaEjecucion', w:84,  align:'right', tipo:'texto', mono:true },
+  { key:'supervisor',label:'Supervisor a cargo',  corto:'Supervisor',origen:'ot.tareas[]',    w:96,  align:'left',  tipo:'texto' },
+  { key:'contacto',  label:'Contacto solicitante',corto:'Contacto',  origen:'solicitante',    w:140, align:'left',  tipo:'texto' },
+  { key:'tareas',    label:'N° de tareas',        corto:'Tareas',    origen:'ot.tareas',      w:60,  align:'right', tipo:'texto', mono:true },
+  { key:'margen',    label:'Margen estimado',     corto:'Margen',    origen:'calculado',      w:70,  align:'right', tipo:'texto', mono:true },
+  { key:'oc',        label:'Orden de compra',     corto:'OC',        origen:'solicitud.oc',   w:92,  align:'left',  tipo:'texto', mono:true },
+];
+const VISIBLES_BASE = ['ot','cliente','etapa','horas','total'];
+const BASE = {
+  navW: 186, asideW: 300, rowH: 40, navOculta: false, asideOculta: false,
+  columnas: CAMPOS.map(c => ({ key: c.key, w: c.w, visible: VISIBLES_BASE.indexOf(c.key) >= 0 })),
+};
+const campo = key => CAMPOS.find(c => c.key === key);
+const clonar = l => ({ ...l, columnas: l.columnas.map(c => ({ ...c })) });
+const normalizar = l => {
+  const dadas = (l && l.columnas) || [];
+  const columnas = dadas.filter(c => campo(c.key)).map(c => ({ key: c.key, w: c.w || campo(c.key).w, visible: !!c.visible }));
+  CAMPOS.forEach(c => { if (!columnas.find(x => x.key === c.key)) columnas.push({ key: c.key, w: c.w, visible: false }); });
+  const cli = columnas.find(c => c.key === 'cliente'); if (cli) cli.visible = true;
+  return { navW: (l && l.navW) || BASE.navW, asideW: (l && l.asideW) || BASE.asideW, rowH: (l && l.rowH) || BASE.rowH,
+    navOculta: !!(l && l.navOculta), asideOculta: !!(l && l.asideOculta), columnas };
+};
+const LS = 'erpTaller.disposicion.v2';
+
+class Component extends DCLogic {
+  state = { pantalla:'panel', filtro:'todos', consulta:'', sel:1, orden:'reciente',
+    layout: clonar(BASE), variantes:[], activa:'', guardando:false, nombreNueva:'', menuColumnas:false,
+    tab:'tareas', otTrat:1,
+    tareasT:[
+      { descripcion:'Desmontaje de placas de desgaste', puesto:'Maestro 1ª', responsable:'J. Muñoz', duracion:16, fecha:'19-08', hora:'08:00', valorHora:14500 },
+      { descripcion:'Corte y biselado de refuerzos', puesto:'Soldador', responsable:'L. Farías', duracion:22, fecha:'20-08', hora:'08:00', valorHora:16800 },
+      { descripcion:'Soldadura MIG en terreno', puesto:'Soldador', responsable:'L. Farías, D. Pinto', duracion:28, fecha:'21-08', hora:'07:30', valorHora:16800 },
+      { descripcion:'Alineamiento y control dimensional', puesto:'Supervisor', responsable:'R. Vergara', duracion:8, fecha:'23-08', hora:'09:00', valorHora:21000 },
+    ],
+    materiales:[
+      { tipo:'Material', codigo:'PL-AR400-12', descripcion:'Placa antidesgaste AR400 12 mm', cantidad:6, precio:148000 },
+      { tipo:'Material', codigo:'PERF-L80', descripcion:'Perfil ángulo L 80×80×8', cantidad:12, precio:31500 },
+      { tipo:'Insumo', codigo:'ELEC-7018', descripcion:'Electrodo 7018 · caja 5 kg', cantidad:8, precio:18400 },
+      { tipo:'Equipo', codigo:'EQ-GEN-15', descripcion:'Arriendo generador 15 kVA · día', cantidad:3, precio:80000 },
+    ],
+    logisticaT:[
+      { unidad:'CAM-02', patente:'JKLP-45', descripcion:'Traslado de materiales a Planta Coronel', cantidad:2, precio:120000 },
+      { unidad:'—', patente:'—', descripcion:'Alimentación cuadrilla · 4 personas × 3 días', cantidad:12, precio:9500 },
+      { unidad:'—', patente:'—', descripcion:'Exámenes de altura física', cantidad:4, precio:6500 },
+    ],
+    pago:{ estado:'Pendiente', montoPagado:0, fechaPago:'', metodoPago:'Transferencia', referencia:'', notas:'' },
+    form:{ empresaSolicitante:'', solicitante:'', correo:'', numero:'', direccion:'', fechaEjecucion:'', plazo:'', origen:'WhatsApp', descripcion:'', adjunto:'' },
+    filtroEstado:'', filtroTexto:'', aviso:'',
+    tabRec:'personal', mes:7, anio:2026, ajustes:{}, calSel:'c1', calAsignado:{},
+    semana:0, otProg:'OT-2026-0148', estadosProg:{}, avisoProg:'',
+    entorno:'produccion', demoCargada:false, pedir:'', palabra:'',
+    modulos:[], otDesde:'', otHasta:'', otEstado:'', resultado:null, modImport:'',
+    solicitudesIng: DATA.map((d, i) => ({
+      n: DATA.length - i, empresa:d.empresa, solicitante:d.contacto.split(' · ')[0], correo:'contacto@cliente.cl',
+      estado: d.pago === 'Sin OT' ? 'Pendiente' : ETAPAS[d.etapaIdx], adjunto: i % 3 === 0 ? 'plano-rev-b.pdf' : '',
+      origen: ['WhatsApp','Correo','Llamada','Presencial'][i % 4], fecha:d.fecha, tieneOT: d.pago !== 'Sin OT',
+    })) };
+
+  componentDidMount() {
+    try {
+      const raw = localStorage.getItem(LS);
+      if (!raw) return;
+      const p = JSON.parse(raw);
+      this.setState({
+        variantes: Array.isArray(p.variantes) ? p.variantes.map(v => ({ nombre: v.nombre, layout: normalizar(v.layout) })) : [],
+        layout: p.layout ? normalizar(p.layout) : this.state.layout,
+        activa: p.activa || '',
+      });
+    } catch (e) {}
+  }
+
+  persistir() {
+    const s = this.state;
+    try { localStorage.setItem(LS, JSON.stringify({ variantes: s.variantes, layout: s.layout, activa: s.activa })); } catch (e) {}
+  }
+
+  setLayout(patch) { this.setState(s => ({ layout: { ...s.layout, ...patch }, activa: '' }), () => this.persistir()); }
+
+  setCol(key, patch) {
+    this.setLayout({ columnas: this.state.layout.columnas.map(c => c.key === key ? { ...c, ...patch } : c) });
+  }
+
+  toggleCol(key) {
+    if (key === 'cliente') return;
+    const c = this.state.layout.columnas.find(x => x.key === key);
+    this.setCol(key, { visible: !c.visible });
+  }
+
+  moverCol(key, delta) {
+    const cols = this.state.layout.columnas.slice();
+    const i = cols.findIndex(c => c.key === key);
+    const j = i + delta;
+    if (i < 0 || j < 0 || j >= cols.length) return;
+    const tmp = cols[i]; cols[i] = cols[j]; cols[j] = tmp;
+    this.setLayout({ columnas: cols });
+  }
+
+  arrastrar(prop, signo, min, max) {
+    return e => {
+      e.preventDefault(); e.stopPropagation();
+      const x0 = e.clientX;
+      const col = prop.indexOf('col:') === 0 ? prop.slice(4) : null;
+      const v0 = col ? this.state.layout.columnas.find(c => c.key === col).w : this.state.layout[prop];
+      const mover = ev => {
+        const v = Math.min(max, Math.max(min, Math.round(v0 + signo * (ev.clientX - x0))));
+        if (col) this.setCol(col, { w: v }); else this.setLayout({ [prop]: v });
+      };
+      const soltar = () => { window.removeEventListener('pointermove', mover); window.removeEventListener('pointerup', soltar); };
+      window.addEventListener('pointermove', mover);
+      window.addEventListener('pointerup', soltar);
+    };
+  }
+
+  guardarVariante() {
+    const nombre = (this.state.nombreNueva || '').trim() || ('Variante ' + (this.state.variantes.length + 1));
+    const variantes = [...this.state.variantes.filter(x => x.nombre !== nombre), { nombre, layout: clonar(this.state.layout) }];
+    this.setState({ variantes, activa: nombre, guardando: false, nombreNueva: '' }, () => this.persistir());
+  }
+
+  aplicar(v) { this.setState({ layout: normalizar(v.layout), activa: v.nombre }, () => this.persistir()); }
+  eliminar(nombre) { this.setState(s => ({ variantes: s.variantes.filter(x => x.nombre !== nombre), activa: s.activa === nombre ? '' : s.activa }), () => this.persistir()); }
+
+  editar(lista, i, campo, numerico) {
+    return e => {
+      const v = numerico ? Number(e.target.value || 0) : e.target.value;
+      this.setState(s => ({ [lista]: s[lista].map((r, j) => j === i ? { ...r, [campo]: v } : r) }));
+    };
+  }
+
+  quitar(lista, i) { this.setState(s => ({ [lista]: s[lista].filter((_, j) => j !== i) })); }
+
+  agregar(lista, fila) { this.setState(s => ({ [lista]: [...s[lista], fila] })); }
+
+  visibles() {
+    const q = this.state.consulta.trim().toLowerCase();
+    return DATA.filter(d => {
+      if (this.state.filtro === 'ots' && d.pago === 'Sin OT') return false;
+      if (this.state.filtro === 'solicitudes' && d.pago !== 'Sin OT') return false;
+      if (this.state.filtro === 'porCobrar' && (d.pago === 'Pagado' || d.pago === 'Sin OT')) return false;
+      if (!q) return true;
+      return (d.empresa + ' ' + d.numero + ' ' + d.contacto + ' ' + d.faena).toLowerCase().includes(q);
+    }).sort((a, b) => this.state.orden === 'monto' ? b.total - a.total : dias(b.fecha) - dias(a.fecha));
+  }
+
+  pagoColor(p) {
+    if (p === 'Pagado') return 'oklch(0.48 0.10 155)';
+    if (p === 'Parcial') return 'oklch(0.55 0.11 65)';
+    if (p === 'Sin OT') return '#a3a29a';
+    return 'oklch(0.52 0.13 25)';
+  }
+
+  valorDe(d, key) {
+    const h = horasDe(d);
+    if (key === 'ot') return d.numero;
+    if (key === 'horas') return h ? h + ' h' : '—';
+    if (key === 'total') return d.total ? CLP(d.total) : '—';
+    if (key === 'pago') return d.pago;
+    if (key === 'creacion') return d.fecha;
+    if (key === 'ejecucion') return d.ejecucion;
+    if (key === 'supervisor') return d.supervisor;
+    if (key === 'contacto') return d.contacto;
+    if (key === 'tareas') return d.tareas.length ? String(d.tareas.length) : '—';
+    if (key === 'margen') return d.margen;
+    if (key === 'oc') return d.oc;
+    return '';
+  }
+
+  datos() {
+    const s = this.state;
+    const esDemo = s.entorno === 'demo';
+    const pedir = s.pedir;
+    return {
+      entornos: ENTORNOS.map(e => ({
+        nombre:e.nombre, bd:e.bd, host:e.host, nota:e.nota,
+        activo: s.entorno === e.key,
+        etiqueta: s.entorno === e.key ? 'En uso' : 'Cambiar a este entorno',
+        marca: s.entorno === e.key ? '#1c1d1b' : 'transparent',
+        fondo: s.entorno === e.key ? '#f0efeb' : '#fff',
+        tono: e.key === 'demo' ? 'oklch(0.55 0.11 65)' : 'oklch(0.48 0.10 155)',
+        onClick: () => this.setState({ entorno: e.key, pedir:'' }),
+      })),
+      esDemo,
+      entornoNombre: esDemo ? 'Demostración' : 'Producción',
+      entornoBd: esDemo ? 'erp_taller_demo' : 'erp_taller',
+      demoCargada: s.demoCargada,
+      demoEstado: s.demoCargada ? 'Cargado · 119 registros · 17-08-2026 09:12' : 'Sin datos de demostración en esta base',
+      demoTono: s.demoCargada ? 'oklch(0.48 0.10 155)' : '#8a8981',
+      contenido: DEMO_CONTENIDO,
+      puedeCargar: esDemo,
+      avisoProduccion: !esDemo,
+      onCargar: () => { if (esDemo) this.setState({ demoCargada:true, pedir:'' }); },
+      onRegenerar: () => { if (esDemo) this.setState({ demoCargada:true, pedir:'' }); },
+      onVaciar: () => { if (esDemo) this.setState({ pedir:'vaciar' }); },
+      pedirVaciar: pedir === 'vaciar',
+      pedirImportar: pedir === 'importar',
+      palabra: s.palabra,
+      onPalabra: e => this.setState({ palabra: e.target.value }),
+      vaciarFondo: s.palabra.trim().toUpperCase() === 'VACIAR' ? 'oklch(0.52 0.13 25)' : '#efedea',
+      vaciarBorde: s.palabra.trim().toUpperCase() === 'VACIAR' ? 'oklch(0.52 0.13 25)' : 'rgba(0,0,0,.12)',
+      vaciarTono: s.palabra.trim().toUpperCase() === 'VACIAR' ? '#fff' : '#b5b3ab',
+      vaciarCursor: s.palabra.trim().toUpperCase() === 'VACIAR' ? 'pointer' : 'not-allowed',
+      importarFondo: s.palabra.trim().toUpperCase() === 'IMPORTAR' ? 'oklch(0.48 0.10 250)' : '#efedea',
+      importarBorde: s.palabra.trim().toUpperCase() === 'IMPORTAR' ? 'oklch(0.48 0.10 250)' : 'rgba(0,0,0,.12)',
+      importarTono: s.palabra.trim().toUpperCase() === 'IMPORTAR' ? '#fff' : '#b5b3ab',
+      importarCursor: s.palabra.trim().toUpperCase() === 'IMPORTAR' ? 'pointer' : 'not-allowed',
+      onConfirmarVaciar: () => { if (s.palabra.trim().toUpperCase() === 'VACIAR') this.setState({ demoCargada:false, pedir:'', palabra:'' }); },
+      onConfirmarImportar: () => { if (s.palabra.trim().toUpperCase() === 'IMPORTAR') this.setState({ pedir:'', palabra:'', archivo:'' }); },
+      accionFondo: esDemo ? 'oklch(0.48 0.10 250)' : '#efedea',
+      accionBorde: esDemo ? 'oklch(0.48 0.10 250)' : 'rgba(0,0,0,.12)',
+      accionTono: esDemo ? '#fff' : '#b5b3ab',
+      secFondo: esDemo ? '#fff' : '#f8f7f4',
+      secBorde: esDemo ? 'rgba(0,0,0,.20)' : 'rgba(0,0,0,.12)',
+      secTono: esDemo ? '#262622' : '#b5b3ab',
+      rojoTono: esDemo ? 'oklch(0.45 0.13 25)' : '#b5b3ab',
+      demoCursor: esDemo ? 'pointer' : 'not-allowed',
+      onCancelar: () => this.setState({ pedir:'', palabra:'' }),
+      modulos: EXPORTABLES.map(m => {
+        const sel = s.modulos.indexOf(m.key) >= 0;
+        return {
+          label:m.label, cols:m.cols,
+          marca: sel ? '×' : '·',
+          tono: sel ? '#1a1a18' : '#a3a29a',
+          fondo: sel ? '#f4f3ef' : '#fff',
+          onClick: () => this.setState({ modulos: sel ? s.modulos.filter(k => k !== m.key) : [...s.modulos, m.key] }),
+        };
+      }),
+      totalExporta: s.modulos.length + ' de ' + EXPORTABLES.length + ' módulos · una hoja por módulo',
+      onTodos: () => this.setState({ modulos: EXPORTABLES.map(m => m.key) }),
+      onNinguno: () => this.setState({ modulos: [] }),
+      hayModulos: s.modulos.length > 0,
+      filtrosOT: s.modulos.indexOf('ots') >= 0,
+      otDesde: s.otDesde, otHasta: s.otHasta, otEstado: s.otEstado,
+      onOtDesde: e => this.setState({ otDesde: e.target.value }),
+      onOtHasta: e => this.setState({ otHasta: e.target.value }),
+      onOtEstado: e => this.setState({ otEstado: e.target.value }),
+      estadosOT: [{ label:'Todos', valor:'' }].concat(ESTADOS_OT_IE.map(e => ({ label:e, valor:e }))),
+      exportaFondo: s.modulos.length ? '#1c1d1b' : '#efedea',
+      exportaBorde: s.modulos.length ? '#1c1d1b' : 'rgba(0,0,0,.12)',
+      exportaTono: s.modulos.length ? '#fff' : '#b5b3ab',
+      exportaCursor: s.modulos.length ? 'pointer' : 'not-allowed',
+      exportaLabel: s.modulos.length ? 'Exportar ' + s.modulos.length + ' módulo(s) a .xlsx' : 'Selecciona al menos un módulo',
+      importables: IMPORTABLES.map(m => ({
+        label:m.label, regla:m.regla,
+        columnas: m.columnas.map(c => ({
+          label:c,
+          fondo: c.indexOf('*') >= 0 ? '#fdf3e6' : '#f0efeb',
+          tono: c.indexOf('*') >= 0 ? 'oklch(0.50 0.11 65)' : '#57564f',
+        })),
+        cargando: s.modImport === m.key,
+        etiqueta: s.modImport === m.key ? 'Cargando…' : 'Importar .xlsx',
+        onPlantilla: () => {},
+        onImportar: () => this.setState({ resultado: { modulo:m.label, ...RESULTADOS[m.key] }, modImport:'' }),
+      })),
+      resultado: s.resultado,
+      hayResultado: !!s.resultado,
+      resumenImport: s.resultado ? s.resultado.insertados + ' registros importados de ' + s.resultado.total + ' filas' : '',
+      erroresImport: s.resultado ? s.resultado.errores.map(e => ({ texto:'Fila ' + e.fila + ' · ' + e.motivo })) : [],
+      hayErrores: !!(s.resultado && s.resultado.errores.length),
+      totalErrores: s.resultado ? s.resultado.errores.length + ' filas omitidas' : '',
+      resultadoBorde: s.resultado && s.resultado.errores.length ? 'oklch(0.55 0.11 65)' : 'oklch(0.48 0.10 155)',
+      onCerrarResultado: () => this.setState({ resultado: null }),
+    };
+  }
+
+  programacion() {
+    const s = this.state;
+    const idx = s.semana;
+    const sem = SEMANAS[idx];
+    const base = new Date(sem.inicio[0], sem.inicio[1], sem.inicio[2]);
+    const dias = Array.from({ length: 7 }, (_, i) => {
+      const f = new Date(base); f.setDate(base.getDate() + i);
+      return { i, letra:['L','M','X','J','V','S','D'][i], etiqueta: String(f.getDate()).padStart(2,'0') + ' ' + MESES_C[f.getMonth()], dow:f.getDay(), finde:f.getDay() === 0 || f.getDay() === 6 };
+    });
+    const estados = { ...s.estadosProg };
+    const estadoDe = ot => estados[ot.num] || ot.estado;
+    const activas = ['Planificada','Programada','En ejecución'];
+    const carga = {};
+    PROG.forEach(ot => {
+      if (!activas.includes(estadoDe(ot))) return;
+      ot.tareas.forEach(t => { if (t.semana === idx) t.asignados.forEach(r => { const k = r + '|' + t.dia; carga[k] = (carga[k] || 0) + t.horas; }); });
+    });
+    const capacidad = (r, d) => { const cal = CALENDARIOS.find(c => c.id === r.cal); return cal ? cal.horas[d.dow] : 0; };
+    const nombreDe = id => (PERSONAL.find(r => r.id === id) || {}).nombre || '—';
+    const excede = (t, dia) => t.asignados.some(id => {
+      const r = PERSONAL.find(x => x.id === id); if (!r) return false;
+      return (carga[id + '|' + dia] || 0) > capacidad(r, dias[dia]);
+    });
+    const fmt = t => t ? dias[t.dia].etiqueta : '—';
+
+    const filas = [];
+    PROG.forEach(ot => {
+      const est = estadoDe(ot);
+      const enSemana = ot.tareas.filter(t => t.semana === idx);
+      const cerrada = ['Terminado','Con informe','Pagada'].includes(est);
+      const programable = est === 'Planificada' || est === 'Programada';
+      const ordenadas = enSemana.slice().sort((a, b) => a.dia - b.dia);
+      filas.push({
+        esOT:true, esTarea:false,
+        num:ot.num, empresa:ot.empresa, descripcion:ot.descripcion,
+        estado:est,
+        estadoTono: est === 'Programada' ? 'oklch(0.48 0.10 250)' : est === 'Planificada' ? 'oklch(0.55 0.11 65)' : '#8a8981',
+        inicio: ordenadas.length ? fmt(ordenadas[0]) : '—',
+        fin: ordenadas.length ? fmt(ordenadas[ordenadas.length - 1]) : '—',
+        horas: enSemana.reduce((a, t) => a + t.horas, 0) + ' h',
+        fondo: s.otProg === ot.num ? '#f0efeb' : enSemana.length ? '#f6f5f2' : '#fff',
+        marca: s.otProg === ot.num ? '#1c1d1b' : 'transparent',
+        accion: cerrada ? est : est === 'Programada' ? 'Desprogramar' : programable ? 'Programar' : 'No disponible',
+        accionActiva: programable,
+        celdas: dias.map(() => ({ hay:false, texto:'', tono:'', fondo:'transparent', borde:'transparent' })),
+        onSelect: () => this.setState({ otProg: ot.num }),
+        onAccion: () => {
+          if (!programable) return;
+          const siguiente = est === 'Programada' ? 'Planificada' : 'Programada';
+          const conf = enSemana.filter(t => excede(t, t.dia));
+          if (siguiente === 'Programada' && conf.length) { this.setState({ otProg: ot.num, avisoProg: ot.num }); return; }
+          this.setState({ estadosProg: { ...estados, [ot.num]: siguiente }, avisoProg:'' });
+        },
+      });
+      ordenadas.forEach((t, i) => {
+        filas.push({
+          esOT:false, esTarea:true,
+          num: String(i + 1), empresa:t.descripcion, descripcion:'',
+          responsable: t.asignados.map(nombreDe).join(', '),
+          puesto: t.puesto,
+          horas: t.horas + ' h',
+          inicio: fmt(t), fin: '',
+          fondo:'#fff', marca:'transparent',
+          celdas: dias.map(d => {
+            const hay = t.dia === d.i;
+            const ex = hay && excede(t, d.i);
+            return {
+              hay, texto: hay ? t.hora + ' · ' + t.horas + ' h' : '',
+              tono: hay ? '#fff' : '',
+              fondo: hay ? (ex ? 'oklch(0.52 0.13 25)' : 'oklch(0.48 0.10 250)') : (d.finde ? '#f4f3ef' : '#fff'),
+              borde: 'transparent',
+            };
+          }),
+        });
+      });
+    });
+
+    const capFilas = PERSONAL.map(r => {
+      const totalCarga = dias.reduce((a, d) => a + (carga[r.id + '|' + d.i] || 0), 0);
+      const totalCap = dias.reduce((a, d) => a + capacidad(r, d), 0);
+      const pct = totalCap > 0 ? Math.round((totalCarga / totalCap) * 100) : 0;
+      const sobre = totalCarga > totalCap;
+      return {
+        nombre:r.nombre, puesto:r.puesto,
+        turno:(CALENDARIOS.find(c => c.id === r.cal) || {}).nombre || 'Sin turno',
+        resumen: totalCarga + ' / ' + totalCap + ' h · ' + pct + ' %',
+        pct: Math.min(pct, 100) + '%',
+        barra: sobre ? 'oklch(0.52 0.13 25)' : totalCarga > 0 ? 'oklch(0.48 0.10 155)' : '#c9c7c0',
+        tono: sobre ? 'oklch(0.52 0.13 25)' : totalCarga > 0 ? '#3a3a35' : '#a3a29a',
+        celdas: dias.map(d => {
+          const c = carga[r.id + '|' + d.i] || 0;
+          const cap = capacidad(r, d);
+          const ex = c > cap;
+          return {
+            texto: cap === 0 && c === 0 ? '·' : c + ' / ' + cap,
+            tono: ex ? 'oklch(0.52 0.13 25)' : c > 0 ? '#1a1a18' : '#c9c7c0',
+            peso: ex ? '700' : c > 0 ? '600' : '400',
+            fondo: ex ? '#fbeceb' : c > 0 ? '#eef4ef' : (d.finde ? '#f4f3ef' : '#fff'),
+          };
+        }),
+      };
+    });
+
+    const otSel = PROG.find(o => o.num === s.otProg) || PROG[0];
+    const conflictos = [];
+    otSel.tareas.filter(t => t.semana === idx).forEach(t => {
+      t.asignados.forEach(id => {
+        const r = PERSONAL.find(x => x.id === id); if (!r) return;
+        const c = carga[id + '|' + t.dia] || 0;
+        const cap = capacidad(r, dias[t.dia]);
+        if (c > cap && !conflictos.find(x => x.clave === id + t.dia)) {
+          conflictos.push({ clave:id + t.dia, nombre:r.nombre, fecha:dias[t.dia].etiqueta, detalle:c + ' h sobre ' + cap + ' h', exceso:'+' + (c - cap) + ' h' });
+        }
+      });
+    });
+
+    return {
+      semana: 'Semana ' + sem.num + ' · ' + dias[0].etiqueta + ' – ' + dias[6].etiqueta,
+      onAnterior: () => this.setState({ semana: Math.max(0, idx - 1) }),
+      onSiguiente: () => this.setState({ semana: Math.min(SEMANAS.length - 1, idx + 1) }),
+      dias: dias.map(d => ({ letra:d.letra, etiqueta:d.etiqueta, tono:d.finde ? '#b5b3ab' : '#6b6a63', fondo:d.finde ? '#dedcd5' : '#e4e2dc' })),
+      filas, capacidad: capFilas,
+      detalle: {
+        num: otSel.num, empresa: otSel.empresa, descripcion: otSel.descripcion,
+        estado: estadoDe(otSel),
+        conflictos,
+        hayConflictos: conflictos.length > 0,
+        sinConflictos: conflictos.length === 0,
+        aviso: s.avisoProg === otSel.num,
+        onForzar: () => this.setState({ estadosProg: { ...estados, [otSel.num]: 'Programada' }, avisoProg:'' }),
+        onCancelar: () => this.setState({ avisoProg:'' }),
+        onAbrir: () => this.setState({ pantalla:'tratamiento', tab:'tareas' }),
+      },
+    };
+  }
+
+  recursos() {
+    const s = this.state;
+    const tab = k => ({
+      label: k === 'personal' ? 'Personal' : k === 'equipos' ? 'Equipos y herramientas' : k === 'suministros' ? 'Suministros directos' : k === 'calendarios' ? 'Calendarios' : 'Plantillas',
+      fondo: s.tabRec === k ? '#fff' : 'transparent',
+      borde: s.tabRec === k ? '#1c1d1b' : 'transparent',
+      tono: s.tabRec === k ? '#1a1a18' : '#6b6a63',
+      peso: s.tabRec === k ? '700' : '400',
+      onClick: () => this.setState({ tabRec: k }),
+    });
+    const mesNombre = new Intl.DateTimeFormat('es-CL', { month:'long', year:'numeric' }).format(new Date(s.anio, s.mes, 1));
+    const cantidad = new Date(s.anio, s.mes + 1, 0).getDate();
+    const dias = Array.from({ length: cantidad }, (_, i) => {
+      const f = new Date(s.anio, s.mes, i + 1);
+      return { n: i + 1, dow: f.getDay(), letra: DIAS_L[f.getDay()], finde: f.getDay() === 0 || f.getDay() === 6, key: s.anio + '-' + s.mes + '-' + (i + 1) };
+    });
+    const horasDia = (r, d) => {
+      const aj = s.ajustes[r.id + '|' + d.key];
+      if (aj !== undefined) return aj;
+      const cal = CALENDARIOS.find(c => c.id === r.cal);
+      return cal ? cal.horas[d.dow] : 0;
+    };
+    const personal = PERSONAL.map(r => {
+      const celdas = dias.map(d => {
+        const h = horasDia(r, d);
+        const manual = s.ajustes[r.id + '|' + d.key] !== undefined;
+        return {
+          valor: h > 0 ? String(h) : '·',
+          tono: h > 0 ? '#1a1a18' : '#d4d2cb',
+          fondo: h > 0 ? (d.finde ? '#eef2f6' : '#f3f6f9') : (d.finde ? '#f4f3ef' : '#fff'),
+          borde: manual ? 'oklch(0.55 0.11 65)' : 'transparent',
+          onClick: () => {
+            const k = r.id + '|' + d.key;
+            const cal = CALENDARIOS.find(c => c.id === r.cal);
+            const base = cal ? cal.horas[d.dow] : 0;
+            const actual = s.ajustes[k] !== undefined ? s.ajustes[k] : base;
+            const siguiente = actual > 0 ? 0 : (base > 0 ? base : 8);
+            const nuevos = { ...s.ajustes };
+            if (siguiente === base) delete nuevos[k]; else nuevos[k] = siguiente;
+            this.setState({ ajustes: nuevos });
+          },
+        };
+      });
+      const total = dias.reduce((a, d) => a + horasDia(r, d), 0);
+      return {
+        id:r.id, nombre:r.nombre, puesto:r.puesto, inicio:r.inicio, valor:CLP(r.valor),
+        cal: r.cal, calNombre: (CALENDARIOS.find(c => c.id === r.cal) || {}).nombre || 'Sin turno',
+        calTono: r.cal ? '#3a3a35' : 'oklch(0.55 0.11 65)',
+        total: total + ' h', celdas,
+        onCal: e => this.setState({ calAsignado: { ...s.calAsignado, [r.id]: e.target.value } }),
+      };
+    });
+    const calSel = CALENDARIOS.find(c => c.id === s.calSel) || CALENDARIOS[0];
+    return {
+      tabs: ['personal','equipos','suministros','calendarios','plantillas'].map(tab),
+      esPersonal: s.tabRec === 'personal', esEquipos: s.tabRec === 'equipos', esSuministros: s.tabRec === 'suministros',
+      esCalendarios: s.tabRec === 'calendarios', esPlantillas: s.tabRec === 'plantillas',
+      mes: mesNombre.charAt(0).toUpperCase() + mesNombre.slice(1),
+      onMesAnterior: () => this.setState(p => p.mes === 0 ? { mes:11, anio:p.anio - 1 } : { mes:p.mes - 1 }),
+      onMesSiguiente: () => this.setState(p => p.mes === 11 ? { mes:0, anio:p.anio + 1 } : { mes:p.mes + 1 }),
+      dias: dias.map(d => ({ letra:d.letra, n:String(d.n), tono:d.finde ? '#b5b3ab' : '#6b6a63', fondo:d.finde ? '#dedcd5' : '#e4e2dc' })),
+      matrizW: (188 + 52 + cantidad * 27) + 'px',
+      personal,
+      calendariosSel: CALENDARIOS.map(c => ({ label:c.nombre, valor:c.id })),
+      puestos: PUESTOS.map(p => ({ label:p, cuenta: String(PERSONAL.filter(r => r.puesto === p).length) })),
+      equipos: EQUIPOS.map(e => ({
+        codigo:e.codigo, nombre:e.nombre, tipo:e.tipo, precio:CLP(e.precio), estado:e.estado,
+        tono: e.estado === 'Disponible' ? 'oklch(0.48 0.10 155)' : e.estado === 'En uso' ? 'oklch(0.55 0.11 65)' : 'oklch(0.52 0.13 25)',
+      })),
+      suministros: SUMINISTROS.map(x => ({ codigo:x.codigo, descripcion:x.descripcion, precio:CLP(x.precio), categoria:x.categoria })),
+      calendarios: CALENDARIOS.map(c => ({
+        nombre:c.nombre, tipo:c.tipo, bloques:c.bloques,
+        semana: c.horas.map((h, i) => ({ letra:DIAS_L[i], valor: h > 0 ? String(h) : '·', tono: h > 0 ? '#1a1a18' : '#c9c7c0' })),
+        totalSemana: c.horas.reduce((a, b) => a + b, 0) + ' h',
+        marca: s.calSel === c.id ? '#1c1d1b' : 'transparent',
+        onClick: () => this.setState({ calSel: c.id }),
+      })),
+      calDetalle: {
+        nombre: calSel.nombre, tipo: calSel.tipo,
+        dias: calSel.horas.map((h, i) => ({ dia:['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'][i], horas: h > 0 ? h + ' h' : 'Libre', bloque: h > 0 ? calSel.bloques : '—', tono: h > 0 ? '#1a1a18' : '#a3a29a' })),
+        total: calSel.horas.reduce((a, b) => a + b, 0) + ' h por ciclo',
+      },
+      plantillas: PLANTILLAS.map(p => ({
+        nombre:p.nombre, categoria:p.categoria, descripcion:p.descripcion,
+        composicion: p.tareas + ' tareas · ' + p.equipos + ' equipos · ' + p.suministros + ' suministros',
+      })),
+      resumen: [
+        { label:'Personal activo', valor:String(PERSONAL.length) },
+        { label:'Sin turno asignado', valor:String(PERSONAL.filter(r => !r.cal).length) },
+        { label:'Equipos y herramientas', valor:String(EQUIPOS.length) },
+        { label:'Suministros catalogados', valor:String(SUMINISTROS.length) },
+        { label:'Ajustes manuales del mes', valor:String(Object.keys(s.ajustes).length) },
+      ],
+      onLimpiarAjustes: () => this.setState({ ajustes: {} }),
+    };
+  }
+
+  setForm(campo) { return e => this.setState(s => ({ form: { ...s.form, [campo]: e.target.value }, aviso:'' })); }
+
+  crearSolicitud() {
+    const f = this.state.form;
+    if (!f.empresaSolicitante || !f.solicitante || !f.descripcion) {
+      this.setState({ aviso: 'Faltan campos obligatorios: empresa, solicitante y descripción.' });
+      return;
+    }
+    const nueva = {
+      n: this.state.solicitudesIng.length + 1, empresa:f.empresaSolicitante, solicitante:f.solicitante,
+      correo:f.correo || '—', estado:'Pendiente', adjunto:f.adjunto, origen:f.origen,
+      fecha: '17-08-2026', tieneOT:false,
+    };
+    this.setState({
+      solicitudesIng: [nueva, ...this.state.solicitudesIng],
+      form:{ empresaSolicitante:'', solicitante:'', correo:'', numero:'', direccion:'', fechaEjecucion:'', plazo:'', origen:'WhatsApp', descripcion:'', adjunto:'' },
+      aviso: 'Solicitud registrada. Queda pendiente de tratamiento.',
+    });
+  }
+
+  ingreso() {
+    const f = this.state.form;
+    const q = this.state.filtroTexto.trim().toLowerCase();
+    const lista = this.state.solicitudesIng.filter(s => {
+      if (this.state.filtroEstado && s.estado !== this.state.filtroEstado) return false;
+      if (!q) return true;
+      return (s.empresa + ' ' + s.solicitante).toLowerCase().includes(q);
+    });
+    const campo = (key, label, ph, ancho) => ({ key, label, ph, ancho, valor:f[key], onChange:this.setForm(key) });
+    return {
+      campos: [
+        campo('empresaSolicitante', 'Empresa solicitante *', 'Razón social', 'span 2'),
+        campo('solicitante', 'Nombre del solicitante *', 'Quién solicita', 'span 2'),
+        campo('correo', 'Correo electrónico', 'contacto@empresa.cl', 'span 2'),
+        campo('numero', 'Teléfono de contacto', '+56 9 ...', 'span 2'),
+        campo('direccion', 'Dirección del servicio', 'Planta, faena o dirección', 'span 4'),
+        campo('fechaEjecucion', 'Fecha de ejecución solicitada', 'dd-mm-aaaa', 'span 2'),
+        campo('plazo', 'Plazo sugerido', 'Ej: 48 horas · 5 días', 'span 2'),
+      ],
+      origen: f.origen,
+      onOrigen: this.setForm('origen'),
+      origenes: ['WhatsApp','Correo','Llamada','Presencial'].map(o => ({ label:o, valor:o })),
+      descripcion: f.descripcion,
+      onDescripcion: this.setForm('descripcion'),
+      adjunto: f.adjunto,
+      onAdjunto: this.setForm('adjunto'),
+      aviso: this.state.aviso,
+      hayAviso: !!this.state.aviso,
+      onCrear: () => this.crearSolicitud(),
+      onLimpiar: () => this.setState({ form:{ empresaSolicitante:'', solicitante:'', correo:'', numero:'', direccion:'', fechaEjecucion:'', plazo:'', origen:'WhatsApp', descripcion:'', adjunto:'' }, aviso:'' }),
+      filtroTexto: this.state.filtroTexto,
+      onFiltroTexto: e => this.setState({ filtroTexto: e.target.value }),
+      estadosFiltro: ['','Pendiente','Solicitud','Tratamiento','Planificada','Programada','Ejecución','Terminado','Con informe','Pagada'].map(v => ({
+        label: v === '' ? 'Todos' : v,
+        marca: this.state.filtroEstado === v ? '▪ ' : '',
+        onClick: () => this.setState({ filtroEstado: v }),
+      })),
+      resumen: lista.length + ' de ' + this.state.solicitudesIng.length + ' solicitudes',
+      solicitudes: lista.map(s => ({
+        n: String(s.n).padStart(2, '0'),
+        empresa: s.empresa, solicitante: s.solicitante, correo: s.correo, origen: s.origen, fecha: s.fecha,
+        estado: s.estado,
+        tono: s.tieneOT ? 'oklch(0.48 0.10 155)' : 'oklch(0.55 0.11 65)',
+        adjunto: s.adjunto || '—',
+        adjuntoTono: s.adjunto ? 'oklch(0.48 0.10 250)' : '#c9c7c0',
+        accion: s.tieneOT ? 'Ver OT' : 'Tratar',
+        onAccion: () => this.setState({ pantalla:'tratamiento', tab:'tareas' }),
+      })),
+    };
+  }
+
+  tratamiento() {
+    const ot = DATA.find(d => d.id === this.state.otTrat) || DATA[0];
+    const t = this.state;
+    const totalMO = t.tareasT.reduce((s, r) => s + r.duracion * r.valorHora, 0);
+    const totalMat = t.materiales.reduce((s, r) => s + r.cantidad * r.precio, 0);
+    const totalLog = t.logisticaT.reduce((s, r) => s + r.cantidad * r.precio, 0);
+    const gran = totalMO + totalMat + totalLog;
+    const horas = t.tareasT.reduce((s, r) => s + r.duracion, 0);
+    const tab = k => ({
+      label: k === 'tareas' ? '1 · Tareas' : k === 'materiales' ? '2 · Equipos y materiales' : k === 'logistica' ? '3 · Suministros directos' : k === 'cotizacion' ? '4 · Cotización' : k === 'ejecucion' ? 'Ejecución' : 'Pago',
+      activo: t.tab === k,
+      fondo: t.tab === k ? '#fff' : 'transparent',
+      borde: t.tab === k ? '#1c1d1b' : 'transparent',
+      tono: t.tab === k ? '#1a1a18' : '#6b6a63',
+      peso: t.tab === k ? '700' : '400',
+      onClick: () => this.setState({ tab: k }),
+    });
+    return {
+      numero: ot.numero === '—' ? 'Nueva planificación' : 'Orden de trabajo ' + ot.numero,
+      empresa: ot.empresa,
+      referencia: ot.faena + ' · ' + ot.contacto,
+      descripcion: ot.descripcion,
+      pipeline: ETAPAS.map((label, i) => ({
+        label,
+        marca: i < ot.etapaIdx ? '×' : i === ot.etapaIdx ? '▪' : '·',
+        tono: i < ot.etapaIdx ? '#6b6a63' : i === ot.etapaIdx ? '#1a1a18' : '#b5b3ab',
+        peso: i === ot.etapaIdx ? '700' : '400',
+      })),
+      tabs: ['tareas','materiales','logistica','cotizacion','ejecucion','pago'].map(tab),
+      esTareas: t.tab === 'tareas', esMateriales: t.tab === 'materiales', esLogistica: t.tab === 'logistica',
+      esCotizacion: t.tab === 'cotizacion', esEjecucion: t.tab === 'ejecucion', esPago: t.tab === 'pago',
+      tareas: t.tareasT.map((r, i) => ({
+        descripcion:r.descripcion, puesto:r.puesto, responsable:r.responsable, duracion:r.duracion,
+        fecha:r.fecha, hora:r.hora, valorHora:r.valorHora, subtotal:CLP(r.duracion * r.valorHora),
+        onDesc:this.editar('tareasT', i, 'descripcion'), onPuesto:this.editar('tareasT', i, 'puesto'),
+        onResp:this.editar('tareasT', i, 'responsable'), onDur:this.editar('tareasT', i, 'duracion', true),
+        onFecha:this.editar('tareasT', i, 'fecha'), onHora:this.editar('tareasT', i, 'hora'),
+        onValor:this.editar('tareasT', i, 'valorHora', true), onQuitar:() => this.quitar('tareasT', i),
+      })),
+      materiales: t.materiales.map((r, i) => ({
+        tipo:r.tipo, codigo:r.codigo, descripcion:r.descripcion, cantidad:r.cantidad, precio:r.precio,
+        subtotal:CLP(r.cantidad * r.precio),
+        onTipo:this.editar('materiales', i, 'tipo'), onCodigo:this.editar('materiales', i, 'codigo'),
+        onDesc:this.editar('materiales', i, 'descripcion'), onCant:this.editar('materiales', i, 'cantidad', true),
+        onPrecio:this.editar('materiales', i, 'precio', true), onQuitar:() => this.quitar('materiales', i),
+      })),
+      logistica: t.logisticaT.map((r, i) => ({
+        unidad:r.unidad, patente:r.patente, descripcion:r.descripcion, cantidad:r.cantidad, precio:r.precio,
+        subtotal:CLP(r.cantidad * r.precio),
+        onUnidad:this.editar('logisticaT', i, 'unidad'), onPatente:this.editar('logisticaT', i, 'patente'),
+        onDesc:this.editar('logisticaT', i, 'descripcion'), onCant:this.editar('logisticaT', i, 'cantidad', true),
+        onPrecio:this.editar('logisticaT', i, 'precio', true), onQuitar:() => this.quitar('logisticaT', i),
+      })),
+      onAgregarTarea: () => this.agregar('tareasT', { descripcion:'', puesto:'', responsable:'', duracion:0, fecha:'', hora:'', valorHora:0 }),
+      onAgregarMaterial: () => this.agregar('materiales', { tipo:'Material', codigo:'', descripcion:'', cantidad:1, precio:0 }),
+      onAgregarLogistica: () => this.agregar('logisticaT', { unidad:'', patente:'', descripcion:'', cantidad:1, precio:0 }),
+      cotizacion: [
+        { label:'Mano de obra', detalle:t.tareasT.length + ' tareas · ' + horas + ' h', valor:CLP(totalMO) },
+        { label:'Equipos y materiales', detalle:t.materiales.length + ' ítems', valor:CLP(totalMat) },
+        { label:'Suministros directos', detalle:t.logisticaT.length + ' ítems', valor:CLP(totalLog) },
+      ],
+      neto: CLP(gran), iva: CLP(gran * 0.19), bruto: CLP(gran * 1.19),
+      resumen: [
+        { label:'Mano de obra', valor:CLP(totalMO) },
+        { label:'Equipos y materiales', valor:CLP(totalMat) },
+        { label:'Suministros directos', valor:CLP(totalLog) },
+      ],
+      horas: horas + ' h',
+      reportes: [
+        { fecha:'19-08-2026 08:14', autor:'L. Farías', texto:'Inicio confirmado en portería. Andamio montado en tolva norte.', foto:'2 fotos' },
+        { fecha:'20-08-2026 17:40', autor:'L. Farías', texto:'Placas 1 a 4 retiradas. Se detecta desgaste mayor al previsto en costilla central.', foto:'3 fotos' },
+        { fecha:'21-08-2026 12:05', autor:'D. Pinto', texto:'Refuerzos biselados y presentados. Pendiente pase de soldadura de raíz.', foto:'1 foto' },
+      ],
+      pago: t.pago,
+      onMonto: e => this.setState(s => ({ pago: { ...s.pago, montoPagado: Number(e.target.value || 0) } })),
+      onFechaPago: e => this.setState(s => ({ pago: { ...s.pago, fechaPago: e.target.value } })),
+      onMetodo: e => this.setState(s => ({ pago: { ...s.pago, metodoPago: e.target.value } })),
+      onReferencia: e => this.setState(s => ({ pago: { ...s.pago, referencia: e.target.value } })),
+      metodosSel: ['Transferencia','Cheque','Efectivo','Crédito 30 días'].map(m => ({ label:m, valor:m })),
+      estados: ['Pendiente','Parcial','Pagado'].map(e => ({
+        label: (t.pago.estado === e ? '▪ ' : '') + e,
+        onClick: () => this.setState(s => ({ pago: { ...s.pago, estado: e } })),
+      })),
+      metodos: ['Transferencia','Cheque','Efectivo','Crédito 30 días'],
+      acciones: [
+        { label:'Guardar', onClick: () => {} },
+        { label:'Plantilla', onClick: () => {} },
+        { label:'Cotización PDF', onClick: () => {} },
+        { label:'Programar', onClick: () => {} },
+      ],
+      onVolver: () => this.setState({ pantalla:'panel' }),
+    };
+  }
+
+  renderVals() {
+    const L = this.state.layout;
+    const cols = L.columnas.filter(c => c.visible);
+    const sel = DATA.find(d => d.id === this.state.sel) || DATA[0];
+    const conOT = DATA.filter(d => d.pago !== 'Sin OT');
+    const horas = DATA.reduce((s, d) => s + horasDe(d), 0);
+    const porCobrar = conOT.filter(d => d.pago !== 'Pagado').reduce((s, d) => s + d.total, 0);
+    const vis = this.visibles();
+    const f = (key, label) => ({ label: this.state.filtro === key ? '▪ ' + label : label, onClick: () => this.setState({ filtro: key }) });
+
+    return {
+      mostrarKpis: this.props.mostrarKpis ?? true,
+      horaSync: '15:38',
+      navW: L.navW + 'px', asideW: L.asideW + 'px', rowH: L.rowH + 'px',
+      medidas: cols.length + ' col · fila ' + L.rowH + 'px',
+      navVisible: !L.navOculta,
+      asideVisible: !L.asideOculta,
+      navGlifo: L.navOculta ? '›' : '‹',
+      asideGlifo: L.asideOculta ? '‹' : '›',
+      navTitulo: L.navOculta ? 'Mostrar navegación' : 'Ocultar navegación',
+      asideTitulo: L.asideOculta ? 'Mostrar panel de detalle' : 'Ocultar panel de detalle',
+      onToggleNav: () => this.setLayout({ navOculta: !L.navOculta }),
+      onToggleAside: () => this.setLayout({ asideOculta: !L.asideOculta }),
+      grid: '3px ' + cols.map(c => c.key === 'cliente' ? 'minmax(170px,1fr)' : c.w + 'px').join(' '),
+      tablaW: (3 + 170 + cols.reduce((s, c) => s + (c.key === 'cliente' ? 0 : c.w), 0) + 10 * cols.length + 29) + 'px',
+      dragNav: this.arrastrar('navW', 1, 132, 320),
+      dragAside: this.arrastrar('asideW', -1, 220, 560),
+      encabezados: cols.map(c => ({
+        label: campo(c.key).corto,
+        align: campo(c.key).align,
+        ajustable: c.key !== 'cliente',
+        onDrag: this.arrastrar('col:' + c.key, 1, 44, 240),
+      })),
+      catalogo: L.columnas.map(c => ({
+        label: campo(c.key).label + (c.key === 'cliente' ? ' (fija)' : ''),
+        origen: campo(c.key).origen,
+        marca: c.visible ? '×' : '·',
+        tono: c.visible ? '#1a1a18' : '#a3a29a',
+        onToggle: () => this.toggleCol(c.key),
+        onSubir: e => { e.stopPropagation(); this.moverCol(c.key, -1); },
+      })),
+      menuColumnas: this.state.menuColumnas,
+      onMenuColumnas: () => this.setState({ menuColumnas: !this.state.menuColumnas }),
+      etiquetaColumnas: 'Columnas (' + cols.length + '/' + CAMPOS.length + ')',
+      densidades: [32, 40, 52].map(h => ({
+        label: h === 32 ? 'Compacta' : h === 40 ? 'Normal' : 'Cómoda',
+        marca: L.rowH === h ? '▪ ' : '',
+        onClick: () => this.setLayout({ rowH: h }),
+      })),
+      variantes: this.state.variantes.map(v => ({
+        nombre: (this.state.activa === v.nombre ? '▪ ' : '') + v.nombre,
+        onClick: () => this.aplicar(v),
+        onEliminar: e => { e.stopPropagation(); this.eliminar(v.nombre); },
+      })),
+      sinVariantes: this.state.variantes.length === 0,
+      guardando: this.state.guardando,
+      nombreNueva: this.state.nombreNueva,
+      onNombre: e => this.setState({ nombreNueva: e.target.value }),
+      onAbrirGuardar: () => this.setState({ guardando: !this.state.guardando }),
+      onConfirmarGuardar: () => this.guardarVariante(),
+      onRestablecer: () => this.setState({ layout: clonar(BASE), activa: '' }, () => this.persistir()),
+      consulta: this.state.consulta,
+      onConsulta: e => this.setState({ consulta: e.target.value }),
+      onNuevaSolicitud: () => this.setState({ filtro: 'solicitudes' }),
+      navOperacion: [
+        { key:'ingreso', label:'Ingreso', count:'2' },
+        { key:'panel', label:'Panel de control', count:String(DATA.length) },
+        { key:'tratamiento', label:'Tratamiento', count:'6' },
+        { key:'programacion', label:'Programación', count:'4' },
+        { key:'terreno', label:'Reportes de terreno', count:'3' },
+      ].map(n => ({
+        label:n.label, count:n.count,
+        fondo: this.state.pantalla === n.key ? 'rgba(255,255,255,.10)' : 'transparent',
+        borde: this.state.pantalla === n.key ? 'oklch(0.62 0.11 250)' : 'transparent',
+        tono: this.state.pantalla === n.key ? '#fff' : 'rgba(255,255,255,.72)',
+        onClick: () => { if (['panel','tratamiento','ingreso','programacion'].includes(n.key)) this.setState({ pantalla: n.key }); },
+      })),
+      navAdmin: [
+        { key:'recursos', label:'Recursos' }, { key:'finanzas', label:'Finanzas' }, { key:'contabilidad', label:'Contabilidad' },
+        { key:'portal', label:'Portal cliente' }, { key:'importar', label:'Importar / exportar' },
+      ].map(n => ({
+        label:n.label,
+        fondo: this.state.pantalla === n.key ? 'rgba(255,255,255,.10)' : 'transparent',
+        borde: this.state.pantalla === n.key ? 'oklch(0.62 0.11 250)' : 'transparent',
+        tono: this.state.pantalla === n.key ? '#fff' : 'rgba(255,255,255,.72)',
+        onClick: () => { if (n.key === 'recursos' || n.key === 'importar') this.setState({ pantalla: n.key === 'importar' ? 'importar' : 'recursos' }); },
+      })),
+      kpis: [
+        { label:'Solicitudes sin OT', valor:'2', nota:'una hace 4 días' },
+        { label:'OTs activas', valor:String(conOT.length), nota:'de 12 en el mes' },
+        { label:'Horas planificadas', valor:horas + ' h', nota:'3 semanas' },
+        { label:'Por cobrar', valor:CLP(porCobrar).replace('$ ', ''), nota:'CLP · margen 27,7 %' },
+      ],
+      filtros: [f('todos','Todos (' + DATA.length + ')'), f('ots','Con OT (' + conOT.length + ')'), f('solicitudes','Sin OT (2)'), f('porCobrar','Por cobrar (5)')],
+      resumenFiltro: vis.length + ' de ' + DATA.length + ' filas',
+      ordenLabel: this.state.orden === 'monto' ? 'Orden: monto' : 'Orden: reciente',
+      onOrden: () => this.setState({ orden: this.state.orden === 'monto' ? 'reciente' : 'monto' }),
+      pieTotales: 'Total visible ' + CLP(vis.reduce((s, d) => s + d.total, 0)) + '  ·  ' + vis.reduce((s, d) => s + d.tareas.length, 0) + ' tareas',
+      filas: vis.map(d => ({
+        marca: d.id === this.state.sel ? '#1c1d1b' : 'transparent',
+        onSelect: () => this.setState({ sel: d.id }),
+        celdas: cols.map(c => {
+          const meta = campo(c.key);
+          if (c.key === 'cliente') return { esCliente:true, esEtapa:false, esTexto:false, principal:d.empresa, secundario:d.faena, etiqueta:d.pago, color:this.pagoColor(d.pago), align:'left', familia:'inherit', peso:'400', pct:'0%' };
+          if (c.key === 'etapa') return { esCliente:false, esEtapa:true, esTexto:false, principal:ETAPAS[d.etapaIdx], secundario:'', etiqueta:'', align:'left', familia:'inherit', peso:'400',
+            pct: Math.round(((d.etapaIdx + 1) / ETAPAS.length) * 100) + '%',
+            color: d.pago === 'Sin OT' ? '#c9c7c0' : d.etapaIdx >= 6 ? 'oklch(0.48 0.10 155)' : 'oklch(0.48 0.10 250)' };
+          return { esCliente:false, esEtapa:false, esTexto:true, principal:this.valorDe(d, c.key), secundario:'', etiqueta:'', pct:'0%',
+            align: meta.align, familia: meta.mono ? 'ui-monospace,Menlo,monospace' : 'inherit',
+            peso: c.key === 'pago' ? '600' : '400',
+            color: c.key === 'pago' ? this.pagoColor(d.pago) : c.key === 'ot' ? '#3a3a35' : '#3a3a35' };
+        }),
+      })),
+      esPanel: this.state.pantalla === 'panel',
+      esTratamiento: this.state.pantalla === 'tratamiento',
+      esIngreso: this.state.pantalla === 'ingreso',
+      esRecursos: this.state.pantalla === 'recursos',
+      esProgramacion: this.state.pantalla === 'programacion',
+      esDatos: this.state.pantalla === 'importar',
+      dat: this.datos(),
+      modoDemo: this.state.entorno === 'demo',
+      bannerDemo: 'Modo demostración · base erp_taller_demo · nada de lo que hagas aquí llega a producción',
+      onSalirDemo: () => this.setState({ entorno:'produccion', pedir:'' }),
+      trat: this.tratamiento(),
+      ing: this.ingreso(),
+      rec: this.recursos(),
+      prog: this.programacion(),
+      det: {
+        numero: sel.numero === '—' ? 'SOL · sin OT' : sel.numero,
+        fecha: 'Ingresada ' + sel.fecha,
+        empresa: sel.empresa,
+        contacto: sel.contacto + ' · ' + sel.faena,
+        descripcion: sel.descripcion,
+        ficha: [
+          { label:'Fecha de creación', valor:sel.fecha },
+          { label:'Ejecución solicitada', valor:sel.ejecucion },
+          { label:'Supervisor', valor:sel.supervisor },
+          { label:'Orden de compra', valor:sel.oc },
+        ],
+        etapas: ETAPAS.map((label, i) => ({
+          label,
+          marca: i < sel.etapaIdx ? '×' : i === sel.etapaIdx ? '▪' : '·',
+          tono: i < sel.etapaIdx ? '#6b6a63' : i === sel.etapaIdx ? '#1a1a18' : '#b5b3ab',
+          peso: i === sel.etapaIdx ? '700' : '400',
+          fecha: i <= sel.etapaIdx ? FECHAS_ETAPA[i] : '',
+        })),
+        resumenTareas: sel.tareas.length ? sel.tareas.length + ' · ' + horasDe(sel) + ' h' : 'sin planificar',
+        tareas: sel.tareas.length ? sel.tareas : [{ descripcion:'Sin tareas planificadas', puesto:'', duracion:'', asignados:'Se definen en Tratamiento' }],
+        costos: sel.costos,
+        granTotal: sel.total ? CLP(sel.total) : '—',
+        margen: sel.margen,
+        acciones: [
+          { label:'Abrir tratamiento', onClick: () => {} }, { label:'Programar', onClick: () => {} },
+          { label:'Cotización PDF', onClick: () => {} }, { label:'Registrar pago', onClick: () => {} },
+        ],
+        accionPrincipal: sel.pago === 'Sin OT' ? 'Convertir en OT' : sel.etapaIdx >= 6 ? 'Cerrar y facturar' : 'Enviar al supervisor',
+        onAvanzar: () => {},
+        nota: sel.pago === 'Sin OT' ? 'La conversión genera el número de OT y hereda cliente, faena y descripción.' : 'El supervisor recibe un enlace con token; no requiere cuenta.',
+      },
+    };
+  }
+}
+</script>
+</body>
+</html>

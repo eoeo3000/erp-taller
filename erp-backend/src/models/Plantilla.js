@@ -29,4 +29,4 @@ const plantillaSchema = new mongoose.Schema({
     collection: 'plantillas'
 });
 
-module.exports = mongoose.models.Plantilla || mongoose.model('Plantilla', plantillaSchema);
+module.exports = (conn) => conn.models.Plantilla || conn.model('Plantilla', plantillaSchema);

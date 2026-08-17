@@ -1,10 +1,10 @@
 const XLSX = require('xlsx');
-const Recurso = require('../models/Recurso');
-const Suministro = require('../models/suministro');
-const Equipo = require('../models/equiposHerramientas');
-const Puesto = require('../models/puesto');
-const OT = require('../models/OT');
-const Solicitud = require('../models/Solicitud');
+const getRecurso = require('../models/Recurso');
+const getSuministro = require('../models/suministro');
+const getEquipo = require('../models/equiposHerramientas');
+const getPuesto = require('../models/puesto');
+const getOT = require('../models/OT');
+const getSolicitud = require('../models/Solicitud');
 
 // ── HELPERS ───────────────────────────────────────────────────────────────────
 
@@ -20,6 +20,7 @@ function normNum(v) { const n = parseFloat(v); return isNaN(n) ? 0 : n; }
 // ── IMPORTAR ──────────────────────────────────────────────────────────────────
 
 exports.importarRecursos = async (req, res) => {
+    const Recurso = getRecurso(req.db);
     try {
         const filas = parsearExcel(req.file.buffer);
         const insertados = [], errores = [];
@@ -55,6 +56,7 @@ exports.importarRecursos = async (req, res) => {
 };
 
 exports.importarSuministros = async (req, res) => {
+    const Suministro = getSuministro(req.db);
     try {
         const filas = parsearExcel(req.file.buffer);
         const insertados = [], errores = [];
@@ -91,6 +93,7 @@ exports.importarSuministros = async (req, res) => {
 };
 
 exports.importarEquipos = async (req, res) => {
+    const Equipo = getEquipo(req.db);
     try {
         const filas = parsearExcel(req.file.buffer);
         const insertados = [], errores = [];
@@ -127,6 +130,7 @@ exports.importarEquipos = async (req, res) => {
 };
 
 exports.importarPuestos = async (req, res) => {
+    const Puesto = getPuesto(req.db);
     try {
         const filas = parsearExcel(req.file.buffer);
         const insertados = [], errores = [];
@@ -161,6 +165,7 @@ exports.importarPuestos = async (req, res) => {
 // ── EXPORTAR (genera buffer Excel en el servidor) ─────────────────────────────
 
 exports.exportarRecursos = async (req, res) => {
+    const Recurso = getRecurso(req.db);
     try {
         const docs = await Recurso.find().lean();
         const filas = docs.map(d => ({
@@ -176,6 +181,7 @@ exports.exportarRecursos = async (req, res) => {
 };
 
 exports.exportarSuministros = async (req, res) => {
+    const Suministro = getSuministro(req.db);
     try {
         const docs = await Suministro.find().lean();
         const filas = docs.map(d => ({
@@ -189,6 +195,7 @@ exports.exportarSuministros = async (req, res) => {
 };
 
 exports.exportarEquipos = async (req, res) => {
+    const Equipo = getEquipo(req.db);
     try {
         const docs = await Equipo.find().lean();
         const filas = docs.map(d => ({
@@ -203,6 +210,7 @@ exports.exportarEquipos = async (req, res) => {
 };
 
 exports.exportarPuestos = async (req, res) => {
+    const Puesto = getPuesto(req.db);
     try {
         const docs = await Puesto.find().lean();
         const filas = docs.map(d => ({
@@ -215,6 +223,7 @@ exports.exportarPuestos = async (req, res) => {
 };
 
 exports.exportarOTs = async (req, res) => {
+    const OT = getOT(req.db);
     try {
         const { desde, hasta, estado } = req.query;
         const filtro = {};
@@ -246,6 +255,7 @@ exports.exportarOTs = async (req, res) => {
 };
 
 exports.exportarSolicitudes = async (req, res) => {
+    const Solicitud = getSolicitud(req.db);
     try {
         const docs = await Solicitud.find().sort({ fechaCreacion: -1 }).lean();
         const filas = docs.map(d => ({
@@ -284,6 +294,12 @@ exports.plantillaPuestos = (_req, res) => {
 // ── EXPORTAR BATCH (múltiples hojas en un solo archivo) ──────────────────────
 
 exports.exportarBatch = async (req, res) => {
+    const Recurso = getRecurso(req.db);
+    const Suministro = getSuministro(req.db);
+    const Equipo = getEquipo(req.db);
+    const Puesto = getPuesto(req.db);
+    const OT = getOT(req.db);
+    const Solicitud = getSolicitud(req.db);
     try {
         const { modulos = '', otDesde, otHasta, otEstado } = req.query;
         const lista = modulos.split(',').map(m => m.trim()).filter(Boolean);

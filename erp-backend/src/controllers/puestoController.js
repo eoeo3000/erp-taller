@@ -1,7 +1,8 @@
-const Puesto = require('../models/puesto');
+const getPuesto = require('../models/puesto');
 
 // Obtener todos los puestos
 exports.obtenerPuestos = async (req, res) => {
+    const Puesto = getPuesto(req.db);
     try {
         const puestos = await Puesto.find().sort({ nombre: 1 });
         res.json(puestos);
@@ -12,6 +13,7 @@ exports.obtenerPuestos = async (req, res) => {
 
 // Crear un nuevo puesto
 exports.crearPuesto = async (req, res) => {
+    const Puesto = getPuesto(req.db);
     try {
         const nuevoPuesto = new Puesto(req.body);
         await nuevoPuesto.save();
@@ -23,6 +25,7 @@ exports.crearPuesto = async (req, res) => {
 
 // Actualizar un puesto
 exports.actualizarPuesto = async (req, res) => {
+    const Puesto = getPuesto(req.db);
     try {
         const puestoActualizado = await Puesto.findByIdAndUpdate(
             req.params.id,
@@ -37,6 +40,7 @@ exports.actualizarPuesto = async (req, res) => {
 
 // Eliminar un puesto
 exports.eliminarPuesto = async (req, res) => {
+    const Puesto = getPuesto(req.db);
     try {
         await Puesto.findByIdAndDelete(req.params.id);
         res.json({ mensaje: 'Puesto eliminado correctamente' });

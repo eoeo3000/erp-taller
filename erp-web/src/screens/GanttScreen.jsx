@@ -1,561 +1,386 @@
-import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-const getColorByPuesto = (puesto) => {
-    const colores = {
-        'Mecánico': '#3498db',
-        'Eléctrico': '#f1c40f',
-        'Soldador': '#e67e22',
-        'Ayudante': '#95a5a6'
-    };
-    return colores[puesto] || '#34495e';
+// Paso 6 del rediseño (ver Incomplete web app design/design_handoff_panel_control/README.md §8):
+// una sola grilla continua OT → tareas → capacidad (mismo grid-template-columns en las tres),
+// vista semanal, panel derecho con el detalle de sobredemanda de la OT seleccionada en vez de
+// un modal bloqueante. Se mantiene toda la lógica real (verificarDisponibilidad, toggleProgramada,
+// confirmarProgramacion, mapaCarga). Sin emoji, un solo color de acento para las barras de tarea.
+
+const t = {
+    fondoMain: '#f6f5f2',
+    superficie: '#ffffff',
+    textoPrincipal: '#1a1a18',
+    textoSecundario1: '#3a3a35',
+    textoSecundario2: '#4a4a44',
+    textoAtenuado1: '#6b6a63',
+    textoAtenuado2: '#75746e',
+    textoAtenuado3: '#8a8981',
+    textoDeshabilitado: '#a3a29a',
+    encabezadoTabla: '#e4e2dc',
+    barraContexto: '#e9e7e2',
+    bordeZona: 'rgba(0,0,0,.12)',
+    hairlineFila: 'rgba(0,0,0,.06)',
+    hairlineBloque: 'rgba(0,0,0,.10)',
+    acento: 'oklch(0.42 0.10 250)',
+    verde: 'oklch(0.48 0.10 155)',
+    rojo: 'oklch(0.52 0.13 25)',
+    cargaOk: '#eef4ef',
+    cargaExceso: '#fbeceb',
+    fontUi: '"Helvetica Neue", Helvetica, Arial, sans-serif',
+    fontMono: 'ui-monospace, Menlo, monospace',
 };
 
-// Recibimos recursos y calendarios como props para la integración
+const DIAS_L = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
+const GRID = '118px minmax(180px,1fr) 132px 104px 52px 62px 62px repeat(7, minmax(74px,1fr))';
+const ESTADOS_ACTIVOS = ['Planificada', 'Programada', 'En Ejecución'];
+const ESTADOS_EJECUTADOS = ['Trabajo Terminado', 'Con Informe', 'Pagada'];
+
+const colorEstadoOT = (estado) => {
+    if (ESTADOS_EJECUTADOS.includes(estado)) return t.textoAtenuado1;
+    if (estado === 'En Ejecución') return t.verde;
+    if (estado === 'Programada') return t.acento;
+    return t.textoSecundario2;
+};
+
 const GanttScreen = ({ recursos = [], ots = [], calendarios = [], obtenerHorasParaDia, actualizarOtGlobal, cargarDatos }) => {
     const navigate = useNavigate();
 
-    // 1. Obtener rango de días (ahora basado en un rango fijo o dinámico de las OTs)
-    const obtenerDiasUnicos = () => {
-        const fechas = [];
-        ots?.forEach(ot => {
-            ot.tareas?.forEach(t => { if (t.fecha) fechas.push(t.fecha); });
-        });
+    // Días con al menos una tarea asignada, para poder navegar semanas hacia atrás/adelante.
+    const diasConTareas = [];
+    ots.forEach(ot => ot.tareas?.forEach(tt => { if (tt.fecha) diasConTareas.push(tt.fecha); }));
 
-        if (fechas.length === 0) return [];
-
-        // 1. Convertir a timestamps para encontrar extremos
-        // Añadimos T00:00:00 para evitar problemas de desfase horario
-        const timestamps = fechas.map(f => new Date(f + "T00:00:00").getTime());
-        const minMs = Math.min(...timestamps);
-        const maxMs = Math.max(...timestamps);
-
-        const listaCompleta = [];
-        let fechaActual = new Date(minMs);
-        const fechaFin = new Date(maxMs);
-
-        // 2. Rellenar el rango día por día
-        while (fechaActual <= fechaFin) {
-            const iso = fechaActual.toISOString().split('T')[0];
-            listaCompleta.push(iso);
-
-            // Avanzamos 1 día
-            fechaActual.setDate(fechaActual.getDate() + 1);
-        }
-
-        return listaCompleta; // Ya viene ordenada cronológicamente
-    };
-
-    const diasHeader = obtenerDiasUnicos();
-
-    const ESTADOS_ACTIVOS = ['Planificada', 'Programada', 'En Ejecución'];
-
-    // Pre-calculamos un mapa de carga para no hacer .filter dentro de cada celda (mejora rendimiento)
     const mapaCarga = {};
-
     ots.filter(ot => ESTADOS_ACTIVOS.includes(ot.estado)).forEach(ot => {
-        ot.tareas?.forEach(t => {
-            if (t.fecha && t.operarioId) {
-                const idsAsignados = Array.isArray(t.operarioId) ? t.operarioId : [t.operarioId];
-                const horas = Number(t.duracion) || 0;
-
-                idsAsignados.forEach(id => {
-                    // Forzamos String(id) para evitar problemas de ObjectId vs String
-                    const key = `${String(id)}-${t.fecha}`;
+        ot.tareas?.forEach(tt => {
+            if (tt.fecha && tt.operarioId) {
+                const ids = Array.isArray(tt.operarioId) ? tt.operarioId : [tt.operarioId];
+                const horas = Number(tt.duracion) || 0;
+                ids.forEach(id => {
+                    const key = `${String(id)}-${tt.fecha}`;
                     mapaCarga[key] = (mapaCarga[key] || 0) + horas;
                 });
             }
         });
     });
 
-    useEffect(() => {
-        ots.forEach(ot => {
-            ot.tareas?.forEach(t => {
-            });
-        });
-    }, [ots]);
-
-    const [idxSemana, setIdxSemana] = useState(0);
-
+    // Semanas disponibles: las que tienen tareas + la semana actual (siempre visible, aunque esté vacía).
     const obtenerSemanas = () => {
-        if (diasHeader.length === 0) return [];
+        const hoyISO = new Date().toISOString().split('T')[0];
         const vistas = new Map();
-        diasHeader.forEach(d => {
+        [...diasConTareas, hoyISO].forEach(d => {
             const fecha = new Date(d + 'T00:00:00');
             const diaSemana = fecha.getDay();
             const diffLunes = diaSemana === 0 ? -6 : 1 - diaSemana;
             const lunes = new Date(fecha);
             lunes.setDate(fecha.getDate() + diffLunes);
             const lunesISO = lunes.toISOString().split('T')[0];
-            if (!vistas.has(lunesISO)) {
-                // Generar los 7 días completos de la semana (Lun–Dom)
-                const dias7 = [];
-                for (let i = 0; i < 7; i++) {
-                    const dia = new Date(lunes);
-                    dia.setDate(lunes.getDate() + i);
-                    dias7.push(dia.toISOString().split('T')[0]);
-                }
-                const domingo = new Date(lunes);
-                domingo.setDate(lunes.getDate() + 6);
-                // Número ISO de semana
-                const primerJueves = new Date(lunes.getFullYear(), 0, 4);
-                const numSem = Math.round(((lunes - primerJueves) / 86400000 + primerJueves.getDay() + 6) / 7) + 1;
-                vistas.set(lunesISO, {
-                    key: lunesISO,
-                    num: numSem,
-                    label: `${lunes.toLocaleDateString('es-CL', { day: '2-digit', month: 'short' })} – ${domingo.toLocaleDateString('es-CL', { day: '2-digit', month: 'short' })}`,
-                    dias: dias7
-                });
-            }
+            if (vistas.has(lunesISO)) return;
+            const dias7 = Array.from({ length: 7 }, (_, i) => {
+                const dia = new Date(lunes); dia.setDate(lunes.getDate() + i);
+                return dia.toISOString().split('T')[0];
+            });
+            const domingo = new Date(lunes); domingo.setDate(lunes.getDate() + 6);
+            const primerJueves = new Date(lunes.getFullYear(), 0, 4);
+            const numSem = Math.round(((lunes - primerJueves) / 86400000 + primerJueves.getDay() + 6) / 7) + 1;
+            vistas.set(lunesISO, {
+                key: lunesISO, num: numSem,
+                label: `${lunes.toLocaleDateString('es-CL', { day: '2-digit', month: 'short' })} – ${domingo.toLocaleDateString('es-CL', { day: '2-digit', month: 'short' })}`,
+                dias: dias7,
+            });
         });
         return Array.from(vistas.values()).sort((a, b) => a.key.localeCompare(b.key));
     };
 
     const semanas = obtenerSemanas();
+    const hoyISO = new Date().toISOString().split('T')[0];
+    const semanaHoyIdx = semanas.findIndex(s => s.dias.includes(hoyISO));
+    const [idxSemana, setIdxSemana] = useState(Math.max(0, semanaHoyIdx));
     const semanaActual = semanas[idxSemana] || null;
     const diasSemana = semanaActual?.dias || [];
 
-    const [modalConflictos, setModalConflictos] = useState(null); // { ot, conflictos: [] }
+    const [otSel, setOtSel] = useState(null);
+    const [confirmando, setConfirmando] = useState(false);
+
+    const capacidadDia = (recurso, dia) => obtenerHorasParaDia ? obtenerHorasParaDia(recurso, { fechaCompleta: new Date(dia + 'T00:00:00') }) : 8;
 
     const verificarDisponibilidad = (ot) => {
         const conflictos = [];
-        (ot.tareas || []).forEach(t => {
-            if (!t.fecha) return;
-            const ids = Array.isArray(t.operarioId) ? t.operarioId : [t.operarioId];
+        (ot.tareas || []).forEach(tt => {
+            if (!tt.fecha) return;
+            const ids = Array.isArray(tt.operarioId) ? tt.operarioId : [tt.operarioId];
             ids.forEach(id => {
                 if (!id) return;
                 const recurso = recursos.find(r => String(r._id) === String(id));
                 if (!recurso) return;
-                const cargaTotal = mapaCarga[`${String(id)}-${t.fecha}`] || 0;
-                const capacidad = obtenerHorasParaDia
-                    ? obtenerHorasParaDia(recurso, { fechaCompleta: new Date(t.fecha + 'T00:00:00') })
-                    : 8;
-                if (cargaTotal > capacidad) {
-                    conflictos.push({
-                        nombre: recurso.nombre,
-                        fecha: t.fecha,
-                        carga: cargaTotal,
-                        capacidad,
-                        deficit: cargaTotal - capacidad
-                    });
-                }
+                const cargaTotal = mapaCarga[`${String(id)}-${tt.fecha}`] || 0;
+                const capacidad = capacidadDia(recurso, tt.fecha);
+                if (cargaTotal > capacidad) conflictos.push({ nombre: recurso.nombre, fecha: tt.fecha, carga: cargaTotal, capacidad, deficit: cargaTotal - capacidad });
             });
         });
-        // Deduplicar por nombre+fecha
         const vistos = new Set();
         return conflictos.filter(c => {
             const key = `${c.nombre}-${c.fecha}`;
             if (vistos.has(key)) return false;
-            vistos.add(key);
-            return true;
+            vistos.add(key); return true;
         });
     };
 
     const toggleProgramada = async (ot) => {
-        // Al desprogramar no hace falta validar
+        setOtSel(ot);
         if (ot.estado === 'Programada') {
             await actualizarOtGlobal(ot._id, { estado: 'Planificada' });
             if (cargarDatos) cargarDatos();
+            setConfirmando(false);
             return;
         }
-        // Al programar: verificar sobredemanda
         const conflictos = verificarDisponibilidad(ot);
-        if (conflictos.length > 0) {
-            setModalConflictos({ ot, conflictos });
-        } else {
+        if (conflictos.length > 0) setConfirmando(true);
+        else {
             await actualizarOtGlobal(ot._id, { estado: 'Programada' });
             if (cargarDatos) cargarDatos();
         }
     };
 
     const confirmarProgramacion = async () => {
-        if (!modalConflictos) return;
-        await actualizarOtGlobal(modalConflictos.ot._id, { estado: 'Programada' });
+        if (!otSel) return;
+        await actualizarOtGlobal(otSel._id, { estado: 'Programada' });
         if (cargarDatos) cargarDatos();
-        setModalConflictos(null);
+        setConfirmando(false);
     };
 
+    const conflictosSel = otSel ? verificarDisponibilidad(otSel) : [];
+
     return (
-        <>
-        <div style={styles.container}>
-            <h2 style={{ color: '#2c3e50' }}>📊 Plano de Ejecución e Infraestructura</h2>
+        <div style={styles.raiz}>
+            <header style={styles.header}>
+                <h1 style={styles.h1}>Programación</h1>
+                <span style={styles.subtitulo}>Plano de ejecución y capacidad real del taller</span>
+            </header>
 
-            <div style={styles.ganttContainer}>
-                {/* --- SECCIÓN 1: TAREAS Y OTs --- */}
-                <div style={{ ...styles.sectionHeader, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span>📋 ORDENES DE TRABAJO Y ASIGNACIÓN</span>
-                    {semanas.length > 0 && (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                            <button
-                                onClick={() => setIdxSemana(i => Math.max(0, i - 1))}
-                                disabled={idxSemana === 0}
-                                style={{ padding: '3px 12px', borderRadius: '6px', border: 'none', cursor: idxSemana === 0 ? 'not-allowed' : 'pointer', backgroundColor: 'rgba(255,255,255,0.2)', color: 'white', fontWeight: 'bold', opacity: idxSemana === 0 ? 0.4 : 1 }}
-                            >← Ant</button>
-                            <span style={{ fontSize: '13px', fontWeight: 'bold', whiteSpace: 'nowrap' }}>
-                                Sem {semanaActual?.num} · {semanaActual?.label}
-                            </span>
-                            <button
-                                onClick={() => setIdxSemana(i => Math.min(semanas.length - 1, i + 1))}
-                                disabled={idxSemana === semanas.length - 1}
-                                style={{ padding: '3px 12px', borderRadius: '6px', border: 'none', cursor: idxSemana === semanas.length - 1 ? 'not-allowed' : 'pointer', backgroundColor: 'rgba(255,255,255,0.2)', color: 'white', fontWeight: 'bold', opacity: idxSemana === semanas.length - 1 ? 0.4 : 1 }}
-                            >Sig →</button>
-                        </div>
-                    )}
-                </div>
+            <div style={styles.barraContexto}>
+                <button onClick={() => setIdxSemana(i => Math.max(0, i - 1))} disabled={idxSemana === 0} style={{ ...styles.btnSecundario, opacity: idxSemana === 0 ? .5 : 1 }}>Semana anterior</button>
+                <span style={{ fontFamily: t.fontMono, fontSize: 11.5, fontWeight: 600, whiteSpace: 'nowrap' }}>{semanaActual ? `Semana ${semanaActual.num} · ${semanaActual.label}` : '—'}</span>
+                <button onClick={() => setIdxSemana(i => Math.min(semanas.length - 1, i + 1))} disabled={idxSemana >= semanas.length - 1} style={{ ...styles.btnSecundario, opacity: idxSemana >= semanas.length - 1 ? .5 : 1 }}>Semana siguiente</button>
+                <span style={{ marginLeft: 'auto', fontSize: 10.5, color: t.textoAtenuado3 }}>La barra roja marca tarea sobre capacidad del responsable</span>
+            </div>
 
-                {/* ENCABEZADO UNIFICADO */}
-                <div style={styles.headerRow}>
-                    <div style={{ ...styles.colBase, width: '150px' }}>OT #</div>
-                    <div style={{ ...styles.colBase, width: '220px' }}>Tarea / Descripción</div>
-                    <div style={{ ...styles.colBase, width: '150px' }}>Responsable</div>
-                    <div style={{ ...styles.colBase, width: '80px' }}>Duración</div>
-                    <div style={{ ...styles.colBase, width: '90px', justifyContent: 'center' }}>Inicio</div>
-                    <div style={{ ...styles.colBase, width: '90px', justifyContent: 'center' }}>Fin</div>
-
-                    <div style={styles.daysArea}>
-                        {diasSemana.map(dia => {
-                            const f = new Date(dia + 'T00:00:00');
-                            return (
-                                <div key={dia} style={styles.dayHeaderCell}>
-                                    <div style={{ fontSize: '10px', textTransform: 'uppercase', opacity: 0.8 }}>
-                                        {f.toLocaleDateString('es-ES', { weekday: 'short' }).replace('.', '')}
-                                    </div>
-                                    <div style={{ fontWeight: 'bold' }}>
-                                        {f.toLocaleDateString('es-ES', { day: '2-digit', month: 'short' })}
-                                    </div>
-                                </div>
-                            );
-                        })}
-                    </div>
-                </div>
-
-                {/* FILAS DE OTs */}
-                {ots.map((ot) => (
-                    <React.Fragment key={ot._id}>
-                        {/* FILA ÚNICA PARA EL NÚMERO DE OT */}
-                        {(() => {
-                            const ESTADOS_EJECUTADOS = ['Trabajo Terminado', 'Con Informe', 'Pagada'];
-                            const estaEjecutado = ESTADOS_EJECUTADOS.includes(ot.estado);
-                            const estaEnEjecucion = ot.estado === 'En Ejecución';
-                            const puedeprogramar = ['Planificada', 'Programada'].includes(ot.estado);
-                            const estaProgramada = ot.estado === 'Programada';
-                            const fechasTareas = (ot.tareas || []).filter(t => t.fecha).map(t => t.fecha).sort();
-                            const otInicio = fechasTareas[0];
-                            const otFin = fechasTareas[fechasTareas.length - 1];
-                            const fmtFecha = iso => iso ? new Date(iso + 'T00:00:00').toLocaleDateString('es-CL', { day: '2-digit', month: 'short' }) : '—';
-                            const enSemanaActual = diasSemana.some(d => fechasTareas.includes(d));
-
-                            const badgeEjecutado = estaEjecutado ? (
-                                <span style={{
-                                    padding: '3px 10px', fontSize: '11px', fontWeight: 'bold',
-                                    border: 'none', borderRadius: '10px', whiteSpace: 'nowrap',
-                                    backgroundColor: '#95a5a6', color: 'white'
-                                }}>✓ {ot.estado}</span>
-                            ) : estaEnEjecucion ? (
-                                <span style={{
-                                    padding: '3px 10px', fontSize: '11px', fontWeight: 'bold',
-                                    border: 'none', borderRadius: '10px', whiteSpace: 'nowrap',
-                                    backgroundColor: '#27ae60', color: 'white'
-                                }}>⚙️ En Ejecución</span>
-                            ) : null;
-
-                            return (
-                                <div style={{ ...styles.dataRow, backgroundColor: estaEjecutado ? '#f5f5f5' : (enSemanaActual ? '#f0f7ff' : '#f8f9fa'), fontWeight: 'bold', opacity: estaEjecutado ? 0.7 : 1 }}>
-                                    <div style={{ ...styles.colBase, width: '150px', color: '#2980b9', fontWeight: 'bold', flexDirection: 'column', alignItems: 'flex-start', gap: '6px' }}>
-                                        <span
-                                            onClick={() => navigate('/tratamiento', { state: ot })}
-                                            title="Abrir OT"
-                                            style={{ cursor: 'pointer', textDecoration: 'underline', color: '#1a6fb3' }}
-                                        >{ot.numeroOT || "S/N"}</span>
-                                        {badgeEjecutado ?? (
-                                            <button
-                                                onClick={() => puedeprogramar && toggleProgramada(ot)}
-                                                disabled={!puedeprogramar}
-                                                title={!puedeprogramar ? 'La OT debe estar Planificada primero' : (estaProgramada ? 'Marcar como no programada' : 'Marcar como Programada')}
-                                                style={{
-                                                    padding: '3px 10px',
-                                                    fontSize: '11px',
-                                                    fontWeight: 'bold',
-                                                    border: 'none',
-                                                    borderRadius: '10px',
-                                                    cursor: puedeprogramar ? 'pointer' : 'not-allowed',
-                                                    backgroundColor: !puedeprogramar ? '#e0e0e0' : (estaProgramada ? '#8e44ad' : '#3498db'),
-                                                    color: !puedeprogramar ? '#aaa' : 'white',
-                                                    whiteSpace: 'nowrap'
-                                                }}
-                                            >
-                                                {!puedeprogramar ? '○ No disponible' : (estaProgramada ? '✓ Programada' : '+ Programar')}
-                                            </button>
-                                        )}
-                                    </div>
-                                    <div style={{ ...styles.colBase, width: '450px' }}>PROYECTO: {ot.descripcionGeneral || ot.descripcion || 'Sin descripción'}</div>
-                                    <div style={{ ...styles.colBase, width: '90px', justifyContent: 'center', flexDirection: 'column', fontSize: '12px', color: otInicio ? '#27ae60' : '#bbb', fontWeight: 'bold' }}>
-                                        {fmtFecha(otInicio)}
-                                    </div>
-                                    <div style={{ ...styles.colBase, width: '90px', justifyContent: 'center', flexDirection: 'column', fontSize: '12px', color: otFin ? '#e74c3c' : '#bbb', fontWeight: 'bold' }}>
-                                        {fmtFecha(otFin)}
-                                    </div>
-                                    <div style={styles.daysArea}>
-                                        {diasSemana.map(dia => <div key={dia} style={{ flex: 1, borderRight: '1px solid #f0f0f0' }} />)}
-                                    </div>
-                                </div>
-                            );
-                        })()}
-
-                        {/* FILAS DE TAREAS */}
-                        {ot.tareas?.map((tarea, tIdx) => {
-                            return (
-                                <div key={`${ot._id}-${tIdx}`} style={styles.dataRow}>
-                                    <div style={{ ...styles.colBase, width: '150px', color: '#95a5a6', textAlign: 'center' }}>{tIdx + 1}</div>
-                                    <div style={{ ...styles.colBase, width: '220px' }}>{tarea.descripcion}</div>
-
-                                    {/* Celda de Responsables Corregida */}
-                                    <div style={{ ...styles.colBase, width: '150px' }}>
-                                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
-                                            {Array.isArray(tarea.operarioNombre) ? (
-                                                tarea.operarioNombre.map((nombre, opIdx) => (
-                                                    <span key={`${ot._id}-${tIdx}-${opIdx}`} style={{
-                                                        fontSize: '11px',
-                                                        backgroundColor: '#eee',
-                                                        padding: '2px 5px',
-                                                        borderRadius: '3px'
-                                                    }}>
-                                                        {nombre}{opIdx < tarea.operarioNombre.length - 1 ? ',' : ''}
-                                                    </span>
-                                                ))
-                                            ) : (
-                                                <span style={{ fontSize: '11px' }}>{tarea.operarioNombre || 'Sin asignar'}</span>
-                                            )}
-                                        </div>
-                                    </div>
-
-                                    <div style={{ ...styles.colBase, width: '80px', textAlign: 'center' }}>{tarea.duracion}h</div>
-                                    <div style={{ ...styles.colBase, width: '90px', justifyContent: 'center', fontSize: '11px', color: tarea.fecha ? '#27ae60' : '#bbb' }}>
-                                        {tarea.fecha ? new Date(tarea.fecha + 'T00:00:00').toLocaleDateString('es-CL', { day: '2-digit', month: 'short' }) : '—'}
-                                    </div>
-                                    <div style={{ ...styles.colBase, width: '90px', borderRight: '1px solid #eee' }} />
-
-                                    {/* Área del Timeline */}
-                                    <div style={styles.daysArea}>
-                                        {diasSemana.map(dia => (
-                                            <div key={dia} style={styles.dayCell}>
-                                                {tarea.fecha === dia && (() => {
-                                                    const ids = Array.isArray(tarea.operarioId) ? tarea.operarioId : [tarea.operarioId];
-                                                    const hayExceso = ids.some(id => {
-                                                        if (!id) return false;
-                                                        const rec = recursos.find(r => String(r._id) === String(id));
-                                                        if (!rec) return false;
-                                                        const cap = obtenerHorasParaDia ? obtenerHorasParaDia(rec, { fechaCompleta: new Date(dia + 'T00:00:00') }) : 8;
-                                                        return (mapaCarga[`${String(id)}-${dia}`] || 0) > cap;
-                                                    });
-                                                    return (
-                                                        <div style={{ ...styles.taskBar, backgroundColor: getColorByPuesto(tarea.puesto), outline: hayExceso ? '2px solid #e74c3c' : 'none' }}>
-                                                            {hayExceso ? '⚠️ ' : ''}{tarea.hora || '8:00'}
-                                                        </div>
-                                                    );
-                                                })()}
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            );
-                        })}
-                    </React.Fragment>
-                ))}
-
-                {/* --- SECCIÓN 2: RECURSOS Y CAPACIDAD --- */}
-                <div style={{ ...styles.sectionHeader, backgroundColor: '#27ae60', marginTop: '40px' }}>
-                    👷 DISPONIBILIDAD DE PERSONAL (CAPACIDAD REAL)
-                </div>
-
-
-                {recursos.map(recurso => {
-                    const sumaCarga = diasSemana.reduce((acc, dia) => acc + (mapaCarga[`${String(recurso._id)}-${dia}`] || 0), 0);
-                    const sumaCapacidad = diasSemana.reduce((acc, dia) => acc + (obtenerHorasParaDia ? obtenerHorasParaDia(recurso, { fechaCompleta: new Date(dia + 'T00:00:00') }) : 8), 0);
-                    const pct = sumaCapacidad > 0 ? Math.round((sumaCarga / sumaCapacidad) * 100) : 0;
-                    const colorSemana = sumaCarga > sumaCapacidad ? '#c62828' : sumaCarga > 0 ? '#2e7d32' : '#999';
-                    return (
-                    <div key={recurso._id} style={styles.dataRow}>
-                        <div style={{ ...styles.colBase, width: '780px', flexShrink: 0, backgroundColor: '#f9f9f9', padding: '10px', borderRight: '1px solid #ddd' }}>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                                <strong>{recurso.nombre}</strong>
-                                <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
-                                    <span style={{ fontSize: '11px', color: '#666' }}>{recurso.puesto}</span>
-                                    <span style={{ fontSize: '10px', backgroundColor: '#e0e0e0', padding: '1px 6px', borderRadius: '4px', color: '#333', fontWeight: 'bold' }}>
-                                        {calendarios.find(c => String(c._id) === String(recurso.calendarioId))?.nombre || 'Sin Turno'}
-                                    </span>
-                                </div>
-                                {/* Resumen semanal */}
-                                {diasSemana.length > 0 && (
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 2 }}>
-                                        <div style={{ flex: 1, background: '#e0e0e0', borderRadius: 4, height: 6 }}>
-                                            <div style={{ background: colorSemana, height: 6, borderRadius: 4, width: `${Math.min(pct, 100)}%`, transition: 'width .3s' }} />
-                                        </div>
-                                        <span style={{ fontSize: 11, fontWeight: 700, color: colorSemana, whiteSpace: 'nowrap' }}>
-                                            {sumaCarga}h / {sumaCapacidad}h ({pct}%)
-                                        </span>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                        <div style={styles.daysArea}>
+            <div style={styles.cuerpo}>
+                <section style={styles.scrollTabla}>
+                    <div style={{ minWidth: 1180 }}>
+                        <div style={styles.filaHeader}>
+                            <span style={styles.thCol}>OT · N°</span>
+                            <span style={styles.thCol}>Tarea / descripción</span>
+                            <span style={styles.thCol}>Responsable</span>
+                            <span style={styles.thCol}>Estado</span>
+                            <span style={{ ...styles.thCol, textAlign: 'right' }}>Hrs</span>
+                            <span style={{ ...styles.thCol, textAlign: 'right' }}>Inicio</span>
+                            <span style={{ ...styles.thCol, textAlign: 'right' }}>Fin</span>
                             {diasSemana.map(dia => {
-                                const carga = mapaCarga[`${String(recurso._id)}-${dia}`] || 0;
-                                const capacidad = obtenerHorasParaDia
-                                    ? obtenerHorasParaDia(recurso, { fechaCompleta: new Date(dia + "T00:00:00") })
-                                    : 8;
-                                const esSobrecarga = carga > capacidad;
-                                const tieneCarga = carga > 0;
+                                const f = new Date(dia + 'T00:00:00');
+                                const esFinde = f.getDay() === 0 || f.getDay() === 6;
                                 return (
-                                    <div key={dia} style={{
-                                        ...styles.dayCell,
-                                        backgroundColor: esSobrecarga ? '#ffebee' : (tieneCarga ? '#e8f5e9' : '#fff'),
-                                        flexDirection: 'column',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        borderRight: '1px solid #eee'
-                                    }}>
-                                        <span style={{
-                                            fontSize: '12px',
-                                            fontWeight: 'bold',
-                                            color: esSobrecarga ? '#c62828' : (tieneCarga ? '#2e7d32' : '#999')
-                                        }}>
-                                            {carga} / {capacidad}h
-                                        </span>
-                                        {esSobrecarga && (
-                                            <div style={{
-                                                fontSize: '9px',
-                                                color: 'white',
-                                                backgroundColor: '#d32f2f',
-                                                padding: '2px 4px',
-                                                borderRadius: '4px',
-                                                marginTop: '2px'
-                                            }}>
-                                                ⚠️ EXCESO
-                                            </div>
-                                        )}
-                                    </div>
+                                    <span key={dia} style={{ height: 32, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: esFinde ? '#dedcd5' : t.encabezadoTabla, borderLeft: `1px solid ${t.hairlineFila}` }}>
+                                        <span style={{ fontSize: 8.5, color: t.textoAtenuado3, letterSpacing: '.06em' }}>{DIAS_L[f.getDay() === 0 ? 6 : f.getDay() - 1]}</span>
+                                        <span style={{ fontFamily: t.fontMono, fontSize: 10, fontWeight: 600 }}>{f.getDate()}</span>
+                                    </span>
                                 );
                             })}
                         </div>
+
+                        {ots.map(ot => {
+                            const estaEjecutado = ESTADOS_EJECUTADOS.includes(ot.estado);
+                            const puedeProgramar = ['Planificada', 'Programada'].includes(ot.estado);
+                            const estaProgramada = ot.estado === 'Programada';
+                            const fechasTareas = (ot.tareas || []).filter(tt => tt.fecha).map(tt => tt.fecha).sort();
+                            const fmtFecha = iso => iso ? new Date(iso + 'T00:00:00').toLocaleDateString('es-CL', { day: '2-digit', month: 'short' }) : '—';
+                            const enSemana = diasSemana.some(d => fechasTareas.includes(d));
+                            const accionLabel = !puedeProgramar ? 'No disponible' : estaProgramada ? 'Desprogramar' : 'Programar';
+                            return (
+                                <React.Fragment key={ot._id}>
+                                    <div style={{ ...styles.filaOT, background: otSel?._id === ot._id ? '#f0efeb' : enSemana ? t.fondoMain : t.superficie, borderLeft: `2px solid ${colorEstadoOT(ot.estado)}` }} onClick={() => { setOtSel(ot); setConfirmando(false); }}>
+                                        <span style={styles.celda}>
+                                            <span onClick={(e) => { e.stopPropagation(); navigate('/tratamiento', { state: ot }); }} style={{ fontFamily: t.fontMono, fontSize: 11, fontWeight: 600, color: t.acento, cursor: 'pointer' }}>{ot.numeroOT || 'S/N'}</span>
+                                        </span>
+                                        <span style={{ ...styles.celda, flexDirection: 'column', alignItems: 'flex-start', justifyContent: 'center', gap: 0 }}>
+                                            <span style={{ fontSize: 12, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' }}>{ot.solicitante || 'Cliente'}</span>
+                                            <span style={{ fontSize: 10.5, color: t.textoAtenuado3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' }}>{ot.descripcion || ''}</span>
+                                        </span>
+                                        <span style={{ ...styles.celda, fontSize: 10.5, fontWeight: 600, color: colorEstadoOT(ot.estado) }}>{ot.estado}</span>
+                                        <span style={styles.celda}>
+                                            {estaEjecutado ? null : (
+                                                <button
+                                                    onClick={(e) => { e.stopPropagation(); if (puedeProgramar) toggleProgramada(ot); }}
+                                                    disabled={!puedeProgramar}
+                                                    title={puedeProgramar ? '' : 'La OT debe estar Planificada primero'}
+                                                    style={{ ...styles.btnAccionFila, ...(puedeProgramar ? {} : { opacity: .5, cursor: 'not-allowed' }) }}
+                                                >{accionLabel}</button>
+                                            )}
+                                        </span>
+                                        <span style={styles.celda} />
+                                        <span style={{ ...styles.celda, justifyContent: 'flex-end', fontFamily: t.fontMono, fontSize: 10.5, color: t.textoSecundario1 }}>{fmtFecha(fechasTareas[0])}</span>
+                                        <span style={{ ...styles.celda, justifyContent: 'flex-end', fontFamily: t.fontMono, fontSize: 10.5, color: t.textoSecundario1, borderRight: `1px solid ${t.hairlineBloque}` }}>{fmtFecha(fechasTareas[fechasTareas.length - 1])}</span>
+                                        {diasSemana.map(dia => <span key={dia} style={{ borderLeft: `1px solid ${t.hairlineFila}` }} />)}
+                                    </div>
+
+                                    {ot.tareas?.map((tarea, tIdx) => (
+                                        <div key={`${ot._id}-${tIdx}`} style={styles.filaTarea}>
+                                            <span style={{ ...styles.celda, paddingLeft: 24, fontFamily: t.fontMono, fontSize: 10.5, color: t.textoDeshabilitado }}>{tIdx + 1}</span>
+                                            <span style={{ ...styles.celda, fontSize: 11.5, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{tarea.descripcion}</span>
+                                            <span style={{ ...styles.celda, flexDirection: 'column', alignItems: 'flex-start', justifyContent: 'center', gap: 0 }}>
+                                                <span style={{ fontSize: 11, color: t.textoSecundario1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' }}>{(tarea.operarioNombre || []).join(', ') || 'Sin asignar'}</span>
+                                                <span style={{ fontSize: 10, color: t.textoDeshabilitado }}>{tarea.puesto}</span>
+                                            </span>
+                                            <span style={styles.celda} />
+                                            <span style={{ ...styles.celda, justifyContent: 'flex-end', fontFamily: t.fontMono, fontSize: 11 }}>{tarea.duracion}h</span>
+                                            <span style={{ ...styles.celda, justifyContent: 'flex-end', fontFamily: t.fontMono, fontSize: 10.5, color: t.textoSecundario1 }}>{tarea.fecha ? new Date(tarea.fecha + 'T00:00:00').toLocaleDateString('es-CL', { day: '2-digit', month: 'short' }) : ''}</span>
+                                            <span style={{ ...styles.celda, borderRight: `1px solid ${t.hairlineBloque}` }} />
+                                            {diasSemana.map(dia => {
+                                                const hay = tarea.fecha === dia;
+                                                let hayExceso = false;
+                                                if (hay) {
+                                                    const ids = Array.isArray(tarea.operarioId) ? tarea.operarioId : [tarea.operarioId];
+                                                    hayExceso = ids.some(id => {
+                                                        if (!id) return false;
+                                                        const rec = recursos.find(r => String(r._id) === String(id));
+                                                        if (!rec) return false;
+                                                        return (mapaCarga[`${String(id)}-${dia}`] || 0) > capacidadDia(rec, dia);
+                                                    });
+                                                }
+                                                return (
+                                                    <span key={dia} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 4, borderLeft: `1px solid ${t.hairlineFila}` }}>
+                                                        {hay && (
+                                                            <span style={{ width: '100%', height: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', background: hayExceso ? t.rojo : t.acento, color: '#fff', fontFamily: t.fontMono, fontSize: 10, fontWeight: 600, borderRadius: 2 }}>
+                                                                {tarea.hora || ''} · {tarea.duracion}h
+                                                            </span>
+                                                        )}
+                                                    </span>
+                                                );
+                                            })}
+                                        </div>
+                                    ))}
+                                </React.Fragment>
+                            );
+                        })}
+
+                        <div style={styles.filaSeccion}>Disponibilidad de personal · carga / capacidad</div>
+
+                        {recursos.map(recurso => {
+                            const cal = calendarios.find(c => String(c._id) === String(recurso.calendarioId));
+                            const sumaCarga = diasSemana.reduce((acc, dia) => acc + (mapaCarga[`${String(recurso._id)}-${dia}`] || 0), 0);
+                            const sumaCapacidad = diasSemana.reduce((acc, dia) => acc + capacidadDia(recurso, dia), 0);
+                            const pct = sumaCapacidad > 0 ? Math.min(100, Math.round((sumaCarga / sumaCapacidad) * 100)) : 0;
+                            const colorBarra = sumaCarga > sumaCapacidad ? t.rojo : sumaCarga > 0 ? t.verde : t.textoDeshabilitado;
+                            return (
+                                <div key={recurso._id} style={styles.filaCapacidad}>
+                                    <span style={{ ...styles.celda, fontSize: 11.5, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{recurso.nombre}</span>
+                                    <span style={{ ...styles.celda, flexDirection: 'column', alignItems: 'flex-start', justifyContent: 'center', gap: 3 }}>
+                                        <span style={{ display: 'flex', gap: 8, fontSize: 10.5, color: t.textoAtenuado3, whiteSpace: 'nowrap', overflow: 'hidden' }}>
+                                            <span style={{ flex: 'none' }}>{recurso.puesto}</span>
+                                            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{cal?.nombre || 'Sin turno'}</span>
+                                        </span>
+                                        <span style={{ display: 'block', height: 3, width: '100%', background: 'rgba(0,0,0,.09)' }}>
+                                            <span style={{ display: 'block', height: 3, background: colorBarra, width: `${pct}%` }} />
+                                        </span>
+                                    </span>
+                                    <span style={{ ...styles.celda, fontFamily: t.fontMono, fontSize: 10.5, fontWeight: 600, color: colorBarra }}>{sumaCarga}h/{sumaCapacidad}h</span>
+                                    <span style={styles.celda} /><span style={styles.celda} /><span style={styles.celda} />
+                                    <span style={{ ...styles.celda, borderRight: `1px solid ${t.hairlineBloque}` }} />
+                                    {diasSemana.map(dia => {
+                                        const carga = mapaCarga[`${String(recurso._id)}-${dia}`] || 0;
+                                        const capacidad = capacidadDia(recurso, dia);
+                                        const exceso = carga > capacidad;
+                                        return (
+                                            <span key={dia} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: exceso ? t.cargaExceso : carga > 0 ? t.cargaOk : 'transparent', borderLeft: `1px solid ${t.hairlineFila}`, fontFamily: t.fontMono, fontSize: 10.5, fontWeight: 600, color: exceso ? t.rojo : carga > 0 ? t.verde : t.textoDeshabilitado }}>
+                                                {carga}/{capacidad}
+                                            </span>
+                                        );
+                                    })}
+                                </div>
+                            );
+                        })}
                     </div>
-                    );
-                })}
+                </section>
+
+                <aside style={styles.aside}>
+                    {!otSel ? (
+                        <div style={{ padding: 16, color: t.textoAtenuado3, fontSize: 12.5, textAlign: 'center' }}>Seleccioná una OT para ver el detalle.</div>
+                    ) : (
+                        <>
+                            <div style={styles.asideHeader}>
+                                <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+                                    <span style={{ fontFamily: t.fontMono, fontSize: 12, fontWeight: 600 }}>{otSel.numeroOT || 'S/N'}</span>
+                                    <span style={{ fontSize: 10.5, fontWeight: 600, color: t.textoAtenuado2 }}>{otSel.estado}</span>
+                                </div>
+                                <div style={{ fontSize: 13.5, fontWeight: 700, marginTop: 4 }}>{otSel.solicitante || 'Cliente'}</div>
+                                <p style={{ margin: '6px 0 0', fontSize: 11.5, lineHeight: 1.5, color: t.textoSecundario2 }}>{otSel.descripcion}</p>
+                            </div>
+
+                            <div style={styles.asideBloque}>
+                                <div style={styles.tituloSub}>Sobredemanda</div>
+                                {conflictosSel.length === 0 ? (
+                                    <div style={{ fontSize: 11.5, color: t.textoAtenuado1, lineHeight: 1.5 }}>Sin conflictos de capacidad en esta semana.</div>
+                                ) : conflictosSel.map((c, i) => (
+                                    <div key={i} style={{ padding: '6px 0', borderBottom: `1px solid ${t.hairlineFila}` }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+                                            <span style={{ fontSize: 11.5, fontWeight: 600 }}>{c.nombre}</span>
+                                            <span style={{ fontFamily: t.fontMono, fontSize: 11, fontWeight: 600, color: t.rojo }}>+{c.deficit}h</span>
+                                        </div>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontSize: 10.5, color: t.textoAtenuado3 }}>
+                                            <span>{c.fecha}</span><span style={{ fontFamily: t.fontMono }}>{c.carga}h sobre {c.capacidad}h</span>
+                                        </div>
+                                    </div>
+                                ))}
+                                {confirmando && (
+                                    <div style={{ marginTop: 10, padding: '8px 10px', background: '#fff', borderLeft: `2px solid ${t.rojo}` }}>
+                                        <div style={{ fontSize: 11.5, color: t.textoSecundario1, lineHeight: 1.5, marginBottom: 8 }}>Programar dejará responsables sobre su capacidad. ¿Continuar?</div>
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+                                            <button onClick={confirmarProgramacion} style={{ height: 26, background: t.rojo, border: `1px solid ${t.rojo}`, color: '#fff', fontSize: 11, fontWeight: 700, cursor: 'pointer', borderRadius: 2 }}>Programar igual</button>
+                                            <button onClick={() => setConfirmando(false)} style={styles.btnSecundario}>Cancelar</button>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
+                            <div style={{ padding: '11px 16px 14px' }}>
+                                <div style={styles.tituloSub}>Acciones</div>
+                                <button onClick={() => navigate('/tratamiento', { state: otSel })} style={{ ...styles.btnSecundario, width: '100%' }}>Abrir tratamiento</button>
+                                <div style={{ fontSize: 10.5, color: t.textoAtenuado3, marginTop: 8, lineHeight: 1.5 }}>Solo las OT en estado Planificada o Programada se pueden programar; las cerradas quedan en gris.</div>
+                            </div>
+                        </>
+                    )}
+                </aside>
             </div>
         </div>
-
-        {/* ── MODAL SOBREDEMANDA ── */}
-        {modalConflictos && (
-            <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
-                <div style={{ background: 'white', borderRadius: '12px', width: '100%', maxWidth: '520px', boxShadow: '0 20px 60px rgba(0,0,0,0.3)', overflow: 'hidden' }}>
-                    {/* Header */}
-                    <div style={{ background: '#e74c3c', color: 'white', padding: '16px 20px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        <span style={{ fontSize: '22px' }}>⚠️</span>
-                        <div>
-                            <div style={{ fontWeight: 'bold', fontSize: '15px' }}>Sobredemanda de Personal</div>
-                            <div style={{ fontSize: '12px', opacity: 0.85 }}>{modalConflictos.ot.numeroOT} — {modalConflictos.ot.descripcion}</div>
-                        </div>
-                    </div>
-                    {/* Cuerpo */}
-                    <div style={{ padding: '20px' }}>
-                        <p style={{ margin: '0 0 14px', color: '#555', fontSize: '13px' }}>
-                            Los siguientes recursos superan su capacidad disponible en las fechas asignadas:
-                        </p>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '20px' }}>
-                            {modalConflictos.conflictos.map((c, i) => (
-                                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '10px', background: '#fff5f5', border: '1px solid #fcc', borderRadius: '8px', padding: '10px 14px' }}>
-                                    <div style={{ flex: 1 }}>
-                                        <div style={{ fontWeight: 'bold', fontSize: '13px', color: '#2c3e50' }}>👷 {c.nombre}</div>
-                                        <div style={{ fontSize: '12px', color: '#888' }}>📅 {c.fecha}</div>
-                                    </div>
-                                    <div style={{ textAlign: 'right' }}>
-                                        <div style={{ fontWeight: 'bold', color: '#e74c3c', fontSize: '14px' }}>{c.carga}h / {c.capacidad}h</div>
-                                        <div style={{ fontSize: '11px', color: '#e74c3c' }}>+{c.deficit}h exceso</div>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                        <p style={{ margin: '0 0 16px', fontSize: '13px', color: '#888' }}>
-                            ¿Deseas programar de todas formas?
-                        </p>
-                        <div style={{ display: 'flex', gap: '10px' }}>
-                            <button
-                                onClick={confirmarProgramacion}
-                                style={{ flex: 1, padding: '11px', background: '#e67e22', color: 'white', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', fontSize: '14px' }}
-                            >
-                                Programar de todas formas
-                            </button>
-                            <button
-                                onClick={() => setModalConflictos(null)}
-                                style={{ flex: 1, padding: '11px', background: '#ecf0f1', color: '#555', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', fontSize: '14px' }}
-                            >
-                                Cancelar
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        )}
-        </>
     );
 };
 
-// ... Mantener getColorByPuesto y estilos ...
 const styles = {
-    container: {
-        width: '100%',
-        maxWidth: '1500px',
-        margin: '0 auto',
-        minHeight: '100vh',
-        padding: 'clamp(10px, 3vw, 20px)',
-        backgroundColor: '#f0f2f5',
-        boxSizing: 'border-box'
-    },
-    sectionHeader: {
-        padding: '10px 20px',
-        backgroundColor: '#2980b9',
-        color: 'white',
-        fontWeight: 'bold',
-        fontSize: '14px',
-        boxSizing: 'border-box'
-    },
-    ganttContainer: {
-        background: 'white',
-        borderRadius: '8px',
-        boxShadow: '0 4px 10px rgba(0,0,0,0.05)'
-    },
-    headerRow: {
-        display: 'flex',
-        background: '#34495e',
-        color: 'white'
-    },
-    dataRow: {
-        display: 'flex',
-        borderBottom: '1px solid #eee',
-        alignItems: 'stretch'
-    },
-    colBase: {
-        padding: '10px',
-        borderRight: '1px solid #eee',
-        flexShrink: 0,
-        display: 'flex',
-        alignItems: 'center',
-        boxSizing: 'border-box'
-    },
-    daysArea: { display: 'flex', flex: 1 },
-    dayHeaderCell: { flex: 1, minWidth: '60px', textAlign: 'center', padding: '10px 0', borderRight: '1px solid #5d6d7e' },
-    dayCell: {
-        flex: 1,
-        minWidth: '60px',
-        borderRight: '1px solid #f0f0f0',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        minHeight: '50px'
-    },
-    taskBar: { width: '80%', height: '24px', borderRadius: '4px', color: 'white', fontSize: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }
+    raiz: { display: 'flex', flexDirection: 'column', height: '100%', minHeight: '720px', background: t.fondoMain, color: t.textoPrincipal, fontFamily: t.fontUi, fontSize: '13px' },
+    header: { flex: 'none', height: 46, display: 'flex', alignItems: 'center', gap: 16, padding: '0 16px', background: t.superficie, borderBottom: `1px solid ${t.bordeZona}` },
+    h1: { margin: 0, fontSize: 14, fontWeight: 700, letterSpacing: '-.01em', whiteSpace: 'nowrap' },
+    subtitulo: { fontSize: 11.5, color: t.textoAtenuado2, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
+
+    barraContexto: { flex: 'none', display: 'flex', alignItems: 'center', gap: 8, padding: '6px 16px', background: t.barraContexto, borderBottom: `1px solid ${t.hairlineBloque}` },
+    btnSecundario: { height: 20, padding: '0 9px', background: t.superficie, border: `1px solid ${t.bordeZona}`, fontSize: 11, color: t.textoSecundario1, cursor: 'pointer', borderRadius: 2, fontFamily: t.fontUi, whiteSpace: 'nowrap' },
+
+    cuerpo: { flex: 1, minHeight: 0, display: 'flex' },
+    scrollTabla: { flex: 1, minWidth: 0, overflow: 'auto', background: t.superficie },
+
+    filaHeader: { position: 'sticky', top: 0, zIndex: 3, display: 'grid', gridTemplateColumns: GRID, gap: 0, alignItems: 'stretch', background: t.encabezadoTabla, borderBottom: `1px solid ${t.bordeZona}` },
+    thCol: { padding: '0 10px', height: 32, display: 'flex', alignItems: 'center', fontSize: 9.5, letterSpacing: '.1em', textTransform: 'uppercase', color: t.textoAtenuado1, fontWeight: 700 },
+
+    filaOT: { display: 'grid', gridTemplateColumns: GRID, alignItems: 'stretch', borderBottom: `1px solid ${t.hairlineFila}`, cursor: 'pointer' },
+    filaTarea: { display: 'grid', gridTemplateColumns: GRID, alignItems: 'stretch', borderBottom: `1px solid ${t.hairlineFila}` },
+    filaCapacidad: { display: 'grid', gridTemplateColumns: GRID, alignItems: 'stretch', borderBottom: `1px solid ${t.hairlineFila}` },
+    filaSeccion: { display: 'flex', alignItems: 'center', height: 30, padding: '0 16px', marginTop: 14, background: t.encabezadoTabla, borderTop: `1px solid ${t.bordeZona}`, borderBottom: `1px solid ${t.hairlineBloque}`, fontSize: 9.5, letterSpacing: '.11em', textTransform: 'uppercase', color: t.textoAtenuado1, fontWeight: 700 },
+    celda: { display: 'flex', alignItems: 'center', padding: '5px 10px', minWidth: 0 },
+    btnAccionFila: { width: '100%', height: 21, padding: '0 6px', background: t.superficie, border: `1px solid ${t.bordeZona}`, fontSize: 10.5, fontWeight: 600, color: '#262622', cursor: 'pointer', borderRadius: 2, whiteSpace: 'nowrap', fontFamily: t.fontUi },
+
+    aside: { width: 284, flex: 'none', display: 'flex', flexDirection: 'column', background: t.fondoMain, borderLeft: `1px solid ${t.bordeZona}`, overflow: 'auto' },
+    asideHeader: { padding: '12px 16px 11px', background: t.superficie, borderBottom: `1px solid ${t.bordeZona}` },
+    asideBloque: { padding: '11px 16px 12px', borderBottom: `1px solid ${t.hairlineBloque}` },
+    tituloSub: { fontSize: 9.5, letterSpacing: '.11em', textTransform: 'uppercase', color: t.textoAtenuado3, marginBottom: 7 },
 };
 
 export default GanttScreen;

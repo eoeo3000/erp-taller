@@ -1,12 +1,85 @@
-const OT = require('../models/OT');
-const Recurso = require('../models/Recurso');
+const getOT = require('../models/OT');
+const getRecurso = require('../models/Recurso');
 const transporter = require('../config/mailer');
 const PDFDocument = require('pdfkit');
 
+// --- Reserva/liberación de recursos por cambio de estado de la OT (ver docs/funcionalidades-v2.md, Gap 4) ---
+// Nota: hoy OT.componentes solo guarda 'codigo' como copia de texto (sin referencia real al catálogo),
+// así que el cruce con EquiposHerramientas/Suministro se hace por codigo — decisión documentada en el
+// gap analysis (Parte VIII, punto 3): aplica hacia adelante, es un cruce best-effort.
+// NOTA: esta función no es un handler (req,res) — recibe la conexión explícitamente como `conn`
+// porque se invoca desde varios handlers distintos (actualizarOT, responderCotizacionCliente).
+async function aplicarReservaPorCambioEstado(otAnterior, otNueva, conn) {
+    try {
+        const estadoAnt = otAnterior?.estado;
+        const estadoNuevo = otNueva?.estado;
+        if (!otNueva || estadoAnt === estadoNuevo) return;
+
+        const EquiposHerramientas = require('../models/equiposHerramientas')(conn);
+        const Suministro = require('../models/suministro')(conn);
+        const MovimientoStock = require('../models/MovimientoStock')(conn);
+        const componentes = otNueva.componentes || [];
+
+        const esEquipo = (c) => c.tipo === 'Equipo' || c.tipo === 'Herramienta';
+
+        // Cliente aceptó la cotización: reservar herramientas/equipos e insumos comprometidos
+        if (estadoNuevo === 'Aprobada' && estadoAnt !== 'Aprobada') {
+            for (const c of componentes) {
+                if (!c.codigo) continue;
+                if (esEquipo(c)) {
+                    await EquiposHerramientas.updateOne({ codigo: c.codigo, estado: 'Disponible' }, { estado: 'Reservado' });
+                } else {
+                    const suministro = await Suministro.findOne({ codigo: c.codigo });
+                    if (suministro) {
+                        await Suministro.updateOne({ _id: suministro._id }, { $inc: { stockReservado: Number(c.cantidad) || 0 } });
+                        await MovimientoStock.create({
+                            suministroId: suministro._id, tipo: 'Reserva', cantidad: Number(c.cantidad) || 0,
+                            otId: otNueva._id, motivo: `Reserva por aprobación de OT ${otNueva.numeroOT || ''}`
+                        });
+                    }
+                }
+            }
+        }
+
+        // Inicia la ejecución en terreno: lo reservado pasa a estar en uso
+        if (estadoNuevo === 'En Ejecución' && estadoAnt !== 'En Ejecución') {
+            for (const c of componentes) {
+                if (c.codigo && esEquipo(c)) {
+                    await EquiposHerramientas.updateOne({ codigo: c.codigo, estado: 'Reservado' }, { estado: 'En Uso' });
+                }
+            }
+        }
+
+        // Faena completada: libera herramientas/equipos e insumos reservados
+        if (estadoNuevo === 'Trabajo Terminado' && estadoAnt !== 'Trabajo Terminado') {
+            for (const c of componentes) {
+                if (!c.codigo) continue;
+                if (esEquipo(c)) {
+                    await EquiposHerramientas.updateOne({ codigo: c.codigo, estado: 'En Uso' }, { estado: 'Disponible' });
+                } else {
+                    const suministro = await Suministro.findOne({ codigo: c.codigo });
+                    if (suministro) {
+                        const delta = -(Number(c.cantidad) || 0);
+                        await Suministro.updateOne({ _id: suministro._id }, { $inc: { stockReservado: delta } });
+                        await MovimientoStock.create({
+                            suministroId: suministro._id, tipo: 'Liberación', cantidad: delta,
+                            otId: otNueva._id, motivo: `Liberación al terminar OT ${otNueva.numeroOT || ''}`
+                        });
+                    }
+                }
+            }
+        }
+    } catch (e) {
+        console.warn('[Reservas] Hook de cambio de estado falló (sin impacto en la operación):', e.message);
+    }
+}
+
 // 1. Obtener toda la data (OTs, Solicitudes y Recursos)
 exports.getAllData = async (req, res) => {
+    const OT = getOT(req.db);
+    const Recurso = getRecurso(req.db);
     try {
-        const Solicitud = require('../models/Solicitud');
+        const Solicitud = require('../models/Solicitud')(req.db);
         const [todasLasOts, todasLasSolicitudes, recursos] = await Promise.all([
             OT.find().sort({ createdAt: -1 }),
             Solicitud.find().sort({ fechaCreacion: -1 }),
@@ -20,6 +93,7 @@ exports.getAllData = async (req, res) => {
 
 // 2. Crear Solicitud Manual
 exports.crearSolicitudManual = async (req, res) => {
+    const OT = getOT(req.db);
     try {
         const nueva = new OT({ ...req.body, estado: 'Pendiente', origen: 'Manual' });
         await nueva.save();
@@ -31,6 +105,7 @@ exports.crearSolicitudManual = async (req, res) => {
 
 // 3. Convertir a OT (Con formato OT-2026-0000)
 exports.convertirOT = async (req, res) => {
+    const OT = getOT(req.db);
     try {
         const data = req.body;
         const idSolicitud = data._id || data.solicitudId;
@@ -70,6 +145,7 @@ exports.convertirOT = async (req, res) => {
 
 // 4. Eliminar OT y Liberar Solicitud
 exports.eliminarOT = async (req, res) => {
+    const OT = getOT(req.db);
     try {
         const { id } = req.params;
         const otAEliminar = await OT.findById(id);
@@ -78,7 +154,7 @@ exports.eliminarOT = async (req, res) => {
         const idSolicitudVinculada = otAEliminar.solicitudId || otAEliminar._id;
         await OT.findByIdAndDelete(id);
 
-        const Solicitud = require('../models/Solicitud');
+        const Solicitud = require('../models/Solicitud')(req.db);
         await Solicitud.findByIdAndUpdate(idSolicitudVinculada, { estado: 'Pendiente', numeroOT: null });
 
         res.status(200).json({ message: "OT eliminada y solicitud liberada" });
@@ -89,6 +165,7 @@ exports.eliminarOT = async (req, res) => {
 
 // 5. Obtener OT por ID de Solicitud (Búsqueda híbrida para evitar el 404)
 exports.obtenerOTPorSolicitud = async (req, res) => {
+    const OT = getOT(req.db);
     try {
         const { solicitudId } = req.params;
         const ot = await OT.findOne({
@@ -107,6 +184,7 @@ exports.obtenerOTPorSolicitud = async (req, res) => {
 
 // 6. Obtener por ID Directo
 exports.obtenerOTPorId = async (req, res) => {
+    const OT = getOT(req.db);
     try {
         const ot = await OT.findById(req.params.id);
         if (!ot) return res.status(404).json({ message: "No encontrado" });
@@ -118,6 +196,7 @@ exports.obtenerOTPorId = async (req, res) => {
 
 // 7. Webhook Emails
 exports.webhookEmail = async (req, res) => {
+    const OT = getOT(req.db);
     try {
         const nuevaSolicitud = new OT({
             solicitante: req.body.remitente,
@@ -134,6 +213,7 @@ exports.webhookEmail = async (req, res) => {
 
 // 8. Actualizar OT (General y Suministros)
 exports.actualizarOT = async (req, res) => {
+    const OT = getOT(req.db);
     try {
         const { id } = req.params;
         const datosCuerpo = req.body;
@@ -150,7 +230,7 @@ exports.actualizarOT = async (req, res) => {
 
         // 2. Lógica de creación si no existe (Tu lógica original mejorada)
         if (!ot) {
-            const Solicitud = require('../models/Solicitud');
+            const Solicitud = require('../models/Solicitud')(req.db);
             const solicitud = await Solicitud.findById(id);
 
             if (solicitud) {
@@ -193,15 +273,17 @@ exports.actualizarOT = async (req, res) => {
                 await crearAsientoAutomatico('OT', ot._id, ot.numeroOT, [
                     { codigoCuenta: '1.1.2', debe: monto, haber: 0, glosa: `Cobro ${ot.numeroOT}` },
                     { codigoCuenta: '4.1.1', debe: 0, haber: monto, glosa: `Ingreso ${ot.numeroOT}` }
-                ], fechaPago, `Cobro servicios ${ot.numeroOT}`);
+                ], fechaPago, `Cobro servicios ${ot.numeroOT}`, req.db);
             }
 
             if (seEstaAnulando) {
-                await anularAsientoPorReferencia('OT', ot._id, pagoNuevo.motivoAnulacion || 'Pago anulado');
+                await anularAsientoPorReferencia('OT', ot._id, pagoNuevo.motivoAnulacion || 'Pago anulado', req.db);
             }
         } catch (eContab) {
             console.warn('[Contabilidad] Hook OT falló (sin impacto en la operación):', eContab.message);
         }
+
+        await aplicarReservaPorCambioEstado(otAnterior, ot, req.db);
 
         // 🚩 CLAVE: Devolvemos la OT completa para que el frontend vea los reportes
         res.json(ot);
@@ -214,6 +296,7 @@ exports.actualizarOT = async (req, res) => {
 
 // 9. Generar link único para que el supervisor inicie la ejecución
 exports.generarLinkEjecucion = async (req, res) => {
+    const OT = getOT(req.db);
     try {
         const { id } = req.params;
         const crypto = require('crypto');
@@ -230,6 +313,7 @@ exports.generarLinkEjecucion = async (req, res) => {
 
 // 10. Enviar OT al supervisor: genera token + PDF + email via Brevo
 exports.enviarAlSupervisor = async (req, res) => {
+    const OT = getOT(req.db);
     try {
         const { id } = req.params;
         const supervisorEmail = (req.body.supervisorEmail || '').trim();
@@ -412,6 +496,7 @@ exports.enviarAlSupervisor = async (req, res) => {
 
 // 11. GET — Portal completo del supervisor
 exports.supervisorPortal = async (req, res) => {
+    const OT = getOT(req.db);
     try {
         const { id } = req.params;
         const { token } = req.query;
@@ -697,6 +782,7 @@ async function postJson(body){
 
 // 11b. POST — Acciones del supervisor (iniciar / posponer / reporte / terminar)
 exports.supervisorAccion = async (req, res) => {
+    const OT = getOT(req.db);
     try {
         const { id } = req.params;
         const { token } = req.query;
@@ -757,6 +843,7 @@ function paginaError(msg) {
 
 // 12. GET — Muestra página de confirmación al supervisor (no cambia estado aún)
 exports.iniciarEjecucion = async (req, res) => {
+    const OT = getOT(req.db);
     try {
         const { id } = req.params;
         const { token } = req.query;
@@ -819,6 +906,7 @@ exports.iniciarEjecucion = async (req, res) => {
 
 // 11b. POST — Supervisor confirma: cambia estado a En Ejecución
 exports.confirmarEjecucion = async (req, res) => {
+    const OT = getOT(req.db);
     try {
         const { id } = req.params;
         const { token } = req.query;
@@ -859,10 +947,12 @@ exports.confirmarEjecucion = async (req, res) => {
 
 // 11. Respuesta Directa del Cliente (Solo actualización interna)
 exports.responderCotizacionCliente = async (req, res) => {
+    const OT = getOT(req.db);
     try {
         const { id, nuevoEstado } = req.params;
 
         // 1. Actualizar la OT
+        const otAnterior = await OT.findById(id).lean();
         const otActualizada = await OT.findByIdAndUpdate(
             id,
             { estado: nuevoEstado },
@@ -875,8 +965,11 @@ exports.responderCotizacionCliente = async (req, res) => {
 
         // 2. Sincronizar con la Solicitud original para que el ERP sea consistente
         const idSolicitud = otActualizada.solicitudId || otActualizada._id;
-        const Solicitud = require('../models/Solicitud');
+        const Solicitud = require('../models/Solicitud')(req.db);
         await Solicitud.findByIdAndUpdate(idSolicitud, { estado: nuevoEstado });
+
+        // 3. Reserva/liberación de recursos si corresponde (ej. Aceptar -> reserva herramientas e insumos)
+        await aplicarReservaPorCambioEstado(otAnterior, otActualizada, req.db);
 
         console.log(`♻️ ERP Actualizado: OT ${otActualizada.numeroOT} ahora está ${nuevoEstado}`);
 

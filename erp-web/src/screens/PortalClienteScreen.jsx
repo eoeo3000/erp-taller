@@ -1,4 +1,5 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 
 /* ────────────────────────────────── CONSTANTES ──────────────────────────── */
 
@@ -72,8 +73,8 @@ function TabSolicitud({ API, onExito }) {
 
 /* ───────────────────────────────── ESTADO ───────────────────────────────── */
 
-function TabEstado({ API }) {
-    const [q, setQ] = useState('');
+function TabEstado({ API, qInicial }) {
+    const [q, setQ] = useState(qInicial || '');
     const [buscando, setBuscando] = useState(false);
     const [resultados, setResultados] = useState(null);
     const [error, setError] = useState('');
@@ -91,6 +92,12 @@ function TabEstado({ API }) {
         } catch (ex) { setError(ex.message); }
         finally { setBuscando(false); }
     };
+
+    // Si llegamos con un código precargado desde el link enviado al cliente, buscamos de inmediato
+    useEffect(() => {
+        if (qInicial) buscar();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     if (detalle) return <DetalleSolicitud sol={detalle} onVolver={() => setDetalle(null)} />;
 
@@ -382,7 +389,10 @@ function ToastExito({ data, onClose }) {
 /* ──────────────────────────── COMPONENTE RAÍZ ───────────────────────────── */
 
 export default function PortalClienteScreen({ API }) {
-    const [tab, setTab] = useState('solicitud');
+    const [searchParams] = useSearchParams();
+    const tabInicial = searchParams.get('tab');
+    const qInicial = searchParams.get('q') || '';
+    const [tab, setTab] = useState(TABS.some(t => t.id === tabInicial) ? tabInicial : 'solicitud');
     const [toast, setToast] = useState(null);
 
     return (
@@ -404,7 +414,7 @@ export default function PortalClienteScreen({ API }) {
             {/* Contenido */}
             <div style={r.contenido}>
                 {tab === 'solicitud' && <TabSolicitud API={API} onExito={d => setToast(d)} />}
-                {tab === 'estado'    && <TabEstado    API={API} />}
+                {tab === 'estado'    && <TabEstado    API={API} qInicial={qInicial} />}
                 {tab === 'docs'      && <TabDocs      API={API} />}
                 {tab === 'contacto'  && <TabContacto />}
             </div>
