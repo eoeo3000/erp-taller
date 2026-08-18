@@ -28,6 +28,15 @@ function lunesDeLaSemana(fecha) {
     return d;
 }
 function aISO(d) { return d.toISOString().slice(0, 10); }
+
+// Nadie ve las asignaciones de otro (siempre filtra por usuarioId); el rol solo decide
+// qué TIPOS de las suyas aparecen. El ejecutor solo ejecuta; el supervisor además
+// supervisa y levanta informes de evaluación (README §5, O5). Vista de carga del equipo
+// no entra aquí — vive en Programación, en el escritorio.
+const TIPOS_POR_ROL = {
+    ejecutor: ['ejecucion'],
+    supervisor: ['ejecucion', 'supervision', 'evaluacion'],
+};
 function diasDeLaSemana(fecha) {
     const lunes = lunesDeLaSemana(fecha);
     return Array.from({ length: 7 }, (_, i) => {
@@ -134,6 +143,7 @@ exports.miDia = async (req, res) => {
         const hoy = aISO(new Date());
         const asignaciones = await Asignacion.find({
             usuarioId: usuario._id, fechaPlanificada: hoy, estado: { $ne: 'cancelada' },
+            tipo: { $in: TIPOS_POR_ROL[usuario.rol] || [] },
         }).sort({ createdAt: 1 });
 
         res.json({ usuario: { nombre: usuario.nombre, rol: usuario.rol }, fecha: hoy, asignaciones });
@@ -153,6 +163,7 @@ exports.miSemana = async (req, res) => {
         const dias = diasDeLaSemana(new Date());
         const asignaciones = await Asignacion.find({
             usuarioId: usuario._id, fechaPlanificada: { $in: dias }, estado: { $ne: 'cancelada' },
+            tipo: { $in: TIPOS_POR_ROL[usuario.rol] || [] },
         }).sort({ fechaPlanificada: 1 });
 
         res.json({ usuario: { nombre: usuario.nombre, rol: usuario.rol }, dias, asignaciones });

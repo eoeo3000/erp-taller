@@ -12,6 +12,11 @@ function normalizarTelefono(t) {
     return String(t || '').replace(/\D/g, '');
 }
 
+// SesionPortal guarda el hash, nunca el token en claro (ver models/SesionPortal.js).
+function hashToken(token) {
+    return crypto.createHash('sha256').update(String(token || '')).digest('hex');
+}
+
 async function generarNumeroSolicitud(conn) {
     const Solicitud = getSolicitud(conn);
     const anio = new Date().getFullYear();
@@ -200,9 +205,13 @@ exports.acceso = async (req, res) => {
             return res.status(401).json({ error: MENSAJE_ACCESO_INVALIDO });
         }
 
-        const token = crypto.randomBytes(20).toString('hex');
+        const token = crypto.randomBytes(20).toString('hex'); // se devuelve una sola vez, no se guarda en claro
         const expira = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 días, ver README §6 C1
-        await SesionPortal.create({ telefono, token, expira });
+        await SesionPortal.create({
+            telefono, expira,
+            tokenHash: hashToken(token),
+            empresaSolicitante: solicitud.empresaSolicitante,
+        });
 
         const trabajos = await trabajosPorTelefono(req.db, telefono);
         res.json({ token, expira, empresaSolicitante: solicitud.empresaSolicitante, trabajos });
@@ -215,11 +224,37 @@ exports.acceso = async (req, res) => {
 exports.misSolicitudes = async (req, res) => {
     const SesionPortal = getSesionPortal(req.db);
     try {
-        const sesion = await SesionPortal.findOne({ token: req.query.token, activa: true });
+        const sesion = await SesionPortal.findOne({ tokenHash: hashToken(req.query.token), revocada: false });
         if (!sesion || sesion.expira < new Date()) return res.status(403).json({ error: 'Sesión inválida o vencida' });
 
+        sesion.ultimoAcceso = new Date();
+        await sesion.save();
+
         const trabajos = await trabajosPorTelefono(req.db, sesion.telefono);
-        res.json({ empresaSolicitante: trabajos[0]?.empresaSolicitante || '', trabajos });
+        res.json({ empresaSolicitante: sesion.empresaSolicitante, trabajos });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+};
+
+// GET /api/portal/sesiones — para que la oficina vea qué sesiones de cliente están activas
+exports.listarSesiones = async (req, res) => {
+    const SesionPortal = getSesionPortal(req.db);
+    try {
+        const sesiones = await SesionPortal.find().select('-tokenHash').sort({ createdAt: -1 });
+        res.json(sesiones);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+};
+
+// POST /api/portal/sesiones/:id/revocar — la oficina corta el acceso de un dispositivo
+exports.revocarSesion = async (req, res) => {
+    const SesionPortal = getSesionPortal(req.db);
+    try {
+        const sesion = await SesionPortal.findByIdAndUpdate(req.params.id, { revocada: true }, { new: true }).select('-tokenHash');
+        if (!sesion) return res.status(404).json({ error: 'Sesión no encontrada' });
+        res.json({ mensaje: 'Sesión revocada', sesion });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }

@@ -10,5 +10,7 @@ router.post('/solicitud',      ctrl.crearSolicitud);
 // viaja en ?entorno= de la query, la PWA se abre fuera de la SPA (CORRECCIONES.md punto 7).
 router.post('/acceso',            ctrl.acceso);
 router.get('/mis-solicitudes',    ctrl.misSolicitudes);
+router.get('/sesiones',              ctrl.listarSesiones);
+router.post('/sesiones/:id/revocar', ctrl.revocarSesion);
 
 module.exports = router;
