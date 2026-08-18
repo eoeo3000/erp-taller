@@ -37,6 +37,24 @@ const TIPOS_POR_ROL = {
     ejecutor: ['ejecucion'],
     supervisor: ['ejecucion', 'supervision', 'evaluacion'],
 };
+// OT.supervisorId apunta a un Recurso (el catálogo real de personal, ver models/OT.js),
+// no a una Asignacion — así que para que la OT asignada aparezca en "mi día"/"mi semana"
+// del supervisor, se arma acá como si fuera una asignación más, en vez de exigir que el
+// planificador cree además una Asignacion tipo 'supervision' redundante.
+async function otsSupervisadasEnFechas(OT, recursoId, fechasISO) {
+    if (!recursoId) return [];
+    const ots = await OT.find({ supervisorId: recursoId, estado: { $ne: 'Pagada' } }).lean();
+    return ots
+        .filter(ot => ot.fechaEjecucion && fechasISO.includes(aISO(new Date(ot.fechaEjecucion))))
+        .map(ot => ({
+            _id: `ot-sup-${ot._id}`,
+            tipo: 'supervision',
+            otId: ot._id,
+            fechaPlanificada: aISO(new Date(ot.fechaEjecucion)),
+            estado: 'pendiente',
+        }));
+}
+
 function diasDeLaSemana(fecha) {
     const lunes = lunesDeLaSemana(fecha);
     return Array.from({ length: 7 }, (_, i) => {
@@ -136,17 +154,23 @@ exports.cerrar = async (req, res) => {
 exports.miDia = async (req, res) => {
     const Asignacion = getAsignacion(req.db);
     const Usuario = getUsuario(req.db);
+    const OT = getOT(req.db);
     try {
         const usuario = await resolverUsuarioPorToken(Usuario, req.query.token);
         if (!usuario) return res.status(403).json({ error: 'Token inválido o revocado' });
 
+        const tiposPermitidos = TIPOS_POR_ROL[usuario.rol] || [];
         const hoy = aISO(new Date());
         const asignaciones = await Asignacion.find({
             usuarioId: usuario._id, fechaPlanificada: hoy, estado: { $ne: 'cancelada' },
-            tipo: { $in: TIPOS_POR_ROL[usuario.rol] || [] },
+            tipo: { $in: tiposPermitidos },
         }).sort({ createdAt: 1 });
 
-        res.json({ usuario: { nombre: usuario.nombre, rol: usuario.rol }, fecha: hoy, asignaciones });
+        const supervisiones = tiposPermitidos.includes('supervision')
+            ? await otsSupervisadasEnFechas(OT, usuario.recursoId, [hoy])
+            : [];
+
+        res.json({ usuario: { nombre: usuario.nombre, rol: usuario.rol }, fecha: hoy, asignaciones: [...asignaciones, ...supervisiones] });
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
@@ -156,17 +180,23 @@ exports.miDia = async (req, res) => {
 exports.miSemana = async (req, res) => {
     const Asignacion = getAsignacion(req.db);
     const Usuario = getUsuario(req.db);
+    const OT = getOT(req.db);
     try {
         const usuario = await resolverUsuarioPorToken(Usuario, req.query.token);
         if (!usuario) return res.status(403).json({ error: 'Token inválido o revocado' });
 
+        const tiposPermitidos = TIPOS_POR_ROL[usuario.rol] || [];
         const dias = diasDeLaSemana(new Date());
         const asignaciones = await Asignacion.find({
             usuarioId: usuario._id, fechaPlanificada: { $in: dias }, estado: { $ne: 'cancelada' },
-            tipo: { $in: TIPOS_POR_ROL[usuario.rol] || [] },
+            tipo: { $in: tiposPermitidos },
         }).sort({ fechaPlanificada: 1 });
 
-        res.json({ usuario: { nombre: usuario.nombre, rol: usuario.rol }, dias, asignaciones });
+        const supervisiones = tiposPermitidos.includes('supervision')
+            ? await otsSupervisadasEnFechas(OT, usuario.recursoId, dias)
+            : [];
+
+        res.json({ usuario: { nombre: usuario.nombre, rol: usuario.rol }, dias, asignaciones: [...asignaciones, ...supervisiones] });
     } catch (error) {
         res.status(500).json({ error: error.message });
     }

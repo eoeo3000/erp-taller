@@ -231,7 +231,7 @@ exports.obtenerOTPorId = async (req, res) => {
 // el _id de la Solicitud que la originó).
 exports.antecedentes = async (req, res) => {
     const OT = getOT(req.db);
-    const Usuario = getUsuario(req.db);
+    const Recurso = getRecurso(req.db);
     const Solicitud = require('../models/Solicitud')(req.db);
     try {
         const { id } = req.params;
@@ -242,13 +242,17 @@ exports.antecedentes = async (req, res) => {
 
         let supervisor = null;
         if (ot?.supervisorId) {
-            const u = await Usuario.findById(ot.supervisorId).select('nombre puesto').lean();
-            if (u) supervisor = { id: u._id, nombre: u.nombre, puesto: u.puesto };
+            const r = await Recurso.findById(ot.supervisorId).select('nombre puesto').lean();
+            if (r) supervisor = { id: r._id, nombre: r.nombre, puesto: r.puesto };
         }
 
-        const candidatos = await Usuario.find({
-            estado: 'activo', puesto: { $in: ['Supervisor', 'Maestro 1ª', 'Técnico'] },
-        }).select('nombre puesto').sort({ nombre: 1 }).lean();
+        // Supervisores = personal (Recurso), no Usuario (acceso móvil PWA) — es el
+        // catálogo real que usa el resto de la app (Gantt, responsables de tarea). Sin
+        // filtro por puesto: es texto libre propio del rubro ("Supervisora de Terreno",
+        // "Técnico Hidráulico"...), no un enum fijo — una lista corta de valores exactos
+        // (Supervisor/Maestro 1ª/Técnico) no calza con datos reales y deja el selector
+        // vacío. Decide la oficina, no un filtro de texto.
+        const candidatos = await Recurso.find({}).select('nombre puesto').sort({ nombre: 1 }).lean();
 
         res.json({
             solicitud: {
@@ -287,7 +291,7 @@ exports.antecedentes = async (req, res) => {
 // el mismo patrón de numeración que convertirOT/actualizarOT.
 exports.asignarSupervisor = async (req, res) => {
     const OT = getOT(req.db);
-    const Usuario = getUsuario(req.db);
+    const Recurso = getRecurso(req.db);
     const Solicitud = require('../models/Solicitud')(req.db);
     try {
         const { id } = req.params;
@@ -323,9 +327,9 @@ exports.asignarSupervisor = async (req, res) => {
 
         let supervisorNuevo = null;
         if (supervisorId) {
-            supervisorNuevo = await Usuario.findById(supervisorId);
-            const puestoValido = ['Supervisor', 'Maestro 1ª', 'Técnico'];
-            if (!supervisorNuevo || supervisorNuevo.estado !== 'activo' || !puestoValido.includes(supervisorNuevo.puesto)) {
+            supervisorNuevo = await Recurso.findById(supervisorId);
+            // Sin restricción de puesto (ver antecedentes(): es texto libre, no un enum).
+            if (!supervisorNuevo) {
                 return res.status(422).json({ error: 'El supervisor seleccionado no es válido' });
             }
         }
@@ -343,7 +347,7 @@ exports.asignarSupervisor = async (req, res) => {
         // Snapshot del supervisor anterior para la bitácora, antes de sobrescribir.
         const supervisorAnteriorId = ot.supervisorId;
         const supervisorAnterior = supervisorAnteriorId
-            ? await Usuario.findById(supervisorAnteriorId).select('nombre puesto').lean()
+            ? await Recurso.findById(supervisorAnteriorId).select('nombre puesto').lean()
             : null;
 
         if (ordenCompra !== undefined) ot.ordenCompra = ordenCompra;

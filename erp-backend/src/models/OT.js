@@ -123,7 +123,11 @@ const OTSchema = new mongoose.Schema({
 
     // Pestaña Antecedentes: supervisor a cargo de la OT completa (independiente del
     // responsable de cada tarea en tareas[].operarioNombre — no se sobreescribe).
-    supervisorId: { type: mongoose.Schema.Types.ObjectId, ref: 'Usuario', default: null },
+    // Referencia a Recurso (el catálogo real de personal que usa todo el resto de la app:
+    // Gantt, responsables de tarea), NO a Usuario (acceso móvil PWA, que hoy casi ningún
+    // Recurso tiene todavía). Si ese Recurso además tiene Recurso.usuarioId, la OT se
+    // refleja en su "mi día"/"mi semana" — ver asignacionController.otsSupervisadasEnFechas.
+    supervisorId: { type: mongoose.Schema.Types.ObjectId, ref: 'Recurso', default: null },
     // Fecha en que se ejecuta el trabajo (distinto de fechaInicio/fechaEntrega, que ya
     // existían sin uso claro en el frontend — este es el campo que la pestaña edita).
     fechaEjecucion: { type: Date, default: null },
