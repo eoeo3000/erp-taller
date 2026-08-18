@@ -53,6 +53,16 @@ function otPublica(ot) {
             precioUnitario: c.precioUnitario,
             subtotal: c.subtotal
         })),
+        // Reportes de terreno — los usa C4 (design_handoff_pwa_movil/README.md §6). Las fotos
+        // ya llegan comprimidas desde el origen (O3/O4 y supervisorPortal recomprimen a un
+        // ancho máximo de 1200px, calidad .75, antes de guardarlas en OT.reportes) — no se
+        // reprocesan acá, solo se exponen tal cual quedaron guardadas.
+        reportes: (ot.reportes || []).map(r => ({
+            fecha: r.fecha,
+            comentario: r.comentario,
+            foto: r.foto,
+            usuario: r.usuario,
+        })),
         logistica: (ot.logistica || []).map(l => ({
             descripcion: l.descripcion,
             subtotal: l.subtotal
@@ -215,6 +225,31 @@ exports.acceso = async (req, res) => {
 
         const trabajos = await trabajosPorTelefono(req.db, telefono);
         res.json({ token, expira, empresaSolicitante: solicitud.empresaSolicitante, trabajos });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+};
+
+// POST /api/portal/emitir-token — la oficina genera un link pre-autenticado para mandar
+// por WhatsApp o correo (README pwa_movil §6, C1: "el link... lleva token firmado por
+// contacto y aterriza directo en C2, saltándose C1"). Sin segundo factor: quien llama a
+// este endpoint ya es personal interno (vía SPA), no un desconocido probando pares.
+exports.emitirTokenContacto = async (req, res) => {
+    const SesionPortal = getSesionPortal(req.db);
+    try {
+        const telefono = normalizarTelefono(req.body.telefono);
+        if (!telefono) return res.status(400).json({ error: 'Teléfono requerido' });
+
+        const trabajos = await trabajosPorTelefono(req.db, telefono);
+        if (!trabajos.length) return res.status(404).json({ error: 'No hay solicitudes registradas con ese teléfono' });
+
+        const token = crypto.randomBytes(20).toString('hex');
+        const expira = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+        await SesionPortal.create({
+            telefono, expira, tokenHash: hashToken(token), empresaSolicitante: trabajos[0].empresaSolicitante,
+        });
+
+        res.json({ token, expira, empresaSolicitante: trabajos[0].empresaSolicitante });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }

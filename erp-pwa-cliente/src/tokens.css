@@ -1,0 +1,110 @@
+/* Mismos tokens que erp-pwa-operativa/src/tokens.css — design_handoff_pwa_movil/README.md
+   §2-§4 son compartidos por las dos PWA, no por pantalla. Se duplica el archivo (no se
+   comparte un paquete) porque cada PWA es una app aparte con su propio build — mismo
+   criterio que ya usa el repo para ETAPAS_VISUAL/MAPA_ETAPA, duplicado entre
+   DashboardScreen.jsx y TratamientoScreen.jsx en vez de importado de un módulo común. */
+:root {
+  --fondo-pantalla: #f6f5f2;
+  --superficie: #ffffff;
+  --franja: #f0efeb;
+  --encabezado-tabla: #e4e2dc;
+  --texto-principal: #1a1a18;
+  --texto-secundario-1: #3a3a35;
+  --texto-secundario-2: #57564f;
+  --texto-atenuado-1: #6b6a63;
+  --texto-atenuado-2: #75746e;
+  --texto-atenuado-3: #8a8981;
+  --deshabilitado-1: #a3a29a;
+  --deshabilitado-2: #c9c7c0;
+  --accion-primaria: #1c1d1b;
+  --accion-primaria-texto: #ffffff;
+  --linea-fina: rgba(0, 0, 0, .06);
+  --linea-bloque: rgba(0, 0, 0, .10);
+  --linea-zona: rgba(0, 0, 0, .12);
+
+  --en-curso: oklch(0.48 0.10 250);
+  --listo: oklch(0.48 0.10 155);
+  --atencion: oklch(0.55 0.11 65);
+  --detenido: oklch(0.52 0.13 25);
+
+  --font-ui: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, Menlo, monospace;
+  --radio: 2px;
+
+  --fs-titulo: 20px;   --fw-titulo: 700;
+  --fs-cifra: 17px;    --fw-cifra: 600;
+  --fs-card-titulo: 16px; --fw-card-titulo: 600;
+  --fs-cuerpo: 15px;   --fw-cuerpo: 400;
+  --fs-secundario: 14px; --fw-secundario: 400;
+  --fs-linea-mono: 13px; --fw-linea-mono: 400;
+  --fs-versalita: 11px; --fw-versalita: 700;
+
+  --objetivo-tactil: 48px;
+  --accion-primaria-alto: 56px;
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body {
+  background: var(--fondo-pantalla);
+  color: var(--texto-principal);
+  font-family: var(--font-ui);
+  -webkit-font-smoothing: antialiased;
+}
+#root { min-height: 100%; display: flex; flex-direction: column; }
+
+button, input, textarea, select { font-family: inherit; }
+button { border-radius: var(--radio); }
+
+.mono { font-family: var(--font-mono); }
+.versalita {
+  font-size: var(--fs-versalita); font-weight: var(--fw-versalita);
+  letter-spacing: .13em; text-transform: uppercase; color: var(--texto-atenuado-2);
+}
+
+.boton-primario {
+  height: var(--accion-primaria-alto);
+  width: 100%;
+  background: var(--accion-primaria);
+  color: var(--accion-primaria-texto);
+  border: none;
+  border-radius: var(--radio);
+  font-size: var(--fs-card-titulo);
+  font-weight: var(--fw-card-titulo);
+  cursor: pointer;
+}
+.boton-primario:disabled { background: var(--deshabilitado-2); color: var(--texto-atenuado-3); }
+
+.boton-secundario {
+  min-height: var(--objetivo-tactil);
+  width: 100%;
+  background: var(--superficie);
+  color: var(--texto-principal);
+  border: 1px solid var(--linea-zona);
+  border-radius: var(--radio);
+  font-size: var(--fs-secundario);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.pie-accion {
+  flex: none;
+  padding: 10px 16px calc(12px + env(safe-area-inset-bottom));
+  background: var(--superficie);
+  border-top: 1px solid var(--linea-zona);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.franja { background: var(--franja); padding: 12px 16px; }
+.barra-estado { width: 3px; align-self: stretch; flex: none; }
+
+.input-campo {
+  width: 100%; padding: 12px; font-size: var(--fs-cuerpo);
+  border: 1px solid var(--linea-zona); border-radius: var(--radio); font-family: inherit;
+}
+
+@media print {
+  .no-imprimir { display: none !important; }
+}
