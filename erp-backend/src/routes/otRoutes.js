@@ -17,6 +17,8 @@ router.post('/:id/generar-link-ejecucion', otController.generarLinkEjecucion);
 router.post('/:id/enviar-supervisor', otController.enviarAlSupervisor);
 router.get('/:id/supervisor', otController.supervisorPortal);
 router.post('/:id/supervisor', otController.supervisorAccion);
+// PWA Operativa (docs/rediseno/design_handoff_pwa_movil) — token de Usuario, no de OT.
+router.put('/:id/accion-movil', otController.accionMovil);
 router.get('/:id/iniciar-ejecucion', otController.iniciarEjecucion);
 router.post('/:id/iniciar-ejecucion', otController.confirmarEjecucion);
 router.get('/:id', otController.obtenerOTPorId);

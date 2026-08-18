@@ -5,6 +5,7 @@ const express = require('express');
 const router = express.Router();
 const ctrl = require('../controllers/usuarioController');
 
+router.get('/whoami', ctrl.whoami); // antes de '/', la usa la PWA por token (sin sesión de SPA)
 router.post('/', ctrl.crear);
 router.get('/', ctrl.listar);
 router.post('/:id/reemitir-token', ctrl.reemitirToken);

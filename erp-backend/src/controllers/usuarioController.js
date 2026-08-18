@@ -56,6 +56,18 @@ exports.crear = async (req, res) => {
     }
 };
 
+// GET /api/usuarios/whoami?token=&entorno= — la propia PWA Operativa, para la ficha de O1
+exports.whoami = async (req, res) => {
+    const Usuario = getUsuario(req.db);
+    try {
+        const usuario = await Usuario.findOne({ token: req.query.token, estado: 'activo' });
+        if (!usuario) return res.status(403).json({ error: 'Token inválido o revocado' });
+        res.json({ nombre: usuario.nombre, puesto: usuario.puesto, rol: usuario.rol, fechaEmision: usuario.fechaEmision });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+};
+
 // GET /api/usuarios — listado para el planificador (vía SPA)
 exports.listar = async (req, res) => {
     const Usuario = getUsuario(req.db);

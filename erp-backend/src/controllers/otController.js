@@ -1,7 +1,38 @@
 const getOT = require('../models/OT');
 const getRecurso = require('../models/Recurso');
+const getUsuario = require('../models/Usuario');
+const getAsignacion = require('../models/Asignacion');
 const transporter = require('../config/mailer');
 const PDFDocument = require('pdfkit');
+
+// Acciones sobre una OT en terreno (iniciar/posponer/interrumpir/reporte/terminar) —
+// compartida por supervisorAccion (token por OT, portal HTML) y accionMovil (token por
+// persona, PWA Operativa, ver docs/rediseno/design_handoff_pwa_movil/README.md §5, O3/O4).
+// Un solo lugar con la lógica de negocio; cada endpoint solo decide CÓMO se autoriza.
+function aplicarAccionOT(ot, { accion, motivo, comentario, foto, usuarioNombre = 'Supervisor' }) {
+    if (accion === 'iniciar') {
+        ot.estado = 'En Ejecución';
+    } else if (accion === 'posponer') {
+        if (!motivo) { const e = new Error('Motivo requerido'); e.status = 400; throw e; }
+        ot.reportes = ot.reportes || [];
+        ot.reportes.push({ comentario: `⏸️ TRABAJO POSPUESTO: ${motivo}`, fecha: new Date(), usuario: usuarioNombre });
+        ot.estado = 'Programada';
+    } else if (accion === 'interrumpir') {
+        if (!motivo) { const e = new Error('Motivo requerido'); e.status = 400; throw e; }
+        ot.reportes = ot.reportes || [];
+        ot.reportes.push({ comentario: `⚠️ TRABAJO INTERRUMPIDO: ${motivo}`, fecha: new Date(), usuario: usuarioNombre });
+        ot.estado = 'Programada';
+    } else if (accion === 'reporte') {
+        if (!comentario && !foto) { const e = new Error('Comentario o foto requeridos'); e.status = 400; throw e; }
+        ot.reportes = ot.reportes || [];
+        ot.reportes.push({ comentario: comentario || '', foto: foto || '', fecha: new Date(), usuario: usuarioNombre });
+        if (ot.estado === 'Trabajo Terminado') ot.estado = 'Con Informe';
+    } else if (accion === 'terminar') {
+        ot.estado = 'Trabajo Terminado';
+    } else {
+        const e = new Error('Acción no reconocida'); e.status = 400; throw e;
+    }
+}
 
 // --- Reserva/liberación de recursos por cambio de estado de la OT (ver docs/funcionalidades-v2.md, Gap 4) ---
 // Nota: hoy OT.componentes solo guarda 'codigo' como copia de texto (sin referencia real al catálogo),
@@ -789,44 +820,50 @@ exports.supervisorAccion = async (req, res) => {
     try {
         const { id } = req.params;
         const { token } = req.query;
-        const { accion, motivo, comentario, foto } = req.body;
 
         const ot = await OT.findById(id);
         if (!ot) return res.status(404).json({ error: 'OT no encontrada' });
         if (!token || ot.tokenEjecucion !== token) return res.status(403).json({ error: 'Token inválido' });
 
-        if (accion === 'iniciar') {
-            ot.estado = 'En Ejecución';
-
-        } else if (accion === 'posponer') {
-            if (!motivo) return res.status(400).json({ error: 'Motivo requerido' });
-            ot.reportes = ot.reportes || [];
-            ot.reportes.push({ comentario: `⏸️ TRABAJO POSPUESTO: ${motivo}`, fecha: new Date(), usuario: 'Supervisor' });
-            ot.estado = 'Programada';
-
-        } else if (accion === 'interrumpir') {
-            if (!motivo) return res.status(400).json({ error: 'Motivo requerido' });
-            ot.reportes = ot.reportes || [];
-            ot.reportes.push({ comentario: `⚠️ TRABAJO INTERRUMPIDO: ${motivo}`, fecha: new Date(), usuario: 'Supervisor' });
-            ot.estado = 'Programada';
-
-        } else if (accion === 'reporte') {
-            if (!comentario && !foto) return res.status(400).json({ error: 'Comentario o foto requeridos' });
-            ot.reportes = ot.reportes || [];
-            ot.reportes.push({ comentario: comentario || '', foto: foto || '', fecha: new Date(), usuario: 'Supervisor' });
-            if (ot.estado === 'Trabajo Terminado') ot.estado = 'Con Informe';
-
-        } else if (accion === 'terminar') {
-            ot.estado = 'Trabajo Terminado';
-
-        } else {
-            return res.status(400).json({ error: 'Acción no reconocida' });
-        }
-
+        aplicarAccionOT(ot, req.body);
         await ot.save();
         res.json({ ok: true, estado: ot.estado });
     } catch (err) {
+        if (err.status) return res.status(err.status).json({ error: err.message });
         console.error('Error en supervisorAccion:', err);
+        res.status(500).json({ error: err.message });
+    }
+};
+
+// PUT — Acción sobre una OT desde la PWA Operativa: misma lógica que supervisorAccion
+// (aplicarAccionOT), autenticada por token de Usuario (persona) y autorizada por tener una
+// Asignacion activa sobre esta OT, en vez del tokenEjecucion por OT del portal antiguo.
+exports.accionMovil = async (req, res) => {
+    const OT = getOT(req.db);
+    const Usuario = getUsuario(req.db);
+    const Asignacion = getAsignacion(req.db);
+    try {
+        const { id } = req.params;
+        const { token } = req.query;
+
+        const usuario = await Usuario.findOne({ token, estado: 'activo' });
+        if (!usuario) return res.status(403).json({ error: 'Token inválido o revocado' });
+
+        const tieneAsignacion = await Asignacion.exists({ usuarioId: usuario._id, otId: id });
+        if (!tieneAsignacion) return res.status(403).json({ error: 'No tienes una asignación sobre esta OT' });
+
+        const ot = await OT.findById(id);
+        if (!ot) return res.status(404).json({ error: 'OT no encontrada' });
+
+        aplicarAccionOT(ot, { ...req.body, usuarioNombre: usuario.nombre });
+        await ot.save();
+
+        usuario.ultimoAcceso = new Date();
+        await usuario.save();
+
+        res.json({ ok: true, estado: ot.estado });
+    } catch (err) {
+        if (err.status) return res.status(err.status).json({ error: err.message });
         res.status(500).json({ error: err.message });
     }
 };
