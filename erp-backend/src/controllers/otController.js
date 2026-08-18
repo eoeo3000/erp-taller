@@ -325,24 +325,18 @@ exports.actualizarOT = async (req, res) => {
     }
 };
 
-// 9. Generar link único para que el supervisor inicie la ejecución
-exports.generarLinkEjecucion = async (req, res) => {
-    const OT = getOT(req.db);
-    try {
-        const { id } = req.params;
-        const crypto = require('crypto');
-        const token = crypto.randomBytes(20).toString('hex');
-        const ot = await OT.findByIdAndUpdate(id, { tokenEjecucion: token }, { new: true });
-        if (!ot) return res.status(404).json({ error: 'OT no encontrada' });
-        const baseUrl = process.env.API_URL || `${req.protocol}://${req.get('host')}`;
-        const link = `${baseUrl}/api/ots/${id}/iniciar-ejecucion?token=${token}&entorno=${req.entorno}`;
-        res.json({ link });
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
-};
-
 // 10. Enviar OT al supervisor: genera token + PDF + email via Brevo
+//
+// NOTA (M4, docs/rediseno/design_handoff_pwa_movil): este flujo (enviarAlSupervisor +
+// supervisorPortal + supervisorAccion, token por OT) iba a retirarse una vez la PWA
+// Operativa lo cubriera, pero el criterio de corte del propio plan de retiro dice
+// "mientras haya links en circulación, el portal convive" — y hoy los hay: al revisar
+// producción (no demo) hay 2 OT (OT-2026-0002, OT-2026-0003) con tokenEjecucion activo y
+// estado 'Programada', es decir, links ya enviados que nadie ha abierto todavía. Retirar
+// esto ahora los rompería. Además no existe todavía ninguna pantalla en la SPA para que
+// el planificador cree un Usuario o una Asignacion (M1 fue backend puro) — aunque no
+// hubiera links pendientes, hoy no habría con qué reemplazar este botón. Se mantiene
+// hasta que ambas condiciones se resuelvan (ver docs/estrategia-movil.md §11/§12).
 exports.enviarAlSupervisor = async (req, res) => {
     const OT = getOT(req.db);
     try {
@@ -880,110 +874,6 @@ function paginaError(msg) {
         <p style="color:#aaa;font-size:14px">Si crees que esto es un error, contacta al administrador.</p>
     </body></html>`;
 }
-
-// 12. GET — Muestra página de confirmación al supervisor (no cambia estado aún)
-exports.iniciarEjecucion = async (req, res) => {
-    const OT = getOT(req.db);
-    try {
-        const { id } = req.params;
-        const { token } = req.query;
-        const ot = await OT.findById(id);
-        if (!ot) return res.status(404).send('<h1>OT no encontrada</h1>');
-        if (!token || ot.tokenEjecucion !== token) {
-            return res.status(403).send(`
-                <div style="font-family:sans-serif;text-align:center;padding:80px 20px;max-width:500px;margin:auto">
-                    <div style="font-size:60px">⚠️</div>
-                    <h1 style="color:#e74c3c">Link inválido</h1>
-                    <p style="color:#555">Este link ya fue utilizado o no es válido.</p>
-                </div>
-            `);
-        }
-
-        const tareasList = (ot.tareas || []).map(t =>
-            `<li style="padding:6px 0;border-bottom:1px solid #eee">
-                <b>${t.descripcion || '—'}</b>
-                ${t.fecha ? `<span style="color:#3498db;margin-left:8px">📅 ${t.fecha}</span>` : ''}
-                ${t.hora ? `<span style="color:#7f8c8d;margin-left:8px">⏰ ${t.hora}</span>` : ''}
-                ${(t.operarioNombre || []).length ? `<span style="color:#27ae60;margin-left:8px">👷 ${[].concat(t.operarioNombre).join(', ')}</span>` : ''}
-            </li>`
-        ).join('');
-
-        res.send(`<!DOCTYPE html>
-            <html lang="es">
-            <head>
-                <meta charset="UTF-8">
-                <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <title>Confirmar Inicio — ${ot.numeroOT}</title>
-            </head>
-            <body style="font-family:sans-serif;background:#f0f2f5;margin:0;padding:20px">
-                <div style="max-width:500px;margin:40px auto;background:white;border-radius:12px;box-shadow:0 4px 20px rgba(0,0,0,0.1);overflow:hidden">
-                    <div style="background:#2c3e50;color:white;padding:24px">
-                        <div style="font-size:13px;opacity:0.7;margin-bottom:4px">ORDEN DE TRABAJO</div>
-                        <div style="font-size:24px;font-weight:bold">${ot.numeroOT || '—'}</div>
-                        <div style="font-size:14px;opacity:0.85;margin-top:4px">${ot.solicitante || ''}</div>
-                    </div>
-                    <div style="padding:24px">
-                        <p style="color:#555;margin-top:0">${ot.descripcion || ''}</p>
-                        ${tareasList ? `<ul style="padding-left:0;list-style:none;margin:0 0 20px">${tareasList}</ul>` : ''}
-                        <p style="color:#555;font-size:14px">
-                            Al confirmar, la orden quedará marcada como <b>En Ejecución</b> en el sistema.
-                        </p>
-                        <form method="POST" action="/api/ots/${id}/iniciar-ejecucion?token=${token}&entorno=${req.entorno}">
-                            <button type="submit"
-                                style="width:100%;padding:16px;background:#27ae60;color:white;border:none;border-radius:8px;font-size:18px;font-weight:bold;cursor:pointer;margin-top:8px">
-                                ✅ Confirmar Inicio de Trabajo
-                            </button>
-                        </form>
-                    </div>
-                </div>
-            </body>
-            </html>
-        `);
-    } catch (error) {
-        res.status(500).send('<h1>Error interno</h1>');
-    }
-};
-
-// 11b. POST — Supervisor confirma: cambia estado a En Ejecución
-exports.confirmarEjecucion = async (req, res) => {
-    const OT = getOT(req.db);
-    try {
-        const { id } = req.params;
-        const { token } = req.query;
-        const ot = await OT.findById(id);
-        if (!ot) return res.status(404).send('<h1>OT no encontrada</h1>');
-        if (!token || ot.tokenEjecucion !== token) {
-            return res.status(403).send(`
-                <div style="font-family:sans-serif;text-align:center;padding:80px 20px;max-width:500px;margin:auto">
-                    <div style="font-size:60px">⚠️</div>
-                    <h1 style="color:#e74c3c">Link ya utilizado</h1>
-                    <p style="color:#555">Este link de confirmación ya fue procesado.</p>
-                </div>
-            `);
-        }
-        ot.estado = 'En Ejecución';
-        await ot.save();
-        res.send(`<!DOCTYPE html>
-            <html lang="es">
-            <head>
-                <meta charset="UTF-8">
-                <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <title>Trabajo en Ejecución</title>
-            </head>
-            <body style="font-family:sans-serif;background:#f0f2f5;margin:0;padding:20px">
-                <div style="max-width:500px;margin:80px auto;background:white;border-radius:12px;box-shadow:0 4px 20px rgba(0,0,0,0.1);padding:48px;text-align:center">
-                    <div style="font-size:64px">⚙️</div>
-                    <h1 style="color:#e67e22;margin:16px 0 8px">Trabajo en Ejecución</h1>
-                    <p style="font-size:16px;color:#555">La OT <b>${ot.numeroOT}</b> ha sido marcada como <b>En Ejecución</b>.</p>
-                    <p style="color:#aaa;font-size:13px;margin-top:24px">Puedes cerrar esta ventana.</p>
-                </div>
-            </body>
-            </html>
-        `);
-    } catch (error) {
-        res.status(500).send('<h1>Error interno</h1>');
-    }
-};
 
 // 11. Respuesta Directa del Cliente (Solo actualización interna)
 exports.responderCotizacionCliente = async (req, res) => {

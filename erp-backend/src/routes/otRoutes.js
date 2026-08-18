@@ -13,14 +13,15 @@ router.post('/webhook-emails', auth, otController.webhookEmail);
 
 // --- 2. Rutas con parámetros generales (Deben ir al final) ---
 
-router.post('/:id/generar-link-ejecucion', otController.generarLinkEjecucion);
+// generarLinkEjecucion / iniciarEjecucion / confirmarEjecucion se retiraron en M4: sin
+// llamador en ningún frontend (ver docs/estrategia-movil.md §11) y ya cubiertos por la
+// PWA Operativa. enviarAlSupervisor/supervisorPortal/supervisorAccion SIGUEN — hay OT en
+// producción con tokenEjecucion activo todavía sin abrir; ver la nota en otController.js.
 router.post('/:id/enviar-supervisor', otController.enviarAlSupervisor);
 router.get('/:id/supervisor', otController.supervisorPortal);
 router.post('/:id/supervisor', otController.supervisorAccion);
 // PWA Operativa (docs/rediseno/design_handoff_pwa_movil) — token de Usuario, no de OT.
 router.put('/:id/accion-movil', otController.accionMovil);
-router.get('/:id/iniciar-ejecucion', otController.iniciarEjecucion);
-router.post('/:id/iniciar-ejecucion', otController.confirmarEjecucion);
 router.get('/:id', otController.obtenerOTPorId);
 router.put('/:id', otController.actualizarOT);
 router.delete('/:id', otController.eliminarOT);
