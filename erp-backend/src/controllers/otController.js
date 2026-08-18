@@ -246,13 +246,13 @@ exports.antecedentes = async (req, res) => {
             if (r) supervisor = { id: r._id, nombre: r.nombre, puesto: r.puesto };
         }
 
-        // Supervisores = personal (Recurso), no Usuario (acceso móvil PWA) — es el
-        // catálogo real que usa el resto de la app (Gantt, responsables de tarea). Sin
-        // filtro por puesto: es texto libre propio del rubro ("Supervisora de Terreno",
-        // "Técnico Hidráulico"...), no un enum fijo — una lista corta de valores exactos
-        // (Supervisor/Maestro 1ª/Técnico) no calza con datos reales y deja el selector
-        // vacío. Decide la oficina, no un filtro de texto.
-        const candidatos = await Recurso.find({}).select('nombre puesto').sort({ nombre: 1 }).lean();
+        // Supervisores = personal (Recurso) con puesto de supervisor, no Usuario (acceso
+        // móvil PWA). El puesto es texto libre propio del rubro ("Supervisora de
+        // Terreno", no "Supervisor" a secas), así que se filtra por coincidencia de la
+        // palabra "supervisor" (sin distinguir mayúsculas ni género), no por igualdad
+        // exacta contra un enum fijo — eso último deja el selector vacío con datos reales.
+        const candidatos = await Recurso.find({ puesto: { $regex: /supervisor/i } })
+            .select('nombre puesto').sort({ nombre: 1 }).lean();
 
         res.json({
             solicitud: {
@@ -328,8 +328,9 @@ exports.asignarSupervisor = async (req, res) => {
         let supervisorNuevo = null;
         if (supervisorId) {
             supervisorNuevo = await Recurso.findById(supervisorId);
-            // Sin restricción de puesto (ver antecedentes(): es texto libre, no un enum).
-            if (!supervisorNuevo) {
+            // Mismo criterio que la lista de candidatos en antecedentes(): puesto que
+            // contiene "supervisor" (sin distinguir mayúsculas ni género).
+            if (!supervisorNuevo || !/supervisor/i.test(supervisorNuevo.puesto || '')) {
                 return res.status(422).json({ error: 'El supervisor seleccionado no es válido' });
             }
         }
