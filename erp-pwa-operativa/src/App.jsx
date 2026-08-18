@@ -8,11 +8,12 @@ import O4ReporteTerreno from './screens/O4_ReporteTerreno.jsx';
 import O5InformeEvaluacion from './screens/O5_InformeEvaluacion.jsx';
 import O6MiSemana from './screens/O6_MiSemana.jsx';
 
-const CLAVE_VISTO = 'operativo.o1.visto';
-
 export default function App() {
     const [pila, setPila] = useState([{ pantalla: 'cargando' }]);
 
+    // O1 (bienvenida + ficha de persona/puesto) se muestra en cada apertura de la app, no
+    // solo la primera vez — pedido explícito del dueño del negocio: quien abre la app debe
+    // poder confirmar de un vistazo con qué usuario quedó identificada, cada vez que entra.
     useEffect(() => {
         const params = new URLSearchParams(window.location.search);
         const tokenUrl = params.get('token');
@@ -26,8 +27,7 @@ export default function App() {
             setPila([{ pantalla: 'sin-acceso' }]);
             return;
         }
-        const yaVioO1 = localStorage.getItem(CLAVE_VISTO) === '1';
-        setPila([{ pantalla: yaVioO1 ? 'o2' : 'o1' }]);
+        setPila([{ pantalla: 'o1' }]);
     }, []);
 
     // Cola de reportes sin señal (README pwa_movil §8): se reintenta al recuperar
@@ -56,7 +56,7 @@ export default function App() {
                 </div>
             );
         case 'o1':
-            return <O1PrimerAcceso onEntrar={() => { localStorage.setItem(CLAVE_VISTO, '1'); reemplazar('o2'); }} />;
+            return <O1PrimerAcceso onEntrar={() => reemplazar('o2')} />;
         case 'o2':
             return <O2MiDia nav={nav} />;
         case 'o3':

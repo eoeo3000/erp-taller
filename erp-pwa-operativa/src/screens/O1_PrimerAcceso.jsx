@@ -3,9 +3,18 @@ import { whoami } from '../api.js';
 
 const fmt = (iso) => iso ? new Date(iso).toLocaleDateString('es-CL', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
 
+// Esta pantalla ahora se muestra en cada apertura (no solo la primera vez), así que el
+// aviso de instalación deja de tener sentido una vez que la app YA corre instalada
+// (display-mode: standalone) — mostrar "añádela a tu pantalla de inicio" dentro de la app
+// que ya está en la pantalla de inicio confundiría más de lo que ayuda.
+function corriendoInstalada() {
+    return window.matchMedia?.('(display-mode: standalone)').matches || window.navigator.standalone === true;
+}
+
 export default function O1PrimerAcceso({ onEntrar }) {
     const [persona, setPersona] = useState(null);
     const [error, setError] = useState('');
+    const [instalada] = useState(corriendoInstalada);
 
     useEffect(() => {
         whoami().then(setPersona).catch((e) => setError(e.message));
@@ -31,12 +40,14 @@ export default function O1PrimerAcceso({ onEntrar }) {
                     </div>
                 )}
 
-                <div style={{ marginTop: 20, background: 'var(--franja)', borderLeft: '2px solid var(--atencion)', padding: '12px 14px' }}>
-                    <div style={{ fontSize: 'var(--fs-secundario)', fontWeight: 600 }}>Instala esta app</div>
-                    <div style={{ fontSize: 'var(--fs-secundario)', color: 'var(--texto-secundario-2)', marginTop: 4 }}>
-                        Menú del navegador → Añadir a pantalla de inicio.
+                {!instalada && (
+                    <div style={{ marginTop: 20, background: 'var(--franja)', borderLeft: '2px solid var(--atencion)', padding: '12px 14px' }}>
+                        <div style={{ fontSize: 'var(--fs-secundario)', fontWeight: 600 }}>Instala esta app</div>
+                        <div style={{ fontSize: 'var(--fs-secundario)', color: 'var(--texto-secundario-2)', marginTop: 4 }}>
+                            Menú del navegador → Añadir a pantalla de inicio.
+                        </div>
                     </div>
-                </div>
+                )}
 
                 <p style={{ fontSize: 'var(--fs-cuerpo)', marginTop: 20, color: 'var(--texto-secundario-1)' }}>
                     Este link es tu acceso permanente. No caduca al terminar un trabajo y no necesitas clave.
