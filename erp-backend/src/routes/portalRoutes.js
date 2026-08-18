@@ -6,4 +6,9 @@ router.get('/buscar',          ctrl.buscar);
 router.get('/solicitud/:id',   ctrl.detalle);
 router.post('/solicitud',      ctrl.crearSolicitud);
 
+// PWA Cliente (docs/rediseno/design_handoff_pwa_movil/README.md §6, C1) — el entorno
+// viaja en ?entorno= de la query, la PWA se abre fuera de la SPA (CORRECCIONES.md punto 7).
+router.post('/acceso',            ctrl.acceso);
+router.get('/mis-solicitudes',    ctrl.misSolicitudes);
+
 module.exports = router;

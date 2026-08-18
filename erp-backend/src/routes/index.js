@@ -20,6 +20,8 @@ const proveedorRoutes = require('./proveedorRoutes');
 const ordenCompraRoutes = require('./ordenCompraRoutes');
 const disposicionRoutes = require('./disposicionRoutes');
 const demoRoutes = require('./demoRoutes');
+const usuarioRoutes = require('./usuarioRoutes');
+const asignacionRoutes = require('./asignacionRoutes');
 
 // Definir los prefijos de las URLs
 router.use('/data', dataRoutes);
@@ -39,5 +41,7 @@ router.use('/proveedores', proveedorRoutes);
 router.use('/ordenes-compra', ordenCompraRoutes);
 router.use('/disposiciones', disposicionRoutes);
 router.use('/demo', demoRoutes);
+router.use('/usuarios', usuarioRoutes);
+router.use('/asignaciones', asignacionRoutes);
 
 module.exports = router;

@@ -1,5 +1,16 @@
+const crypto = require('crypto');
 const getSolicitud = require('../models/Solicitud');
 const getOT = require('../models/OT');
+const getSesionPortal = require('../models/SesionPortal');
+
+// Un solo mensaje para los tres casos de fallo (teléfono inexistente, solicitud
+// inexistente, o par que no coincide) — no revelar cuál de los dos falló (ver
+// docs/estrategia-movil.md §5.2 y design_handoff_pwa_movil/README.md §6, C1).
+const MENSAJE_ACCESO_INVALIDO = 'Teléfono o número de solicitud no coinciden.';
+
+function normalizarTelefono(t) {
+    return String(t || '').replace(/\D/g, '');
+}
 
 async function generarNumeroSolicitud(conn) {
     const Solicitud = getSolicitud(conn);
@@ -145,5 +156,71 @@ exports.crearSolicitud = async (req, res) => {
         });
     } catch (err) {
         res.status(400).json({ error: err.message });
+    }
+};
+
+// Todas las solicitudes/OT que comparten el mismo teléfono (normalizado, sin separadores),
+// para no depender de que el número se haya escrito siempre igual (con o sin '+56', espacios,
+// guiones). A la escala de una PyME (ver estrategia-movil.md §4) filtrar en memoria sobre el
+// listado ya ordenado alcanza — mismo criterio que ya usa buscar() con $regex sin índice.
+async function trabajosPorTelefono(conn, telefonoNormalizado) {
+    const Solicitud = getSolicitud(conn);
+    const OT = getOT(conn);
+    const candidatas = await Solicitud.find().sort({ fechaCreacion: -1 }).lean();
+    const solicitudes = candidatas.filter(s => normalizarTelefono(s.numero) === telefonoNormalizado);
+    return Promise.all(solicitudes.map(async sol => {
+        const ot = await OT.findOne({ solicitudId: sol._id }).lean();
+        return {
+            _id: sol._id,
+            numeroSolicitud: sol.numeroSolicitud || null,
+            empresaSolicitante: sol.empresaSolicitante,
+            solicitante: sol.solicitante,
+            descripcion: sol.descripcion,
+            estado: sol.estado,
+            fechaCreacion: sol.fechaCreacion || sol.createdAt,
+            fechaEjecucionSolicitada: sol.fechaEjecucionSolicitada,
+            ot: otPublica(ot),
+        };
+    }));
+}
+
+// POST /api/portal/acceso — { telefono, numeroSolicitud }: el teléfono identifica a la
+// empresa, el número de solicitud es el segundo factor. Del par se deriva la empresa y se
+// devuelven TODOS sus trabajos (design_handoff_pwa_movil/README.md §6, C1).
+exports.acceso = async (req, res) => {
+    const Solicitud = getSolicitud(req.db);
+    const SesionPortal = getSesionPortal(req.db);
+    try {
+        const telefono = normalizarTelefono(req.body.telefono);
+        const numeroSolicitud = (req.body.numeroSolicitud || '').trim();
+        if (!telefono || !numeroSolicitud) return res.status(400).json({ error: MENSAJE_ACCESO_INVALIDO });
+
+        const solicitud = await Solicitud.findOne({ numeroSolicitud }).lean();
+        if (!solicitud || normalizarTelefono(solicitud.numero) !== telefono) {
+            return res.status(401).json({ error: MENSAJE_ACCESO_INVALIDO });
+        }
+
+        const token = crypto.randomBytes(20).toString('hex');
+        const expira = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 días, ver README §6 C1
+        await SesionPortal.create({ telefono, token, expira });
+
+        const trabajos = await trabajosPorTelefono(req.db, telefono);
+        res.json({ token, expira, empresaSolicitante: solicitud.empresaSolicitante, trabajos });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+};
+
+// GET /api/portal/mis-solicitudes?token= — reutiliza la sesión que abrió acceso()
+exports.misSolicitudes = async (req, res) => {
+    const SesionPortal = getSesionPortal(req.db);
+    try {
+        const sesion = await SesionPortal.findOne({ token: req.query.token, activa: true });
+        if (!sesion || sesion.expira < new Date()) return res.status(403).json({ error: 'Sesión inválida o vencida' });
+
+        const trabajos = await trabajosPorTelefono(req.db, sesion.telefono);
+        res.json({ empresaSolicitante: trabajos[0]?.empresaSolicitante || '', trabajos });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
     }
 };
