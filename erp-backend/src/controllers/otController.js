@@ -304,7 +304,7 @@ exports.generarLinkEjecucion = async (req, res) => {
         const ot = await OT.findByIdAndUpdate(id, { tokenEjecucion: token }, { new: true });
         if (!ot) return res.status(404).json({ error: 'OT no encontrada' });
         const baseUrl = process.env.API_URL || `${req.protocol}://${req.get('host')}`;
-        const link = `${baseUrl}/api/ots/${id}/iniciar-ejecucion?token=${token}`;
+        const link = `${baseUrl}/api/ots/${id}/iniciar-ejecucion?token=${token}&entorno=${req.entorno}`;
         res.json({ link });
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -335,7 +335,7 @@ exports.enviarAlSupervisor = async (req, res) => {
         }
 
         const baseUrl = process.env.API_URL || `${req.protocol}://${req.get('host')}`;
-        const link = `${baseUrl}/api/ots/${id}/supervisor?token=${token}`;
+        const link = `${baseUrl}/api/ots/${id}/supervisor?token=${token}&entorno=${req.entorno}`;
 
         // --- Generar PDF ---
         const pdfBuffer = await new Promise((resolve, reject) => {
@@ -523,7 +523,10 @@ exports.supervisorPortal = async (req, res) => {
             </div>`).join('');
 
         const estadoColor = { 'Programada': '#3498db', 'En Ejecución': '#e67e22', 'Trabajo Terminado': '#27ae60', 'Con Informe': '#8e44ad' }[estado] || '#95a5a6';
-        const base = `/api/ots/${id}/supervisor?token=${token}`;
+        // BASE queda embebido en el <script> de abajo y es la URL que usa postJson() para cada
+        // acción — arrastrar el entorno acá es lo que hace que iniciar/reportar/terminar operen
+        // sobre la misma conexión (demo o producción) que resolvió esta página (CORRECCIONES.md §7).
+        const base = `/api/ots/${id}/supervisor?token=${token}&entorno=${req.entorno}`;
 
         const seccionAcciones = (() => {
             if (estado === 'Programada') return `
@@ -888,7 +891,7 @@ exports.iniciarEjecucion = async (req, res) => {
                         <p style="color:#555;font-size:14px">
                             Al confirmar, la orden quedará marcada como <b>En Ejecución</b> en el sistema.
                         </p>
-                        <form method="POST" action="/api/ots/${id}/iniciar-ejecucion?token=${token}">
+                        <form method="POST" action="/api/ots/${id}/iniciar-ejecucion?token=${token}&entorno=${req.entorno}">
                             <button type="submit"
                                 style="width:100%;padding:16px;background:#27ae60;color:white;border:none;border-radius:8px;font-size:18px;font-weight:bold;cursor:pointer;margin-top:8px">
                                 ✅ Confirmar Inicio de Trabajo
