@@ -1,7 +1,7 @@
 // Service worker de assets — mismo criterio que erp-pwa-operativa/public/sw.js: solo
 // cachea el shell estático, nunca /api/, nunca POST/PUT.
 const CACHE = 'cliente-shell-v1';
-const SHELL = ['/cliente/', '/cliente/manifest.json'];
+const SHELL = ['/', '/manifest.json'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(SHELL)));

@@ -3,12 +3,13 @@ import react from '@vitejs/plugin-react';
 
 // Aplicación aparte de la SPA de escritorio (erp-web): su propio build, su propio
 // manifest y su propio service worker, para que el scope del SW no choque con el de
-// ninguna otra app. Se sirve bajo /operativo/ del mismo dominio — mismo criterio de
-// "sin subdominio nuevo" que ya usa el Portal del Cliente (ver docs/estrategia-movil.md
-// §10), aplicado aquí como base de Vite en vez de como ruta interna de otra SPA, porque
-// el requisito explícito de esta PWA es tener su propio manifest/SW (ver prompt M2).
+// ninguna otra app. Se despliega como su propio Render Static Site, con dominio propio
+// (no un subdirectorio del dominio de erp-web) — por eso base es '/' y no '/operativo/':
+// la raíz del sitio ES la raíz de esta app. La idea original de estrategia-movil.md §10
+// (subruta del mismo dominio) suponía un solo host sirviendo todo; en la práctica ni
+// erp-web ni erp-backend comparten host hoy, así que cada PWA sigue ese mismo patrón.
 export default defineConfig({
-  base: '/operativo/',
+  base: '/',
   plugins: [react()],
   server: { port: 5174 },
 });

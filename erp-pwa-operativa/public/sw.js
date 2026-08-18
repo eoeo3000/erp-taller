@@ -4,7 +4,7 @@
 // Sin offline completo (ver design_handoff_pwa_movil/README.md §8) — esto es solo la
 // diferencia entre "la app carga" y "pantalla en blanco" con mala señal.
 const CACHE = 'operativo-shell-v1';
-const SHELL = ['/operativo/', '/operativo/manifest.json'];
+const SHELL = ['/', '/manifest.json'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(SHELL)));

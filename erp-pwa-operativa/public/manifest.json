@@ -2,16 +2,16 @@
   "name": "erp-taller — Mi día",
   "short_name": "Mi día",
   "description": "Trabajo del día para supervisores y ejecutores en terreno.",
-  "start_url": "/operativo/",
-  "scope": "/operativo/",
+  "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#f6f5f2",
   "theme_color": "#1c1d1b",
   "icons": [
-    { "src": "/operativo/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
-    { "src": "/operativo/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
-    { "src": "/operativo/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
-    { "src": "/operativo/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
   ]
 }

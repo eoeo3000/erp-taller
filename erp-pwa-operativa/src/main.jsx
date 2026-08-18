@@ -5,7 +5,7 @@ import './tokens.css';
 
 if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/operativo/sw.js').catch(() => { /* sin SW no bloquea el uso */ });
+        navigator.serviceWorker.register('/sw.js').catch(() => { /* sin SW no bloquea el uso */ });
     });
 }
 
