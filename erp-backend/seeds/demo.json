@@ -1447,7 +1447,7 @@
       "descripcion": "Instalación de tablero eléctrico para nueva línea de producción",
       "estado": "Tratada",
       "origen": "Manual",
-      "prioridad": "Media",
+      "prioridad": "Normal",
       "tecnicoAsignado": "",
       "tareas": [],
       "componentes": [],
@@ -1489,7 +1489,7 @@
       "descripcion": "Reparación de estructura metálica con corrosión visible",
       "estado": "Planificada",
       "origen": "Manual",
-      "prioridad": "Alta",
+      "prioridad": "Urgente",
       "tecnicoAsignado": "",
       "tareas": [
         {
@@ -1774,7 +1774,7 @@
       "descripcion": "Fuga hidráulica en elevador de carga",
       "estado": "Programada",
       "origen": "Manual",
-      "prioridad": "Media",
+      "prioridad": "Normal",
       "tecnicoAsignado": "",
       "tareas": [
         {
@@ -1875,7 +1875,7 @@
       "descripcion": "Habilitación eléctrica de bodega nueva",
       "estado": "En Ejecución",
       "origen": "Manual",
-      "prioridad": "Alta",
+      "prioridad": "Urgente",
       "tecnicoAsignado": "",
       "tareas": [
         {
@@ -2262,7 +2262,7 @@
       "descripcion": "Cambio de rodamientos en cinta transportadora",
       "estado": "Con Informe",
       "origen": "Manual",
-      "prioridad": "Media",
+      "prioridad": "Normal",
       "tecnicoAsignado": "",
       "tareas": [
         {
@@ -2411,7 +2411,7 @@
       "descripcion": "Revisión de sistema de frenos de grúa pluma",
       "estado": "Pagada",
       "origen": "Manual",
-      "prioridad": "Alta",
+      "prioridad": "Urgente",
       "tecnicoAsignado": "",
       "tareas": [
         {

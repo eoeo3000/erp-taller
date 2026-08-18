@@ -113,10 +113,34 @@ const OTSchema = new mongoose.Schema({
     },
 
     // --- Metadatos y Asignación ---
-    prioridad: { type: String, enum: ['Baja', 'Media', 'Alta', 'Urgente'] },
+    // 'Media'/'Alta' quedaron en el enum viejo pero nunca se usaron en ningún lado del
+    // frontend (grep confirmado sobre erp-web/src) — se reemplaza sin costo de migración
+    // de datos reales. Ver pestaña Antecedentes, docs/rediseno/design_handoff_panel_control.
+    prioridad: { type: String, enum: ['Baja', 'Normal', 'Urgente'], default: 'Normal' },
     tecnicoAsignado: { type: String },
     fechaInicio: { type: Date },
     fechaEntrega: { type: Date },
+
+    // Pestaña Antecedentes: supervisor a cargo de la OT completa (independiente del
+    // responsable de cada tarea en tareas[].operarioNombre — no se sobreescribe).
+    supervisorId: { type: mongoose.Schema.Types.ObjectId, ref: 'Usuario', default: null },
+    // Fecha en que se ejecuta el trabajo (distinto de fechaInicio/fechaEntrega, que ya
+    // existían sin uso claro en el frontend — este es el campo que la pestaña edita).
+    fechaEjecucion: { type: Date, default: null },
+    // OC del CLIENTE (texto libre) — no confundir con ordenesCompra de abajo, que son las
+    // Ordenes de Compra propias generadas para cubrir faltantes de stock (Gap 3).
+    ordenCompra: { type: String, default: '' },
+    instruccionesTerreno: { type: String, default: '' },
+    asignadaEn: { type: Date, default: null },
+    // Sin sistema de login para el staff interno (ver CLAUDE.md) — no hay de dónde sacar
+    // "quién" asignó de forma confiable hoy. Se deja el campo para cuando exista una sesión
+    // real; queda null en vez de inventar un valor.
+    asignadaPor: { type: mongoose.Schema.Types.ObjectId, ref: 'Usuario', default: null },
+    // Bitácora de la OT (por ahora solo la usa la asignación de supervisor).
+    bitacora: [{
+        fecha: { type: Date, default: Date.now },
+        texto: String,
+    }],
 
     // Órdenes de Compra generadas para cubrir faltantes de stock de esta OT (ver docs/funcionalidades-v2.md, Gap 3)
     ordenesCompra: [{ type: mongoose.Schema.Types.ObjectId, ref: 'OrdenCompra' }],

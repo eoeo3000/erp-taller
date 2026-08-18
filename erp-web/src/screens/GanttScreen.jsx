@@ -145,16 +145,18 @@ const GanttScreen = ({ recursos = [], ots = [], calendarios = [], obtenerHorasPa
         const conflictos = verificarDisponibilidad(ot);
         if (conflictos.length > 0) setConfirmando(true);
         else {
-            await actualizarOtGlobal(ot._id, { estado: 'Programada' });
+            const resultado = await actualizarOtGlobal(ot._id, { estado: 'Programada' });
+            if (!resultado?.exito) { alert(resultado?.error || 'No se pudo programar la OT.'); return; }
             if (cargarDatos) cargarDatos();
         }
     };
 
     const confirmarProgramacion = async () => {
         if (!otSel) return;
-        await actualizarOtGlobal(otSel._id, { estado: 'Programada' });
-        if (cargarDatos) cargarDatos();
+        const resultado = await actualizarOtGlobal(otSel._id, { estado: 'Programada' });
         setConfirmando(false);
+        if (!resultado?.exito) { alert(resultado?.error || 'No se pudo programar la OT.'); return; }
+        if (cargarDatos) cargarDatos();
     };
 
     const conflictosSel = otSel ? verificarDisponibilidad(otSel) : [];

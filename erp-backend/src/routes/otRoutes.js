@@ -22,6 +22,9 @@ router.get('/:id/supervisor', otController.supervisorPortal);
 router.post('/:id/supervisor', otController.supervisorAccion);
 // PWA Operativa (docs/rediseno/design_handoff_pwa_movil) — token de Usuario, no de OT.
 router.put('/:id/accion-movil', otController.accionMovil);
+// Pestaña Antecedentes (asignación de supervisor) — antes de '/:id' para no chocar.
+router.get('/:id/antecedentes', otController.antecedentes);
+router.patch('/:id/asignacion', otController.asignarSupervisor);
 router.get('/:id', otController.obtenerOTPorId);
 router.put('/:id', otController.actualizarOT);
 router.delete('/:id', otController.eliminarOT);

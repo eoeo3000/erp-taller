@@ -225,6 +225,157 @@ exports.obtenerOTPorId = async (req, res) => {
     }
 };
 
+// 6b. GET — Pestaña Antecedentes: solicitud de origen (solo lectura) + datos de la OT
+// (asignación) + candidatos a supervisor. :id puede ser una Solicitud sin OT creada
+// todavía (mismo patrón híbrido que obtenerOTPorSolicitud/actualizarOT: la OT reutiliza
+// el _id de la Solicitud que la originó).
+exports.antecedentes = async (req, res) => {
+    const OT = getOT(req.db);
+    const Usuario = getUsuario(req.db);
+    const Solicitud = require('../models/Solicitud')(req.db);
+    try {
+        const { id } = req.params;
+        const ot = await OT.findById(id).lean();
+        const solicitudId = ot?.solicitudId || id;
+        const sol = await Solicitud.findById(solicitudId).lean();
+        if (!sol) return res.status(404).json({ error: 'Solicitud no encontrada' });
+
+        let supervisor = null;
+        if (ot?.supervisorId) {
+            const u = await Usuario.findById(ot.supervisorId).select('nombre puesto').lean();
+            if (u) supervisor = { id: u._id, nombre: u.nombre, puesto: u.puesto };
+        }
+
+        const candidatos = await Usuario.find({
+            estado: 'activo', puesto: { $in: ['Supervisor', 'Maestro 1ª', 'Técnico'] },
+        }).select('nombre puesto').sort({ nombre: 1 }).lean();
+
+        res.json({
+            solicitud: {
+                numero: sol.numeroSolicitud || null,
+                empresa: sol.empresaSolicitante,
+                solicitante: sol.solicitante,
+                fechaSolicitud: sol.fechaHoraSolicitud || sol.fechaCreacion,
+                origen: sol.origen,
+                direccion: sol.direccion || '',
+                fechaEjecucionSolicitada: sol.fechaEjecucionSolicitada,
+                adjuntos: sol.adjuntos ? [sol.adjuntos] : [],
+                descripcion: sol.descripcion,
+            },
+            ot: {
+                numero: ot?.numeroOT || null,
+                estado: ot?.estado || null,
+                fechaCreacion: ot?.fechaCreacion || null,
+                supervisorId: ot?.supervisorId || null,
+                supervisor,
+                fechaEjecucion: ot?.fechaEjecucion || null,
+                ordenCompra: ot?.ordenCompra || '',
+                prioridad: ot?.prioridad || 'Normal',
+                instruccionesTerreno: ot?.instruccionesTerreno || '',
+                asignadaEn: ot?.asignadaEn || null,
+                asignadaPor: ot?.asignadaPor || null,
+            },
+            candidatos: candidatos.map(u => ({ id: u._id, nombre: u.nombre, puesto: u.puesto })),
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+};
+
+// 6c. PATCH — Asigna/reasigna el supervisor a cargo de la OT y el resto de los datos de
+// la pestaña Antecedentes. Si la OT no existe todavía (solicitud sin tratar), la crea con
+// el mismo patrón de numeración que convertirOT/actualizarOT.
+exports.asignarSupervisor = async (req, res) => {
+    const OT = getOT(req.db);
+    const Usuario = getUsuario(req.db);
+    const Solicitud = require('../models/Solicitud')(req.db);
+    try {
+        const { id } = req.params;
+        const { supervisorId, fechaEjecucion, ordenCompra, prioridad, instruccionesTerreno } = req.body;
+
+        let ot = await OT.findById(id);
+        if (!ot) {
+            const sol = await Solicitud.findById(id);
+            if (!sol) return res.status(404).json({ error: 'Solicitud no encontrada' });
+
+            const ultimaOT = await OT.findOne({ numeroOT: { $regex: /^OT-2026-/ } }).sort({ numeroOT: -1 });
+            let siguienteNum = 1;
+            if (ultimaOT?.numeroOT) {
+                const n = parseInt(ultimaOT.numeroOT.split('-').pop());
+                if (!isNaN(n)) siguienteNum = n + 1;
+            }
+            ot = new OT({
+                ...sol.toObject(),
+                _id: sol._id,
+                solicitudId: sol._id,
+                numeroOT: `OT-2026-${siguienteNum.toString().padStart(4, '0')}`,
+                estado: 'Tratada',
+            });
+        }
+
+        if (ot.estado === 'Pagada') {
+            return res.status(409).json({ error: 'La OT está pagada; no admite cambios en Antecedentes.' });
+        }
+
+        if (prioridad && !['Baja', 'Normal', 'Urgente'].includes(prioridad)) {
+            return res.status(422).json({ error: "prioridad debe ser 'Baja', 'Normal' o 'Urgente'" });
+        }
+
+        let supervisorNuevo = null;
+        if (supervisorId) {
+            supervisorNuevo = await Usuario.findById(supervisorId);
+            const puestoValido = ['Supervisor', 'Maestro 1ª', 'Técnico'];
+            if (!supervisorNuevo || supervisorNuevo.estado !== 'activo' || !puestoValido.includes(supervisorNuevo.puesto)) {
+                return res.status(422).json({ error: 'El supervisor seleccionado no es válido' });
+            }
+        }
+
+        if (fechaEjecucion) {
+            const fecha = new Date(fechaEjecucion);
+            if (isNaN(fecha.getTime())) return res.status(422).json({ error: 'Fecha de ejecución inválida' });
+            const creacion = ot.fechaCreacion ? new Date(new Date(ot.fechaCreacion).toDateString()) : null;
+            if (creacion && fecha < creacion) {
+                return res.status(422).json({ error: 'La fecha de ejecución no puede ser anterior a la fecha de creación de la OT' });
+            }
+            ot.fechaEjecucion = fecha;
+        }
+
+        // Snapshot del supervisor anterior para la bitácora, antes de sobrescribir.
+        const supervisorAnteriorId = ot.supervisorId;
+        const supervisorAnterior = supervisorAnteriorId
+            ? await Usuario.findById(supervisorAnteriorId).select('nombre puesto').lean()
+            : null;
+
+        if (ordenCompra !== undefined) ot.ordenCompra = ordenCompra;
+        if (prioridad) ot.prioridad = prioridad;
+        if (instruccionesTerreno !== undefined) ot.instruccionesTerreno = instruccionesTerreno;
+
+        if (supervisorNuevo) {
+            ot.supervisorId = supervisorNuevo._id;
+            ot.asignadaEn = new Date();
+            // asignadaPor queda null: no existe sesión de staff interno hoy (ver default del schema).
+
+            ot.bitacora = ot.bitacora || [];
+            const texto = supervisorAnterior && String(supervisorAnteriorId) !== String(supervisorNuevo._id)
+                ? `OT reasignada de ${supervisorAnterior.nombre} (${supervisorAnterior.puesto}) a ${supervisorNuevo.nombre} (${supervisorNuevo.puesto})`
+                : `OT asignada a ${supervisorNuevo.nombre} (${supervisorNuevo.puesto})`;
+            ot.bitacora.push({ fecha: new Date(), texto });
+        }
+
+        await ot.save();
+
+        const otRespuesta = ot.toObject();
+        otRespuesta.supervisor = supervisorNuevo
+            ? { id: supervisorNuevo._id, nombre: supervisorNuevo.nombre, puesto: supervisorNuevo.puesto }
+            : supervisorAnterior
+                ? { id: supervisorAnteriorId, nombre: supervisorAnterior.nombre, puesto: supervisorAnterior.puesto }
+                : null;
+        res.json(otRespuesta);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+};
+
 // 7. Webhook Emails
 exports.webhookEmail = async (req, res) => {
     const OT = getOT(req.db);
@@ -251,6 +402,14 @@ exports.actualizarOT = async (req, res) => {
 
         // Snapshot previo para detectar transiciones contables
         const otAnterior = await OT.findById(id).lean();
+
+        // Pestaña Antecedentes: sin supervisor asignado, la OT no puede pasar a Programada.
+        if (datosCuerpo.estado === 'Programada') {
+            const supervisorFinal = ('supervisorId' in datosCuerpo) ? datosCuerpo.supervisorId : otAnterior?.supervisorId;
+            if (!supervisorFinal) {
+                return res.status(409).json({ error: 'La OT no tiene supervisor asignado' });
+            }
+        }
 
         // 1. Intentar actualizar (Usamos $set para campos normales y nos aseguramos de traer la OT nueva)
         let ot = await OT.findByIdAndUpdate(

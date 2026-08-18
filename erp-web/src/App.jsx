@@ -312,7 +312,11 @@ function App() {
 
         return { exito: true, otActualizada: otNueva };
       }
-      return { exito: false };
+      // p.ej. 409 "La OT no tiene supervisor asignado" (pestaña Antecedentes) — se
+      // reenvía el mensaje del backend en vez de descartarlo, para que quien llame
+      // (GanttScreen al programar, etc.) pueda mostrárselo a quien está operando.
+      const cuerpo = await respuesta.json().catch(() => ({}));
+      return { exito: false, error: cuerpo.error || cuerpo.mensaje || null };
     } catch (error) {
       console.error("Error:", error);
       return { exito: false };

@@ -65,6 +65,166 @@ const GRID_TAREAS = 'minmax(200px,1fr) 118px 132px 52px 68px 62px 84px 96px 24px
 const GRID_MATERIALES = '104px 128px minmax(200px,1fr) 62px 96px 100px 100px 24px';
 const GRID_LOGISTICA = '96px 96px minmax(200px,1fr) 62px 96px 100px 140px 24px';
 
+const fmtFecha = (iso) => iso ? new Date(iso).toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—';
+
+const filaAnte = { display: 'grid', gridTemplateColumns: '132px 1fr', gap: 8, padding: '7px 0', borderBottom: `1px solid ${t.hairlineFila}` };
+const etiquetaAnte = { fontSize: '11px', color: t.textoAtenuado2 };
+const valorAnte = { fontSize: '11.5px', color: t.textoPrincipal };
+const controlAnte = { height: 26, border: '1px solid rgba(0,0,0,.22)', borderRadius: 2, padding: '0 8px', fontSize: '11.5px', fontFamily: t.fontUi, width: '100%', boxSizing: 'border-box', background: '#fff' };
+
+function FilaAntecedente({ etiqueta, valor, negrita }) {
+    return (
+        <div style={filaAnte}>
+            <span style={etiquetaAnte}>{etiqueta}</span>
+            <span style={{ ...valorAnte, fontWeight: negrita ? 600 : 400 }}>{valor ?? '—'}</span>
+        </div>
+    );
+}
+
+// Pestaña Antecedentes: solicitud de origen (solo lectura) + asignación de la OT (editable),
+// incluida la asignación del supervisor a cargo — independiente del responsable de cada
+// tarea (tareas[].operarioNombre). Ver docs/rediseno/design_handoff_panel_control.
+function TabAntecedentes({ cargando, antecedentes, form, onCampo, onGuardar, guardando, aviso, soloLectura }) {
+    if (cargando || !antecedentes) {
+        return (
+            <div style={{ padding: 16 }}>
+                {[1, 2, 3].map(i => (
+                    <div key={i} style={{ height: 26, background: '#eeece7', borderRadius: 2, marginBottom: 10, maxWidth: 420 }} />
+                ))}
+            </div>
+        );
+    }
+
+    const { solicitud, ot, candidatos } = antecedentes;
+    const PRIORIDADES = ['Baja', 'Normal', 'Urgente'];
+
+    return (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(300px,100%), 1fr))' }}>
+            {/* Columna izquierda — Solicitud de origen (solo lectura) */}
+            <div style={{ padding: 16, borderRight: `1px solid rgba(0,0,0,.08)` }}>
+                <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 8 }}>
+                    <span style={{ fontSize: '12px', fontWeight: 700, color: t.textoPrincipal }}>Solicitud de origen</span>
+                    <span style={{ fontFamily: t.fontMono, fontSize: '11px', color: t.textoAtenuado1 }}>{solicitud.numero || '—'}</span>
+                </div>
+
+                <FilaAntecedente etiqueta="Empresa solicitante" valor={solicitud.empresa} negrita />
+                <FilaAntecedente etiqueta="Solicitante" valor={solicitud.solicitante} />
+                <FilaAntecedente etiqueta="Fecha de solicitud" valor={fmtFecha(solicitud.fechaSolicitud)} />
+                <FilaAntecedente etiqueta="Origen" valor={solicitud.origen} />
+                <FilaAntecedente etiqueta="Faena / dirección" valor={solicitud.direccion} />
+                <FilaAntecedente etiqueta="Ejecución solicitada" valor={fmtFecha(solicitud.fechaEjecucionSolicitada)} />
+                <div style={{ ...filaAnte, borderBottom: 'none' }}>
+                    <span style={etiquetaAnte}>Adjuntos</span>
+                    {solicitud.adjuntos?.length ? (
+                        <span style={valorAnte}>
+                            {solicitud.adjuntos.map((a, i) => (
+                                <a key={i} href={a} target="_blank" rel="noreferrer" style={{ color: t.acento, textDecoration: 'none' }}>
+                                    {a.split('/').pop()}
+                                </a>
+                            ))}
+                        </span>
+                    ) : <span style={{ ...valorAnte, color: t.textoDeshabilitado }}>Sin adjuntos</span>}
+                </div>
+
+                <div style={{ marginTop: 12, background: '#f7f6f2', border: '1px solid rgba(0,0,0,.08)', borderRadius: 2, padding: 10 }}>
+                    <div style={{ fontSize: '10.5px', fontWeight: 700, color: t.textoAtenuado2, marginBottom: 4 }}>Descripción del cliente</div>
+                    <div style={{ fontSize: '11.5px', color: t.textoPrincipal, lineHeight: 1.55 }}>{solicitud.descripcion || '—'}</div>
+                </div>
+            </div>
+
+            {/* Columna derecha — Datos de la orden de trabajo (editable) */}
+            <div style={{ padding: 16 }}>
+                <div style={{ fontSize: '12px', fontWeight: 700, color: t.textoPrincipal, marginBottom: 10 }}>Datos de la orden de trabajo</div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '132px 1fr', gap: '10px 12px', alignItems: 'center' }}>
+                    <span style={etiquetaAnte}>N° de OT</span>
+                    <span style={{ ...valorAnte, fontFamily: t.fontMono }}>{ot.numero || 'Se asigna al guardar'}</span>
+
+                    <span style={etiquetaAnte}>Fecha de creación</span>
+                    <span style={{ ...valorAnte, fontFamily: t.fontMono }}>{fmtFecha(ot.fechaCreacion)}</span>
+
+                    <span style={etiquetaAnte}>Supervisor a cargo</span>
+                    <select
+                        style={controlAnte} disabled={soloLectura}
+                        value={form.supervisorId} onChange={e => onCampo('supervisorId', e.target.value)}
+                    >
+                        <option value="">Sin asignar</option>
+                        {candidatos.map(c => <option key={c.id} value={c.id}>{c.nombre} · {c.puesto}</option>)}
+                    </select>
+
+                    <span style={etiquetaAnte}>Fecha de ejecución</span>
+                    <input
+                        style={{ ...controlAnte, fontFamily: t.fontMono }} disabled={soloLectura}
+                        placeholder="dd-mm-aaaa" value={form.fechaEjecucion}
+                        onChange={e => onCampo('fechaEjecucion', e.target.value)}
+                    />
+
+                    <span style={etiquetaAnte}>Orden de compra</span>
+                    <input
+                        style={controlAnte} disabled={soloLectura}
+                        placeholder="Sin OC del cliente" value={form.ordenCompra}
+                        onChange={e => onCampo('ordenCompra', e.target.value)}
+                    />
+
+                    <span style={etiquetaAnte}>Prioridad</span>
+                    <div style={{ display: 'flex', gap: 4 }}>
+                        {PRIORIDADES.map(p => (
+                            <button
+                                key={p} type="button" disabled={soloLectura}
+                                onClick={() => onCampo('prioridad', p)}
+                                style={{
+                                    flex: 1, height: 26, border: '1px solid rgba(0,0,0,.22)', borderRadius: 2,
+                                    background: form.prioridad === p ? '#1c1d1b' : '#fff',
+                                    color: form.prioridad === p ? '#fff' : t.textoPrincipal,
+                                    fontWeight: form.prioridad === p ? 700 : 400, fontSize: '11px', cursor: soloLectura ? 'default' : 'pointer',
+                                }}
+                            >
+                                {p}
+                            </button>
+                        ))}
+                    </div>
+
+                    <span style={{ ...etiquetaAnte, alignSelf: 'start', marginTop: 4 }}>Instrucciones</span>
+                    <textarea
+                        style={{ ...controlAnte, height: 'auto', minHeight: 58, padding: 8, resize: 'vertical' }} disabled={soloLectura}
+                        placeholder="Indicaciones para el supervisor en terreno"
+                        value={form.instruccionesTerreno}
+                        onChange={e => onCampo('instruccionesTerreno', e.target.value)}
+                    />
+                </div>
+
+                {!soloLectura && (
+                    <div style={{ marginTop: 14, display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <button
+                            onClick={onGuardar} disabled={guardando}
+                            style={{
+                                height: 28, padding: '0 14px', background: t.acento, color: '#fff', fontWeight: 700,
+                                fontSize: '11.5px', border: 'none', borderRadius: 2, cursor: guardando ? 'default' : 'pointer',
+                                opacity: guardando ? .7 : 1,
+                            }}
+                        >
+                            {guardando ? 'Guardando…' : 'Guardar y asignar'}
+                        </button>
+                        {aviso && (
+                            <span style={{ fontSize: '11px', color: aviso.tipo === 'ok' ? '#4c7a4c' : t.rojo }}>{aviso.texto}</span>
+                        )}
+                    </div>
+                )}
+                {soloLectura && (
+                    <div style={{ marginTop: 14, fontSize: '11px', color: t.textoAtenuado2 }}>
+                        La OT está pagada — Antecedentes queda en solo lectura.
+                    </div>
+                )}
+
+                <p style={{ fontSize: '10.5px', color: t.textoAtenuado3, marginTop: 14, lineHeight: 1.5 }}>
+                    Al asignar, la OT aparece en la agenda del supervisor y en su aplicación de terreno.
+                    Las tareas individuales mantienen su propio responsable.
+                </p>
+            </div>
+        </div>
+    );
+}
+
 const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = [],
     componentes: componentesDB = [],
     suministros: suministrosDB = [],
@@ -76,7 +236,9 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
     const inicializado = useRef(false);
     // OT que ya traía tareas/componentes de antes de que existiera el Informe Inicial: no se le exige completarlo retroactivamente.
     const yaTeniaContenidoPrevio = (datosRecibidos?.tareas?.length > 0) || (datosRecibidos?.componentes?.length > 0) || (datosRecibidos?.logistica?.length > 0);
-    const [tabActiva, setTabActiva] = useState(yaTeniaContenidoPrevio ? 'tareas' : 'informe');
+    // Antecedentes es el destino por defecto al abrir una OT desde cualquier entrada
+    // (panel de control, ingreso de solicitudes, programación) — ver CORRECCIONES pestaña Antecedentes.
+    const [tabActiva, setTabActiva] = useState('antecedentes');
     const [otSeleccionada, setOtSeleccionada] = useState(datosRecibidos || {});
     const [tareas, setTareas] = useState([]);
     const [componentes, setComponentes] = useState([]);
@@ -286,7 +448,22 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
         }
     };
 
-    const agregarTarea = () => setTareas([...tareas, { id: Date.now(), descripcion: '', puesto: '', duracion: 0, fecha: '', hora: '', valorHora: 0 }]);
+    // Pestaña Antecedentes: al agregar una tarea en una OT que ya tiene supervisor
+    // asignado, se precarga su nombre como responsable por defecto (solo valor inicial,
+    // el usuario puede cambiarlo). operarioId/operarioNombre son arreglos paralelos que
+    // alimentan el conteo de personas y el costo (ver GRID_TAREAS más abajo), así que solo
+    // se precargan juntos — si el supervisor (Usuario) no tiene un Recurso vinculado
+    // (Recurso.usuarioId), no hay operarioId real que ponerle y se deja sin precargar en
+    // vez de mostrar un nombre "fantasma" sin id detrás.
+    const agregarTarea = () => {
+        const supervisor = antecedentes?.ot?.supervisor;
+        const recursoSupervisor = supervisor && (recursos || []).find(r => String(r.usuarioId) === String(supervisor.id));
+        setTareas([...tareas, {
+            id: Date.now(), descripcion: '', puesto: '', duracion: 0, fecha: '', hora: '', valorHora: 0,
+            operarioId: recursoSupervisor ? [recursoSupervisor._id] : [],
+            operarioNombre: recursoSupervisor ? [recursoSupervisor.nombre] : [],
+        }]);
+    };
 
     useEffect(() => {
         const cargarDetalleOT = async () => {
@@ -309,6 +486,68 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
         };
         cargarDetalleOT();
     }, [datosRecibidos?._id, API]);
+
+    // --- Pestaña Antecedentes: solicitud de origen (solo lectura) + asignación de la OT ---
+    const [antecedentes, setAntecedentes] = useState(null);
+    const [cargandoAntecedentes, setCargandoAntecedentes] = useState(true);
+    const [formAsignacion, setFormAsignacion] = useState({
+        supervisorId: '', fechaEjecucion: '', ordenCompra: '', prioridad: 'Normal', instruccionesTerreno: '',
+    });
+    const [avisoAsignacion, setAvisoAsignacion] = useState(null); // { tipo: 'ok'|'error', texto }
+    const [guardandoAsignacion, setGuardandoAsignacion] = useState(false);
+
+    const dmy = (iso) => iso ? new Date(iso).toISOString().slice(0, 10).split('-').reverse().join('-') : '';
+    const ymd = (dmyStr) => {
+        const m = /^(\d{2})-(\d{2})-(\d{4})$/.exec(dmyStr || '');
+        return m ? `${m[3]}-${m[2]}-${m[1]}` : '';
+    };
+
+    useEffect(() => {
+        const id = otSeleccionada?._id || datosRecibidos?._id;
+        if (!id || !API) return;
+        setCargandoAntecedentes(true);
+        axios.get(`${API}/ots/${id}/antecedentes`)
+            .then(({ data }) => {
+                setAntecedentes(data);
+                setFormAsignacion({
+                    supervisorId: data.ot.supervisorId || '',
+                    fechaEjecucion: dmy(data.ot.fechaEjecucion),
+                    ordenCompra: data.ot.ordenCompra || '',
+                    prioridad: data.ot.prioridad || 'Normal',
+                    instruccionesTerreno: data.ot.instruccionesTerreno || '',
+                });
+            })
+            .catch(() => {})
+            .finally(() => setCargandoAntecedentes(false));
+    }, [otSeleccionada?._id, datosRecibidos?._id, API]);
+
+    const campoAsignacion = (campo, valor) => {
+        setFormAsignacion(prev => ({ ...prev, [campo]: valor }));
+        setAvisoAsignacion(null);
+    };
+
+    const guardarAsignacion = async () => {
+        const id = otSeleccionada?._id || datosRecibidos?._id;
+        if (!id) return;
+        setGuardandoAsignacion(true);
+        setAvisoAsignacion(null);
+        try {
+            const { data } = await axios.patch(`${API}/ots/${id}/asignacion`, {
+                supervisorId: formAsignacion.supervisorId || null,
+                fechaEjecucion: formAsignacion.fechaEjecucion ? ymd(formAsignacion.fechaEjecucion) : null,
+                ordenCompra: formAsignacion.ordenCompra,
+                prioridad: formAsignacion.prioridad,
+                instruccionesTerreno: formAsignacion.instruccionesTerreno,
+            });
+            setOtSeleccionada(prev => ({ ...prev, ...data }));
+            setAvisoAsignacion({ tipo: 'ok', texto: data.supervisor ? `Asignada a ${data.supervisor.nombre}` : 'Guardado' });
+            setAntecedentes(prev => prev ? { ...prev, ot: { ...prev.ot, ...data, supervisor: data.supervisor } } : prev);
+        } catch (error) {
+            setAvisoAsignacion({ tipo: 'error', texto: error.response?.data?.error || 'No se pudo guardar.' });
+        } finally {
+            setGuardandoAsignacion(false);
+        }
+    };
 
     useEffect(() => {
         if (tabActiva !== 'reportes') return;
@@ -609,6 +848,9 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
 
             <div style={styles.tabsFila}>
                 <div style={styles.tabs}>
+                    <button onClick={() => setTabActiva('antecedentes')} style={tabActiva === 'antecedentes' ? styles.tabActivo : styles.tab}>
+                        Antecedentes
+                    </button>
                     <button onClick={() => setTabActiva('informe')} style={tabActiva === 'informe' ? styles.tabActivo : styles.tab}>
                         0 · Informe Inicial{!informeEvaluacion.completo && !yaTeniaContenidoPrevio ? ' *' : ''}
                     </button>
@@ -626,6 +868,20 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
 
             <div style={styles.cuerpo}>
                 <section style={styles.contenido}>
+
+                    {/* ANTECEDENTES */}
+                    {tabActiva === 'antecedentes' && (
+                        <TabAntecedentes
+                            cargando={cargandoAntecedentes}
+                            antecedentes={antecedentes}
+                            form={formAsignacion}
+                            onCampo={campoAsignacion}
+                            onGuardar={guardarAsignacion}
+                            guardando={guardandoAsignacion}
+                            aviso={avisoAsignacion}
+                            soloLectura={otSeleccionada?.estado === 'Pagada'}
+                        />
+                    )}
 
                     {/* 0 · INFORME INICIAL */}
                     {tabActiva === 'informe' && (

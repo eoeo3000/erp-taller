@@ -289,7 +289,7 @@ const ots = ESTADOS_OT.map((estado, i) => {
         descripcion: sol.descripcion,
         estado,
         origen: 'Manual',
-        prioridad: ['Baja', 'Media', 'Alta', 'Urgente'][i % 4],
+        prioridad: ['Baja', 'Normal', 'Urgente'][i % 3],
         tecnicoAsignado: '',
         tareas: [],
         componentes: [],
