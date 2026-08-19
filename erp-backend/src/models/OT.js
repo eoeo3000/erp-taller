@@ -140,6 +140,22 @@ const OTSchema = new mongoose.Schema({
     // Ordenes de Compra propias generadas para cubrir faltantes de stock (Gap 3).
     ordenCompra: { type: String, default: '' },
     instruccionesTerreno: { type: String, default: '' },
+    // Mejora v3 #6 (Cotización ampliada) — sección "Condiciones comerciales" del PDF.
+    condicionesComerciales: {
+        validez: { type: String, default: '30 días corridos desde la emisión' },
+        plazoPago: { type: String, default: '30 días desde la factura' },
+        formaPago: { type: String, default: 'Transferencia electrónica' },
+        garantia: { type: String, default: '6 meses por defectos de montaje' },
+        plazoEjecucion: { type: String, default: '' },
+        noIncluye: { type: String, default: '' },
+    },
+    // Mejora v3 #5 (Carpeta de OT) — documento interno consolidado, no se envía al cliente.
+    carpetaOT: {
+        generadoEn: { type: Date, default: null },
+        generadoPor: { type: String, default: '' },
+        paginas: { type: Number, default: 0 },
+        secciones: [String],
+    },
     asignadaEn: { type: Date, default: null },
     // Sin sistema de login para el staff interno (ver CLAUDE.md) — no hay de dónde sacar
     // "quién" asignó de forma confiable hoy. Se deja el campo para cuando exista una sesión

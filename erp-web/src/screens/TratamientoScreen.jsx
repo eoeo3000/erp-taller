@@ -233,6 +233,99 @@ function TabAntecedentes({ cargando, antecedentes, form, onCampo, onGuardar, gua
     );
 }
 
+// Mejora v3 #5 — Carpeta de OT: documento interno consolidado (informe de evaluación,
+// tareas y metodología, recursos, cotización, informes de ejecución, OC), no se envía al
+// cliente. Se regenera bajo demanda en vez de guardar el PDF en la OT (evitar blobs
+// grandes en Mongo, sin storage de archivos configurado en el proyecto) — solo queda el
+// registro de cuándo se generó, quién y con qué secciones (OT.carpetaOT).
+function construirIndiceCarpeta({ otSeleccionada, tareas, componentes }) {
+    const tareasConDesarrollo = tareas.filter(tt => (tt.desarrollo || '').trim()).length;
+    const reportes = otSeleccionada.reportes || [];
+    const fotosReportes = reportes.filter(r => r.foto).length;
+    const ocs = otSeleccionada.ordenesCompra || [];
+    return [
+        { k: 'evaluacion', label: 'Informe de evaluación', activo: !!otSeleccionada.informeEvaluacion?.completo,
+            detalle: otSeleccionada.informeEvaluacion?.fecha ? `Visita del ${otSeleccionada.informeEvaluacion.fecha} · ${otSeleccionada.informeEvaluacion.fotos?.length || 0} fotos` : 'Sin informe de evaluación',
+            resumen: 'Diagnóstico en faena, mediciones y registro fotográfico del estado inicial.', pags: otSeleccionada.informeEvaluacion?.completo ? 2 : 0 },
+        { k: 'tareas', label: 'Tareas y metodología', activo: tareas.length > 0,
+            detalle: `${tareasConDesarrollo} de ${tareas.length} tareas con desarrollo definido`,
+            resumen: 'Alcance comprometido y cómo se ejecutó cada tarea.', pags: Math.max(1, Math.ceil(tareas.length / 4)) },
+        { k: 'recursos', label: 'Recursos asignados', activo: tareas.length > 0 || componentes.length > 0,
+            detalle: 'Personal, equipos y materiales', resumen: 'Personal, horas hombre, equipos y materiales consumidos.', pags: 1 },
+        { k: 'cotizacion', label: 'Cotización aprobada', activo: ['Aprobada', 'Programada', 'En Ejecución', 'Trabajo Terminado', 'Con Informe', 'Pagada'].includes(otSeleccionada.estado),
+            detalle: `${otSeleccionada.numeroOT || 'Sin OT'} · ${otSeleccionada.estado}`, resumen: 'Desglose comercial y condiciones aceptadas por el cliente.', pags: 1 },
+        { k: 'ejecucion', label: 'Informes de ejecución', activo: reportes.length > 0,
+            detalle: `${reportes.length} informes de terreno · ${fotosReportes} fotos`, resumen: 'Avance por jornada, desviaciones y respaldo fotográfico.', pags: Math.max(1, Math.ceil(reportes.length / 2)) },
+        { k: 'ocs', label: 'Órdenes de compra', activo: ocs.length > 0,
+            detalle: `${ocs.length} OC a proveedores`, resumen: 'Compras asociadas a la OT con proveedor y monto.', pags: ocs.length > 0 ? 1 : 0 },
+    ];
+}
+
+function TabDocumentosPdf({ otSeleccionada, tareas, componentes, antecedentes, onGenerar }) {
+    const indiceCompleto = construirIndiceCarpeta({ otSeleccionada, tareas, componentes });
+    const [marcados, setMarcados] = useState(() => Object.fromEntries(indiceCompleto.map(it => [it.k, it.activo])));
+    const [generadoPor, setGeneradoPor] = useState('');
+    const [aviso, setAviso] = useState('');
+
+    const seleccionados = indiceCompleto.filter(it => marcados[it.k]);
+    const totalPags = 1 + seleccionados.reduce((a, it) => a + it.pags, 0); // +1 portada
+
+    const generar = () => {
+        if (!generadoPor.trim()) { setAviso('Escribe quién genera la carpeta.'); return; }
+        onGenerar(seleccionados, generadoPor.trim(), totalPags);
+        setAviso(`Carpeta generada: OT-${otSeleccionada.numeroOT || 'nueva'}-carpeta.pdf`);
+    };
+
+    return (
+        <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start', flexWrap: 'wrap', padding: 16 }}>
+            <div style={{ width: 300, flex: 'none', background: t.superficie, border: `1px solid ${t.bordeZona}` }}>
+                <div style={{ padding: '9px 12px', background: t.encabezadoTabla, borderBottom: `1px solid ${t.hairlineBloque}`, fontSize: 9.5, letterSpacing: '.11em', textTransform: 'uppercase', color: t.textoAtenuado3 }}>Contenido de la carpeta</div>
+                {indiceCompleto.map(it => (
+                    <label key={it.k} style={{ display: 'grid', gridTemplateColumns: '16px 1fr auto', gap: 9, alignItems: 'center', padding: '9px 12px', borderBottom: `1px solid ${t.hairlineFila}`, cursor: 'pointer' }}>
+                        <input type="checkbox" checked={!!marcados[it.k]} onChange={() => { setMarcados(m => ({ ...m, [it.k]: !m[it.k] })); setAviso(''); }} style={{ width: 14, height: 14 }} />
+                        <span style={{ minWidth: 0 }}>
+                            <span style={{ display: 'block', fontSize: 11.5, fontWeight: 600 }}>{it.label}</span>
+                            <span style={{ display: 'block', fontSize: 10.5, color: t.textoAtenuado3 }}>{it.detalle}</span>
+                        </span>
+                        <span style={{ fontFamily: t.fontMono, fontSize: 10.5, color: t.textoDeshabilitado }}>{it.pags} p</span>
+                    </label>
+                ))}
+                <div style={{ padding: 11 }}>
+                    <div style={{ fontSize: 10.5, color: t.textoAtenuado3, lineHeight: 1.5, marginBottom: 8 }}>Documento interno. No se envía al cliente.</div>
+                    <input placeholder="Generado por" value={generadoPor} onChange={e => { setGeneradoPor(e.target.value); setAviso(''); }} style={{ ...styles.inputPlano, marginBottom: 8, border: `1px solid ${t.bordeInput}` }} />
+                    <button onClick={generar} style={{ ...styles.btnPrimario, width: '100%' }}>Generar carpeta de OT</button>
+                    <div style={{ fontSize: 10.5, color: aviso.startsWith('Carpeta') ? t.verde : t.rojo, marginTop: 7, minHeight: 14 }}>{aviso}</div>
+                </div>
+            </div>
+
+            <div style={{ width: 600, maxWidth: '100%', background: '#fff', border: `1px solid ${t.bordeZona}`, padding: '28px 32px', boxShadow: '0 1px 3px rgba(0,0,0,.07)' }}>
+                <div style={{ borderBottom: '2px solid #1c1d1b', paddingBottom: 9 }}>
+                    <div style={{ fontSize: 9.5, letterSpacing: '.13em', textTransform: 'uppercase', color: t.textoAtenuado3 }}>Carpeta de orden de trabajo</div>
+                    <div style={{ fontSize: 19, fontWeight: 700, marginTop: 3 }}>{otSeleccionada.numeroOT || 'Sin número'}</div>
+                    <div style={{ fontSize: 11, color: t.textoAtenuado1, marginTop: 2 }}>
+                        {otSeleccionada.solicitante || 'Cliente'} · {antecedentes?.solicitud?.direccion || 'Sin faena registrada'} · Supervisor {antecedentes?.ot?.supervisor?.nombre || 'sin asignar'}
+                    </div>
+                </div>
+                {seleccionados.length === 0 && <div style={{ padding: '16px 0', fontSize: 11.5, color: t.textoAtenuado3 }}>Marca al menos una sección para ver el índice.</div>}
+                {seleccionados.map((it, i) => (
+                    <div key={it.k} style={{ display: 'grid', gridTemplateColumns: '26px 1fr 46px', gap: 10, alignItems: 'baseline', padding: '8px 0', borderBottom: `1px solid ${t.hairlineFila}` }}>
+                        <span style={{ fontFamily: t.fontMono, fontSize: 11, color: t.textoDeshabilitado }}>{String(i + 1).padStart(2, '0')}</span>
+                        <span style={{ minWidth: 0 }}>
+                            <span style={{ display: 'block', fontSize: 12.5, fontWeight: 600 }}>{it.label}</span>
+                            <span style={{ display: 'block', fontSize: 11, color: t.textoAtenuado1, lineHeight: 1.5 }}>{it.resumen}</span>
+                        </span>
+                        <span style={{ fontFamily: t.fontMono, fontSize: 10.5, color: t.textoDeshabilitado, textAlign: 'right' }}>{it.pags} p</span>
+                    </div>
+                ))}
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 14, fontSize: 10.5, color: t.textoAtenuado3 }}>
+                    <span>{generadoPor ? `Generado el ${new Date().toLocaleDateString('es-CL')} por ${generadoPor}` : 'Sin generar todavía'}</span>
+                    <span style={{ fontFamily: t.fontMono }}>{totalPags} páginas</span>
+                </div>
+            </div>
+        </div>
+    );
+}
+
 const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = [],
     componentes: componentesDB = [],
     suministros: suministrosDB = [],
@@ -266,6 +359,14 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
         return p || { estado: 'Pendiente', montoPagado: 0, fechaPago: '', metodoPago: 'Transferencia', referencia: '', notas: '' };
     });
     const [logistica, setLogistica] = useState([{ id: Date.now(), descripcion: '', cantidad: 1, precio: 0 }]);
+    // Mejora v3 #6 — Cotización ampliada: condiciones comerciales editables y secciones a
+    // incluir en el PDF (el detalle por tarea/materiales-suministros/totales van siempre).
+    const [condicionesComerciales, setCondicionesComerciales] = useState(() => ({
+        validez: '30 días corridos desde la emisión', plazoPago: '30 días desde la factura',
+        formaPago: 'Transferencia electrónica', garantia: '6 meses por defectos de montaje',
+        plazoEjecucion: '', noIncluye: '', ...(datosRecibidos?.condicionesComerciales || {}),
+    }));
+    const [seccionesPdf, setSeccionesPdf] = useState({ tareas: true, materiales: true, gantt: true, condiciones: true, fotos: false });
     const [asideW, setAsideW] = useState(300);
     const [asideOculta, setAsideOculta] = useState(false);
     useEffect(() => { if (isMobile) setAsideOculta(true); }, [isMobile]);
@@ -363,7 +464,10 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
         }
     };
 
-    const generarPDF = async () => {
+    // Mejora v3 #6 — Cotización ampliada. `secciones` controla qué bloques opcionales entran
+    // (tareas/materiales/gantt/condiciones); encabezado y totales van siempre. "fotos" queda
+    // listado en el panel pero deshabilitado (sin implementar, ver TabDocumentosPdf).
+    const generarPDF = async (secciones = seccionesPdf) => {
         const doc = new jsPDF();
         const pageWidth = doc.internal.pageSize.getWidth();
         doc.setFontSize(18); doc.setTextColor(44, 62, 80);
@@ -387,53 +491,133 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
         const desc = `Descripción: ${datosRecibidos?.descripcion || 'Sin detalle'}`;
         const splitDesc = doc.splitTextToSize(desc, pageWidth - 28);
         doc.text(splitDesc, 14, 68);
-        const startTablesY = 68 + (splitDesc.length * 5) + 5;
+        let y = 68 + (splitDesc.length * 5) + 5;
 
-        autoTable(doc, {
-            startY: startTablesY,
-            head: [['1. MATERIALES / REPUESTOS', 'CANT.', 'SUBTOTAL']],
-            body: componentes.map(c => [c.descripcion, c.cantidad, `$ ${(Number(c.cantidad) * Number(c.precio)).toLocaleString()}`]),
-            headStyles: { fillColor: [44, 62, 80] }
-        });
-        autoTable(doc, {
-            startY: doc.lastAutoTable.finalY + 10,
-            head: [['2. PLAN DE TRABAJO (SUMINISTROS)', 'PUESTO', 'HRS', 'SUBTOTAL']],
-            body: tareas.map(tt => [tt.descripcion, tt.puesto, tt.duracion, `$ ${(Number(tt.duracion) * Number(tt.valorHora) * (tt.operarioId?.length || 1)).toLocaleString()}`]),
-            headStyles: { fillColor: [52, 73, 94] }
-        });
-
-        const finalYPlan = doc.lastAutoTable.finalY + 10;
-        doc.setFontSize(12); doc.setTextColor(44, 62, 80);
-        doc.text("3. CRONOGRAMA DE EJECUCIÓN", 14, finalYPlan);
-        const ganttElement = document.getElementById('seccion-gantt-visual');
-        let nextY = finalYPlan + 10;
-        if (ganttElement) {
-            const canvas = await html2canvas(ganttElement, { scale: 2 });
-            const imgData = canvas.toDataURL('image/png');
-            const imgWidth = pageWidth - 28;
-            const imgHeight = (canvas.height * imgWidth) / canvas.width;
-            if (finalYPlan + imgHeight > 270) {
-                doc.addPage(); doc.addImage(imgData, 'PNG', 14, 20, imgWidth, imgHeight);
-                nextY = 20 + imgHeight + 15;
-            } else {
-                doc.addImage(imgData, 'PNG', 14, finalYPlan + 5, imgWidth, imgHeight);
-                nextY = finalYPlan + imgHeight + 15;
-            }
+        // 1. Detalle por tarea: tarea, HH, materiales, subtotal por línea (no solo el total).
+        // Los materiales no están vinculados a una tarea puntual en el modelo (componentes[]
+        // no tiene tareaId) — la columna queda en "—" en vez de mostrar un $0 que parecería
+        // un cálculo real, y el subtotal de esta tabla es solo mano de obra de la tarea.
+        if (secciones.tareas && tareas.length > 0) {
+            autoTable(doc, {
+                startY: y,
+                head: [['1. DETALLE POR TAREA', 'HH', 'MATERIALES', 'SUBTOTAL (M.O.)']],
+                body: tareas.map(tt => {
+                    const hh = Number(tt.duracion) * Number(tt.valorHora) * (tt.operarioId?.length || 1);
+                    return [tt.descripcion, `${tt.duracion} h`, '—', `$ ${hh.toLocaleString()}`];
+                }),
+                headStyles: { fillColor: [44, 62, 80] },
+            });
+            y = doc.lastAutoTable.finalY + 10;
         }
-        autoTable(doc, {
-            startY: nextY,
-            head: [['4. TRASLADOS Y OTROS SUMINISTROS', 'SUBTOTAL']],
-            body: logistica.map(l => [l.descripcion, `$ ${(Number(l.cantidad) * Number(l.precio)).toLocaleString()}`]),
-            headStyles: { fillColor: [127, 140, 141] }
-        });
-        const resY = doc.lastAutoTable.finalY + 15;
-        doc.setFontSize(11); doc.setTextColor(0);
-        doc.text(`TOTAL NETO: $ ${granTotal.toLocaleString()}`, pageWidth - 15, resY, { align: 'right' });
-        doc.text(`IVA (19%): $ ${(granTotal * 0.19).toLocaleString()}`, pageWidth - 15, resY + 7, { align: 'right' });
-        doc.setFontSize(13); doc.setFont(undefined, 'bold');
-        doc.text(`TOTAL BRUTO: $ ${(granTotal * 1.19).toLocaleString()}`, pageWidth - 15, resY + 15, { align: 'right' });
+
+        // 2. Materiales y suministros directos: dos bloques separados (no uno combinado).
+        if (secciones.materiales) {
+            doc.setFontSize(11); doc.setTextColor(44, 62, 80); doc.setFont(undefined, 'bold');
+            doc.text('2. MATERIALES Y SUMINISTROS DIRECTOS', 14, y);
+            y += 4;
+            const mitad = (pageWidth - 28) / 2;
+            autoTable(doc, {
+                startY: y, tableWidth: mitad - 4, margin: { left: 14 },
+                head: [['Materiales', 'Monto']],
+                body: componentes.map(c => [c.descripcion, `$ ${(Number(c.cantidad) * Number(c.precio)).toLocaleString()}`]),
+                headStyles: { fillColor: [52, 73, 94] }, styles: { fontSize: 8.5 },
+            });
+            const yMateriales = doc.lastAutoTable.finalY;
+            autoTable(doc, {
+                startY: y, tableWidth: mitad - 4, margin: { left: 14 + mitad + 8 },
+                head: [['Suministros directos', 'Monto']],
+                body: logistica.map(l => [l.descripcion, `$ ${(Number(l.cantidad) * Number(l.precio)).toLocaleString()}`]),
+                headStyles: { fillColor: [127, 140, 141] }, styles: { fontSize: 8.5 },
+            });
+            y = Math.max(yMateriales, doc.lastAutoTable.finalY) + 10;
+        }
+
+        // 3. Cronograma: el Gantt de la OT embebido (captura de la tabla ya renderizada en pantalla).
+        if (secciones.gantt) {
+            doc.setFontSize(12); doc.setTextColor(44, 62, 80); doc.setFont(undefined, 'bold');
+            doc.text("3. CRONOGRAMA", 14, y);
+            const ganttElement = document.getElementById('seccion-gantt-visual');
+            if (ganttElement) {
+                const canvas = await html2canvas(ganttElement, { scale: 2 });
+                const imgData = canvas.toDataURL('image/png');
+                const imgWidth = pageWidth - 28;
+                const imgHeight = (canvas.height * imgWidth) / canvas.width;
+                if (y + imgHeight > 270) { doc.addPage(); doc.addImage(imgData, 'PNG', 14, 20, imgWidth, imgHeight); y = 20 + imgHeight + 15; }
+                else { doc.addImage(imgData, 'PNG', 14, y + 5, imgWidth, imgHeight); y = y + imgHeight + 15; }
+            } else { y += 10; }
+        }
+
+        // 4. Totales: mano de obra, materiales y suministros, neto, total con IVA.
+        const totalMO = tareas.reduce((a, tt) => a + Number(tt.duracion) * Number(tt.valorHora) * (tt.operarioId?.length || 1), 0);
+        const totalMatSum = componentes.reduce((a, c) => a + Number(c.cantidad) * Number(c.precio), 0) + logistica.reduce((a, l) => a + Number(l.cantidad) * Number(l.precio), 0);
+        doc.setFont(undefined, 'normal'); doc.setFontSize(10); doc.setTextColor(0);
+        doc.text('4. TOTALES', 14, y); y += 7;
+        doc.text(`Mano de obra: $ ${totalMO.toLocaleString()}`, pageWidth - 15, y, { align: 'right' }); y += 6;
+        doc.text(`Materiales y suministros: $ ${totalMatSum.toLocaleString()}`, pageWidth - 15, y, { align: 'right' }); y += 6;
+        doc.setFont(undefined, 'bold');
+        doc.text(`Neto: $ ${granTotal.toLocaleString()}`, pageWidth - 15, y, { align: 'right' }); y += 7;
+        doc.setFontSize(13);
+        doc.text(`Total con IVA: $ ${(granTotal * 1.19).toLocaleString()}`, pageWidth - 15, y, { align: 'right' }); y += 12;
+
+        // 5. Condiciones comerciales.
+        if (secciones.condiciones) {
+            doc.setFontSize(11); doc.setFont(undefined, 'bold'); doc.setTextColor(44, 62, 80);
+            doc.text('5. CONDICIONES COMERCIALES', 14, y); y += 6;
+            doc.setFontSize(9); doc.setFont(undefined, 'normal'); doc.setTextColor(0);
+            const filas = [
+                ['Validez', condicionesComerciales.validez], ['Plazo de pago', condicionesComerciales.plazoPago],
+                ['Forma de pago', condicionesComerciales.formaPago], ['Garantía', condicionesComerciales.garantia],
+                ['Plazo de ejecución', condicionesComerciales.plazoEjecucion || '—'], ['No incluye', condicionesComerciales.noIncluye || '—'],
+            ];
+            filas.forEach(([label, valor]) => {
+                doc.setFont(undefined, 'bold'); doc.text(`${label}:`, 14, y);
+                doc.setFont(undefined, 'normal');
+                const texto = doc.splitTextToSize(valor, pageWidth - 60);
+                doc.text(texto, 55, y);
+                y += Math.max(6, texto.length * 5);
+            });
+        }
+
         doc.save(`Cotizacion_OT_${datosRecibidos?._id || 'nueva'}.pdf`);
         return doc;
+    };
+
+    // Mejora v3 #5 — genera el PDF consolidado de la carpeta de OT con las secciones
+    // marcadas y guarda solo el registro (fecha/autor/secciones) en la OT, no el archivo.
+    const generarCarpetaOT = async (seccionesElegidas, generadoPor, totalPags) => {
+        const doc = new jsPDF();
+        const pageWidth = doc.internal.pageSize.getWidth();
+        doc.setFontSize(9); doc.setTextColor(120);
+        doc.text('CARPETA DE ORDEN DE TRABAJO', 14, 16);
+        doc.setFontSize(18); doc.setTextColor(20); doc.setFont(undefined, 'bold');
+        doc.text(otSeleccionada?.numeroOT || 'Sin número', 14, 26);
+        doc.setFontSize(10); doc.setFont(undefined, 'normal'); doc.setTextColor(80);
+        doc.text(`${otSeleccionada?.solicitante || 'Cliente'}`, 14, 33);
+        doc.setDrawColor(20); doc.setLineWidth(0.6); doc.line(14, 37, pageWidth - 14, 37);
+
+        let y = 47;
+        seccionesElegidas.forEach((it, i) => {
+            if (y > 260) { doc.addPage(); y = 20; }
+            doc.setFontSize(12); doc.setFont(undefined, 'bold'); doc.setTextColor(20);
+            doc.text(`${String(i + 1).padStart(2, '0')}. ${it.label}`, 14, y);
+            y += 6;
+            doc.setFontSize(9.5); doc.setFont(undefined, 'normal'); doc.setTextColor(90);
+            doc.text(doc.splitTextToSize(it.resumen, pageWidth - 28), 14, y);
+            y += 6;
+            doc.setFontSize(9); doc.setTextColor(120);
+            doc.text(it.detalle, 14, y);
+            y += 12;
+        });
+
+        doc.setFontSize(8.5); doc.setTextColor(140);
+        doc.text(`Generado el ${new Date().toLocaleDateString('es-CL')} por ${generadoPor} · ${totalPags} páginas`, 14, 290);
+        doc.save(`OT-${otSeleccionada?.numeroOT || 'nueva'}-carpeta.pdf`);
+
+        try {
+            await actualizarOtGlobal(otSeleccionada._id, {
+                carpetaOT: { generadoEn: new Date().toISOString(), generadoPor, paginas: totalPags, secciones: seccionesElegidas.map(s => s.k) },
+            });
+        } catch (e) { console.warn('No se pudo registrar la carpeta en la OT:', e.message); }
     };
 
     const finalizarYCotizar = async () => {
@@ -871,6 +1055,7 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                         Ejecución {otSeleccionada.reportes?.length ? `(${otSeleccionada.reportes.length})` : ''}
                     </button>
                     <button onClick={() => setTabActiva('pago')} style={tabActiva === 'pago' ? styles.tabActivo : styles.tab}>Pago</button>
+                    <button onClick={() => setTabActiva('documentos')} style={tabActiva === 'documentos' ? styles.tabActivo : styles.tab}>Documentos de terreno</button>
                 </div>
                 <button onClick={() => setModalPlantilla(true)} style={styles.btnSecundario}>Cargar hoja de ruta</button>
             </div>
@@ -1219,7 +1404,8 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
 
                     {/* 4 · COTIZACIÓN */}
                     {tabActiva === 'cotizacion' && (
-                        <div style={{ maxWidth: 620, padding: 16 }}>
+                        <div style={{ padding: 16, display: 'flex', gap: 16, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+                        <div style={{ maxWidth: 620, flex: '1 1 480px' }}>
                             <div style={styles.tituloSub}>Cotización técnica y comercial</div>
                             {[
                                 { label: 'Mano de obra', detalle: `${tareas.length} tarea(s)`, valor: totalManoObra },
@@ -1272,7 +1458,35 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                                     </table>
                                 </div>
                             )}
+                            <div style={styles.tituloSub}>Condiciones comerciales</div>
+                            {[
+                                ['validez', 'Validez'], ['plazoPago', 'Plazo de pago'], ['formaPago', 'Forma de pago'],
+                                ['garantia', 'Garantía'], ['plazoEjecucion', 'Plazo de ejecución'], ['noIncluye', 'No incluye'],
+                            ].map(([campo, label]) => (
+                                <div key={campo} style={{ display: 'grid', gridTemplateColumns: '110px 1fr', gap: 8, alignItems: 'center', padding: '4px 0' }}>
+                                    <span style={{ fontSize: 10.5, color: t.textoAtenuado2 }}>{label}</span>
+                                    <input className="campo-ed" style={styles.inputPlano} value={condicionesComerciales[campo]} onChange={e => setCondicionesComerciales(c => ({ ...c, [campo]: e.target.value }))} />
+                                </div>
+                            ))}
                             <div style={{ fontSize: 10.5, color: t.textoAtenuado3, marginTop: 12, lineHeight: 1.5 }}>El PDF se genera con encabezado de cliente, plan de trabajo, cronograma y traslados, y queda adjunto al envío al solicitante.</div>
+                        </div>
+
+                        <div style={{ width: 264, flex: 'none', background: t.superficie, border: `1px solid ${t.bordeZona}`, padding: 12 }}>
+                            <div style={styles.tituloSub}>Secciones del PDF</div>
+                            {[
+                                ['tareas', 'Detalle por tarea', 'Nuevo'], ['materiales', 'Materiales vs. suministros', 'Nuevo'],
+                                ['gantt', 'Cronograma', 'Nuevo'], ['condiciones', 'Condiciones comerciales', 'Nuevo'],
+                                ['fotos', 'Fotografías de referencia', 'Por definir'],
+                            ].map(([k, label, estado]) => (
+                                <label key={k} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', borderBottom: `1px solid ${t.hairlineFila}`, cursor: k === 'fotos' ? 'default' : 'pointer', fontSize: 11.5 }}>
+                                    <input type="checkbox" checked={seccionesPdf[k]} disabled={k === 'fotos'} onChange={() => setSeccionesPdf(s => ({ ...s, [k]: !s[k] }))} style={{ width: 14, height: 14 }} />
+                                    <span style={{ minWidth: 0 }}>{label}</span>
+                                    <span style={{ marginLeft: 'auto', fontSize: 9.5, letterSpacing: '.07em', textTransform: 'uppercase', color: estado === 'Nuevo' ? t.verde : t.textoAtenuado3 }}>{estado}</span>
+                                </label>
+                            ))}
+                            <button onClick={() => generarPDF(seccionesPdf)} style={{ ...styles.btnPrimario, width: '100%', marginTop: 11 }}>Descargar PDF</button>
+                            <div style={{ fontSize: 10.5, color: t.textoAtenuado3, marginTop: 9, lineHeight: 1.5 }}>Las cotizaciones ya emitidas se siguen viendo con su formato original.</div>
+                        </div>
                         </div>
                     )}
 
@@ -1437,6 +1651,14 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                                 {pago.anulado && <button onClick={restaurarPago} style={styles.btnSecundario}>Restaurar pago</button>}
                             </div>
                         </div>
+                    )}
+
+                    {/* DOCUMENTOS DE TERRENO */}
+                    {tabActiva === 'documentos' && (
+                        <TabDocumentosPdf
+                            otSeleccionada={otSeleccionada} tareas={tareas} componentes={componentes}
+                            antecedentes={antecedentes} onGenerar={generarCarpetaOT}
+                        />
                     )}
                 </section>
 
