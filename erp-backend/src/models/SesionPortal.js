@@ -27,6 +27,10 @@ const SesionPortalSchema = new mongoose.Schema({
     alcance: { type: String, enum: ['empresa', 'propias'], default: 'empresa' },
 
     tokenHash: { type: String, default: '' }, // vacío = token pre-generado sin asignar todavía (stock)
+    // Primeros caracteres del token en claro, SOLO para mostrar algo reconocible en la
+    // tabla "Tokens activos" (4 hex de 40 no alcanza para nada útil si se filtra) — el
+    // resto del token nunca se guarda, ver tokenHash arriba.
+    tokenPreview: { type: String, default: '' },
     expira: { type: Date, required: true },
     estado: { type: String, enum: ['activo', 'revocado'], default: 'activo' },
 

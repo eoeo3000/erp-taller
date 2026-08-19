@@ -117,3 +117,16 @@ exports.revocar = async (req, res) => {
         res.status(500).json({ error: error.message });
     }
 };
+
+// POST /api/usuarios/:id/reactivar — vuelve a habilitar con el MISMO token (no lo cambia;
+// para eso está reemitir-token). Cubre "un revocado ofrece Reactivar" en Tokens activos.
+exports.reactivar = async (req, res) => {
+    const Usuario = getUsuario(req.db);
+    try {
+        const usuario = await Usuario.findByIdAndUpdate(req.params.id, { estado: 'activo' }, { new: true }).select('-token');
+        if (!usuario) return res.status(404).json({ error: 'Usuario no encontrado' });
+        res.json({ mensaje: 'Acceso reactivado', usuario });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+};

@@ -10,5 +10,6 @@ router.post('/', ctrl.crear);
 router.get('/', ctrl.listar);
 router.post('/:id/reemitir-token', ctrl.reemitirToken);
 router.post('/:id/revocar', ctrl.revocar);
+router.post('/:id/reactivar', ctrl.reactivar);
 
 module.exports = router;

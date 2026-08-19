@@ -12,6 +12,7 @@ router.post('/acceso',            ctrl.acceso);
 router.post('/emitir-token',      ctrl.emitirTokenContacto);
 router.get('/mis-solicitudes',    ctrl.misSolicitudes);
 router.get('/sesiones',              ctrl.listarSesiones);
+router.get('/stock-tokens',              ctrl.stockTokens);
 router.post('/sesiones/lote',            ctrl.generarLote);
 router.post('/sesiones/:id/revocar',   ctrl.revocarSesion);
 router.post('/sesiones/:id/reactivar', ctrl.reactivarSesion);

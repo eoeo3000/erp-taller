@@ -266,11 +266,12 @@ exports.emitirTokenContacto = async (req, res) => {
     const SesionPortal = getSesionPortal(req.db);
     const Cliente = getCliente(req.db);
     try {
-        const { clienteId, contactoId, alcance, correo: correoManual, entorno } = req.body;
+        const { clienteId, contactoId, alcance, correo: correoManual, entorno, nombreContacto: nombreNuevo } = req.body;
         let telefono = normalizarTelefono(req.body.telefono);
         let empresaSolicitante = '';
         let nombreContacto = '';
         let correo = correoManual || '';
+        let contactoIdFinal = contactoId || null;
 
         if (clienteId) {
             const cliente = await Cliente.findById(clienteId);
@@ -282,6 +283,14 @@ exports.emitirTokenContacto = async (req, res) => {
                 nombreContacto = contacto.nombre;
                 correo = correo || contacto.correo;
                 telefono = telefono || normalizarTelefono(contacto.telefono);
+            } else if (nombreNuevo) {
+                // "Si el contacto no existe, se crea aquí mismo y queda guardado en la ficha
+                // de la empresa en Clientes" (prototipo, Emitir acceso cliente).
+                cliente.contactos.push({ nombre: nombreNuevo, correo, telefono: req.body.telefono || '' });
+                await cliente.save();
+                const creado = cliente.contactos[cliente.contactos.length - 1];
+                contactoIdFinal = creado._id;
+                nombreContacto = creado.nombre;
             }
         } else {
             if (!telefono) return res.status(400).json({ error: 'Teléfono o cliente requerido' });
@@ -294,9 +303,9 @@ exports.emitirTokenContacto = async (req, res) => {
         const expira = new Date(Date.now() + DIAS_VIGENCIA_TOKEN * 24 * 60 * 60 * 1000);
         const sesion = await SesionPortal.create({
             tipo: 'cliente', telefono, empresaSolicitante,
-            clienteId: clienteId || null, contactoId: contactoId || null,
+            clienteId: clienteId || null, contactoId: contactoIdFinal,
             alcance: alcance === 'propias' ? 'propias' : 'empresa',
-            tokenHash: hashToken(token), expira, estado: 'activo',
+            tokenHash: hashToken(token), tokenPreview: token.slice(0, 4), expira, estado: 'activo',
             emitidoEn: new Date(), emitidoPor: req.body.emitidoPor || '',
         });
 
@@ -318,6 +327,7 @@ exports.regenerarToken = async (req, res) => {
 
         const token = nuevoToken();
         anterior.tokenHash = hashToken(token);
+        anterior.tokenPreview = token.slice(0, 4);
         anterior.expira = new Date(Date.now() + DIAS_VIGENCIA_TOKEN * 24 * 60 * 60 * 1000);
         anterior.estado = 'activo';
         anterior.ultimoAcceso = null;
@@ -343,18 +353,50 @@ exports.reenviarToken = exports.regenerarToken;
 // son vistas distintas del mismo dato, Revocado es el único estado real que se persiste).
 exports.listarSesiones = async (req, res) => {
     const SesionPortal = getSesionPortal(req.db);
+    const Usuario = require('../models/Usuario')(req.db);
+    const Cliente = getCliente(req.db);
     try {
-        const sesiones = await SesionPortal.find({ tipo: 'cliente' }).select('-tokenHash').sort({ createdAt: -1 }).lean();
         const ahora = Date.now();
-        const conEstado = sesiones.map(s => {
-            let estadoDisplay = 'Activo';
-            if (s.estado === 'revocado') estadoDisplay = 'Revocado';
-            else if (!s.tokenHash && !s.clienteId) estadoDisplay = 'Sin asignar'; // stock pre-generado
-            else if (!s.ultimoAcceso) estadoDisplay = 'Sin uso';
-            else if (ahora - new Date(s.ultimoAcceso).getTime() > DIAS_INACTIVO * 24 * 60 * 60 * 1000) estadoDisplay = 'Inactivo';
-            return { ...s, estadoDisplay };
+        const estadoPorFechas = (estado, ultimoAcceso, sinAsignar) => {
+            if (estado === 'revocado') return 'Revocado';
+            if (sinAsignar) return 'Sin asignar';
+            if (!ultimoAcceso) return 'Sin uso';
+            if (ahora - new Date(ultimoAcceso).getTime() > DIAS_INACTIVO * 24 * 60 * 60 * 1000) return 'Inactivo';
+            return 'Activo';
+        };
+
+        // Cliente — origen SesionPortal
+        const sesiones = await SesionPortal.find({ tipo: 'cliente' }).select('-tokenHash').sort({ createdAt: -1 }).lean();
+        const clientesPorId = new Map((await Cliente.find().lean()).map(c => [String(c._id), c]));
+        const filasCliente = sesiones.map(s => {
+            const cliente = s.clienteId ? clientesPorId.get(String(s.clienteId)) : null;
+            const contacto = cliente?.contactos?.find(c => String(c._id) === String(s.contactoId));
+            return {
+                _id: s._id, tipo: 'cliente',
+                nombre: contacto?.nombre || s.empresaSolicitante || 'Sin nombre',
+                correo: contacto?.correo || '',
+                origen: `Clientes · ${s.empresaSolicitante || cliente?.empresa || '—'}`,
+                tokenPreview: s.tokenPreview || '',
+                emitidoEn: s.emitidoEn, ultimoAcceso: s.ultimoAcceso,
+                estadoDisplay: estadoPorFechas(s.estado, s.ultimoAcceso, !s.tokenHash && !s.clienteId),
+            };
         });
-        res.json(conEstado);
+
+        // Operativo — origen Usuario (se emiten desde la ficha de Recursos, no desde acá;
+        // esta lista solo los muestra, para que "Tokens activos" sea una vista única).
+        const usuarios = await Usuario.find().sort({ createdAt: -1 }).lean();
+        const filasOperativo = usuarios.map(u => ({
+            _id: u._id, tipo: 'operativo',
+            nombre: u.nombre, correo: '',
+            origen: `Recursos · ${u.puesto || u.rol}`,
+            // Usuario.token se guarda en claro (ver models/Usuario.js) — se recorta acá,
+            // nunca se manda completo fuera de whoami()/accion-movil (auth por token).
+            tokenPreview: u.token ? u.token.slice(0, 4) : '',
+            emitidoEn: u.fechaEmision, ultimoAcceso: u.ultimoAcceso,
+            estadoDisplay: estadoPorFechas(u.estado, u.ultimoAcceso, false),
+        }));
+
+        res.json([...filasCliente, ...filasOperativo].sort((a, b) => new Date(b.emitidoEn) - new Date(a.emitidoEn)));
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
@@ -417,6 +459,35 @@ exports.generarLote = async (req, res) => {
             Array.from({ length: cantidad }, () => ({ tipo: 'cliente', tokenHash: '', expira, estado: 'activo' }))
         );
         res.status(201).json({ mensaje: `${lote.length} tokens generados`, cantidad: lote.length, vigenciaDias: DIAS_VIGENCIA_LOTE });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+};
+
+// GET /api/portal/stock-tokens — resumen para "Stock pre-generado". El bloque operativo
+// es de solo lectura: Usuario no tiene concepto de lote/pre-generado ni de vencimiento
+// (ver models/Usuario.js — el token no expira por tiempo, decisión ya tomada), así que
+// "Generar lote" para operativos queda fuera del alcance de esta entrega (mejora v3 #2:
+// "solo tokens de cliente"); se muestran sus contadores reales igual, sin inventar un pool.
+exports.stockTokens = async (req, res) => {
+    const SesionPortal = getSesionPortal(req.db);
+    const Usuario = require('../models/Usuario')(req.db);
+    try {
+        const ahora = new Date();
+        const inicioMes = new Date(ahora.getFullYear(), ahora.getMonth(), 1);
+        const en30dias = new Date(ahora.getTime() + 30 * 24 * 60 * 60 * 1000);
+
+        const [disponiblesCliente, asignadosClienteMes, vencenClienteEn30] = await Promise.all([
+            SesionPortal.countDocuments({ tipo: 'cliente', tokenHash: '', clienteId: null }),
+            SesionPortal.countDocuments({ tipo: 'cliente', clienteId: { $ne: null }, emitidoEn: { $gte: inicioMes } }),
+            SesionPortal.countDocuments({ tipo: 'cliente', estado: 'activo', expira: { $gte: ahora, $lte: en30dias } }),
+        ]);
+        const asignadosOperativoMes = await Usuario.countDocuments({ createdAt: { $gte: inicioMes } });
+
+        res.json({
+            cliente: { disponibles: disponiblesCliente, asignadosMes: asignadosClienteMes, vencenEn30Dias: vencenClienteEn30, vigenciaLoteDias: DIAS_VIGENCIA_LOTE },
+            operativo: { disponibles: 0, asignadosMes: asignadosOperativoMes, vencenEn30Dias: 0, soportaLote: false },
+        });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
