@@ -191,7 +191,7 @@ const GanttScreen = ({ recursos = [], ots = [], calendarios = [], obtenerHorasPa
                 <span style={{ fontFamily: t.fontMono, fontSize: 11.5, fontWeight: 600, whiteSpace: 'nowrap' }}>{semanaActual ? `Semana ${semanaActual.num} · ${semanaActual.label}` : '—'}</span>
                 <button onClick={() => setIdxSemana(i => Math.min(semanas.length - 1, i + 1))} disabled={idxSemana >= semanas.length - 1} style={{ ...styles.btnSecundario, opacity: idxSemana >= semanas.length - 1 ? .5 : 1 }}>Semana siguiente</button>
                 <div style={{ display: 'flex', gap: 4, marginLeft: 14 }}>
-                    {[['ot', 'Por OT'], ['supervisor', 'Por supervisor'], ['operario', 'Por operario']].map(([m, label]) => (
+                    {[['todo', 'Ver todo'], ['ot', 'Por OT'], ['supervisor', 'Por supervisor'], ['operario', 'Por operario']].map(([m, label]) => (
                         <button key={m} onClick={() => setModoVista(m)} style={modoVista === m ? styles.segActivo : styles.segInactivo}>{label}</button>
                     ))}
                 </div>
@@ -202,9 +202,9 @@ const GanttScreen = ({ recursos = [], ots = [], calendarios = [], obtenerHorasPa
                 <section style={styles.scrollTabla}>
                     <div style={{ minWidth: 1228 }}>
                         <div style={styles.filaHeader}>
-                            <span style={styles.thCol}>{modoVista === 'supervisor' ? 'Supervisor' : 'OT · N°'}</span>
+                            <span style={styles.thCol}>{modoVista === 'supervisor' ? 'Supervisor' : modoVista === 'todo' ? 'OT / Supervisor' : 'OT · N°'}</span>
                             <span style={styles.thCol}>{modoVista === 'operario' ? 'Tarea / descripción' : 'Detalle'}</span>
-                            <span style={styles.thCol}>{modoVista === 'ot' ? 'Supervisor' : modoVista === 'supervisor' ? 'Carga' : 'Responsable'}</span>
+                            <span style={styles.thCol}>{modoVista === 'ot' ? 'Supervisor' : modoVista === 'supervisor' ? 'Carga' : modoVista === 'todo' ? 'Supervisor / Carga' : 'Responsable'}</span>
                             <span style={styles.thCol}>Estado</span>
                             <span style={{ ...styles.thCol, textAlign: 'right' }}>Hrs</span>
                             <span style={{ ...styles.thCol, textAlign: 'right' }}>Inicio</span>
@@ -221,7 +221,8 @@ const GanttScreen = ({ recursos = [], ots = [], calendarios = [], obtenerHorasPa
                             })}
                         </div>
 
-                        {modoVista === 'operario' && <>
+                        {(modoVista === 'operario' || modoVista === 'todo') && <>
+                        {modoVista === 'todo' && <div style={styles.filaSeccion}>Por operario</div>}
                         {ots.map(ot => {
                             const estaEjecutado = ESTADOS_EJECUTADOS.includes(ot.estado);
                             const puedeProgramar = ['Planificada', 'Programada'].includes(ot.estado);
@@ -346,7 +347,8 @@ const GanttScreen = ({ recursos = [], ots = [], calendarios = [], obtenerHorasPa
                         })}
                         </>}
 
-                        {modoVista === 'ot' && <>
+                        {(modoVista === 'ot' || modoVista === 'todo') && <>
+                        {modoVista === 'todo' && <div style={styles.filaSeccion}>Por OT</div>}
                         {ots.map(ot => {
                             const supervisor = recursos.find(r => String(r._id) === String(ot.supervisorId));
                             const fechasTareas = (ot.tareas || []).filter(tt => tt.fecha).map(tt => tt.fecha).sort();
@@ -385,11 +387,14 @@ const GanttScreen = ({ recursos = [], ots = [], calendarios = [], obtenerHorasPa
                                 </div>
                             );
                         })}
+                        {modoVista === 'ot' && <>
                         <div style={styles.filaSeccion}>Carga de supervisores · asignaciones / capacidad</div>
                         {supervisoresRecursos.map(r => <FilaCargaSupervisor key={r._id} recurso={r} diasSemana={diasSemana} otsActivasDe={otsActivasDe} diasOcupadosPorSupervisor={diasOcupadosPorSupervisor} limite={LIMITE_ASIGNACIONES(r)} />)}
                         </>}
+                        </>}
 
-                        {modoVista === 'supervisor' && <>
+                        {(modoVista === 'supervisor' || modoVista === 'todo') && <>
+                        {modoVista === 'todo' && <div style={styles.filaSeccion}>Por supervisor</div>}
                         {supervisoresRecursos.map(r => {
                             const activas = otsActivasDe(r._id);
                             const ocupados = diasOcupadosPorSupervisor(r._id);

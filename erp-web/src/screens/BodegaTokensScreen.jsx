@@ -24,7 +24,12 @@ const seg = (activo) => ({
     cursor: 'pointer', borderRadius: 2, fontFamily: t.fontUi,
 });
 
-const fmtFecha = (iso) => iso ? new Date(iso).toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—';
+const fmtFecha = (iso) => {
+    if (!iso) return '—';
+    const d = new Date(iso);
+    const esHoy = d.toDateString() === new Date().toDateString();
+    return esHoy ? `hoy ${d.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })}` : d.toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit', year: 'numeric' });
+};
 const fmtAcceso = (iso) => {
     if (!iso) return 'nunca';
     const dias = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
@@ -55,9 +60,19 @@ export default function BodegaTokensScreen({ API }) {
     );
 }
 
+const ETIQUETAS_ACCION = { revocar: 'Revocar', regenerar: 'Regenerar', reenviar: 'Reenviar', reactivar: 'Reactivar' };
+const MENSAJES_ACCION = {
+    revocar: (tok) => `Acceso de ${tok.nombre} revocado.`,
+    regenerar: (tok) => `Token de ${tok.nombre} regenerado — el link anterior ya no sirve. Correo reenviado a ${tok.correo || 'su casilla registrada'}.`,
+    reenviar: (tok) => `Nuevo link enviado por correo a ${tok.correo || 'su casilla registrada'} (el token en claro no se guarda, así que reenviar equivale a regenerar).`,
+    reactivar: (tok) => `Acceso de ${tok.nombre} reactivado.`,
+};
+
 function TokensActivos({ API }) {
     const [tokens, setTokens] = useState(null);
     const [error, setError] = useState('');
+    const [aviso, setAviso] = useState(null); // { tipo: 'ok'|'error', texto }
+    const [procesando, setProcesando] = useState(null); // _id de la fila en curso
 
     const cargar = () => axios.get(`${API}/portal/sesiones`, { headers: headerEntorno() })
         .then(({ data }) => setTokens(data)).catch(e => setError(e.response?.data?.error || 'No se pudo cargar.'));
@@ -70,11 +85,16 @@ function TokensActivos({ API }) {
             ? { revocar: 'revocar', regenerar: 'regenerar', reenviar: 'reenviar', reactivar: 'reactivar' }
             : { revocar: 'revocar', regenerar: 'reemitir-token', reenviar: 'reemitir-token', reactivar: 'reactivar' };
         if (tipoAccion === 'revocar' && !window.confirm(`¿Revocar el acceso de ${tok.nombre}?`)) return;
+        setAviso(null);
+        setProcesando(tok._id);
         try {
             await axios.post(`${base}/${rutas[tipoAccion]}`, { correo: tok.correo }, { headers: headerEntorno() });
-            cargar();
+            setAviso({ tipo: 'ok', texto: MENSAJES_ACCION[tipoAccion](tok) });
+            await cargar();
         } catch (e) {
-            alert(e.response?.data?.error || 'No se pudo completar la acción.');
+            setAviso({ tipo: 'error', texto: e.response?.data?.error || 'No se pudo completar la acción.' });
+        } finally {
+            setProcesando(null);
         }
     };
 
@@ -82,7 +102,13 @@ function TokensActivos({ API }) {
     if (!tokens) return null;
 
     return (
-        <div style={{ maxWidth: 1080, background: '#fff', border: `1px solid ${t.bordeZona}` }}>
+        <div style={{ maxWidth: 1080 }}>
+            {aviso && (
+                <div style={{ marginBottom: 8, padding: '7px 10px', fontSize: 11.5, color: aviso.tipo === 'ok' ? t.verde : t.rojo, background: aviso.tipo === 'ok' ? 'rgba(76,122,76,.08)' : 'rgba(168,65,47,.08)', border: `1px solid ${aviso.tipo === 'ok' ? t.verde : t.rojo}` }}>
+                    {aviso.texto}
+                </div>
+            )}
+            <div style={{ background: '#fff', border: `1px solid ${t.bordeZona}` }}>
             <div style={{ display: 'grid', gridTemplateColumns: GRID_TOKENS, gap: 10, padding: '7px 12px', background: t.encabezadoTabla, borderBottom: `1px solid ${t.hairline}`, fontSize: 9.5, letterSpacing: '.09em', textTransform: 'uppercase', color: t.textoAtenuado2 }}>
                 <span>Titular</span><span>Tipo · origen</span><span>Token</span><span>Emitido</span><span>Último acceso</span><span>Estado</span><span style={{ textAlign: 'right' }}>Acciones</span>
             </div>
@@ -93,7 +119,7 @@ function TokensActivos({ API }) {
                 const estFondo = tok.estadoDisplay === 'Activo' ? 'rgba(76,122,76,.13)' : tok.estadoDisplay === 'Revocado' ? 'rgba(168,65,47,.13)' : '#f0efeb';
                 const estTono = tok.estadoDisplay === 'Activo' ? t.verde : tok.estadoDisplay === 'Revocado' ? t.rojo : t.textoAtenuado1;
                 const acciones = tok.estadoDisplay === 'Revocado' ? ['reactivar'] : ['revocar', 'regenerar', 'reenviar'];
-                const etiquetas = { revocar: 'Revocar', regenerar: 'Regenerar', reenviar: 'Reenviar', reactivar: 'Reactivar' };
+                const enCurso = procesando === tok._id;
                 return (
                     <div key={tok._id} style={{ display: 'grid', gridTemplateColumns: GRID_TOKENS, gap: 10, alignItems: 'center', padding: '8px 12px', borderBottom: `1px solid ${t.hairline}` }}>
                         <div style={{ minWidth: 0 }}>
@@ -110,7 +136,7 @@ function TokensActivos({ API }) {
                         <span style={{ justifySelf: 'start', fontSize: 10, fontWeight: 700, letterSpacing: '.05em', textTransform: 'uppercase', padding: '2px 7px', borderRadius: 2, background: estFondo, color: estTono }}>{tok.estadoDisplay}</span>
                         <div style={{ justifySelf: 'end', display: 'flex', gap: 4 }}>
                             {acciones.map(a => (
-                                <button key={a} onClick={() => accion(tok, a)} style={{ height: 23, padding: '0 8px', background: '#fff', border: '1px solid rgba(0,0,0,.22)', fontSize: 10.5, color: a === 'revocar' ? t.rojo : t.textoSecundario2, cursor: 'pointer', borderRadius: 2 }}>{etiquetas[a]}</button>
+                                <button key={a} onClick={() => accion(tok, a)} disabled={enCurso} style={{ height: 23, padding: '0 8px', background: '#fff', border: '1px solid rgba(0,0,0,.22)', fontSize: 10.5, color: a === 'revocar' ? t.rojo : t.textoSecundario2, cursor: enCurso ? 'default' : 'pointer', borderRadius: 2, opacity: enCurso ? .5 : 1 }}>{enCurso ? '…' : ETIQUETAS_ACCION[a]}</button>
                             ))}
                         </div>
                     </div>
@@ -118,6 +144,7 @@ function TokensActivos({ API }) {
             })}
             <div style={{ padding: '9px 12px', fontSize: 10.5, color: t.textoAtenuado2, lineHeight: 1.6 }}>
                 Los tokens operativos se emiten desde la ficha de cada persona en Recursos. Los tokens cliente se emiten desde el contacto de la empresa en Clientes, al momento de habilitarle el portal. Un mismo contacto necesita un token por empresa. Cada acceso queda registrado con fecha, hora y dispositivo; al revocar se avisa por correo al titular.
+            </div>
             </div>
         </div>
     );
