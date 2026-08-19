@@ -83,11 +83,32 @@ function FichaCliente({ cliente, API, onCambio }) {
     const [contactos, setContactos] = useState(cliente.contactos);
     const [nuevo, setNuevo] = useState({ nombre: '', correo: '', telefono: '', cargo: '' });
     const [avisoPorContacto, setAvisoPorContacto] = useState({});
+    // Edición de la empresa (nombre/dirección) y de contactos existentes — antes solo se
+    // podía agregar o borrar, no corregir un dato mal escrito.
+    const [empresa, setEmpresa] = useState(cliente.empresa);
+    const [direccion, setDireccion] = useState(cliente.direccion || '');
+    const [avisoEmpresa, setAvisoEmpresa] = useState('');
+    const [avisoContactos, setAvisoContactos] = useState('');
+    const contactosCambiaron = JSON.stringify(contactos) !== JSON.stringify(cliente.contactos);
+    const empresaCambio = empresa !== cliente.empresa || direccion !== (cliente.direccion || '');
+
+    const guardarEmpresa = async () => {
+        if (!empresa.trim()) { setAvisoEmpresa('El nombre de la empresa no puede quedar vacío.'); return; }
+        await axios.put(`${API}/clientes/${cliente._id}`, { empresa: empresa.trim(), direccion }, { headers: headerEntorno() });
+        setAvisoEmpresa('Guardado.');
+        onCambio();
+    };
 
     const guardarContactos = async (lista) => {
         setContactos(lista);
         await axios.put(`${API}/clientes/${cliente._id}`, { contactos: lista }, { headers: headerEntorno() });
+        setAvisoContactos('Guardado.');
         onCambio();
+    };
+
+    const editarContacto = (idx, campo, valor) => {
+        setAvisoContactos('');
+        setContactos(prev => prev.map((c, i) => i === idx ? { ...c, [campo]: valor } : c));
     };
 
     const agregarContacto = () => {
@@ -96,7 +117,10 @@ function FichaCliente({ cliente, API, onCambio }) {
         setNuevo({ nombre: '', correo: '', telefono: '', cargo: '' });
     };
 
-    const eliminarContacto = (idx) => guardarContactos(contactos.filter((_, i) => i !== idx));
+    const eliminarContacto = (idx) => {
+        if (!window.confirm('¿Quitar este contacto?')) return;
+        guardarContactos(contactos.filter((_, i) => i !== idx));
+    };
 
     const emitirAcceso = async (contacto) => {
         setAvisoPorContacto(a => ({ ...a, [contacto._id]: 'Emitiendo…' }));
@@ -113,32 +137,51 @@ function FichaCliente({ cliente, API, onCambio }) {
 
     return (
         <div style={{ maxWidth: 720 }}>
-            <h2 style={{ fontSize: 16, fontWeight: 700, margin: '0 0 4px' }}>{cliente.empresa}</h2>
-            <div style={{ fontSize: 10.5, color: t.textoAtenuado1, marginBottom: 16 }}>Ficha de la empresa · Clientes</div>
+            <div style={{ fontSize: 9.5, letterSpacing: '.1em', textTransform: 'uppercase', color: t.textoAtenuado2, marginBottom: 6 }}>Empresa</div>
+            <div style={{ background: '#fff', border: `1px solid ${t.bordeZona}`, padding: 12, marginBottom: 20 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '90px 1fr', gap: 9, alignItems: 'center' }}>
+                    <span style={{ fontSize: 11, color: t.textoAtenuado1 }}>Nombre</span>
+                    <input value={empresa} onChange={e => { setEmpresa(e.target.value); setAvisoEmpresa(''); }} style={{ ...campoStyle, fontSize: 13, fontWeight: 600 }} />
+                    <span style={{ fontSize: 11, color: t.textoAtenuado1 }}>Dirección</span>
+                    <input value={direccion} onChange={e => { setDireccion(e.target.value); setAvisoEmpresa(''); }} style={campoStyle} placeholder="Faena / dirección" />
+                </div>
+                {empresaCambio && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 10 }}>
+                        <button onClick={guardarEmpresa} style={{ ...botonSecundario, background: t.acento, borderColor: t.acento, color: '#fff', fontWeight: 700 }}>Guardar cambios</button>
+                        <span style={{ fontSize: 10.5, color: t.textoAtenuado2 }}>Hay cambios sin guardar</span>
+                    </div>
+                )}
+                {!empresaCambio && avisoEmpresa && <div style={{ fontSize: 10.5, color: t.verde, marginTop: 8 }}>{avisoEmpresa}</div>}
+            </div>
 
-            <div style={{ fontSize: 9.5, letterSpacing: '.1em', textTransform: 'uppercase', color: t.textoAtenuado2, marginBottom: 6 }}>Contactos</div>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 6 }}>
+                <span style={{ fontSize: 9.5, letterSpacing: '.1em', textTransform: 'uppercase', color: t.textoAtenuado2 }}>Contactos</span>
+                {contactosCambiaron && <span style={{ fontSize: 10.5, color: t.textoAtenuado2 }}>Hay cambios sin guardar</span>}
+            </div>
             <div style={{ background: '#fff', border: `1px solid ${t.bordeZona}` }}>
                 {contactos.map((c, i) => (
-                    <div key={c._id || i} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 130px auto auto', gap: 8, alignItems: 'center', padding: '8px 10px', borderBottom: `1px solid ${t.hairline}` }}>
-                        <div>
-                            <div style={{ fontSize: 12, fontWeight: 600 }}>{c.nombre}</div>
-                            <div style={{ fontSize: 10.5, color: t.textoAtenuado2 }}>{c.cargo}</div>
-                        </div>
-                        <div style={{ fontSize: 11, color: t.textoSecundario2 }}>{c.correo}</div>
-                        <div style={{ fontSize: 11, fontFamily: t.fontMono, color: t.textoSecundario2 }}>{c.telefono}</div>
-                        <button onClick={() => emitirAcceso(c)} disabled={!c._id} title={!c._id ? 'Guarda el contacto primero' : ''} style={botonSecundario}>Emitir acceso</button>
-                        <span onClick={() => eliminarContacto(i)} style={{ fontFamily: t.fontMono, fontSize: 13, color: '#c9c7c0', cursor: 'pointer', textAlign: 'center' }}>×</span>
+                    <div key={c._id || i} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 130px auto auto', gap: 8, alignItems: 'center', padding: '8px 10px', borderBottom: `1px solid ${t.hairline}` }}>
+                        <input value={c.nombre} onChange={e => editarContacto(i, 'nombre', e.target.value)} placeholder="Nombre" style={campoStyle} />
+                        <input value={c.cargo || ''} onChange={e => editarContacto(i, 'cargo', e.target.value)} placeholder="Cargo" style={campoStyle} />
+                        <input value={c.correo || ''} onChange={e => editarContacto(i, 'correo', e.target.value)} placeholder="Correo" style={campoStyle} />
+                        <input value={c.telefono || ''} onChange={e => editarContacto(i, 'telefono', e.target.value)} placeholder="+56 9" style={{ ...campoStyle, fontFamily: t.fontMono }} />
+                        <button onClick={() => emitirAcceso(c)} disabled={!c._id} title={!c._id ? 'Guarda el contacto primero' : ''} style={botonSecundario}>Emitir acceso</button
+                        ><span onClick={() => eliminarContacto(i)} style={{ fontFamily: t.fontMono, fontSize: 13, color: '#c9c7c0', cursor: 'pointer', textAlign: 'center' }}>×</span>
                         {avisoPorContacto[c._id] && (
                             <div style={{ gridColumn: '1 / -1', fontSize: 10.5, color: t.verde }}>{avisoPorContacto[c._id]}</div>
                         )}
                     </div>
                 ))}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 130px 1fr auto', gap: 8, alignItems: 'center', padding: '8px 10px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 130px auto auto', gap: 8, alignItems: 'center', padding: '8px 10px' }}>
                     <input placeholder="Nombre" value={nuevo.nombre} onChange={e => setNuevo(n => ({ ...n, nombre: e.target.value }))} style={campoStyle} />
+                    <input placeholder="Cargo" value={nuevo.cargo} onChange={e => setNuevo(n => ({ ...n, cargo: e.target.value }))} style={campoStyle} />
                     <input placeholder="Correo" value={nuevo.correo} onChange={e => setNuevo(n => ({ ...n, correo: e.target.value }))} style={campoStyle} />
                     <input placeholder="+56 9" value={nuevo.telefono} onChange={e => setNuevo(n => ({ ...n, telefono: e.target.value }))} style={{ ...campoStyle, fontFamily: t.fontMono }} />
-                    <input placeholder="Cargo" value={nuevo.cargo} onChange={e => setNuevo(n => ({ ...n, cargo: e.target.value }))} style={campoStyle} />
-                    <button onClick={agregarContacto} style={botonSecundario}>Agregar</button>
+                    <button onClick={agregarContacto} style={{ ...botonSecundario, gridColumn: 'span 2' }}>Agregar contacto</button>
+                </div>
+                <div style={{ padding: '8px 10px', display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <button onClick={() => guardarContactos(contactos)} disabled={!contactosCambiaron} style={{ ...botonSecundario, background: contactosCambiaron ? t.acento : '#fff', borderColor: contactosCambiaron ? t.acento : t.bordeInput, color: contactosCambiaron ? '#fff' : t.textoAtenuado2, fontWeight: 700 }}>Guardar cambios de contactos</button>
+                    {!contactosCambiaron && avisoContactos && <span style={{ fontSize: 10.5, color: t.verde }}>{avisoContactos}</span>}
                 </div>
             </div>
         </div>

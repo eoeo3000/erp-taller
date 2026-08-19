@@ -396,7 +396,23 @@ exports.listarSesiones = async (req, res) => {
             estadoDisplay: estadoPorFechas(u.estado, u.ultimoAcceso, false),
         }));
 
-        res.json([...filasCliente, ...filasOperativo].sort((a, b) => new Date(b.emitidoEn) - new Date(a.emitidoEn)));
+        // Personal con puesto de supervisor que YA existe en Recursos pero todavía no
+        // tiene Usuario (nunca se le emitió token): sin esto, "Tokens activos" solo
+        // mostraba a quien ya tenía acceso, no a quién le falta — no quedaban asociados.
+        const Recurso = require('../models/Recurso')(req.db);
+        const idsConUsuario = new Set(usuarios.filter(u => u.recursoId).map(u => String(u.recursoId)));
+        const supervisoresSinToken = await Recurso.find({ puesto: { $regex: /supervisor/i } }).lean();
+        const filasPendientes = supervisoresSinToken
+            .filter(r => !idsConUsuario.has(String(r._id)))
+            .map(r => ({
+                _id: r._id, tipo: 'operativo', pendiente: true, recursoId: r._id, puesto: r.puesto,
+                nombre: r.nombre, correo: r.email || '',
+                origen: `Recursos · ${r.puesto}`,
+                tokenPreview: '', emitidoEn: null, ultimoAcceso: null,
+                estadoDisplay: 'Sin emitir',
+            }));
+
+        res.json([...filasCliente, ...filasOperativo, ...filasPendientes].sort((a, b) => new Date(b.emitidoEn || 0) - new Date(a.emitidoEn || 0)));
     } catch (err) {
         res.status(500).json({ error: err.message });
     }

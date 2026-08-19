@@ -98,6 +98,22 @@ function TokensActivos({ API }) {
         }
     };
 
+    // Personal de Recursos con puesto de supervisor que todavía no tiene Usuario — emite
+    // el token acá mismo, sin tener que ir a la ficha de Recursos.
+    const emitirParaRecurso = async (tok) => {
+        setAviso(null);
+        setProcesando(tok._id);
+        try {
+            await axios.post(`${API}/usuarios`, { nombre: tok.nombre, puesto: tok.puesto, rol: 'supervisor', recursoId: tok.recursoId }, { headers: headerEntorno() });
+            setAviso({ tipo: 'ok', texto: `Acceso operativo emitido para ${tok.nombre}${tok.correo ? ` — correo enviado a ${tok.correo}` : ' — sin correo registrado en Recursos, no se pudo avisar por mail'}.` });
+            await cargar();
+        } catch (e) {
+            setAviso({ tipo: 'error', texto: e.response?.data?.error || 'No se pudo emitir el acceso.' });
+        } finally {
+            setProcesando(null);
+        }
+    };
+
     if (error) return <div style={{ fontSize: 12, color: t.rojo }}>{error}</div>;
     if (!tokens) return null;
 
@@ -116,8 +132,8 @@ function TokensActivos({ API }) {
             {tokens.map(tok => {
                 const accesoTexto = fmtAcceso(tok.ultimoAcceso);
                 const accesoRojo = accesoTexto === 'nunca' || accesoTexto.includes('meses');
-                const estFondo = tok.estadoDisplay === 'Activo' ? 'rgba(76,122,76,.13)' : tok.estadoDisplay === 'Revocado' ? 'rgba(168,65,47,.13)' : '#f0efeb';
-                const estTono = tok.estadoDisplay === 'Activo' ? t.verde : tok.estadoDisplay === 'Revocado' ? t.rojo : t.textoAtenuado1;
+                const estFondo = tok.pendiente ? 'rgba(184,134,47,.13)' : tok.estadoDisplay === 'Activo' ? 'rgba(76,122,76,.13)' : tok.estadoDisplay === 'Revocado' ? 'rgba(168,65,47,.13)' : '#f0efeb';
+                const estTono = tok.pendiente ? t.ambar : tok.estadoDisplay === 'Activo' ? t.verde : tok.estadoDisplay === 'Revocado' ? t.rojo : t.textoAtenuado1;
                 const acciones = tok.estadoDisplay === 'Revocado' ? ['reactivar'] : ['revocar', 'regenerar', 'reenviar'];
                 const enCurso = procesando === tok._id;
                 return (
@@ -135,7 +151,9 @@ function TokensActivos({ API }) {
                         <span style={{ fontFamily: t.fontMono, fontSize: 11, color: accesoRojo ? t.rojo : t.textoAtenuado1 }}>{accesoTexto}</span>
                         <span style={{ justifySelf: 'start', fontSize: 10, fontWeight: 700, letterSpacing: '.05em', textTransform: 'uppercase', padding: '2px 7px', borderRadius: 2, background: estFondo, color: estTono }}>{tok.estadoDisplay}</span>
                         <div style={{ justifySelf: 'end', display: 'flex', gap: 4 }}>
-                            {acciones.map(a => (
+                            {tok.pendiente ? (
+                                <button onClick={() => emitirParaRecurso(tok)} disabled={enCurso} style={{ height: 23, padding: '0 8px', background: t.acento, border: `1px solid ${t.acento}`, fontSize: 10.5, fontWeight: 700, color: '#fff', cursor: enCurso ? 'default' : 'pointer', borderRadius: 2, opacity: enCurso ? .6 : 1 }}>{enCurso ? '…' : 'Emitir acceso'}</button>
+                            ) : acciones.map(a => (
                                 <button key={a} onClick={() => accion(tok, a)} disabled={enCurso} style={{ height: 23, padding: '0 8px', background: '#fff', border: '1px solid rgba(0,0,0,.22)', fontSize: 10.5, color: a === 'revocar' ? t.rojo : t.textoSecundario2, cursor: enCurso ? 'default' : 'pointer', borderRadius: 2, opacity: enCurso ? .5 : 1 }}>{enCurso ? '…' : ETIQUETAS_ACCION[a]}</button>
                             ))}
                         </div>
