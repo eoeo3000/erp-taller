@@ -12,6 +12,10 @@ router.post('/acceso',            ctrl.acceso);
 router.post('/emitir-token',      ctrl.emitirTokenContacto);
 router.get('/mis-solicitudes',    ctrl.misSolicitudes);
 router.get('/sesiones',              ctrl.listarSesiones);
-router.post('/sesiones/:id/revocar', ctrl.revocarSesion);
+router.post('/sesiones/lote',            ctrl.generarLote);
+router.post('/sesiones/:id/revocar',   ctrl.revocarSesion);
+router.post('/sesiones/:id/reactivar', ctrl.reactivarSesion);
+router.post('/sesiones/:id/regenerar', ctrl.regenerarToken);
+router.post('/sesiones/:id/reenviar',  ctrl.reenviarToken);
 
 module.exports = router;

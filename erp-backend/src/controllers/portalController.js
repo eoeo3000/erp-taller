@@ -2,6 +2,12 @@ const crypto = require('crypto');
 const getSolicitud = require('../models/Solicitud');
 const getOT = require('../models/OT');
 const getSesionPortal = require('../models/SesionPortal');
+const getCliente = require('../models/Cliente');
+const transporter = require('../config/mailer');
+
+const DIAS_VIGENCIA_TOKEN = 30; // sesión autoservicio/emitida
+const DIAS_VIGENCIA_LOTE = 90;  // token pre-generado sin asignar (Requiere confirmación → confirmado con el usuario)
+const DIAS_INACTIVO = 30;       // último acceso más antiguo que esto se muestra en rojo
 
 // Un solo mensaje para los tres casos de fallo (teléfono inexistente, solicitud
 // inexistente, o par que no coincide) — no revelar cuál de los dos falló (ver
@@ -230,26 +236,187 @@ exports.acceso = async (req, res) => {
     }
 };
 
-// POST /api/portal/emitir-token — la oficina genera un link pre-autenticado para mandar
-// por WhatsApp o correo (README pwa_movil §6, C1: "el link... lleva token firmado por
-// contacto y aterriza directo en C2, saltándose C1"). Sin segundo factor: quien llama a
-// este endpoint ya es personal interno (vía SPA), no un desconocido probando pares.
+// Construye el link del portal y despacha el correo de acceso — reutilizado por emisión,
+// regeneración y reenvío. Texto plano, sin HTML decorativo (mismo criterio que el resto
+// de los correos del sistema, ver config/mailer.js).
+async function enviarCorreoAcceso({ correo, nombre, empresa, token, entorno }) {
+    if (!correo) return false;
+    const baseUrl = process.env.PWA_CLIENTE_URL || 'https://erp-pwa-cliente.onrender.com';
+    const link = `${baseUrl}/?token=${token}${entorno ? `&entorno=${entorno}` : ''}`;
+    await transporter.sendMail({
+        from: `"ERP - Gestión de Trabajo" <${process.env.EMAIL_FROM}>`,
+        to: correo,
+        subject: `Acceso a tu portal${empresa ? ` — ${empresa}` : ''}`,
+        text: `Hola${nombre ? ` ${nombre}` : ''},\n\n`
+            + `Este es tu acceso al portal donde puedes ver el estado de tus solicitudes y órdenes de trabajo${empresa ? ` de ${empresa}` : ''}.\n\n`
+            + `${link}\n\n`
+            + `Es un acceso permanente: no necesitas clave. Si lo pierdes o cambias de equipo, pide a la oficina que lo renueve.`,
+    });
+    return true;
+}
+
+function nuevoToken() { return crypto.randomBytes(20).toString('hex'); }
+
+// POST /api/portal/emitir-token — "Bodega de tokens · Emitir acceso cliente" (mejora v3
+// #2). Dos formas de identificar al titular: clienteId+contactoId (origen normal, desde
+// el módulo de tokens o embebido en la ficha del Cliente) o telefono suelto (compatibilidad
+// con el flujo anterior, cuando todavía no hay Cliente cargado para ese teléfono). Sin
+// segundo factor: quien llama a este endpoint ya es personal interno (vía SPA).
 exports.emitirTokenContacto = async (req, res) => {
     const SesionPortal = getSesionPortal(req.db);
+    const Cliente = getCliente(req.db);
     try {
-        const telefono = normalizarTelefono(req.body.telefono);
-        if (!telefono) return res.status(400).json({ error: 'Teléfono requerido' });
+        const { clienteId, contactoId, alcance, correo: correoManual, entorno } = req.body;
+        let telefono = normalizarTelefono(req.body.telefono);
+        let empresaSolicitante = '';
+        let nombreContacto = '';
+        let correo = correoManual || '';
 
-        const trabajos = await trabajosPorTelefono(req.db, telefono);
-        if (!trabajos.length) return res.status(404).json({ error: 'No hay solicitudes registradas con ese teléfono' });
+        if (clienteId) {
+            const cliente = await Cliente.findById(clienteId);
+            if (!cliente) return res.status(404).json({ error: 'Cliente no encontrado' });
+            empresaSolicitante = cliente.empresa;
+            if (contactoId) {
+                const contacto = cliente.contactos.id(contactoId);
+                if (!contacto) return res.status(404).json({ error: 'Contacto no encontrado' });
+                nombreContacto = contacto.nombre;
+                correo = correo || contacto.correo;
+                telefono = telefono || normalizarTelefono(contacto.telefono);
+            }
+        } else {
+            if (!telefono) return res.status(400).json({ error: 'Teléfono o cliente requerido' });
+            const trabajos = await trabajosPorTelefono(req.db, telefono);
+            if (!trabajos.length) return res.status(404).json({ error: 'No hay solicitudes registradas con ese teléfono' });
+            empresaSolicitante = trabajos[0].empresaSolicitante;
+        }
 
-        const token = crypto.randomBytes(20).toString('hex');
-        const expira = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
-        await SesionPortal.create({
-            telefono, expira, tokenHash: hashToken(token), empresaSolicitante: trabajos[0].empresaSolicitante,
+        const token = nuevoToken();
+        const expira = new Date(Date.now() + DIAS_VIGENCIA_TOKEN * 24 * 60 * 60 * 1000);
+        const sesion = await SesionPortal.create({
+            tipo: 'cliente', telefono, empresaSolicitante,
+            clienteId: clienteId || null, contactoId: contactoId || null,
+            alcance: alcance === 'propias' ? 'propias' : 'empresa',
+            tokenHash: hashToken(token), expira, estado: 'activo',
+            emitidoEn: new Date(), emitidoPor: req.body.emitidoPor || '',
         });
 
-        res.json({ token, expira, empresaSolicitante: trabajos[0].empresaSolicitante });
+        const correoEnviado = await enviarCorreoAcceso({ correo, nombre: nombreContacto, empresa: empresaSolicitante, token, entorno });
+
+        res.json({ token, expira, empresaSolicitante, sesionId: sesion._id, correoEnviado });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+};
+
+// POST /api/portal/sesiones/:id/regenerar — invalida el token anterior (deja de servir
+// de inmediato) y emite uno nuevo para la misma persona; reenvía el correo.
+exports.regenerarToken = async (req, res) => {
+    const SesionPortal = getSesionPortal(req.db);
+    try {
+        const anterior = await SesionPortal.findById(req.params.id);
+        if (!anterior) return res.status(404).json({ error: 'Sesión no encontrada' });
+
+        const token = nuevoToken();
+        anterior.tokenHash = hashToken(token);
+        anterior.expira = new Date(Date.now() + DIAS_VIGENCIA_TOKEN * 24 * 60 * 60 * 1000);
+        anterior.estado = 'activo';
+        anterior.ultimoAcceso = null;
+        await anterior.save();
+
+        const correoEnviado = await enviarCorreoAcceso({
+            correo: req.body.correo, empresa: anterior.empresaSolicitante, token, entorno: req.body.entorno,
+        });
+
+        res.json({ token, expira: anterior.expira, correoEnviado });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+};
+
+// POST /api/portal/sesiones/:id/reenviar — el token en claro nunca se guarda (solo su
+// hash, ver models/SesionPortal.js), así que no existe nada que "reenviar" literalmente:
+// reenviar es, en la práctica, regenerar y volver a enviar el correo con el link nuevo.
+exports.reenviarToken = exports.regenerarToken;
+
+// GET /api/portal/sesiones — "Tokens activos": estado mostrado se deriva de estado
+// guardado + último acceso, no se guarda un cuarto valor aparte (Activo/Inactivo/Sin uso
+// son vistas distintas del mismo dato, Revocado es el único estado real que se persiste).
+exports.listarSesiones = async (req, res) => {
+    const SesionPortal = getSesionPortal(req.db);
+    try {
+        const sesiones = await SesionPortal.find({ tipo: 'cliente' }).select('-tokenHash').sort({ createdAt: -1 }).lean();
+        const ahora = Date.now();
+        const conEstado = sesiones.map(s => {
+            let estadoDisplay = 'Activo';
+            if (s.estado === 'revocado') estadoDisplay = 'Revocado';
+            else if (!s.tokenHash && !s.clienteId) estadoDisplay = 'Sin asignar'; // stock pre-generado
+            else if (!s.ultimoAcceso) estadoDisplay = 'Sin uso';
+            else if (ahora - new Date(s.ultimoAcceso).getTime() > DIAS_INACTIVO * 24 * 60 * 60 * 1000) estadoDisplay = 'Inactivo';
+            return { ...s, estadoDisplay };
+        });
+        res.json(conEstado);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+};
+
+// POST /api/portal/sesiones/:id/revocar — la oficina corta el acceso; avisa por correo.
+exports.revocarSesion = async (req, res) => {
+    const SesionPortal = getSesionPortal(req.db);
+    try {
+        const sesion = await SesionPortal.findByIdAndUpdate(
+            req.params.id,
+            { estado: 'revocado', revocadoEn: new Date(), revocadoPor: req.body.revocadoPor || '' },
+            { new: true },
+        ).select('-tokenHash');
+        if (!sesion) return res.status(404).json({ error: 'Sesión no encontrada' });
+
+        if (req.body.correo) {
+            try {
+                await transporter.sendMail({
+                    from: `"ERP - Gestión de Trabajo" <${process.env.EMAIL_FROM}>`,
+                    to: req.body.correo,
+                    subject: 'Tu acceso al portal fue revocado',
+                    text: 'Tu acceso al portal de seguimiento fue revocado desde la oficina. Si crees que es un error, contáctanos.',
+                });
+            } catch (eCorreo) {
+                console.warn('[revocarSesion] no se pudo enviar el aviso de revocación:', eCorreo.message);
+            }
+        }
+
+        res.json({ mensaje: 'Sesión revocada', sesion });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+};
+
+// POST /api/portal/sesiones/:id/reactivar — vuelve a habilitar una sesión revocada con el
+// mismo token (no regenera): cubre "un revocado ofrece Reactivar" de Tokens activos.
+exports.reactivarSesion = async (req, res) => {
+    const SesionPortal = getSesionPortal(req.db);
+    try {
+        const sesion = await SesionPortal.findByIdAndUpdate(
+            req.params.id, { estado: 'activo', revocadoEn: null, revocadoPor: '' }, { new: true },
+        ).select('-tokenHash');
+        if (!sesion) return res.status(404).json({ error: 'Sesión no encontrada' });
+        res.json({ mensaje: 'Sesión reactivada', sesion });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+};
+
+// POST /api/portal/sesiones/lote — "Stock pre-generado": crea N sesiones sin clienteId
+// (tokenHash vacío, sin asignar todavía). Se asignan más adelante regenerando esa sesión
+// una vez que se sabe a qué contacto va (mismo endpoint que "Regenerar").
+exports.generarLote = async (req, res) => {
+    const SesionPortal = getSesionPortal(req.db);
+    try {
+        const cantidad = Math.max(1, Math.min(200, Number(req.body.cantidad) || 0));
+        const expira = new Date(Date.now() + DIAS_VIGENCIA_LOTE * 24 * 60 * 60 * 1000);
+        const lote = await SesionPortal.insertMany(
+            Array.from({ length: cantidad }, () => ({ tipo: 'cliente', tokenHash: '', expira, estado: 'activo' }))
+        );
+        res.status(201).json({ mensaje: `${lote.length} tokens generados`, cantidad: lote.length, vigenciaDias: DIAS_VIGENCIA_LOTE });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
@@ -259,37 +426,16 @@ exports.emitirTokenContacto = async (req, res) => {
 exports.misSolicitudes = async (req, res) => {
     const SesionPortal = getSesionPortal(req.db);
     try {
-        const sesion = await SesionPortal.findOne({ tokenHash: hashToken(req.query.token), revocada: false });
+        const sesion = await SesionPortal.findOne({ tokenHash: hashToken(req.query.token), estado: 'activo' });
         if (!sesion || sesion.expira < new Date()) return res.status(403).json({ error: 'Sesión inválida o vencida' });
 
         sesion.ultimoAcceso = new Date();
+        sesion.accesos = sesion.accesos || [];
+        sesion.accesos.push({ fecha: new Date(), ip: req.ip || '', userAgent: req.headers['user-agent'] || '' });
         await sesion.save();
 
         const trabajos = await trabajosPorTelefono(req.db, sesion.telefono);
         res.json({ empresaSolicitante: sesion.empresaSolicitante, trabajos });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-};
-
-// GET /api/portal/sesiones — para que la oficina vea qué sesiones de cliente están activas
-exports.listarSesiones = async (req, res) => {
-    const SesionPortal = getSesionPortal(req.db);
-    try {
-        const sesiones = await SesionPortal.find().select('-tokenHash').sort({ createdAt: -1 });
-        res.json(sesiones);
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-};
-
-// POST /api/portal/sesiones/:id/revocar — la oficina corta el acceso de un dispositivo
-exports.revocarSesion = async (req, res) => {
-    const SesionPortal = getSesionPortal(req.db);
-    try {
-        const sesion = await SesionPortal.findByIdAndUpdate(req.params.id, { revocada: true }, { new: true }).select('-tokenHash');
-        if (!sesion) return res.status(404).json({ error: 'Sesión no encontrada' });
-        res.json({ mensaje: 'Sesión revocada', sesion });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
