@@ -150,6 +150,68 @@ exports.cerrar = async (req, res) => {
     }
 };
 
+const DIAS_INFORME_ATRASADO = 5; // días hábiles (confirmado con el usuario) — aproximado a días corridos
+
+function inicioPeriodo(periodo) {
+    const ahora = new Date();
+    if (periodo === 'mes') return new Date(ahora.getFullYear(), ahora.getMonth(), 1);
+    if (periodo === 'trimestre') return new Date(ahora.getFullYear(), Math.floor(ahora.getMonth() / 3) * 3, 1);
+    const dia = ahora.getDay();
+    const lunes = new Date(ahora);
+    lunes.setDate(ahora.getDate() + (dia === 0 ? -6 : 1 - dia));
+    lunes.setHours(0, 0, 0, 0);
+    return lunes;
+}
+
+// GET /api/asignaciones/tablero-supervisores?periodo=semana|mes|trimestre — mejora v3 #4.
+// Fuentes: Asignacion (evaluaciones/ejecuciones vía Usuario.recursoId) + OT.supervisorId
+// (Recurso) para "informes atrasados", que es un concepto de OT, no de Asignacion. Sin
+// timestamp de "cuándo entró en Trabajo Terminado" en el modelo — se aproxima con
+// ot.updatedAt, lo más cercano que existe hoy (ver nota en el código).
+exports.tableroSupervisores = async (req, res) => {
+    const Asignacion = getAsignacion(req.db);
+    const Usuario = getUsuario(req.db);
+    const Recurso = getRecurso(req.db);
+    const OT = getOT(req.db);
+    try {
+        const desde = inicioPeriodo(req.query.periodo);
+        const desdeISO = aISO(desde);
+
+        const supervisoresRecurso = await Recurso.find({ puesto: { $regex: /supervisor/i } }).lean();
+        const usuarios = await Usuario.find({ recursoId: { $in: supervisoresRecurso.map(r => r._id) } }).lean();
+        const usuarioPorRecurso = new Map(usuarios.map(u => [String(u.recursoId), u]));
+
+        const limiteAtraso = new Date(Date.now() - DIAS_INFORME_ATRASADO * 24 * 60 * 60 * 1000);
+
+        const filas = await Promise.all(supervisoresRecurso.map(async (r) => {
+            const usuario = usuarioPorRecurso.get(String(r._id));
+            let evalPend = 0, evalCurso = 0, ejecPend = 0, ejecCurso = 0, completadas = 0;
+            if (usuario) {
+                const asignaciones = await Asignacion.find({ usuarioId: usuario._id, fechaPlanificada: { $gte: desdeISO } }).lean();
+                evalPend = asignaciones.filter(a => a.tipo === 'evaluacion' && a.estado === 'pendiente').length;
+                evalCurso = asignaciones.filter(a => a.tipo === 'evaluacion' && a.estado === 'en_curso').length;
+                ejecPend = asignaciones.filter(a => a.tipo === 'ejecucion' && a.estado === 'pendiente').length;
+                ejecCurso = asignaciones.filter(a => a.tipo === 'ejecucion' && a.estado === 'en_curso').length;
+                completadas = asignaciones.filter(a => a.estado === 'completada').length;
+            }
+            const informesAtrasados = await OT.countDocuments({
+                supervisorId: r._id, estado: 'Trabajo Terminado', updatedAt: { $lte: limiteAtraso },
+            });
+            const activas = evalPend + evalCurso + ejecPend + ejecCurso;
+            const limite = r.senior ? 6 : 5;
+            return {
+                recursoId: r._id, nombre: r.nombre, puesto: r.puesto,
+                evalPend, evalCurso, ejecPend, ejecCurso, completadas, informesAtrasados,
+                cargaPct: Math.min(100, Math.round((activas / limite) * 100)),
+            };
+        }));
+
+        res.json({ periodo: req.query.periodo || 'semana', desde: desdeISO, supervisores: filas });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+};
+
 // GET /api/asignaciones/mi-dia?token=&entorno=
 exports.miDia = async (req, res) => {
     const Asignacion = getAsignacion(req.db);

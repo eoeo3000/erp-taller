@@ -103,6 +103,11 @@ const GanttScreen = ({ recursos = [], ots = [], calendarios = [], obtenerHorasPa
     const [otSel, setOtSel] = useState(null);
     const [confirmando, setConfirmando] = useState(false);
     const [asideOculta, setAsideOculta] = useState(false);
+    // Mejora v3 #3 — "Por operario" es exactamente lo que ya existía (sin cambios); "Por OT"
+    // y "Por supervisor" son vistas nuevas, agregadas por OT/persona en vez de por tarea.
+    const [modoVista, setModoVista] = useState('ot');
+    const esSupervisor = (r) => /supervisor/i.test(r.puesto || ''); // mismo criterio que otController.antecedentes
+    const LIMITE_ASIGNACIONES = (r) => (r.senior ? 6 : 5); // confirmado con el usuario
 
     // Preselecciona la primera OT visible para que el panel no arranque vacío.
     useEffect(() => {
@@ -111,6 +116,19 @@ const GanttScreen = ({ recursos = [], ots = [], calendarios = [], obtenerHorasPa
     }, [ots]);
 
     const capacidadDia = (recurso, dia) => obtenerHorasParaDia ? obtenerHorasParaDia(recurso, { fechaCompleta: new Date(dia + 'T00:00:00') }) : 8;
+
+    // Mejora v3 #3 — datos agregados para "Por OT" / "Por supervisor". Se apoyan en
+    // OT.supervisorId (Recurso), no en Asignacion: es simplificación deliberada — cuenta
+    // supervisión de OT ya creadas, no evaluaciones que todavía son solo Solicitud.
+    const supervisoresRecursos = recursos.filter(esSupervisor);
+    const otsActivasDe = (recursoId) => ots.filter(ot => String(ot.supervisorId) === String(recursoId) && ESTADOS_ACTIVOS.includes(ot.estado));
+    const diasOcupadosPorSupervisor = (recursoId) => {
+        const mapa = {};
+        otsActivasDe(recursoId).forEach(ot => {
+            (ot.tareas || []).forEach(tt => { if (tt.fecha && diasSemana.includes(tt.fecha)) mapa[tt.fecha] = (mapa[tt.fecha] || 0) + 1; });
+        });
+        return mapa;
+    };
 
     const verificarDisponibilidad = (ot) => {
         const conflictos = [];
@@ -172,16 +190,21 @@ const GanttScreen = ({ recursos = [], ots = [], calendarios = [], obtenerHorasPa
                 <button onClick={() => setIdxSemana(i => Math.max(0, i - 1))} disabled={idxSemana === 0} style={{ ...styles.btnSecundario, opacity: idxSemana === 0 ? .5 : 1 }}>Semana anterior</button>
                 <span style={{ fontFamily: t.fontMono, fontSize: 11.5, fontWeight: 600, whiteSpace: 'nowrap' }}>{semanaActual ? `Semana ${semanaActual.num} · ${semanaActual.label}` : '—'}</span>
                 <button onClick={() => setIdxSemana(i => Math.min(semanas.length - 1, i + 1))} disabled={idxSemana >= semanas.length - 1} style={{ ...styles.btnSecundario, opacity: idxSemana >= semanas.length - 1 ? .5 : 1 }}>Semana siguiente</button>
-                <span style={{ marginLeft: 'auto', fontSize: 10.5, color: t.textoAtenuado3 }}>La barra roja marca tarea sobre capacidad del responsable</span>
+                <div style={{ display: 'flex', gap: 4, marginLeft: 14 }}>
+                    {[['ot', 'Por OT'], ['supervisor', 'Por supervisor'], ['operario', 'Por operario']].map(([m, label]) => (
+                        <button key={m} onClick={() => setModoVista(m)} style={modoVista === m ? styles.segActivo : styles.segInactivo}>{label}</button>
+                    ))}
+                </div>
+                <span style={{ marginLeft: 'auto', fontSize: 10.5, color: t.textoAtenuado3 }}>La barra roja marca tarea o día sobre capacidad</span>
             </div>
 
             <div style={styles.cuerpo}>
                 <section style={styles.scrollTabla}>
                     <div style={{ minWidth: 1228 }}>
                         <div style={styles.filaHeader}>
-                            <span style={styles.thCol}>OT · N°</span>
-                            <span style={styles.thCol}>Tarea / descripción</span>
-                            <span style={styles.thCol}>Responsable</span>
+                            <span style={styles.thCol}>{modoVista === 'supervisor' ? 'Supervisor' : 'OT · N°'}</span>
+                            <span style={styles.thCol}>{modoVista === 'operario' ? 'Tarea / descripción' : 'Detalle'}</span>
+                            <span style={styles.thCol}>{modoVista === 'ot' ? 'Supervisor' : modoVista === 'supervisor' ? 'Carga' : 'Responsable'}</span>
                             <span style={styles.thCol}>Estado</span>
                             <span style={{ ...styles.thCol, textAlign: 'right' }}>Hrs</span>
                             <span style={{ ...styles.thCol, textAlign: 'right' }}>Inicio</span>
@@ -198,6 +221,7 @@ const GanttScreen = ({ recursos = [], ots = [], calendarios = [], obtenerHorasPa
                             })}
                         </div>
 
+                        {modoVista === 'operario' && <>
                         {ots.map(ot => {
                             const estaEjecutado = ESTADOS_EJECUTADOS.includes(ot.estado);
                             const puedeProgramar = ['Planificada', 'Programada'].includes(ot.estado);
@@ -320,6 +344,87 @@ const GanttScreen = ({ recursos = [], ots = [], calendarios = [], obtenerHorasPa
                                 </div>
                             );
                         })}
+                        </>}
+
+                        {modoVista === 'ot' && <>
+                        {ots.map(ot => {
+                            const supervisor = recursos.find(r => String(r._id) === String(ot.supervisorId));
+                            const fechasTareas = (ot.tareas || []).filter(tt => tt.fecha).map(tt => tt.fecha).sort();
+                            const enSemana = diasSemana.some(d => fechasTareas.includes(d));
+                            const horasSemana = (ot.tareas || []).filter(tt => diasSemana.includes(tt.fecha)).reduce((a, tt) => a + (Number(tt.duracion) || 0), 0);
+                            const fmtFecha = iso => iso ? new Date(iso + 'T00:00:00').toLocaleDateString('es-CL', { day: '2-digit', month: 'short' }) : '—';
+                            return (
+                                <div key={ot._id} style={{ ...styles.filaOT, background: otSel?._id === ot._id ? '#f0efeb' : enSemana ? t.fondoMain : t.superficie }} onClick={() => { setOtSel(ot); setConfirmando(false); }}>
+                                    <span style={{ ...styles.celda, borderLeft: `2px solid ${otSel?._id === ot._id ? '#1c1d1b' : 'transparent'}` }}>
+                                        <span onClick={(e) => { e.stopPropagation(); navigate('/tratamiento', { state: ot }); }} style={{ fontFamily: t.fontMono, fontSize: 11, fontWeight: 600, color: t.acento, cursor: 'pointer' }}>{ot.numeroOT || 'S/N'}</span>
+                                    </span>
+                                    <span style={{ ...styles.celda, flexDirection: 'column', alignItems: 'flex-start', justifyContent: 'center', gap: 0 }}>
+                                        <span style={{ fontSize: 12, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' }}>{ot.solicitante || 'Cliente'}</span>
+                                        <span style={{ fontSize: 10.5, color: t.textoAtenuado3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' }}>{ot.descripcion || ''}</span>
+                                    </span>
+                                    <span style={{ ...styles.celda, flexDirection: 'column', alignItems: 'flex-start', justifyContent: 'center', gap: 0 }}>
+                                        <span style={{ fontSize: 11, color: t.textoSecundario1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' }}>{supervisor?.nombre || <span style={{ color: t.textoDeshabilitado }}>Sin supervisor</span>}</span>
+                                        <span style={{ fontSize: 10, color: t.textoDeshabilitado, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' }}>{supervisor?.puesto || ''}</span>
+                                    </span>
+                                    <span style={{ ...styles.celda, fontSize: 10.5, fontWeight: 600, color: colorEstadoOT(ot.estado) }}>{ot.estado}</span>
+                                    <span style={{ ...styles.celda, justifyContent: 'flex-end', fontFamily: t.fontMono, fontSize: 11 }}>{`${horasSemana} h`}</span>
+                                    <span style={{ ...styles.celda, justifyContent: 'flex-end', fontFamily: t.fontMono, fontSize: 10.5, color: t.textoSecundario1 }}>{fmtFecha(fechasTareas[0])}</span>
+                                    <span style={{ ...styles.celda, justifyContent: 'flex-end', fontFamily: t.fontMono, fontSize: 10.5, color: t.textoSecundario1, borderRight: `1px solid ${t.hairlineBloque}` }}>{fmtFecha(fechasTareas[fechasTareas.length - 1])}</span>
+                                    {diasSemana.map(dia => {
+                                        const hay = fechasTareas.includes(dia);
+                                        const f = new Date(dia + 'T00:00:00');
+                                        const esFinde = f.getDay() === 0 || f.getDay() === 6;
+                                        return (
+                                            <span key={dia} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minWidth: 0, overflow: 'hidden', padding: 4, borderLeft: `1px solid ${t.hairlineFila}`, background: esFinde ? '#f4f3ef' : 'transparent' }}>
+                                                {hay && (
+                                                    <span style={{ width: '100%', height: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', background: t.acento, color: '#fff', fontFamily: t.fontMono, fontSize: 10, fontWeight: 600, borderRadius: 2 }} />
+                                                )}
+                                            </span>
+                                        );
+                                    })}
+                                </div>
+                            );
+                        })}
+                        <div style={styles.filaSeccion}>Carga de supervisores · asignaciones / capacidad</div>
+                        {supervisoresRecursos.map(r => <FilaCargaSupervisor key={r._id} recurso={r} diasSemana={diasSemana} otsActivasDe={otsActivasDe} diasOcupadosPorSupervisor={diasOcupadosPorSupervisor} limite={LIMITE_ASIGNACIONES(r)} />)}
+                        </>}
+
+                        {modoVista === 'supervisor' && <>
+                        {supervisoresRecursos.map(r => {
+                            const activas = otsActivasDe(r._id);
+                            const ocupados = diasOcupadosPorSupervisor(r._id);
+                            const horasSemana = activas.reduce((acc, ot) => acc + (ot.tareas || []).filter(tt => diasSemana.includes(tt.fecha)).reduce((a, tt) => a + (Number(tt.duracion) || 0), 0), 0);
+                            const fechas = activas.flatMap(ot => (ot.tareas || []).filter(tt => tt.fecha).map(tt => tt.fecha)).sort();
+                            const fmtFecha = iso => iso ? new Date(iso + 'T00:00:00').toLocaleDateString('es-CL', { day: '2-digit', month: 'short' }) : '—';
+                            return (
+                                <div key={r._id} style={{ ...styles.filaOT, cursor: 'default' }}>
+                                    <span style={styles.celda}><span style={{ fontSize: 12, fontWeight: 700 }}>{r.nombre}</span></span>
+                                    <span style={{ ...styles.celda, flexDirection: 'column', alignItems: 'flex-start', justifyContent: 'center', gap: 0 }}>
+                                        <span style={{ fontSize: 11, color: t.textoSecundario1 }}>{r.puesto}{r.senior ? ' · senior' : ''}</span>
+                                        <span style={{ fontSize: 10, color: t.textoDeshabilitado }}>{activas.length} de {LIMITE_ASIGNACIONES(r)} asignaciones</span>
+                                    </span>
+                                    <span style={{ ...styles.celda, fontFamily: t.fontMono, fontSize: 11, fontWeight: 600, color: activas.length > LIMITE_ASIGNACIONES(r) ? t.rojo : t.acento }}>{Math.round((activas.length / LIMITE_ASIGNACIONES(r)) * 100)}%</span>
+                                    <span style={{ ...styles.celda, fontSize: 10.5, fontWeight: 600, color: activas.length > LIMITE_ASIGNACIONES(r) ? t.rojo : t.textoSecundario1 }}>{activas.length > LIMITE_ASIGNACIONES(r) ? 'Sobrecarga' : activas.length > 0 ? 'Al día' : 'Disponible'}</span>
+                                    <span style={{ ...styles.celda, justifyContent: 'flex-end', fontFamily: t.fontMono, fontSize: 11 }}>{`${horasSemana} h`}</span>
+                                    <span style={{ ...styles.celda, justifyContent: 'flex-end', fontFamily: t.fontMono, fontSize: 10.5, color: t.textoSecundario1 }}>{fmtFecha(fechas[0])}</span>
+                                    <span style={{ ...styles.celda, justifyContent: 'flex-end', fontFamily: t.fontMono, fontSize: 10.5, color: t.textoSecundario1, borderRight: `1px solid ${t.hairlineBloque}` }}>{fmtFecha(fechas[fechas.length - 1])}</span>
+                                    {diasSemana.map(dia => {
+                                        const n = ocupados[dia] || 0;
+                                        const f = new Date(dia + 'T00:00:00');
+                                        const esFinde = f.getDay() === 0 || f.getDay() === 6;
+                                        const sobre = n > LIMITE_ASIGNACIONES(r);
+                                        return (
+                                            <span key={dia} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 34, minWidth: 0, overflow: 'hidden', padding: 4, borderLeft: `1px solid ${t.hairlineFila}`, background: sobre ? t.cargaExceso : esFinde ? '#f4f3ef' : 'transparent' }}>
+                                                {n > 0 && <span style={{ fontFamily: t.fontMono, fontSize: 10.5, fontWeight: 600, color: sobre ? t.rojo : t.textoPrincipal }}>{n}</span>}
+                                            </span>
+                                        );
+                                    })}
+                                </div>
+                            );
+                        })}
+                        <div style={styles.filaSeccion}>Carga de supervisores · asignaciones / capacidad</div>
+                        {supervisoresRecursos.map(r => <FilaCargaSupervisor key={r._id} recurso={r} diasSemana={diasSemana} otsActivasDe={otsActivasDe} diasOcupadosPorSupervisor={diasOcupadosPorSupervisor} limite={LIMITE_ASIGNACIONES(r)} />)}
+                        </>}
                     </div>
                 </section>
 
@@ -386,6 +491,45 @@ const GanttScreen = ({ recursos = [], ots = [], calendarios = [], obtenerHorasPa
     );
 };
 
+// Bloque "Carga de supervisores · asignaciones / capacidad" — mismo patrón visual que
+// "Disponibilidad de personal" (barra + resumen + celdas por día), pero contando OT
+// activas por supervisor en vez de horas por operario (ver otsActivasDe/diasOcupadosPorSupervisor).
+function FilaCargaSupervisor({ recurso, diasSemana, otsActivasDe, diasOcupadosPorSupervisor, limite }) {
+    const activas = otsActivasDe(recurso._id).length;
+    const ocupados = diasOcupadosPorSupervisor(recurso._id);
+    const pct = limite > 0 ? Math.min(100, Math.round((activas / limite) * 100)) : 0;
+    const colorBarra = activas > limite ? t.rojo : activas > 0 ? t.verde : t.textoDeshabilitado;
+    const colorResumen = activas > limite ? t.rojo : t.textoPrincipal;
+    return (
+        <div style={styles.filaCapacidad}>
+            <span style={{ ...styles.celda, fontSize: 11.5, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{recurso.nombre}</span>
+            <span style={{ ...styles.celda, flexDirection: 'column', justifyContent: 'center', gap: 3, overflow: 'hidden' }}>
+                <span style={{ display: 'flex', gap: 8, width: '100%', fontSize: 10.5, color: t.textoAtenuado3, whiteSpace: 'nowrap', overflow: 'hidden' }}>
+                    <span style={{ flex: 'none' }}>{recurso.puesto}</span>
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{activas} de {limite} asignaciones</span>
+                </span>
+                <span style={{ display: 'block', height: 3, width: '100%', background: 'rgba(0,0,0,.09)' }}>
+                    <span style={{ display: 'block', height: 3, background: colorBarra, width: `${pct}%` }} />
+                </span>
+            </span>
+            <span style={{ ...styles.celda, fontFamily: t.fontMono, fontSize: 10.5, fontWeight: 600, color: colorResumen }}>{activas} / {limite} · {pct} %</span>
+            <span style={styles.celda} /><span style={styles.celda} /><span style={styles.celda} />
+            <span style={{ ...styles.celda, borderRight: `1px solid ${t.hairlineBloque}` }} />
+            {diasSemana.map(dia => {
+                const n = ocupados[dia] || 0;
+                const exceso = n > limite;
+                const f = new Date(dia + 'T00:00:00');
+                const esFinde = f.getDay() === 0 || f.getDay() === 6;
+                return (
+                    <span key={dia} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 32, minWidth: 0, overflow: 'hidden', background: exceso ? t.cargaExceso : n > 0 ? t.cargaOk : (esFinde ? '#f4f3ef' : 'transparent'), borderLeft: `1px solid ${t.hairlineFila}`, fontFamily: t.fontMono, fontSize: 10.5, fontWeight: 600, color: exceso ? t.rojo : n > 0 ? t.textoPrincipal : t.textoDeshabilitado }}>
+                        {n === 0 ? '·' : n}
+                    </span>
+                );
+            })}
+        </div>
+    );
+}
+
 const styles = {
     raiz: { display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, background: t.fondoMain, color: t.textoPrincipal, fontFamily: t.fontUi, fontSize: '13px' },
     header: { flex: 'none', height: 46, display: 'flex', alignItems: 'center', gap: 16, padding: '0 16px', background: t.superficie, borderBottom: `1px solid ${t.bordeZona}` },
@@ -394,6 +538,8 @@ const styles = {
 
     barraContexto: { flex: 'none', display: 'flex', alignItems: 'center', gap: 8, padding: '6px 16px', background: t.barraContexto, borderBottom: `1px solid ${t.hairlineBloque}` },
     btnSecundario: { height: 20, padding: '0 9px', background: t.superficie, border: `1px solid ${t.bordeZona}`, fontSize: 11, color: t.textoSecundario1, cursor: 'pointer', borderRadius: 2, fontFamily: t.fontUi, whiteSpace: 'nowrap' },
+    segActivo: { height: 22, padding: '0 10px', background: '#1c1d1b', border: '1px solid #1c1d1b', fontSize: 11, fontWeight: 700, color: '#fff', cursor: 'pointer', borderRadius: 2, fontFamily: t.fontUi },
+    segInactivo: { height: 22, padding: '0 10px', background: t.superficie, border: `1px solid ${t.bordeZona}`, fontSize: 11, fontWeight: 400, color: t.textoSecundario1, cursor: 'pointer', borderRadius: 2, fontFamily: t.fontUi },
 
     cuerpo: { flex: 1, minHeight: 0, display: 'flex' },
     scrollTabla: { flex: 1, minWidth: 0, overflow: 'auto', background: t.superficie },

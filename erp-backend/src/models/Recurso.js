@@ -29,6 +29,9 @@ const RecursoSchema = new mongoose.Schema({
     // Acceso móvil (PWA Operativa) — opcional: no todo Recurso reporta desde terreno.
     // Ver docs/estrategia-movil.md §7.3.
     usuarioId: { type: mongoose.Schema.Types.ObjectId, ref: 'Usuario' },
+    // Mejora v3 #3/#4: límite de asignaciones simultáneas para el cálculo de carga —
+    // 5 para el resto, 6 para un supervisor "senior" (confirmado con el usuario).
+    senior: { type: Boolean, default: false },
     tarifaHora: { type: Number, default: 0 },
     fechaInicioCiclo: { type: String },
     // Mejoramos ausencias para que coincida con la lógica de fechas

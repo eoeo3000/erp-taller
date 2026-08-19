@@ -42,6 +42,9 @@ import ComprasScreen from './screens/ComprasScreen';
 import ContabilidadScreen from './screens/ContabilidadScreen';
 import ImportExportScreen from './screens/ImportExportScreen';
 import PortalClienteScreen from './screens/PortalClienteScreen';
+import ClientesScreen from './screens/ClientesScreen';
+import BodegaTokensScreen from './screens/BodegaTokensScreen';
+import TableroSupervisoresScreen from './screens/TableroSupervisoresScreen';
 import useIsMobile from './hooks/useIsMobile';
 import { headerEntorno, obtenerEntorno, fijarEntorno } from './utils/entorno';
 
@@ -815,9 +818,12 @@ function App() {
     { to: '/', label: 'Ingreso', count: solicitudesSinOT },
     { to: '/dashboard', label: 'Panel de control', count: ots.length },
     { to: '/gantt', label: 'Programación', count: otsProgramables },
+    { to: '/tablero-supervisores', label: 'Tablero de supervisores', count: null },
   ];
   const navAdmin = [
     { to: '/recursos', label: 'Recursos' },
+    { to: '/clientes', label: 'Clientes' },
+    { to: '/tokens', label: 'Bodega de tokens' },
     { to: '/importexport', label: 'Importar / exportar' },
   ];
   // Fuera del nav por decisión del cliente (siguen existiendo y accesibles por URL directa):
@@ -916,6 +922,9 @@ function App() {
             <Route path="/contabilidad" element={<ContabilidadScreen API={API} />} />
             <Route path="/importexport" element={<ImportExportScreen API={API} cargarDatos={cargarDatos} />} />
             <Route path="/portal" element={<PortalClienteScreen API={API} />} />
+            <Route path="/clientes" element={<ClientesScreen API={API} />} />
+            <Route path="/tokens" element={<BodegaTokensScreen API={API} />} />
+            <Route path="/tablero-supervisores" element={<TableroSupervisoresScreen API={API} recursos={recursos} />} />
           </Routes>
         </main>
       </div>
