@@ -61,7 +61,15 @@ const informeEvaluacionVacio = {
 
 // Grillas fijas de cada tabla editable (README §6). Las de materiales/suministros suman una
 // columna de disponibilidad/OC que el mock no contemplaba (ver Gap 2b/2c, funcionalidades-v2.md).
-const GRID_TAREAS = 'minmax(200px,1fr) 118px 132px 52px 68px 62px 84px 96px 24px';
+const GRID_TAREAS = 'minmax(200px,1fr) 160px 118px 132px 52px 68px 62px 84px 96px 40px';
+
+// Mejora "Metodología por tarea": la fila edita solo la primera línea de desarrollo; el
+// resto del texto (parágrafos siguientes, escritos desde el panel expandido) se conserva.
+const primeraLinea = (texto) => (texto || '').split('\n')[0];
+const conPrimeraLineaReemplazada = (texto, nuevaPrimera) => {
+    const resto = (texto || '').split('\n').slice(1).join('\n');
+    return resto ? `${nuevaPrimera}\n${resto}` : nuevaPrimera;
+};
 const GRID_MATERIALES = '104px 128px minmax(200px,1fr) 62px 96px 100px 100px 24px';
 const GRID_LOGISTICA = '96px 96px minmax(200px,1fr) 62px 96px 100px 140px 24px';
 
@@ -613,6 +621,7 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
     };
 
     const eliminarTarea = (index) => setTareas(prev => prev.filter((_, i) => i !== index));
+    const [tareaExpandida, setTareaExpandida] = useState(null);
     const eliminarComponente = (index) => setComponentes(prev => prev.filter((_, i) => i !== index));
     const eliminarLogistica = (index) => {
         const nuevaLog = logistica.filter((_, i) => i !== index);
@@ -993,7 +1002,7 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                     {tabActiva === 'tareas' && (
                         <div style={{ padding: '0 0 16px' }}>
                             <div style={styles.tablaHeader(GRID_TAREAS)}>
-                                <span>Descripción</span><span>Puesto</span><span>Responsable</span>
+                                <span>Descripción</span><span>Desarrollo / metodología</span><span>Puesto</span><span>Responsable</span>
                                 <span style={{ textAlign: 'right' }}>Hrs</span><span style={{ textAlign: 'right' }}>Fecha</span>
                                 <span style={{ textAlign: 'right' }}>Hora</span><span style={{ textAlign: 'right' }}>$/hora</span>
                                 <span style={{ textAlign: 'right' }}>Subtotal</span><span />
@@ -1003,9 +1012,19 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                                 const precioHora = Number(tt.valorHora) || 0;
                                 const personas = Array.isArray(tt.operarioId) ? tt.operarioId.length : 0;
                                 const sub = horas * precioHora * (personas > 0 ? personas : 1);
+                                const idKey = tt._id || tt.id || `tarea-${idx}`;
+                                const tieneDesarrollo = !!(tt.desarrollo || '').trim();
                                 return (
-                                    <div key={tt._id || tt.id || `tarea-${idx}`} style={styles.tablaFila(GRID_TAREAS)}>
+                                    <div key={idKey}>
+                                    <div style={styles.tablaFila(GRID_TAREAS)}>
                                         <input className="campo-ed" style={styles.inputCelda} value={tt.descripcion} onChange={e => actualizarTarea(idx, 'descripcion', e.target.value)} />
+                                        <input
+                                            className="campo-ed" style={styles.inputCelda}
+                                            value={primeraLinea(tt.desarrollo)}
+                                            placeholder="Sin desarrollo"
+                                            onFocus={() => setTareaExpandida(idKey)}
+                                            onChange={e => actualizarTarea(idx, 'desarrollo', conPrimeraLineaReemplazada(tt.desarrollo, e.target.value))}
+                                        />
                                         <select className="campo-ed" style={styles.inputCelda} value={tt.puesto} onChange={(e) => {
                                             const nombreSeleccionado = e.target.value;
                                             const puestoEncontrado = puestosDB.find(p => p.nombre === nombreSeleccionado);
@@ -1051,12 +1070,38 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                                         <input type="time" className="campo-ed" style={{ ...styles.inputCelda, textAlign: 'right' }} value={tt.hora} onChange={e => actualizarTarea(idx, 'hora', e.target.value)} />
                                         <input type="number" className="campo-ed" style={{ ...styles.inputCelda, textAlign: 'right' }} value={tt.valorHora || ''} onChange={e => actualizarTarea(idx, 'valorHora', e.target.value)} />
                                         <span style={styles.celdaSubtotal}>{CLP(sub)}</span>
-                                        <span onClick={() => eliminarTarea(idx)} style={styles.xFila}>×</span>
+                                        <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 5 }}>
+                                            {!tieneDesarrollo && <span title="Sin desarrollo definido" style={{ width: 6, height: 6, borderRadius: '50%', background: t.rojo, flex: 'none' }} />}
+                                            <span onClick={() => eliminarTarea(idx)} style={styles.xFila}>×</span>
+                                        </span>
+                                    </div>
+                                    {tareaExpandida === idKey && (
+                                        <div style={{ background: '#f7f6f2', padding: '10px 16px 14px', borderBottom: `1px solid ${t.hairlineFila}` }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
+                                                <span style={{ fontSize: 11, fontWeight: 700, color: t.textoSecundario1 }}>
+                                                    Desarrollo extendido · {tt.descripcion || 'Tarea sin nombre'}
+                                                </span>
+                                                <span onClick={() => setTareaExpandida(null)} style={{ fontSize: 11, color: t.acento, cursor: 'pointer' }}>Contraer</span>
+                                            </div>
+                                            <textarea
+                                                className="campo-ed"
+                                                style={{ width: '100%', minHeight: 90, boxSizing: 'border-box', padding: 8, fontFamily: 'inherit', fontSize: 12, color: t.textoPrincipal, borderRadius: 2, resize: 'vertical' }}
+                                                value={tt.desarrollo || ''}
+                                                onChange={e => actualizarTarea(idx, 'desarrollo', e.target.value)}
+                                                autoFocus
+                                            />
+                                        </div>
+                                    )}
                                     </div>
                                 );
                             })}
-                            <div style={{ padding: '8px 16px' }}>
+                            <div style={{ padding: '8px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
                                 <button onClick={agregarTarea} style={styles.btnAgregar}>Agregar tarea</button>
+                                {tareas.length > 0 && (
+                                    <span style={{ fontSize: 11, color: t.textoAtenuado2 }}>
+                                        {tareas.filter(tt => (tt.desarrollo || '').trim()).length} de {tareas.length} tareas con desarrollo definido
+                                    </span>
+                                )}
                             </div>
                             <div style={styles.continuarWrap}><button onClick={() => setTabActiva('componentes')} style={styles.btnSecundario}>Continuar: Equipos y materiales →</button></div>
                         </div>
@@ -1261,6 +1306,24 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                                     )}
                                 </div>
                             </div>
+
+                            {/* Metodología por tarea: el plan queda visible junto a los reportes de terreno,
+                                para comparar plan contra lo ejecutado. Los reportes no se vinculan a una
+                                tarea puntual hoy (aplicarAccionOT no guarda tareaId al crearlos), así que
+                                se muestra el plan completo de la OT, no un cruce reporte-por-reporte. */}
+                            {tareas.some(tt => (tt.desarrollo || '').trim()) && (
+                                <div style={{ marginBottom: 16 }}>
+                                    <div style={styles.tituloSub}>Plan de trabajo (metodología planificada)</div>
+                                    <div style={{ border: `1px solid ${t.bordeZona}`, borderRadius: 2 }}>
+                                        {tareas.filter(tt => (tt.desarrollo || '').trim()).map((tt, i) => (
+                                            <div key={tt._id || tt.id || i} style={{ padding: '8px 12px', borderBottom: `1px solid ${t.hairlineFila}` }}>
+                                                <div style={{ fontSize: 11.5, fontWeight: 600, color: t.textoPrincipal }}>{tt.descripcion}</div>
+                                                <div style={{ fontSize: 11, color: t.textoSecundario2, marginTop: 2, whiteSpace: 'pre-wrap', lineHeight: 1.45 }}>{tt.desarrollo}</div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
 
                             <div style={{ ...styles.tituloSub, display: 'flex', gap: 8 }}>
                                 <span>Evidencias de terreno</span>

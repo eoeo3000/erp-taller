@@ -61,6 +61,11 @@ const OTSchema = new mongoose.Schema({
     // 1. Tareas (Array de objetos)
     tareas: [{
         descripcion: String,
+        // Metodología/desarrollo de la tarea (pestaña Tareas del tratamiento): la primera
+        // línea se edita inline en la tabla, el texto completo en el panel expandido. Viaja
+        // tal cual a la PWA Operativa (mi-día) y al Informe de Ejecución para comparar plan
+        // contra terreno — no necesita serialización especial, es un campo más del subdocumento.
+        desarrollo: { type: String, default: '' },
         puesto: String,
         duracion: Number,
         fecha: String,

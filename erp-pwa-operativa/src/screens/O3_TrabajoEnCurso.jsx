@@ -94,6 +94,9 @@ export default function O3TrabajoEnCurso({ nav, asignacion }) {
                             <div style={{ flex: 1 }}>
                                 <div style={{ fontSize: 15, textDecoration: t.completada ? 'line-through' : 'none', color: t.completada ? 'var(--texto-atenuado-1)' : 'var(--texto-principal)' }}>{t.descripcion}</div>
                                 <div style={{ fontSize: 13, color: 'var(--texto-atenuado-1)' }}>{(t.operarioNombre || []).join(', ')} · {t.duracion} h</div>
+                                {t.desarrollo && (
+                                    <div style={{ fontSize: 13, color: 'var(--texto-secundario-2)', marginTop: 4, whiteSpace: 'pre-wrap', lineHeight: 1.4 }}>{t.desarrollo}</div>
+                                )}
                             </div>
                             {!t.completada && (
                                 <button className="boton-secundario" style={{ width: 'auto', minHeight: 44, padding: '0 14px' }} disabled={procesando} onClick={() => marcarListo(idx)}>Listo</button>
