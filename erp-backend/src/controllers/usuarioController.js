@@ -6,14 +6,18 @@ const crypto = require('crypto');
 const getUsuario = require('../models/Usuario');
 const getRecurso = require('../models/Recurso');
 const transporter = require('../config/mailer');
+const { PWA_OPERATIVA_URL } = require('../config/urls');
 
 function generarToken() {
     return crypto.randomBytes(20).toString('hex');
 }
 
-async function enviarCorreoToken(usuario, recurso, baseUrl, entorno) {
+// El link apunta a PWA_OPERATIVA_URL (su propio host, ver config/urls.js) — NO a este
+// backend. Antes usaba `${API_URL}/operativo`, un bug real: la PWA Operativa es un Render
+// Static Site aparte, ese path nunca existió en el backend (ver base:'/' en su vite.config).
+async function enviarCorreoToken(usuario, recurso, entorno) {
     if (!recurso?.email) return; // sin Recurso o sin correo, no hay a quién avisar
-    const link = `${baseUrl}/operativo?token=${usuario.token}&entorno=${entorno}`;
+    const link = `${PWA_OPERATIVA_URL}/?token=${usuario.token}&entorno=${entorno}`;
     await transporter.sendMail({
         from: `"ERP - Gestión de Trabajo" <${process.env.EMAIL_FROM}>`,
         to: recurso.email,
@@ -43,9 +47,8 @@ exports.crear = async (req, res) => {
         if (recursoId) await Recurso.findByIdAndUpdate(recursoId, { usuarioId: usuario._id });
 
         const recurso = recursoId ? await Recurso.findById(recursoId) : null;
-        const baseUrl = process.env.API_URL || `${req.protocol}://${req.get('host')}`;
         try {
-            await enviarCorreoToken(usuario, recurso, baseUrl, req.entorno);
+            await enviarCorreoToken(usuario, recurso, req.entorno);
         } catch (eCorreo) {
             console.warn('[usuarios] no se pudo enviar el correo de acceso:', eCorreo.message);
         }
@@ -93,9 +96,8 @@ exports.reemitirToken = async (req, res) => {
         await usuario.save();
 
         const recurso = usuario.recursoId ? await Recurso.findById(usuario.recursoId) : null;
-        const baseUrl = process.env.API_URL || `${req.protocol}://${req.get('host')}`;
         try {
-            await enviarCorreoToken(usuario, recurso, baseUrl, req.entorno);
+            await enviarCorreoToken(usuario, recurso, req.entorno);
         } catch (eCorreo) {
             console.warn('[usuarios] no se pudo enviar el correo de reemisión:', eCorreo.message);
         }

@@ -4,6 +4,7 @@ const getOT = require('../models/OT');
 const getSesionPortal = require('../models/SesionPortal');
 const getCliente = require('../models/Cliente');
 const transporter = require('../config/mailer');
+const { PWA_CLIENTE_URL } = require('../config/urls');
 
 const DIAS_VIGENCIA_TOKEN = 30; // sesión autoservicio/emitida
 const DIAS_VIGENCIA_LOTE = 90;  // token pre-generado sin asignar (Requiere confirmación → confirmado con el usuario)
@@ -241,8 +242,7 @@ exports.acceso = async (req, res) => {
 // de los correos del sistema, ver config/mailer.js).
 async function enviarCorreoAcceso({ correo, nombre, empresa, token, entorno }) {
     if (!correo) return false;
-    const baseUrl = process.env.PWA_CLIENTE_URL || 'https://erp-pwa-cliente.onrender.com';
-    const link = `${baseUrl}/?token=${token}${entorno ? `&entorno=${entorno}` : ''}`;
+    const link = `${PWA_CLIENTE_URL}/?token=${token}${entorno ? `&entorno=${entorno}` : ''}`;
     await transporter.sendMail({
         from: `"ERP - Gestión de Trabajo" <${process.env.EMAIL_FROM}>`,
         to: correo,
