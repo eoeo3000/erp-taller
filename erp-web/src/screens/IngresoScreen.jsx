@@ -240,9 +240,12 @@ const IngresoScreen = ({ solicitudes = [], liberarSolicitudManual, cargarDatos, 
 
                                 return (
                                     <div key={s._id || index} style={styles.fila}>
-                                        <span style={styles.celdaMono}>{String(index + 1).padStart(2, '0')}</span>
+                                        <span style={styles.celdaMono} title="Número de solicitud — junto al teléfono, es lo que el cliente usa para entrar al Portal">{s.numeroSolicitud || String(index + 1).padStart(2, '0')}</span>
                                         <span style={styles.celdaEmpresa}>{s.empresaSolicitante || '—'}</span>
-                                        <span style={styles.celdaTexto}>{s.solicitante || '—'}</span>
+                                        <span style={{ minWidth: 0 }}>
+                                            <span style={styles.celdaTexto}>{s.solicitante || '—'}</span>
+                                            {s.numero && <span style={{ display: 'block', fontFamily: t.fontMono, fontSize: '10px', color: t.textoAtenuado2 }}>{s.numero}</span>}
+                                        </span>
                                         <span style={{ minWidth: 0 }}>
                                             <span style={{ ...styles.celdaEstado, color: colorEstado(estadoFinal, yaTieneOT) }}>{estadoFinal || 'Pendiente'}</span>
                                             {sla && <span style={{ display: 'block', fontFamily: t.fontMono, fontSize: '10px', color: sla.color }}>SLA {sla.texto}</span>}

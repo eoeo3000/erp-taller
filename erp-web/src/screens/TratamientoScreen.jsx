@@ -117,6 +117,7 @@ function TabAntecedentes({ cargando, antecedentes, form, onCampo, onGuardar, gua
 
                 <FilaAntecedente etiqueta="Empresa solicitante" valor={solicitud.empresa} negrita />
                 <FilaAntecedente etiqueta="Solicitante" valor={solicitud.solicitante} />
+                <FilaAntecedente etiqueta="Teléfono" valor={solicitud.telefono} />
                 <FilaAntecedente etiqueta="Fecha de solicitud" valor={fmtFecha(solicitud.fechaSolicitud)} />
                 <FilaAntecedente etiqueta="Origen" valor={solicitud.origen} />
                 <FilaAntecedente etiqueta="Faena / dirección" valor={solicitud.direccion} />

@@ -257,6 +257,10 @@ exports.antecedentes = async (req, res) => {
         res.json({
             solicitud: {
                 numero: sol.numeroSolicitud || null,
+                // Teléfono: es lo que el cliente usa junto con el número de solicitud para
+                // entrar al Portal Cliente (design_handoff_pwa_movil §6, C1) — sin verlo acá,
+                // nadie en la oficina puede confirmárselo si lo pide.
+                telefono: sol.numero || '',
                 empresa: sol.empresaSolicitante,
                 solicitante: sol.solicitante,
                 fechaSolicitud: sol.fechaHoraSolicitud || sol.fechaCreacion,
