@@ -158,6 +158,19 @@ function App() {
       return false;
     }
   };
+  // Editar una solicitud ya creada (doble clic en la fila, Ingreso) — reutiliza el mismo
+  // endpoint PUT que ya actualizaba solo el estado, ahora ampliado para aceptar el resto
+  // de los campos del formulario.
+  const actualizarSolicitudGlobal = async (id, datosForm) => {
+    try {
+      const { data } = await axios.put(`${API}/solicitudes/${id}`, datosForm);
+      setSolicitudes(prev => prev.map(s => String(s._id) === String(id) ? data : s));
+      return true;
+    } catch (error) {
+      console.error("Error al actualizar solicitud:", error.response?.data || error.message);
+      return false;
+    }
+  };
   const crearRecurso = async (nuevoRecurso) => {
     try {
       const datosParaEnviar = {
@@ -880,7 +893,7 @@ function App() {
           <BannerDemo entorno={entornoActivo} onVolver={volverAProduccion} />
           <Routes>
             <Route path="/reporte" element={<ReporteTerreno ots={ots} actualizarOtGlobal={actualizarOtGlobal} />} />
-            <Route path="/" element={<IngresoScreen solicitudes={solicitudes} liberarSolicitudManual={liberarSolicitudManual} crearSolicitudGlobal={crearSolicitudGlobal} setSolicitudes={setSolicitudes} cargarDatos={cargarDatos} API={API} ots={ots} enviarPortalCliente={enviarPortalCliente} cargando={cargando} errorCarga={errorCarga} />} />
+            <Route path="/" element={<IngresoScreen solicitudes={solicitudes} liberarSolicitudManual={liberarSolicitudManual} crearSolicitudGlobal={crearSolicitudGlobal} actualizarSolicitudGlobal={actualizarSolicitudGlobal} setSolicitudes={setSolicitudes} cargarDatos={cargarDatos} API={API} ots={ots} enviarPortalCliente={enviarPortalCliente} cargando={cargando} errorCarga={errorCarga} />} />
             <Route path="/dashboard" element={<DashboardScreen solicitudes={solicitudes} ots={ots} eliminarOT={eliminarOT} actualizarEstadoSolicitud={actualizarEstadoSolicitud} enviarASupervisor={enviarASupervisor} recursos={recursos} API={API} cargando={cargando} errorCarga={errorCarga} cargarDatos={cargarDatos} guardarDisposicionGlobal={guardarDisposicionGlobal} eliminarDisposicionGlobal={eliminarDisposicionGlobal} />} />
             <Route path="/tratamiento" element={<TratamientoScreen recurso={recursos} puestosDB={puestosDB} enviarASupervisor={enviarASupervisor} componentes={componentes} actualizarOtGlobal={actualizarOtGlobal} editarOtGlobal={editarOtGlobal} cargarDatos={cargarDatos} API={API} recursos={recursos} suministros={suministros} otSeleccionada={otSeleccionada} setOtSeleccionada={setOtSeleccionada} plantillas={plantillas} />} />
             <Route path="/gantt" element={<GanttScreen ots={ots} recursos={recursos} calendarios={calendarios} obtenerHorasParaDia={obtenerHorasParaDia} actualizarOtGlobal={actualizarOtGlobal} cargarDatos={cargarDatos} />} />

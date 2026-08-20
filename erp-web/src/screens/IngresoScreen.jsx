@@ -62,19 +62,53 @@ const GRID = '34px minmax(150px,1.4fr) minmax(120px,1fr) 104px 96px 84px 132px 1
 const TABLA_MIN_W = 34 + 150 + 120 + 104 + 96 + 84 + 132 + 150 + 10 * 8 + 32;
 
 // Recibimos 'solicitudes' como prop desde App.jsx para actualización automática
-const IngresoScreen = ({ solicitudes = [], liberarSolicitudManual, cargarDatos, API, crearSolicitudGlobal, ots = [], enviarPortalCliente, cargando, errorCarga }) => {
+const IngresoScreen = ({ solicitudes = [], liberarSolicitudManual, cargarDatos, API, crearSolicitudGlobal, actualizarSolicitudGlobal, ots = [], enviarPortalCliente, cargando, errorCarga }) => {
     const navigate = useNavigate();
     const [form, setForm] = useState(FORM_VACIO);
     const [archivo, setArchivo] = useState(null);
     const [aviso, setAviso] = useState(null); // { texto, tono: 'error' | 'ok' }
     const [filtroEstado, setFiltroEstado] = useState('');
     const [filtroTexto, setFiltroTexto] = useState('');
+    // Doble clic en una fila carga sus datos acá mismo para editar, en vez de un modal
+    // aparte — mismo formulario, cambia el botón y el título.
+    const [editandoId, setEditandoId] = useState(null);
 
     const set = (campo) => (e) => setForm(prev => ({ ...prev, [campo]: e.target.value }));
+
+    const editarSolicitud = (s) => {
+        setForm({
+            solicitante: s.solicitante || '', empresaSolicitante: s.empresaSolicitante || '',
+            correo: s.correo || '', numero: s.numero || '', direccion: s.direccion || '',
+            descripcion: s.descripcion || '', origen: s.origen || 'WhatsApp',
+            fechaEjecucionSolicitada: s.fechaEjecucionSolicitada ? s.fechaEjecucionSolicitada.slice(0, 10) : '',
+            plazoEjecucionSugerido: s.plazoEjecucionSugerido || '', adjuntos: s.adjuntos || '',
+        });
+        setEditandoId(s._id);
+        setArchivo(null);
+        setAviso(null);
+    };
+
+    const cancelarEdicion = () => {
+        setEditandoId(null);
+        setForm(FORM_VACIO);
+        setArchivo(null);
+        setAviso(null);
+    };
 
     const handleCrear = async () => {
         if (!form.empresaSolicitante || !form.solicitante || !form.descripcion) {
             setAviso({ texto: 'Completa los campos obligatorios: empresa, solicitante y descripción.', tono: 'error' });
+            return;
+        }
+        if (editandoId) {
+            const exito = await actualizarSolicitudGlobal(editandoId, form);
+            if (exito) {
+                setEditandoId(null);
+                setForm(FORM_VACIO);
+                setAviso({ texto: 'Solicitud actualizada.', tono: 'ok' });
+            } else {
+                setAviso({ texto: 'No se pudieron guardar los cambios. Intenta nuevamente.', tono: 'error' });
+            }
             return;
         }
         const exito = await crearSolicitudGlobal(form, archivo);
@@ -128,7 +162,7 @@ const IngresoScreen = ({ solicitudes = [], liberarSolicitudManual, cargarDatos, 
                 {/* Formulario */}
                 <section style={styles.formSeccion}>
                     <div style={{ padding: '13px 16px 8px' }}>
-                        <div style={styles.tituloBloque}>Nueva solicitud de servicio</div>
+                        <div style={styles.tituloBloque}>{editandoId ? 'Editar solicitud' : 'Nueva solicitud de servicio'}</div>
                         <div style={styles.formGrid}>
                             {campos.map(c => (
                                 <label key={c.key} style={{ ...styles.campoLabel, gridColumn: `span ${c.span}` }}>
@@ -190,8 +224,10 @@ const IngresoScreen = ({ solicitudes = [], liberarSolicitudManual, cargarDatos, 
                         )}
 
                         <div style={{ display: 'flex', gap: 6, marginTop: 12, paddingBottom: 14, alignItems: 'center' }}>
-                            <button onClick={handleCrear} style={styles.btnPrimario}>Generar solicitud</button>
-                            <button onClick={() => { setForm(FORM_VACIO); setArchivo(null); setAviso(null); }} style={styles.btnSecundario}>Limpiar</button>
+                            <button onClick={handleCrear} style={styles.btnPrimario}>{editandoId ? 'Guardar cambios' : 'Generar solicitud'}</button>
+                            <button onClick={editandoId ? cancelarEdicion : () => { setForm(FORM_VACIO); setArchivo(null); setAviso(null); }} style={styles.btnSecundario}>
+                                {editandoId ? 'Cancelar edición' : 'Limpiar'}
+                            </button>
                             <span style={{ marginLeft: 'auto', fontSize: '10.5px', color: t.textoAtenuado3 }}>* obligatorio</span>
                         </div>
                     </div>
@@ -239,7 +275,11 @@ const IngresoScreen = ({ solicitudes = [], liberarSolicitudManual, cargarDatos, 
                                 const sla = calcularSLA(s, otEncontrada);
 
                                 return (
-                                    <div key={s._id || index} style={styles.fila}>
+                                    <div
+                                        key={s._id || index} style={{ ...styles.fila, background: editandoId === s._id ? t.hoverFila : undefined, cursor: 'pointer' }}
+                                        onDoubleClick={() => editarSolicitud(s)}
+                                        title="Doble clic para editar los datos de esta solicitud"
+                                    >
                                         <span style={styles.celdaMono} title="Número de solicitud — junto al teléfono, es lo que el cliente usa para entrar al Portal">{s.numeroSolicitud || String(index + 1).padStart(2, '0')}</span>
                                         <span style={styles.celdaEmpresa}>{s.empresaSolicitante || '—'}</span>
                                         <span style={{ minWidth: 0 }}>

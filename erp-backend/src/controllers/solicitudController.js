@@ -68,14 +68,26 @@ exports.crearSolicitud = async (req, res) => {
     }
 };
 
+// A pesar del nombre (histórico: al principio solo cambiaba estado), esta ruta ahora
+// también sirve para editar los datos de la solicitud desde el formulario de Ingreso
+// (doble clic en una fila) — de ahí el resto de los campos, todos opcionales: Mongoose
+// ignora las claves en undefined, así que un PUT que solo manda {estado} sigue
+// funcionando igual que antes sin tocar el resto.
 exports.actualizarEstado = async (req, res) => {
     const Solicitud = getSolicitud(req.db);
     try {
         const { id } = req.params;
-        const { estado } = req.body;
-        const actualizada = await Solicitud.findByIdAndUpdate(id, { estado }, { new: true });
+        const {
+            estado, empresaSolicitante, solicitante, correo, numero, direccion,
+            descripcion, origen, fechaEjecucionSolicitada, plazoEjecucionSugerido,
+        } = req.body;
+        const actualizada = await Solicitud.findByIdAndUpdate(id, {
+            estado, empresaSolicitante, solicitante, correo, numero, direccion,
+            descripcion, origen, fechaEjecucionSolicitada, plazoEjecucionSugerido,
+        }, { new: true, runValidators: true });
+        if (!actualizada) return res.status(404).json({ error: "Solicitud no encontrada" });
         res.json(actualizada);
     } catch (error) {
-        res.status(400).json({ error: "Error al actualizar estado" });
+        res.status(400).json({ error: error.message || "Error al actualizar la solicitud" });
     }
 };
