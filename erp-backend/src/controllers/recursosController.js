@@ -53,16 +53,22 @@ exports.updateRecurso = async (req, res) => {
     const Ot = getOt(req.db);
     try {
         const { id } = req.params;
-        const { calendarioId, ajustes, nombre, puesto, fechaInicioCiclo } = req.body;
+        const { calendarioId, ajustes, nombre, puesto, fechaInicioCiclo, email, telefono } = req.body;
 
         // 1. Buscamos y actualizamos el recurso
         // Usamos findByIdAndUpdate para obtener los datos nuevos directamente
+        // email/telefono: correo y número del recurso — antes se descartaban en cada
+        // edición porque no estaban en este whitelist, aunque el modelo y crearRecurso
+        // (que no filtra campos) sí los soportaban. Son los que usa Bodega de tokens para
+        // avisar por correo al emitir un acceso operativo.
         const recurso = await Recurso.findByIdAndUpdate(
             id,
             {
                 nombre,
                 puesto,
                 fechaInicioCiclo,
+                email,
+                telefono,
                 calendarioId: (calendarioId === "" || calendarioId === "null") ? null : calendarioId
             },
             { new: true } // Esto nos devuelve el documento ya actualizado

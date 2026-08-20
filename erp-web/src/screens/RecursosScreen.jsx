@@ -234,7 +234,7 @@ const RecursosScreen = ({
                                             <div key={r._id} style={{ display: 'flex', borderBottom: `1px solid ${t.hairlineFila}` }}>
                                                 <span style={{ width: 188, flex: 'none', padding: '5px 10px', background: t.superficie, position: 'sticky', left: 0, zIndex: 2, borderRight: `1px solid ${t.bordeZona}` }}>
                                                     <span style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 4 }}>
-                                                        <span onClick={() => setFormIntegrante({ _id: r._id, nombre: r.nombre, puesto: r.puesto || '', calendarioId: r.calendarioId || '', fechaInicioCiclo: r.fechaInicioCiclo ? r.fechaInicioCiclo.split('T')[0] : '' })} style={{ display: 'block', fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', cursor: 'pointer' }}>{r.nombre}</span>
+                                                        <span onClick={() => setFormIntegrante({ _id: r._id, nombre: r.nombre, puesto: r.puesto || '', calendarioId: r.calendarioId || '', fechaInicioCiclo: r.fechaInicioCiclo ? r.fechaInicioCiclo.split('T')[0] : '', email: r.email || '', telefono: r.telefono || '' })} style={{ display: 'block', fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', cursor: 'pointer' }}>{r.nombre}</span>
                                                         <span onClick={() => { if (window.confirm(`¿Eliminar a ${r.nombre}?`)) eliminarRecurso(r._id); }} style={styles.xFila}>×</span>
                                                     </span>
                                                     <span style={{ display: 'flex', gap: 6, fontSize: 10.5, whiteSpace: 'nowrap', overflow: 'hidden' }}>
@@ -293,11 +293,13 @@ const RecursosScreen = ({
                                             {calendarios.map(c => <option key={c._id} value={c._id}>{c.nombre}</option>)}
                                         </select>
                                         <input type="date" className="campo-ed" style={styles.inputPlano} value={formIntegrante.fechaInicioCiclo || ''} onChange={e => setFormIntegrante(f => ({ ...f, fechaInicioCiclo: e.target.value }))} />
+                                        <input type="email" className="campo-ed" style={styles.inputPlano} placeholder="Correo" value={formIntegrante.email || ''} onChange={e => setFormIntegrante(f => ({ ...f, email: e.target.value }))} />
+                                        <input className="campo-ed" style={{ ...styles.inputPlano, fontFamily: t.fontMono }} placeholder="+56 9…" value={formIntegrante.telefono || ''} onChange={e => setFormIntegrante(f => ({ ...f, telefono: e.target.value }))} />
                                         <button onClick={guardarIntegrante} style={styles.btnPrimario}>Guardar</button>
                                         <button onClick={() => setFormIntegrante(null)} style={styles.btnSecundario}>Cancelar</button>
                                     </div>
                                 ) : (
-                                    <button onClick={() => setFormIntegrante({ nombre: '', puesto: '', calendarioId: '', fechaInicioCiclo: '' })} style={styles.btnAgregar}>Agregar integrante</button>
+                                    <button onClick={() => setFormIntegrante({ nombre: '', puesto: '', calendarioId: '', fechaInicioCiclo: '', email: '', telefono: '' })} style={styles.btnAgregar}>Agregar integrante</button>
                                 )}
                             </div>
                         </>
