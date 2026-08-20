@@ -384,22 +384,29 @@ exports.listarSesiones = async (req, res) => {
 
         // Operativo — origen Usuario (se emiten desde la ficha de Recursos, no desde acá;
         // esta lista solo los muestra, para que "Tokens activos" sea una vista única).
+        const Recurso = require('../models/Recurso')(req.db);
         const usuarios = await Usuario.find().sort({ createdAt: -1 }).lean();
-        const filasOperativo = usuarios.map(u => ({
-            _id: u._id, tipo: 'operativo',
-            nombre: u.nombre, correo: '',
-            origen: `Recursos · ${u.puesto || u.rol}`,
-            // Usuario.token se guarda en claro (ver models/Usuario.js) — se recorta acá,
-            // nunca se manda completo fuera de whoami()/accion-movil (auth por token).
-            tokenPreview: u.token ? u.token.slice(0, 4) : '',
-            emitidoEn: u.fechaEmision, ultimoAcceso: u.ultimoAcceso,
-            estadoDisplay: estadoPorFechas(u.estado, u.ultimoAcceso, false),
-        }));
+        const recursosPorId = new Map(
+            (await Recurso.find({ _id: { $in: usuarios.filter(u => u.recursoId).map(u => u.recursoId) } }).lean())
+                .map(r => [String(r._id), r])
+        );
+        const filasOperativo = usuarios.map(u => {
+            const recurso = u.recursoId ? recursosPorId.get(String(u.recursoId)) : null;
+            return {
+                _id: u._id, tipo: 'operativo',
+                nombre: u.nombre, correo: recurso?.email || '',
+                origen: `Recursos · ${u.puesto || u.rol}`,
+                // Usuario.token se guarda en claro (ver models/Usuario.js) — se recorta acá,
+                // nunca se manda completo fuera de whoami()/accion-movil (auth por token).
+                tokenPreview: u.token ? u.token.slice(0, 4) : '',
+                emitidoEn: u.fechaEmision, ultimoAcceso: u.ultimoAcceso,
+                estadoDisplay: estadoPorFechas(u.estado, u.ultimoAcceso, false),
+            };
+        });
 
         // Personal con puesto de supervisor que YA existe en Recursos pero todavía no
         // tiene Usuario (nunca se le emitió token): sin esto, "Tokens activos" solo
         // mostraba a quien ya tenía acceso, no a quién le falta — no quedaban asociados.
-        const Recurso = require('../models/Recurso')(req.db);
         const idsConUsuario = new Set(usuarios.filter(u => u.recursoId).map(u => String(u.recursoId)));
         const supervisoresSinToken = await Recurso.find({ puesto: { $regex: /supervisor/i } }).lean();
         const filasPendientes = supervisoresSinToken
