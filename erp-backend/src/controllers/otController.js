@@ -416,6 +416,17 @@ exports.actualizarOT = async (req, res) => {
             }
         }
 
+        // fechaEjecucion es lo que usa la PWA Operativa para decidir si una OT le aparece
+        // hoy/esta semana a su supervisor (ver asignacionController.otsSupervisadasEnFechas)
+        // — si nadie la pone a mano en Antecedentes, la OT queda invisible en el celular
+        // aunque ya tenga tareas con fecha real. Se deriva sola de la primera tarea con
+        // fecha, salvo que este mismo guardado ya venga con una fechaEjecucion explícita
+        // (ej. desde el propio formulario de Antecedentes, que no toca tareas[]).
+        if (Array.isArray(datosCuerpo.tareas) && !('fechaEjecucion' in datosCuerpo)) {
+            const fechasTareas = datosCuerpo.tareas.map(t => t.fecha).filter(Boolean).sort();
+            if (fechasTareas.length > 0) datosCuerpo.fechaEjecucion = fechasTareas[0];
+        }
+
         // 1. Intentar actualizar (Usamos $set para campos normales y nos aseguramos de traer la OT nueva)
         let ot = await OT.findByIdAndUpdate(
             id,
