@@ -26,7 +26,7 @@ export default function C1Acceso({ nav }) {
             <div style={{ flex: 1, padding: 20 }}>
                 <div style={{ fontSize: 'var(--fs-titulo)', fontWeight: 'var(--fw-titulo)', marginTop: 24 }}>Mis trabajos</div>
                 <div style={{ fontSize: 'var(--fs-secundario)', color: 'var(--texto-atenuado-1)', marginTop: 4 }}>
-                    Ingrese su teléfono y el número de una de sus solicitudes.
+                    Ingrese su teléfono para ver todos sus trabajos.
                 </div>
 
                 <div style={{ marginTop: 24, background: '#eef4fb', borderLeft: '2px solid var(--en-curso)', padding: '10px 14px', fontSize: 'var(--fs-secundario)', color: 'var(--texto-secundario-1)' }}>
@@ -38,7 +38,7 @@ export default function C1Acceso({ nav }) {
                     <input className="input-campo" style={{ marginTop: 6 }} value={telefono} onChange={(e) => setTelefono(e.target.value)} placeholder="+56 9 …" inputMode="tel" />
                 </label>
                 <label style={{ display: 'block', marginTop: 14 }}>
-                    <span className="versalita">N° de solicitud</span>
+                    <span className="versalita">N° de solicitud (opcional)</span>
                     <input className="input-campo" style={{ marginTop: 6 }} value={numeroSolicitud} onChange={(e) => setNumeroSolicitud(e.target.value)} placeholder="SOL-2026-0001" />
                 </label>
 
