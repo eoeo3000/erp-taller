@@ -236,20 +236,37 @@ async function trabajosPorTelefono(conn, telefonoNormalizado) {
     }));
 }
 
-// POST /api/portal/acceso — { telefono, numeroSolicitud }: el teléfono identifica a la
-// empresa, el número de solicitud es el segundo factor. Del par se deriva la empresa y se
-// devuelven TODOS sus trabajos (design_handoff_pwa_movil/README.md §6, C1).
+// POST /api/portal/acceso — { telefono, numeroSolicitud? }: el teléfono identifica a la
+// empresa y devuelve TODOS sus trabajos (design_handoff_pwa_movil/README.md §6, C1).
+//
+// numeroSolicitud es OPCIONAL — decisión de producto (revisión agosto 2026): el cliente
+// puede entrar solo con su teléfono, sin tener a mano el número de una solicitud puntual.
+// Lo que NO se permite es al revés (numeroSolicitud solo, sin teléfono): numeroSolicitud
+// es correlativo y adivinable (SOL-2026-0001, 0002...) — sin el teléfono como segundo
+// factor, cualquiera podría probar números seguidos y ver datos de otro cliente (hueco de
+// privacidad ya documentado en docs/estrategia-movil.md §5.2). El teléfono, en cambio, no
+// es correlativo, así que basta solo con demostrar que se conoce.
 exports.acceso = async (req, res) => {
     const Solicitud = getSolicitud(req.db);
     const SesionPortal = getSesionPortal(req.db);
     try {
         const telefono = normalizarTelefono(req.body.telefono);
         const numeroSolicitud = (req.body.numeroSolicitud || '').trim();
-        if (!telefono || !numeroSolicitud) return res.status(400).json({ error: MENSAJE_ACCESO_INVALIDO });
+        if (!telefono) return res.status(400).json({ error: MENSAJE_ACCESO_INVALIDO });
 
-        const solicitud = await Solicitud.findOne({ numeroSolicitud }).lean();
-        if (!solicitud || normalizarTelefono(solicitud.numero) !== telefono) {
-            return res.status(401).json({ error: MENSAJE_ACCESO_INVALIDO });
+        let empresaSolicitante;
+        if (numeroSolicitud) {
+            const solicitud = await Solicitud.findOne({ numeroSolicitud }).lean();
+            if (!solicitud || normalizarTelefono(solicitud.numero) !== telefono) {
+                return res.status(401).json({ error: MENSAJE_ACCESO_INVALIDO });
+            }
+            empresaSolicitante = solicitud.empresaSolicitante;
+        }
+
+        const trabajos = await trabajosPorTelefono(req.db, telefono);
+        if (!numeroSolicitud) {
+            if (!trabajos.length) return res.status(401).json({ error: 'No hay solicitudes registradas con ese teléfono.' });
+            empresaSolicitante = trabajos[0].empresaSolicitante;
         }
 
         const token = crypto.randomBytes(20).toString('hex'); // se devuelve una sola vez, no se guarda en claro
@@ -257,11 +274,10 @@ exports.acceso = async (req, res) => {
         await SesionPortal.create({
             telefono, expira,
             tokenHash: hashToken(token),
-            empresaSolicitante: solicitud.empresaSolicitante,
+            empresaSolicitante,
         });
 
-        const trabajos = await trabajosPorTelefono(req.db, telefono);
-        res.json({ token, expira, empresaSolicitante: solicitud.empresaSolicitante, trabajos });
+        res.json({ token, expira, empresaSolicitante, trabajos });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
