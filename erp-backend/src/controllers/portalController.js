@@ -17,8 +17,16 @@ const DIAS_INACTIVO = 30;       // último acceso más antiguo que esto se muest
 // docs/estrategia-movil.md §5.2 y design_handoff_pwa_movil/README.md §6, C1).
 const MENSAJE_ACCESO_INVALIDO = 'Teléfono o número de solicitud no coinciden.';
 
+// "912345678", "56912345678" y "+56912345678" son el mismo celular chileno (ver
+// validarTelefono en los formularios del frontend, que acepta las tres formas) — hay
+// que normalizarlos al mismo valor acá, o si el cliente ingresó la solicitud con un
+// formato y después busca/entra con otro, no la encuentra.
 function normalizarTelefono(t) {
-    return String(t || '').replace(/\D/g, '');
+    const soloDigitos = String(t || '').replace(/\D/g, '');
+    if (soloDigitos.length === 11 && soloDigitos.startsWith('569')) {
+        return soloDigitos.slice(2);
+    }
+    return soloDigitos;
 }
 
 // SesionPortal guarda el hash, nunca el token en claro (ver models/SesionPortal.js).

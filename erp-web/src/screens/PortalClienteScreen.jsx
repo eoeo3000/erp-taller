@@ -20,6 +20,15 @@ const INFO_OT = {
     'Pagada':            { color: '#27ae60', icono: '💵', texto: 'Pagada' },
 };
 
+// Celular chileno: 9 dígitos que empiezan con 9, con o sin +56 adelante — sin ambigüedad
+// entre "912345678" y "56912345678"/"+56912345678". Opcional: vacío no bloquea (el acceso
+// al Portal Cliente también puede ser por correo, ver docs/estrategia-movil.md §5.2).
+const validarTelefono = (valor) => {
+    if (!valor) return true;
+    const limpio = valor.replace(/[\s()-]/g, '');
+    return /^(\+?56)?9\d{8}$/.test(limpio);
+};
+
 const CLP = (n) => Number(n || 0).toLocaleString('es-CL', { style: 'currency', currency: 'CLP', minimumFractionDigits: 0 });
 const fmtDate = (iso) => iso ? new Date((iso + '').split('T')[0] + 'T00:00:00').toLocaleDateString('es-CL', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
 
@@ -35,6 +44,7 @@ function TabSolicitud({ API, onExito }) {
     const enviar = async (e) => {
         e.preventDefault();
         if (!form.empresaSolicitante || !form.solicitante || !form.descripcion) { setError('Los campos marcados con * son obligatorios.'); return; }
+        if (!validarTelefono(form.numero)) { setError('El teléfono debe ser un celular chileno: 9 dígitos empezando con 9 (ej: 912345678), con o sin +56 adelante.'); return; }
         setEnviando(true); setError('');
         try {
             const r = await fetch(`${API}/portal/solicitud`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) });
