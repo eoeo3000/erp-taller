@@ -3,10 +3,29 @@ import { crearSolicitud, getSesion } from '../api.js';
 
 const URGENCIAS = ['Puede esperar', 'Esta semana', 'Detiene la producción'];
 
+// Mismo recorte que ya usa O4_ReporteTerreno.jsx (PWA Operativa): reescala a un ancho
+// máximo antes de mandar. Faltaba acá — una foto de cámara sin comprimir (varios MB en
+// base64) quedaba guardada tal cual en Solicitud.adjuntos, e inflaba /api/data para
+// cualquiera que lo consultara después (confirmado: una sola solicitud con esto llegó a
+// pesar ~5 MB y hacía demorar ~1 minuto la carga de datos en todo el sistema).
 function fotoAThumb(archivo) {
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
         const reader = new FileReader();
-        reader.onload = (e) => resolve(e.target.result);
+        reader.onload = (e) => {
+            const img = new Image();
+            img.onload = () => {
+                const MAX = 1200;
+                let w = img.width, h = img.height;
+                if (w > MAX) { h = Math.round((h * MAX) / w); w = MAX; }
+                const canvas = document.createElement('canvas');
+                canvas.width = w; canvas.height = h;
+                canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+                resolve(canvas.toDataURL('image/jpeg', 0.75));
+            };
+            img.onerror = reject;
+            img.src = e.target.result;
+        };
+        reader.onerror = reject;
         reader.readAsDataURL(archivo);
     });
 }
