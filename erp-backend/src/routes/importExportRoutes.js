@@ -29,4 +29,7 @@ router.get('/plantilla/suministros', ctrl.plantillaSuministros);
 router.get('/plantilla/equipos',     ctrl.plantillaEquipos);
 router.get('/plantilla/puestos',     ctrl.plantillaPuestos);
 
+// ── ADMINISTRACIÓN DEL SISTEMA ───────────────────────────────────────────────
+router.get('/uso-disco', ctrl.usoDisco);
+
 module.exports = router;

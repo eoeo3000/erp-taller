@@ -1,4 +1,6 @@
 const XLSX = require('xlsx');
+const fs = require('fs');
+const path = require('path');
 const getRecurso = require('../models/Recurso');
 const getSuministro = require('../models/suministro');
 const getEquipo = require('../models/equiposHerramientas');
@@ -394,3 +396,45 @@ function enviarExcel(res, filas, nombreHoja, nombreArchivo) {
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.send(buffer);
 }
+
+// ── USO DE DISCO ──────────────────────────────────────────────────────────────
+// Vive acá por falta de un lugar mejor: es el único otro bloque de "administración
+// del sistema" que ya tiene pantalla propia (ImportExportScreen, junto a Entorno de
+// trabajo), no porque tenga que ver con importar/exportar datos.
+
+// Tarifa de Render Persistent Disk al momento de escribir esto — es un estimado mío,
+// no un valor que Render exponga por API; confirmar contra render.com/pricing si el
+// número empieza a importar de verdad.
+const USD_POR_GB_MES = 0.25;
+
+function tamanoCarpeta(ruta) {
+    let bytes = 0;
+    let archivos = 0;
+    if (!fs.existsSync(ruta)) return { bytes, archivos };
+    for (const nombre of fs.readdirSync(ruta)) {
+        const completa = path.join(ruta, nombre);
+        const info = fs.statSync(completa);
+        if (info.isFile()) { bytes += info.size; archivos++; }
+    }
+    return { bytes, archivos };
+}
+
+// GET /api/import/uso-disco — tamaño real de erp-backend/uploads/, para ver cuánto
+// se viene acumulando y a cuánto equivale en el disco persistente de Render.
+exports.usoDisco = (req, res) => {
+    try {
+        const carpeta = path.join(__dirname, '..', '..', 'uploads');
+        const { bytes, archivos } = tamanoCarpeta(carpeta);
+        const gb = bytes / (1024 ** 3);
+        res.json({
+            archivos,
+            bytes,
+            mb: Number((bytes / (1024 ** 2)).toFixed(2)),
+            gb: Number(gb.toFixed(4)),
+            costoEstimadoMensualUSD: Number((gb * USD_POR_GB_MES).toFixed(4)),
+            tarifaUsadaUSDPorGBMes: USD_POR_GB_MES,
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+};

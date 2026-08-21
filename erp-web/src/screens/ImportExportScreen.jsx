@@ -101,6 +101,16 @@ export default function ImportExportScreen({ API, cargarDatos }) {
     useEffect(() => { cargarInfoEntornos(); }, [cargarInfoEntornos]);
     useEffect(() => { cargarEstadoDemo(); }, [cargarEstadoDemo]);
 
+    // ── USO DE DISCO (adjuntos de solicitudes) ──
+    const [usoDisco, setUsoDisco] = useState(null);
+    const cargarUsoDisco = useCallback(async () => {
+        try {
+            const r = await fetch(`${API}/import/uso-disco`, { headers: headerEntorno() });
+            setUsoDisco(await r.json());
+        } catch { /* no crítico */ }
+    }, [API]);
+    useEffect(() => { cargarUsoDisco(); }, [cargarUsoDisco]);
+
     const cambiarEntorno = (valor) => {
         if (valor === entorno) return;
         fijarEntorno(valor);
@@ -260,6 +270,34 @@ export default function ImportExportScreen({ API, cargarDatos }) {
                                     </div>
                                 );
                             })}
+                        </div>
+                    </section>
+
+                    {/* ── USO DE DISCO (adjuntos de solicitudes) ── */}
+                    <section style={styles.bloque}>
+                        <div style={styles.bloqueHeader}>
+                            <span style={styles.tituloSub}>Uso de disco · adjuntos</span>
+                            <button onClick={cargarUsoDisco} style={styles.btnSecundario}>Actualizar</button>
+                        </div>
+                        <div style={styles.notaBloque}>Fotos y archivos subidos desde solicitudes — se acumulan sin borrado automático.</div>
+                        {!usoDisco ? (
+                            <div style={{ fontSize: 11, color: t.textoAtenuado2 }}>Calculando…</div>
+                        ) : (
+                            <div style={{ display: 'flex', gap: 28, alignItems: 'baseline', flexWrap: 'wrap' }}>
+                                <div>
+                                    <div style={{ fontFamily: t.fontMono, fontSize: 20, fontWeight: 700 }}>{usoDisco.mb < 1 ? `${(usoDisco.bytes / 1024).toFixed(0)} KB` : `${usoDisco.mb} MB`}</div>
+                                    <div style={{ fontSize: 10.5, color: t.textoAtenuado2 }}>{usoDisco.archivos} archivo{usoDisco.archivos === 1 ? '' : 's'}</div>
+                                </div>
+                                <div>
+                                    <div style={{ fontFamily: t.fontMono, fontSize: 20, fontWeight: 700, color: t.acento }}>
+                                        {usoDisco.costoEstimadoMensualUSD < 0.01 ? '< US$ 0,01' : `US$ ${usoDisco.costoEstimadoMensualUSD.toFixed(2)}`}
+                                    </div>
+                                    <div style={{ fontSize: 10.5, color: t.textoAtenuado2 }}>estimado / mes en disco persistente</div>
+                                </div>
+                            </div>
+                        )}
+                        <div style={{ fontSize: 10, color: t.textoAtenuado3, marginTop: 10 }}>
+                            Estimado a US$ {usoDisco?.tarifaUsadaUSDPorGBMes ?? '0.25'} por GB al mes — tarifa de referencia, no un dato que Render entregue en tiempo real.
                         </div>
                     </section>
 
