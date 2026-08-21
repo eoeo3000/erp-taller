@@ -1,4 +1,6 @@
 const crypto = require('crypto');
+const fs = require('fs');
+const path = require('path');
 const getSolicitud = require('../models/Solicitud');
 const getOT = require('../models/OT');
 const getSesionPortal = require('../models/SesionPortal');
@@ -154,6 +156,25 @@ exports.detalle = async (req, res) => {
     }
 };
 
+// El formulario "Pedir un servicio" (C6, PWA Cliente) manda la foto como data-URI base64
+// dentro del JSON, porque esa ruta no tiene multer — a diferencia de POST /api/solicitudes
+// (el formulario de escritorio), que sí sube el archivo real y guarda solo la ruta.
+// Guardar el base64 tal cual en Solicitud.adjuntos infla cada documento a varios MB, y con
+// eso cualquier consulta masiva (GET /api/data, cada 30 s desde erp-web; el propio Portal
+// del Cliente) arrastra ese peso — confirmado: una sola solicitud así hizo que /api/data
+// tardara casi un minuto en producción. Se decodifica acá y se guarda en uploads/, igual
+// que ya hace multer para el formulario de escritorio, dejando en el campo solo la ruta.
+function guardarAdjuntoSiEsBase64(valor) {
+    const match = /^data:([\w/+.-]+);base64,(.+)$/.exec(valor || '');
+    if (!match) return valor; // ya es una ruta/URL (o está vacío) — se deja igual
+    const [, mime, contenido] = match;
+    const ext = (mime.split('/')[1] || 'jpg').replace('jpeg', 'jpg');
+    const nombre = `${Date.now()}-${crypto.randomBytes(6).toString('hex')}.${ext}`;
+    const destino = path.join(__dirname, '..', '..', 'uploads', nombre);
+    fs.writeFileSync(destino, Buffer.from(contenido, 'base64'));
+    return `/uploads/${nombre}`;
+}
+
 // POST /api/portal/solicitud  — crear nueva solicitud desde el portal del cliente
 exports.crearSolicitud = async (req, res) => {
     const Solicitud = getSolicitud(req.db);
@@ -165,6 +186,7 @@ exports.crearSolicitud = async (req, res) => {
                 data[key] = value;
             }
         }
+        if (data.adjuntos) data.adjuntos = guardarAdjuntoSiEsBase64(data.adjuntos);
         data.origen = data.origen || 'Portal Web';
         data.numeroSolicitud = await generarNumeroSolicitud(req.db);
 
