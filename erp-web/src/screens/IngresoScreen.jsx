@@ -33,6 +33,14 @@ const t = {
 
 // SLA: mide el tiempo que la Solicitud lleva sin tratar (fechaHoraSolicitud -> ahora).
 // Se congela una vez que la OT vinculada llega a 'Tratada' o más allá (ver docs/funcionalidades-v2.md, Gap 5).
+// Celular chileno: 9 dígitos que empiezan con 9, con o sin +56 adelante — sin ambigüedad
+// entre "912345678" y "56912345678"/"+56912345678". Opcional: vacío no bloquea.
+const validarTelefono = (valor) => {
+    if (!valor) return true;
+    const limpio = valor.replace(/[\s()-]/g, '');
+    return /^(\+?56)?9\d{8}$/.test(limpio);
+};
+
 const calcularSLA = (s, otEncontrada) => {
     if (otEncontrada && otEncontrada.estado !== 'Pendiente') return null;
     const inicio = new Date(s.fechaHoraSolicitud || s.fechaCreacion || s.createdAt);
@@ -117,6 +125,10 @@ const IngresoScreen = ({ solicitudes = [], liberarSolicitudManual, cargarDatos, 
     const handleCrear = async () => {
         if (!form.empresaSolicitante || !form.solicitante || !form.descripcion) {
             setAviso({ texto: 'Completa los campos obligatorios: empresa, solicitante y descripción.', tono: 'error' });
+            return;
+        }
+        if (!validarTelefono(form.numero)) {
+            setAviso({ texto: 'El teléfono debe ser un celular chileno: 9 dígitos empezando con 9 (ej: 912345678), con o sin +56 adelante.', tono: 'error' });
             return;
         }
         if (editandoId) {

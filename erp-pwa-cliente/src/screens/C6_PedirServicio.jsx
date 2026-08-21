@@ -3,6 +3,15 @@ import { crearSolicitud, getSesion } from '../api.js';
 
 const URGENCIAS = ['Puede esperar', 'Esta semana', 'Detiene la producción'];
 
+// Celular chileno: 9 dígitos que empiezan con 9, con o sin +56 adelante — así no
+// queda ambigüedad entre "912345678" y "56912345678"/"+56912345678". Opcional: si
+// viene vacío no se bloquea (el acceso al Portal Cliente también puede ser por correo).
+const validarTelefono = (valor) => {
+    if (!valor) return true;
+    const limpio = valor.replace(/[\s()-]/g, '');
+    return /^(\+?56)?9\d{8}$/.test(limpio);
+};
+
 // Mismo recorte que ya usa O4_ReporteTerreno.jsx (PWA Operativa): reescala a un ancho
 // máximo antes de mandar. Faltaba acá — una foto de cámara sin comprimir (varios MB en
 // base64) quedaba guardada tal cual en Solicitud.adjuntos, e inflaba /api/data para
@@ -51,6 +60,9 @@ export default function C6PedirServicio({ nav }) {
     const enviar = async () => {
         if (!form.empresaSolicitante || !form.solicitante || !form.descripcion) {
             setError('Complete empresa, nombre y descripción.'); return;
+        }
+        if (!validarTelefono(form.numero)) {
+            setError('El teléfono debe ser un celular chileno: 9 dígitos empezando con 9 (ej: 912345678), con o sin +56 adelante.'); return;
         }
         setEnviando(true); setError('');
         try {
