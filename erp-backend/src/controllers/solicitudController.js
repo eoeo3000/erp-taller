@@ -79,11 +79,11 @@ exports.actualizarEstado = async (req, res) => {
         const { id } = req.params;
         const {
             estado, empresaSolicitante, solicitante, correo, numero, direccion,
-            descripcion, origen, fechaEjecucionSolicitada, plazoEjecucionSugerido,
+            descripcion, origen, fechaEjecucionSolicitada, plazoEjecucionSugerido, adjuntos,
         } = req.body;
         const actualizada = await Solicitud.findByIdAndUpdate(id, {
             estado, empresaSolicitante, solicitante, correo, numero, direccion,
-            descripcion, origen, fechaEjecucionSolicitada, plazoEjecucionSugerido,
+            descripcion, origen, fechaEjecucionSolicitada, plazoEjecucionSugerido, adjuntos,
         }, { new: true, runValidators: true });
         if (!actualizada) return res.status(404).json({ error: "Solicitud no encontrada" });
         res.json(actualizada);

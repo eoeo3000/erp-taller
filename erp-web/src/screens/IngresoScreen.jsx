@@ -61,6 +61,15 @@ const FORM_VACIO = {
 const GRID = '34px minmax(150px,1.4fr) minmax(120px,1fr) 104px 96px 84px 132px 150px';
 const TABLA_MIN_W = 34 + 150 + 120 + 104 + 96 + 84 + 132 + 150 + 10 * 8 + 32;
 
+function FilaVista({ etiqueta, valor }) {
+    return (
+        <div style={{ display: 'grid', gridTemplateColumns: '110px 1fr', gap: 8, padding: '5px 0', borderBottom: `1px solid ${t.hairlineFila}` }}>
+            <span style={{ fontSize: '11px', color: t.textoAtenuado2 }}>{etiqueta}</span>
+            <span style={{ fontSize: '12px', color: t.textoPrincipal }}>{valor || '—'}</span>
+        </div>
+    );
+}
+
 // Recibimos 'solicitudes' como prop desde App.jsx para actualización automática
 const IngresoScreen = ({ solicitudes = [], liberarSolicitudManual, cargarDatos, API, crearSolicitudGlobal, actualizarSolicitudGlobal, ots = [], enviarPortalCliente, cargando, errorCarga }) => {
     const navigate = useNavigate();
@@ -69,11 +78,16 @@ const IngresoScreen = ({ solicitudes = [], liberarSolicitudManual, cargarDatos, 
     const [aviso, setAviso] = useState(null); // { texto, tono: 'error' | 'ok' }
     const [filtroEstado, setFiltroEstado] = useState('');
     const [filtroTexto, setFiltroTexto] = useState('');
-    // Doble clic en una fila carga sus datos acá mismo para editar, en vez de un modal
-    // aparte — mismo formulario, cambia el botón y el título.
+    // Doble clic en una fila abre primero una vista de solo lectura (con la foto visible,
+    // si tiene) — antes entraba directo a edición y no había forma de ver el adjunto sin
+    // editar. "Editar" desde ahí pasa al mismo formulario de siempre.
+    const [viendoId, setViendoId] = useState(null);
     const [editandoId, setEditandoId] = useState(null);
 
     const set = (campo) => (e) => setForm(prev => ({ ...prev, [campo]: e.target.value }));
+
+    const verSolicitud = (s) => { setViendoId(s._id); setEditandoId(null); };
+    const cerrarVista = () => setViendoId(null);
 
     const editarSolicitud = (s) => {
         setForm({
@@ -84,6 +98,7 @@ const IngresoScreen = ({ solicitudes = [], liberarSolicitudManual, cargarDatos, 
             plazoEjecucionSugerido: s.plazoEjecucionSugerido || '', adjuntos: s.adjuntos || '',
         });
         setEditandoId(s._id);
+        setViendoId(null);
         setArchivo(null);
         setAviso(null);
     };
@@ -94,6 +109,10 @@ const IngresoScreen = ({ solicitudes = [], liberarSolicitudManual, cargarDatos, 
         setArchivo(null);
         setAviso(null);
     };
+
+    const eliminarAdjunto = () => { setForm(f => ({ ...f, adjuntos: '' })); setArchivo(null); };
+    const esImagen = (ruta) => /\.(jpe?g|png|gif|webp)$/i.test(ruta || '') || /^data:image/.test(ruta || '');
+    const urlAdjunto = (ruta) => ruta?.startsWith('data:') ? ruta : `${API.replace('/api', '')}${ruta}`;
 
     const handleCrear = async () => {
         if (!form.empresaSolicitante || !form.solicitante || !form.descripcion) {
@@ -137,6 +156,8 @@ const IngresoScreen = ({ solicitudes = [], liberarSolicitudManual, cargarDatos, 
         ...estados.map(e => ({ key: e, label: `${e} (${solicitudes.filter(s => s.estado === e).length})` })),
     ];
 
+    const solicitudVista = viendoId ? solicitudes.find(s => s._id === viendoId) : null;
+
     const q = filtroTexto.trim().toLowerCase();
     const solicitudesFiltradas = solicitudes.filter(s => {
         const cumpleEstado = !filtroEstado || s.estado === filtroEstado;
@@ -161,6 +182,46 @@ const IngresoScreen = ({ solicitudes = [], liberarSolicitudManual, cargarDatos, 
             <div style={styles.cuerpo}>
                 {/* Formulario */}
                 <section style={styles.formSeccion}>
+                    {solicitudVista && !editandoId ? (
+                        <div style={{ padding: '13px 16px 16px' }}>
+                            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
+                                <div style={styles.tituloBloque}>Solicitud {solicitudVista.numeroSolicitud || ''}</div>
+                                <span onClick={cerrarVista} style={{ fontSize: '11px', color: t.textoAtenuado2, cursor: 'pointer' }}>Cerrar ×</span>
+                            </div>
+                            <FilaVista etiqueta="Empresa" valor={solicitudVista.empresaSolicitante} />
+                            <FilaVista etiqueta="Solicitante" valor={solicitudVista.solicitante} />
+                            <FilaVista etiqueta="Correo" valor={solicitudVista.correo} />
+                            <FilaVista etiqueta="Teléfono" valor={solicitudVista.numero} />
+                            <FilaVista etiqueta="Dirección" valor={solicitudVista.direccion} />
+                            <FilaVista etiqueta="Origen" valor={solicitudVista.origen} />
+                            <FilaVista etiqueta="Fecha de ejecución" valor={fmtFecha(solicitudVista.fechaEjecucionSolicitada)} />
+                            <FilaVista etiqueta="Plazo sugerido" valor={solicitudVista.plazoEjecucionSugerido} />
+                            <div style={{ marginTop: 10 }}>
+                                <span style={styles.etiqueta}>Descripción</span>
+                                <p style={{ fontSize: '12.5px', lineHeight: 1.55, margin: '4px 0 0', color: t.textoSecundario1 }}>{solicitudVista.descripcion || '—'}</p>
+                            </div>
+                            <div style={{ marginTop: 12 }}>
+                                <span style={styles.etiqueta}>Adjunto</span>
+                                {solicitudVista.adjuntos ? (
+                                    esImagen(solicitudVista.adjuntos) ? (
+                                        <a href={urlAdjunto(solicitudVista.adjuntos)} target="_blank" rel="noopener noreferrer">
+                                            <img src={urlAdjunto(solicitudVista.adjuntos)} alt="Adjunto" style={{ display: 'block', width: '100%', maxHeight: 220, objectFit: 'cover', borderRadius: 3, marginTop: 6, border: `1px solid ${t.bordeZona}` }} />
+                                        </a>
+                                    ) : (
+                                        <div style={{ marginTop: 6 }}>
+                                            <a href={urlAdjunto(solicitudVista.adjuntos)} target="_blank" rel="noopener noreferrer" style={{ fontSize: '12px', color: t.acento }}>Abrir archivo adjunto</a>
+                                        </div>
+                                    )
+                                ) : (
+                                    <div style={{ fontSize: '12px', color: t.textoDeshabilitado, marginTop: 6 }}>Sin adjuntos</div>
+                                )}
+                            </div>
+                            <div style={{ display: 'flex', gap: 6, marginTop: 16 }}>
+                                <button onClick={() => editarSolicitud(solicitudVista)} style={styles.btnPrimario}>Editar</button>
+                                <button onClick={cerrarVista} style={styles.btnSecundario}>Cerrar</button>
+                            </div>
+                        </div>
+                    ) : (
                     <div style={{ padding: '13px 16px 8px' }}>
                         <div style={styles.tituloBloque}>{editandoId ? 'Editar solicitud' : 'Nueva solicitud de servicio'}</div>
                         <div style={styles.formGrid}>
@@ -203,6 +264,14 @@ const IngresoScreen = ({ solicitudes = [], liberarSolicitudManual, cargarDatos, 
                                     </button>
                                     {archivo && <button type="button" onClick={() => setArchivo(null)} style={styles.btnSecundario}>Quitar</button>}
                                 </div>
+                                {editandoId && form.adjuntos && !archivo && (
+                                    <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 6 }}>
+                                        <a href={urlAdjunto(form.adjuntos)} target="_blank" rel="noopener noreferrer" style={{ fontSize: '11px', color: t.acento }}>
+                                            {esImagen(form.adjuntos) ? 'Ver foto actual' : 'Descargar adjunto actual'}
+                                        </a>
+                                        <span onClick={eliminarAdjunto} style={{ fontSize: '11px', color: t.pagoPendiente, cursor: 'pointer' }}>Eliminar adjunto</span>
+                                    </div>
+                                )}
                             </label>
 
                             <label style={{ ...styles.campoLabel, gridColumn: 'span 4' }}>
@@ -231,6 +300,7 @@ const IngresoScreen = ({ solicitudes = [], liberarSolicitudManual, cargarDatos, 
                             <span style={{ marginLeft: 'auto', fontSize: '10.5px', color: t.textoAtenuado3 }}>* obligatorio</span>
                         </div>
                     </div>
+                    )}
                 </section>
 
                 {/* Tabla */}
@@ -276,9 +346,9 @@ const IngresoScreen = ({ solicitudes = [], liberarSolicitudManual, cargarDatos, 
 
                                 return (
                                     <div
-                                        key={s._id || index} style={{ ...styles.fila, background: editandoId === s._id ? t.hoverFila : undefined, cursor: 'pointer' }}
-                                        onDoubleClick={() => editarSolicitud(s)}
-                                        title="Doble clic para editar los datos de esta solicitud"
+                                        key={s._id || index} style={{ ...styles.fila, background: (editandoId === s._id || viendoId === s._id) ? t.hoverFila : undefined, cursor: 'pointer' }}
+                                        onDoubleClick={() => verSolicitud(s)}
+                                        title="Doble clic para ver los datos de esta solicitud"
                                     >
                                         <span style={styles.celdaMono} title="Número de solicitud — junto al teléfono, es lo que el cliente usa para entrar al Portal">{s.numeroSolicitud || String(index + 1).padStart(2, '0')}</span>
                                         <span style={styles.celdaEmpresa}>{s.empresaSolicitante || '—'}</span>
