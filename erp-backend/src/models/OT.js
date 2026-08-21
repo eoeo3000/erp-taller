@@ -177,4 +177,7 @@ const OTSchema = new mongoose.Schema({
     timestamps: true
 });
 
+// getAllData (dataController.js) ordena por createdAt en cada carga/poll de /api/data.
+OTSchema.index({ createdAt: -1 });
+
 module.exports = (conn) => conn.models.OT || conn.model('OT', OTSchema);

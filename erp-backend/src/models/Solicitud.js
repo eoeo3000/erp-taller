@@ -29,4 +29,8 @@ const solicitudSchema = new mongoose.Schema({
     collection: 'solicitudes'
 });
 
+// getAllData (dataController.js) y obtenerSolicitudes (solicitudController.js) ordenan por
+// fechaCreacion en cada carga/poll.
+solicitudSchema.index({ fechaCreacion: -1 });
+
 module.exports = (conn) => conn.models.Solicitud || conn.model('Solicitud', solicitudSchema);
