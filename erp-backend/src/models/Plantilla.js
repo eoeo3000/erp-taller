@@ -29,4 +29,7 @@ const plantillaSchema = new mongoose.Schema({
     collection: 'plantillas'
 });
 
+// getAllData (dataController.js) ordena por categoria + nombre en cada carga/poll.
+plantillaSchema.index({ categoria: 1, nombre: 1 });
+
 module.exports = (conn) => conn.models.Plantilla || conn.model('Plantilla', plantillaSchema);

@@ -222,24 +222,30 @@ function App() {
     cargarDatos(); // Carga inicial inmediata
 
     const interval = setInterval(async () => {
+      // Con la pestaña en segundo plano nadie está mirando estos datos — nos saltamos
+      // el poll para no seguir golpeando /api/data sin necesidad.
+      if (document.visibilityState !== 'visible') return;
       try {
         // Usamos axios para mantener la consistencia
         const { data } = await axios.get(`${API}/data`);
 
-        // Sincronización inteligente: solo actualiza si hay cambios reales
-        // Esto evita que React vuelva a dibujar la pantalla cada 30 segundos si nada cambió
-        const syncState = (prev, next, setter) => {
-          if (JSON.stringify(prev) !== JSON.stringify(next)) {
-            setter(next || []);
-          }
+        // Sincronización inteligente: solo actualiza si hay cambios reales.
+        // IMPORTANTE: comparamos contra 'prev' dentro del propio setState funcional,
+        // no contra las variables de estado del closure — así este efecto no necesita
+        // depender de ots/solicitudes/etc. Antes SÍ dependía de ellas (ver historial),
+        // y como cargarDatos() las reescribe con una referencia nueva en cada llamada,
+        // el efecto se desmontaba y volvía a montar solo, disparando /api/data cada
+        // pocos segundos en vez de cada 30 (ver docs/bugs-conocidos.md).
+        const syncState = (next, setter) => {
+          setter(prev => (JSON.stringify(prev) !== JSON.stringify(next) ? (next || []) : prev));
         };
 
-        syncState(ots, data.ots, setOts);
-        syncState(solicitudes, data.solicitudes, setSolicitudes);
-        syncState(recursos, data.recursos, setRecursos);
-        syncState(calendarios, data.calendarios, setCalendarios);
-        syncState(componentes, data.equipos, setComponentes);
-        syncState(suministros, data.suministros, setSuministros);
+        syncState(data.ots, setOts);
+        syncState(data.solicitudes, setSolicitudes);
+        syncState(data.recursos, setRecursos);
+        syncState(data.calendarios, setCalendarios);
+        syncState(data.equipos, setComponentes);
+        syncState(data.suministros, setSuministros);
 
       } catch (error) {
         console.error("❌ Error en refresco automático:", error);
@@ -247,7 +253,7 @@ function App() {
     }, 30000); // 30 segundos es un buen equilibrio
 
     return () => clearInterval(interval);
-  }, [ots, solicitudes, recursos, calendarios, componentes, suministros]); // Dependencias para la comparación
+  }, []); // Se monta una sola vez — el intervalo interno no necesita reiniciarse por cambios de estado
   const eliminarOT = async (id) => {
     if (!id || id === 'null') return;
 
