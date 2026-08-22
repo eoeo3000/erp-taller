@@ -30,8 +30,12 @@ function sumarDias(iso, delta) {
 
 const CLAVE_AYUDA_VISTA = 'operativo.s2.ayudaDobleToqueVista';
 
-export default function S2MiSemanaSupervisor({ nav }) {
-    const [desde, setDesde] = useState(null);
+export default function S2MiSemanaSupervisor({ nav, contexto }) {
+    // Qué semana se está viendo vive también en la pila de navegación (contexto), no solo
+    // acá: al entrar a una OT (S3) y volver, React desmonta y vuelve a montar esta pantalla
+    // desde cero — un useState local por sí solo se resetea y siempre vuelve a la semana
+    // actual, perdiendo en qué semana estaba la persona antes de entrar a la OT.
+    const [desde, setDesdeLocal] = useState(contexto?.desde ?? null);
     const [datos, setDatos] = useState(null);
     const [error, setError] = useState('');
     // Gesto sin rótulo visible = gesto que nadie descubre (README §4): se muestra una vez y
@@ -39,6 +43,11 @@ export default function S2MiSemanaSupervisor({ nav }) {
     const [mostrarAyuda, setMostrarAyuda] = useState(() => {
         try { return !localStorage.getItem(CLAVE_AYUDA_VISTA); } catch { return true; }
     });
+
+    const cambiarSemana = (nuevaFecha) => {
+        setDesdeLocal(nuevaFecha);
+        nav.reemplazar('s2', { desde: nuevaFecha });
+    };
 
     useEffect(() => {
         setDatos(null);
@@ -59,7 +68,7 @@ export default function S2MiSemanaSupervisor({ nav }) {
             <button onClick={nav.volver} className="mono" style={{ flex: 'none', width: 40, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', fontSize: 20, color: 'var(--texto-secundario-2)', cursor: 'pointer' }}>‹</button>
             <span style={{ flex: 'none', fontSize: 17, fontWeight: 700, whiteSpace: 'nowrap' }}>Mi semana</span>
             <span style={{ marginLeft: 'auto', flex: 'none', display: 'flex', alignItems: 'center' }}>
-                <button onClick={() => datos && setDesde(sumarDias(datos.dias[0], -7))} disabled={!datos} className="mono" style={{ width: 40, height: 44, background: 'none', border: 'none', fontSize: 18, color: 'var(--texto-secundario-2)', cursor: datos ? 'pointer' : 'default' }}>‹</button>
+                <button onClick={() => datos && cambiarSemana(sumarDias(datos.dias[0], -7))} disabled={!datos} className="mono" style={{ width: 40, height: 44, background: 'none', border: 'none', fontSize: 18, color: 'var(--texto-secundario-2)', cursor: datos ? 'pointer' : 'default' }}>‹</button>
                 {/* Rótulo tapable: abre el selector de fecha nativo para ir directo a
                     cualquier semana, no solo semana anterior/siguiente de a una. */}
                 <label style={{ position: 'relative', display: 'flex', alignItems: 'center', height: 44, padding: '0 4px', cursor: datos ? 'pointer' : 'default' }}>
@@ -67,12 +76,12 @@ export default function S2MiSemanaSupervisor({ nav }) {
                     {datos && (
                         <input
                             type="date" value={datos.dias[0]} aria-label="Elegir semana"
-                            onChange={(e) => e.target.value && setDesde(e.target.value)}
+                            onChange={(e) => e.target.value && cambiarSemana(e.target.value)}
                             style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', opacity: 0, cursor: 'pointer' }}
                         />
                     )}
                 </label>
-                <button onClick={() => datos && setDesde(sumarDias(datos.dias[0], 7))} disabled={!datos} className="mono" style={{ width: 40, height: 44, background: 'none', border: 'none', fontSize: 18, color: 'var(--texto-secundario-2)', cursor: datos ? 'pointer' : 'default' }}>›</button>
+                <button onClick={() => datos && cambiarSemana(sumarDias(datos.dias[0], 7))} disabled={!datos} className="mono" style={{ width: 40, height: 44, background: 'none', border: 'none', fontSize: 18, color: 'var(--texto-secundario-2)', cursor: datos ? 'pointer' : 'default' }}>›</button>
             </span>
         </header>
     );
