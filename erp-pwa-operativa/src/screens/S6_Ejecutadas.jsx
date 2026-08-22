@@ -24,8 +24,18 @@ export default function S6Ejecutadas({ nav }) {
 
     useEffect(() => { ejecutadas().then((d) => setDatos(d.ots)).catch((e) => setError(e.message)); }, []);
 
-    if (error) return <div style={{ padding: 24, fontSize: 'var(--fs-cuerpo)', color: 'var(--detenido)' }}>{error}</div>;
-    if (!datos) return null;
+    // La barra superior se pinta de inmediato: al pasar de una pantalla a otra debe quedar
+    // una barra visible, no una pantalla en blanco mientras carga el contenido.
+    const cabecera = (
+        <header style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: 12, height: 52, padding: '0 14px 0 8px', background: 'var(--superficie)', borderBottom: '1px solid var(--linea-zona)' }}>
+            <button onClick={nav.volver} className="mono" style={{ width: 44, height: 44, background: 'none', border: 'none', fontSize: 20, color: 'var(--texto-secundario-2)', cursor: 'pointer' }}>‹</button>
+            <span style={{ fontSize: 17, fontWeight: 700 }}>Ejecutadas</span>
+            <span className="mono" style={{ marginLeft: 'auto', fontSize: 13, color: 'var(--texto-atenuado-1)' }}>30 días</span>
+        </header>
+    );
+
+    if (error) return <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>{cabecera}<div style={{ padding: 24, fontSize: 'var(--fs-cuerpo)', color: 'var(--detenido)' }}>{error}</div></div>;
+    if (!datos) return <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>{cabecera}</div>;
 
     if (seleccionada) {
         return <DetalleEjecutada otId={seleccionada} onVolver={() => setSeleccionada(null)} />;
@@ -35,11 +45,7 @@ export default function S6Ejecutadas({ nav }) {
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
-            <header style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: 12, height: 52, padding: '0 14px 0 8px', background: 'var(--superficie)', borderBottom: '1px solid var(--linea-zona)' }}>
-                <button onClick={nav.volver} className="mono" style={{ width: 44, height: 44, background: 'none', border: 'none', fontSize: 20, color: 'var(--texto-secundario-2)', cursor: 'pointer' }}>‹</button>
-                <span style={{ fontSize: 17, fontWeight: 700 }}>Ejecutadas</span>
-                <span className="mono" style={{ marginLeft: 'auto', fontSize: 13, color: 'var(--texto-atenuado-1)' }}>30 días</span>
-            </header>
+            {cabecera}
 
             <div className="franja" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <span style={{ fontSize: 13, color: 'var(--texto-secundario-2)' }}>Solo consulta · el cierre lo hace la oficina</span>
@@ -79,7 +85,16 @@ export default function S6Ejecutadas({ nav }) {
 function DetalleEjecutada({ otId, onVolver }) {
     const [ot, setOt] = useState(null);
     useEffect(() => { obtenerOT(otId).then(setOt); }, [otId]);
-    if (!ot) return null;
+
+    const cabecera = (
+        <header style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: 12, height: 52, padding: '0 14px 0 8px', background: 'var(--superficie)', borderBottom: '1px solid var(--linea-zona)' }}>
+            <button onClick={onVolver} className="mono" style={{ width: 44, height: 44, background: 'none', border: 'none', fontSize: 20, color: 'var(--texto-secundario-2)', cursor: 'pointer' }}>‹</button>
+            <span className="mono" style={{ fontSize: 15, fontWeight: 600 }}>{ot?.numeroOT || '…'}</span>
+            <span style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: 'var(--texto-atenuado-1)' }}>Solo consulta</span>
+        </header>
+    );
+
+    if (!ot) return <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>{cabecera}</div>;
 
     const fotos = [
         ...(ot.reportes || []).filter((r) => r.foto).map((r) => r.foto),
@@ -88,11 +103,7 @@ function DetalleEjecutada({ otId, onVolver }) {
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
-            <header style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: 12, height: 52, padding: '0 14px 0 8px', background: 'var(--superficie)', borderBottom: '1px solid var(--linea-zona)' }}>
-                <button onClick={onVolver} className="mono" style={{ width: 44, height: 44, background: 'none', border: 'none', fontSize: 20, color: 'var(--texto-secundario-2)', cursor: 'pointer' }}>‹</button>
-                <span className="mono" style={{ fontSize: 15, fontWeight: 600 }}>{ot.numeroOT}</span>
-                <span style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: 'var(--texto-atenuado-1)' }}>Solo consulta</span>
-            </header>
+            {cabecera}
 
             <div style={{ flex: 1, overflowY: 'auto' }}>
                 <div style={{ padding: '16px 18px', background: 'var(--superficie)', borderBottom: '1px solid var(--linea-fina)' }}>
