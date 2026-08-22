@@ -24,7 +24,13 @@ self.addEventListener('fetch', (event) => {
     caches.match(event.request).then((cacheado) => {
       const red = fetch(event.request)
         .then((respuesta) => {
-          if (respuesta.ok) caches.open(CACHE).then((cache) => cache.put(event.request, respuesta.clone()));
+          // Clonar YA, antes de devolver la respuesta: en cuanto el navegador la recibe
+          // empieza a leer su body, y clonar después de eso revienta con "Response body
+          // is already used" (mismo bug real que erp-pwa-operativa/public/sw.js).
+          if (respuesta.ok) {
+            const paraCache = respuesta.clone();
+            caches.open(CACHE).then((cache) => cache.put(event.request, paraCache));
+          }
           return respuesta;
         })
         .catch(() => cacheado);

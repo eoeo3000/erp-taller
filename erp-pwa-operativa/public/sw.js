@@ -27,7 +27,14 @@ self.addEventListener('fetch', (event) => {
     caches.match(event.request).then((cacheado) => {
       const red = fetch(event.request)
         .then((respuesta) => {
-          if (respuesta.ok) caches.open(CACHE).then((cache) => cache.put(event.request, respuesta.clone()));
+          // Clonar YA, antes de devolver la respuesta: en cuanto el navegador la recibe
+          // empieza a leer su body, y clonar después de eso revienta con "Response body
+          // is already used" (visto en producción — cache.put quedaba en una promesa sin
+          // esperar, así que corría después de que el body ya estaba en uso).
+          if (respuesta.ok) {
+            const paraCache = respuesta.clone();
+            caches.open(CACHE).then((cache) => cache.put(event.request, paraCache));
+          }
           return respuesta;
         })
         .catch(() => cacheado);
