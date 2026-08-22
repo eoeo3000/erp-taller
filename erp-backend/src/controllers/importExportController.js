@@ -7,6 +7,9 @@ const getEquipo = require('../models/equiposHerramientas');
 const getPuesto = require('../models/puesto');
 const getOT = require('../models/OT');
 const getSolicitud = require('../models/Solicitud');
+const getTipoTrabajo = require('../models/TipoTrabajo');
+const getCondicionEntorno = require('../models/CondicionEntorno');
+const TIPOS_DATO_CAMPO = getTipoTrabajo.TIPOS_DATO_CAMPO;
 
 // ── HELPERS ───────────────────────────────────────────────────────────────────
 
@@ -18,6 +21,71 @@ function parsearExcel(buffer) {
 
 function normStr(v) { return String(v || '').trim(); }
 function normNum(v) { const n = parseFloat(v); return isNaN(n) ? 0 : n; }
+function normSiNo(v) { return /^s(i|í)$/i.test(normStr(v)); }
+function normLista(v) { return normStr(v).split(',').map(s => s.trim()).filter(Boolean); }
+
+// Para el catálogo de tipos de trabajo (varias hojas, ver docs/plan-formulario-adaptativo.md
+// §7) — a diferencia de parsearExcel (siempre la primera hoja), acá hace falta leer varias
+// hojas del mismo archivo por nombre.
+function parsearHoja(wb, nombreHoja) {
+    const sheet = wb.Sheets[nombreHoja];
+    if (!sheet) return [];
+    return XLSX.utils.sheet_to_json(sheet, { defval: '' });
+}
+
+// "Cambio de línea" -> "CAMBIO_DE_LINEA" — código de correlación entre hojas, generado al
+// exportar; no se guarda en el modelo (TipoTrabajo se identifica por nombre, igual que
+// Puesto), es solo para que las hojas de un mismo archivo se puedan enlazar entre sí.
+const ACENTOS = { 'Á': 'A', 'É': 'E', 'Í': 'I', 'Ó': 'O', 'Ú': 'U', 'Ñ': 'N', 'Ü': 'U' };
+function sinAcentos(s) { return s.replace(/[ÁÉÍÓÚÑÜ]/g, (c) => ACENTOS[c] || c); }
+
+function slugCodigo(nombre) {
+    return sinAcentos(normStr(nombre).toUpperCase())
+        .replace(/[^A-Z0-9]+/g, '_')
+        .replace(/^_+|_+$/g, '');
+}
+
+function construirWorkbookCatalogo(tipos, condiciones) {
+    const wb = XLSX.utils.book_new();
+    agregarHojasCatalogo(wb, tipos, condiciones);
+    return wb;
+}
+
+// Separado de construirWorkbookCatalogo para poder sumar las 4 hojas del catálogo a un
+// workbook YA existente (exportarBatch, cuando "tipos-trabajo" se selecciona junto a otros
+// módulos) en vez de generar siempre un archivo aparte.
+function agregarHojasCatalogo(wb, tipos, condiciones) {
+    const filasTipos = [], filasCampos = [], filasOpciones = [];
+
+    for (const t of tipos) {
+        const codigoTipo = slugCodigo(t.nombre);
+        const nombresCondNoAplican = (t.condicionesNoAplicables || [])
+            .map(c => (typeof c === 'string' ? c : c.nombre))
+            .filter(Boolean);
+        filasTipos.push({
+            codigoTipo,
+            nombre: t.nombre,
+            sinonimos: (t.sinonimos || []).join(', '),
+            plantillaTexto: t.plantillaTexto || '',
+            condicionesNoAplicables: nombresCondNoAplican.join(', '),
+        });
+        for (const c of (t.campos || [])) {
+            filasCampos.push({
+                codigoTipo, clave: c.clave, etiqueta: c.etiqueta, tipoDato: c.tipoDato,
+                obligatorio: c.obligatorio ? 'Sí' : 'No', orden: c.orden ?? 0,
+            });
+            for (const op of (c.opciones || [])) {
+                filasOpciones.push({ codigoTipo, clave: c.clave, opcion: op });
+            }
+        }
+    }
+
+    agregarHoja(wb, filasTipos, 'Tipos de trabajo');
+    agregarHoja(wb, filasCampos, 'Campos');
+    agregarHoja(wb, filasOpciones, 'Opciones');
+    agregarHoja(wb, condiciones.map(c => ({ nombre: c.nombre || c })), 'Condiciones de entorno');
+    return wb;
+}
 
 // ── IMPORTAR ──────────────────────────────────────────────────────────────────
 
@@ -164,6 +232,95 @@ exports.importarPuestos = async (req, res) => {
     }
 };
 
+// Catálogo de tipos de trabajo — 3-4 hojas por archivo (ver
+// docs/plan-formulario-adaptativo.md §7): "Tipos de trabajo", "Campos", "Opciones" y
+// "Condiciones de entorno" (esta última opcional), unidas por una columna `codigoTipo` de
+// texto libre que la persona que arma el Excel define ella misma — no es un id de Mongo.
+exports.importarTiposTrabajo = async (req, res) => {
+    const TipoTrabajo = getTipoTrabajo(req.db);
+    const CondicionEntorno = getCondicionEntorno(req.db);
+    try {
+        const wb = XLSX.read(req.file.buffer, { type: 'buffer' });
+        const filasTipos = parsearHoja(wb, 'Tipos de trabajo');
+        const filasCampos = parsearHoja(wb, 'Campos');
+        const filasOpciones = parsearHoja(wb, 'Opciones');
+        const filasCondiciones = parsearHoja(wb, 'Condiciones de entorno');
+        const errores = [];
+
+        // 1) Condiciones de entorno primero — las de Hoja 1 (condicionesNoAplicables) se
+        // resuelven contra este mapa, que también incluye las que ya existían en la base.
+        const mapaCondiciones = new Map();
+        for (const c of await CondicionEntorno.find().lean()) mapaCondiciones.set(normStr(c.nombre).toLowerCase(), c._id);
+        let condicionesCargadas = 0;
+        for (const f of filasCondiciones) {
+            const nombre = normStr(f.nombre);
+            if (!nombre) continue;
+            const doc = await CondicionEntorno.findOneAndUpdate({ nombre }, { nombre }, { upsert: true, new: true, runValidators: true });
+            mapaCondiciones.set(nombre.toLowerCase(), doc._id);
+            condicionesCargadas++;
+        }
+
+        // 2) Campos agrupados por codigoTipo + clave (Hoja 2).
+        const camposPorTipo = new Map(); // codigoTipo -> Map(clave -> campo)
+        for (const f of filasCampos) {
+            const codigoTipo = normStr(f.codigoTipo);
+            const clave = normStr(f.clave);
+            if (!codigoTipo || !clave) continue;
+            if (!camposPorTipo.has(codigoTipo)) camposPorTipo.set(codigoTipo, new Map());
+            const tipoDato = normStr(f.tipoDato);
+            camposPorTipo.get(codigoTipo).set(clave, {
+                clave,
+                etiqueta: normStr(f.etiqueta) || clave,
+                tipoDato: TIPOS_DATO_CAMPO.includes(tipoDato) ? tipoDato : 'texto',
+                obligatorio: normSiNo(f.obligatorio),
+                orden: normNum(f.orden),
+                opciones: [],
+            });
+        }
+
+        // 3) Opciones anexadas a su campo (Hoja 3).
+        for (const f of filasOpciones) {
+            const codigoTipo = normStr(f.codigoTipo);
+            const clave = normStr(f.clave);
+            const opcion = normStr(f.opcion);
+            if (!codigoTipo || !clave || !opcion) continue;
+            const campo = camposPorTipo.get(codigoTipo)?.get(clave);
+            if (campo) campo.opciones.push(opcion);
+        }
+
+        // 4) Tipos de trabajo (Hoja 1) — upsert final por nombre, igual criterio que Puesto/Suministro.
+        const insertados = [];
+        for (let i = 0; i < filasTipos.length; i++) {
+            const f = filasTipos[i];
+            const nombre = normStr(f.nombre);
+            if (!nombre) { errores.push({ fila: i + 2, motivo: 'nombre vacío' }); continue; }
+
+            const codigoTipo = normStr(f.codigoTipo);
+            const camposMapa = camposPorTipo.get(codigoTipo);
+            const campos = camposMapa ? [...camposMapa.values()].sort((a, b) => a.orden - b.orden) : [];
+
+            const condicionesNoAplicables = normLista(f.condicionesNoAplicables)
+                .map((n) => mapaCondiciones.get(n.toLowerCase()))
+                .filter(Boolean);
+
+            try {
+                await TipoTrabajo.findOneAndUpdate(
+                    { nombre },
+                    { nombre, sinonimos: normLista(f.sinonimos), plantillaTexto: normStr(f.plantillaTexto), campos, condicionesNoAplicables },
+                    { upsert: true, new: true, runValidators: true }
+                );
+                insertados.push(nombre);
+            } catch (e) {
+                errores.push({ fila: i + 2, motivo: e.message });
+            }
+        }
+
+        res.json({ total: filasTipos.length, insertados: insertados.length, errores, condicionesCargadas });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+};
+
 // ── EXPORTAR (genera buffer Excel en el servidor) ─────────────────────────────
 
 exports.exportarRecursos = async (req, res) => {
@@ -274,6 +431,20 @@ exports.exportarSolicitudes = async (req, res) => {
     } catch (err) { res.status(500).json({ error: err.message }); }
 };
 
+exports.exportarTiposTrabajo = async (req, res) => {
+    const TipoTrabajo = getTipoTrabajo(req.db);
+    const CondicionEntorno = getCondicionEntorno(req.db);
+    try {
+        const tipos = await TipoTrabajo.find().populate('condicionesNoAplicables').lean();
+        const condiciones = await CondicionEntorno.find().lean();
+        const wb = construirWorkbookCatalogo(tipos, condiciones);
+        const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+        res.setHeader('Content-Disposition', 'attachment; filename="catalogo_tipos_trabajo.xlsx"');
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.send(buffer);
+    } catch (err) { res.status(500).json({ error: err.message }); }
+};
+
 // ── PLANTILLAS VACÍAS ─────────────────────────────────────────────────────────
 
 exports.plantillaRecursos = (_req, res) => {
@@ -291,6 +462,35 @@ exports.plantillaEquipos = (_req, res) => {
 exports.plantillaPuestos = (_req, res) => {
     const filas = [{ nombre: 'Electricista', costoHora: 8000, categoria: 'Técnico' }];
     enviarExcel(res, filas, 'Puestos', 'plantilla_puestos.xlsx');
+};
+// Ejemplo lleno de "Cambio de línea" (mismo del plan §7) — más útil como punto de partida
+// que una fila vacía, dado que el catálogo tiene 3-4 hojas relacionadas entre sí.
+exports.plantillaTiposTrabajo = (_req, res) => {
+    const tipoEjemplo = [{
+        nombre: 'Cambio de línea',
+        sinonimos: ['cañería', 'tubería', 'línea de proceso'],
+        plantillaTexto: 'Cambio de línea de {diametro} {material}, {trazado}, transporta {fluido}, en {planta}',
+        condicionesNoAplicables: ['Energizado'],
+        campos: [
+            { clave: 'diametro', etiqueta: 'Diámetro', tipoDato: 'seleccionUnica', obligatorio: true, orden: 1, opciones: ['2 pulgadas', '4 pulgadas', '6 pulgadas'] },
+            { clave: 'material', etiqueta: 'Material', tipoDato: 'seleccionUnica', obligatorio: true, orden: 2, opciones: ['inoxidable', 'carbono', 'PVC'] },
+            { clave: 'trazado', etiqueta: 'Trazado', tipoDato: 'seleccionUnica', obligatorio: false, orden: 3, opciones: ['línea recta', 'con codos'] },
+            { clave: 'fluido', etiqueta: 'Fluido que transporta', tipoDato: 'seleccionUnica', obligatorio: true, orden: 4, opciones: ['agua', 'ácido', 'vapor'] },
+            { clave: 'planta', etiqueta: 'Área o planta', tipoDato: 'texto', obligatorio: true, orden: 5, opciones: [] },
+            { clave: 'equipoReferencial', etiqueta: 'Equipo referencial', tipoDato: 'texto', obligatorio: false, orden: 6, opciones: [] },
+            { clave: 'fechaTentativa', etiqueta: 'Fecha de ejecución tentativa', tipoDato: 'fecha', obligatorio: false, orden: 7, opciones: [] },
+            { clave: 'duracionTentativa', etiqueta: 'Duración tentativa', tipoDato: 'numero', obligatorio: false, orden: 8, opciones: [] },
+            { clave: 'fotoActual', etiqueta: 'Foto referencial del estado actual', tipoDato: 'foto', obligatorio: false, orden: 9, opciones: [] },
+            { clave: 'fotoEsperada', etiqueta: 'Foto de lo esperado', tipoDato: 'foto', obligatorio: false, orden: 10, opciones: [] },
+        ],
+    }];
+    const condicionesEjemplo = ['Pretil de ácido', 'Polución', 'Inundado', 'Ambiente ácido', 'A la intemperie', 'Excavación', 'Apertura de línea', 'Bloqueo de línea', 'Energizado', 'Alineación']
+        .map((nombre) => ({ nombre }));
+    const wb = construirWorkbookCatalogo(tipoEjemplo, condicionesEjemplo);
+    const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+    res.setHeader('Content-Disposition', 'attachment; filename="plantilla_tipos_trabajo.xlsx"');
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.send(buffer);
 };
 
 // ── EXPORTAR BATCH (múltiples hojas en un solo archivo) ──────────────────────
@@ -351,6 +551,13 @@ exports.exportarBatch = async (req, res) => {
                 correo: d.correo || '', numero: d.numero || '',
                 fechaSolicitud: d.fechaCreacion ? new Date(d.fechaCreacion).toLocaleDateString('es-CL') : ''
             })), 'Solicitudes');
+        }
+        if (lista.includes('tipos-trabajo')) {
+            const TipoTrabajo = getTipoTrabajo(req.db);
+            const CondicionEntorno = getCondicionEntorno(req.db);
+            const tipos = await TipoTrabajo.find().populate('condicionesNoAplicables').lean();
+            const condiciones = await CondicionEntorno.find().lean();
+            agregarHojasCatalogo(wb, tipos, condiciones);
         }
 
         if (!wb.SheetNames.length) return res.status(400).json({ error: 'No se generaron datos' });

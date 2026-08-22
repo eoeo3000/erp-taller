@@ -53,7 +53,23 @@ const OTSchema = new mongoose.Schema({
             cantidad: Number,
             unidad: String,
             precio: Number
-        }]
+        }],
+        // Formulario adaptativo — ver docs/plan-formulario-adaptativo.md. Aditivo: no
+        // reemplaza nada de lo de arriba. Cada hallazgo mantiene sincronizada una fila propia
+        // en `tareas` de acá arriba (tareaVinculadaId guarda el _id de ese subdocumento) — ver
+        // plan §3.4.1. Eliminar un hallazgo elimina también su tarea vinculada.
+        hallazgos: [{
+            tipoTrabajoId: { type: mongoose.Schema.Types.ObjectId, ref: 'TipoTrabajo', default: null },
+            valores: { type: mongoose.Schema.Types.Mixed, default: {} },
+            condicionesEntorno: [{ type: mongoose.Schema.Types.ObjectId, ref: 'CondicionEntorno' }],
+            textoGenerado: { type: String, default: '' },
+            textoDescriptivo: { type: String, default: '' },
+            textoEditadoManualmente: { type: Boolean, default: false },
+            fotos: { type: [String], default: [] },
+            casoNoCubierto: { type: Boolean, default: false },
+            tareaVinculadaId: { type: String, default: '' },
+            fecha: { type: Date, default: Date.now },
+        }],
     },
 
     // --- NUEVOS CAMPOS PARA GUARDAR EL TRATAMIENTO ---

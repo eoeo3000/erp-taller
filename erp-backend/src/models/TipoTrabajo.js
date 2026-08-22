@@ -1,0 +1,42 @@
+// Catálogo de tipos de trabajo para el formulario adaptativo del Informe de Evaluación —
+// ver docs/plan-formulario-adaptativo.md. Configuración, no código: cada tipo define sus
+// propios campos, las opciones válidas de cada campo, sinónimos para el motor de sugerencia
+// (búsqueda por palabra clave, ver erp-web/erp-pwa-operativa "hallazgos") y una plantilla de
+// texto con marcadores {clave} que resuelve el motor de texto adaptativo.
+//
+// No es lo mismo que Plantilla (erp-backend/src/models/Plantilla.js): Plantilla es un
+// paquete de tareas/componentes/logística ya armado para insertar de una vez en una OT.
+// TipoTrabajo es un esquema de campos para describir UNA observación de terreno y generar su
+// texto — conceptos distintos, decisión documentada en el plan (§2), sin fusionar.
+const mongoose = require('mongoose');
+
+const TIPOS_DATO_CAMPO = ['texto', 'numero', 'seleccionUnica', 'seleccionMultiple', 'fecha', 'foto'];
+
+const campoSchema = new mongoose.Schema({
+    clave: { type: String, required: true, trim: true },
+    etiqueta: { type: String, required: true, trim: true },
+    tipoDato: { type: String, enum: TIPOS_DATO_CAMPO, required: true },
+    // Solo tiene sentido para seleccionUnica/seleccionMultiple; se deja disponible para
+    // cualquier tipoDato sin validación cruzada, mismo criterio laxo que el resto del proyecto
+    // (CLAUDE.md: "sin validaciones complejas").
+    opciones: { type: [String], default: [] },
+    obligatorio: { type: Boolean, default: false },
+    orden: { type: Number, default: 0 },
+}, { _id: false });
+
+const tipoTrabajoSchema = new mongoose.Schema({
+    nombre: { type: String, required: true, trim: true },
+    sinonimos: { type: [String], default: [] },
+    plantillaTexto: { type: String, default: '' },
+    campos: { type: [campoSchema], default: [] },
+    // Condiciones del catálogo transversal (CondicionEntorno) que no aplican a este tipo de
+    // trabajo — lista de EXCLUSIÓN, no de inclusión (plan §3.3): por defecto todas las
+    // condiciones están disponibles, y cada tipo solo guarda las que decide sacar.
+    condicionesNoAplicables: [{ type: mongoose.Schema.Types.ObjectId, ref: 'CondicionEntorno' }],
+    activo: { type: Boolean, default: true },
+}, { timestamps: true });
+
+tipoTrabajoSchema.index({ nombre: 1 });
+
+module.exports = (conn) => conn.models.TipoTrabajo || conn.model('TipoTrabajo', tipoTrabajoSchema);
+module.exports.TIPOS_DATO_CAMPO = TIPOS_DATO_CAMPO;
