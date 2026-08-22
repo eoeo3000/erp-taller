@@ -32,5 +32,9 @@ AsignacionSchema.pre('validate', function () {
 // y no crear una segunda Asignacion de evaluación para la misma Solicitud. sparse porque
 // 'ejecucion'/'supervision' no usan solicitudId — no deben competir por este índice.
 AsignacionSchema.index({ solicitudId: 1 }, { unique: true, sparse: true });
+// mi-dia/mi-semana (PWA Operativa) filtran por estos dos campos en cada request — mismo
+// motivo que el índice nuevo de OT.supervisorId+estado: sin él, cada llamada es un
+// collection scan completo, invisible en la demo y real en producción.
+AsignacionSchema.index({ usuarioId: 1, fechaPlanificada: 1 });
 
 module.exports = (conn) => conn.models.Asignacion || conn.model('Asignacion', AsignacionSchema);
