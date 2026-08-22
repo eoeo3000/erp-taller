@@ -197,5 +197,10 @@ const OTSchema = new mongoose.Schema({
 
 // getAllData (dataController.js) ordena por createdAt en cada carga/poll de /api/data.
 OTSchema.index({ createdAt: -1 });
+// mi-dia/mi-semana/mi-panel (PWA Operativa, modo supervisor) filtran por estos dos campos
+// en cada request — sin índice, cada llamada hace un collection scan completo. Se vio en
+// producción: mi-semana tardaba ~8s con datos reales (la demo, con pocos documentos, nunca
+// lo mostró).
+OTSchema.index({ supervisorId: 1, estado: 1 });
 
 module.exports = (conn) => conn.models.OT || conn.model('OT', OTSchema);

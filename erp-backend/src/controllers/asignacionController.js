@@ -41,9 +41,16 @@ const TIPOS_POR_ROL = {
 // no a una Asignacion — así que para que la OT asignada aparezca en "mi día"/"mi semana"
 // del supervisor, se arma acá como si fuera una asignación más, en vez de exigir que el
 // planificador cree además una Asignacion tipo 'supervision' redundante.
-async function otsSupervisadasEnFechas(OT, recursoId, fechasISO) {
+// Una sola consulta para las dos vistas derivadas (supervisiones y tareas por semana): antes
+// cada una hacía su propio OT.find idéntico — en producción, con datos reales y sin índice
+// en supervisorId, esas dos consultas duplicadas eran buena parte de por qué mi-semana
+// tardaba ~8s (ver también el índice nuevo en models/OT.js).
+async function otsSupervisadasPorRecurso(OT, recursoId) {
     if (!recursoId) return [];
-    const ots = await OT.find({ supervisorId: recursoId, estado: { $ne: 'Pagada' } }).lean();
+    return OT.find({ supervisorId: recursoId, estado: { $ne: 'Pagada' } }).lean();
+}
+
+function supervisionesDesdeOTs(ots, fechasISO) {
     return ots
         .filter(ot => ot.fechaEjecucion && fechasISO.includes(aISO(new Date(ot.fechaEjecucion))))
         .map(ot => ({
@@ -57,12 +64,10 @@ async function otsSupervisadasEnFechas(OT, recursoId, fechasISO) {
 
 // Datos por-tarea de las OT supervisadas dentro de un rango de fechas (S2 Mi semana del
 // supervisor, docs/rediseno/design_handoff_pwa_supervisor/README.md §4): a diferencia de
-// otsSupervisadasEnFechas (una fila por OT, pensada para mi-dia/mi-semana del ejecutor),
-// acá se necesita granularidad de tarea — hora real y operarioId — para dibujar las barras
-// del calendario y detectar cruces de horario en el cliente.
-async function tareasSemanaSupervisada(OT, recursoId, diasISO) {
-    if (!recursoId) return [];
-    const ots = await OT.find({ supervisorId: recursoId, estado: { $ne: 'Pagada' } }).lean();
+// supervisionesDesdeOTs (una fila por OT, pensada para mi-dia/mi-semana del ejecutor), acá se
+// necesita granularidad de tarea — hora real y operarioId — para dibujar las barras del
+// calendario y detectar cruces de horario en el cliente.
+function tareasSemanaDesdeOTs(ots, diasISO) {
     const filas = [];
     for (const ot of ots) {
         for (const t of (ot.tareas || [])) {
@@ -257,9 +262,10 @@ exports.miDia = async (req, res) => {
             tipo: { $in: tiposPermitidos },
         }).sort({ createdAt: 1 });
 
-        const supervisiones = tiposPermitidos.includes('supervision')
-            ? await otsSupervisadasEnFechas(OT, usuario.recursoId, [hoy])
+        const otsSup = tiposPermitidos.includes('supervision')
+            ? await otsSupervisadasPorRecurso(OT, usuario.recursoId)
             : [];
+        const supervisiones = supervisionesDesdeOTs(otsSup, [hoy]);
 
         res.json({ usuario: { nombre: usuario.nombre, rol: usuario.rol }, fecha: hoy, asignaciones: [...asignaciones, ...supervisiones] });
     } catch (error) {
@@ -286,12 +292,11 @@ exports.miSemana = async (req, res) => {
             tipo: { $in: tiposPermitidos },
         }).sort({ fechaPlanificada: 1 });
 
-        const supervisiones = tiposPermitidos.includes('supervision')
-            ? await otsSupervisadasEnFechas(OT, usuario.recursoId, dias)
+        const otsSup = tiposPermitidos.includes('supervision')
+            ? await otsSupervisadasPorRecurso(OT, usuario.recursoId)
             : [];
-        const tareasSupervisadas = tiposPermitidos.includes('supervision')
-            ? await tareasSemanaSupervisada(OT, usuario.recursoId, dias)
-            : [];
+        const supervisiones = supervisionesDesdeOTs(otsSup, dias);
+        const tareasSupervisadas = tareasSemanaDesdeOTs(otsSup, dias);
 
         res.json({ usuario: { nombre: usuario.nombre, rol: usuario.rol }, dias, asignaciones: [...asignaciones, ...supervisiones], tareasSupervisadas });
     } catch (error) {
@@ -303,7 +308,7 @@ const DIAS_ARCHIVO_PANEL = 30; // "Solicitudes ejecutadas" de S1 (README §3): �
 
 // GET /api/asignaciones/mi-panel?token=&entorno= — resumen de S1 · Mi panel (solo rol
 // supervisor). Cada conteo es de alcance distinto (hoy / backlog propio / archivo de 30
-// días) — no una vista de la semana, por eso no reutiliza tareasSemanaSupervisada.
+// días) — no una vista de la semana, por eso no reutiliza tareasSemanaDesdeOTs.
 exports.miPanel = async (req, res) => {
     const Usuario = getUsuario(req.db);
     const Asignacion = getAsignacion(req.db);
