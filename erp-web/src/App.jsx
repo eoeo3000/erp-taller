@@ -361,6 +361,22 @@ function App() {
       console.error("Error al actualizar solicitud:", error);
     }
   };
+  // Aprobar crea la OT de inmediato (no solo marca la Solicitud) — reutiliza
+  // PATCH /ots/:id/asignacion (otController.asignarSupervisor), que ya sabe crear la OT si
+  // todavía no existe cuando recibe el _id de la Solicitud, aunque no venga con supervisor
+  // (queda "sin asignar", asignable después desde Antecedentes o desde el resumen del
+  // Informe Inicial). Así la OT aparece de inmediato en "Solicitudes sin informe inicial" de
+  // la PWA, sin depender de que alguien entre a Tratamiento y guarde algo primero.
+  const aprobarYCrearOT = async (solicitud) => {
+    try {
+      await axios.put(`${API}/solicitudes/${solicitud._id}`, { estado: 'Aprobada' });
+      await axios.patch(`${API}/ots/${solicitud._id}/asignacion`, {});
+      await cargarDatos();
+    } catch (error) {
+      console.error("Error al aprobar y crear la OT:", error);
+      alert('No se pudo aprobar la solicitud: ' + (error.response?.data?.error || error.message));
+    }
+  };
   const editarOtGlobal = async (id, otActualizada) => {
     try {
       const respuesta = await fetch(`${API}/ots/${id}`, {
@@ -768,31 +784,6 @@ function App() {
     }
   };
 
-  const enviarASupervisor = (ot) => {
-    if (!ot) return;
-    const telefono = ot.whatsappDestino;
-
-    // 🚩 AJUSTE 1: Limpieza total de la URL
-    // Eliminamos espacios y aseguramos HTTPS. 
-    // Si estás en producción, asegúrate de que tu URL NO sea una IP (ej: 192.168...)
-    let urlBase = window.location.origin.trim();
-
-    // Si es localhost, WhatsApp rara vez lo pondrá azul, 
-    // pero para producción esto es vital:
-    const linkReporte = `${urlBase}/reporte?id=${ot._id}`;
-
-    // 🚩 AJUSTE 2: Formato de "Ancla"
-    // Ponemos el link entre dos saltos de línea y sin caracteres pegados
-    const encabezado = `*RESUMEN DE SUMINISTROS - OT #${ot.numeroOT || 'S/N'}*`;
-    const cliente = `📍 *Cliente:* ${ot.solicitante || 'Particular'}`;
-
-    // El link debe ir solo en su línea, sin texto pegado, para que WhatsApp lo convierta en enlace clickeable
-    const mensajeFinal = `${encabezado}\n${cliente}\n\n*Acceso al reporte:*\n${linkReporte}\n\n_Por favor confirmar recepción._`;
-
-    const urlFinal = `https://wa.me/${telefono}?text=${encodeURIComponent(mensajeFinal)}`;
-    window.open(urlFinal, '_blank');
-  };
-
   const enviarPortalCliente = (solicitud) => {
     if (!solicitud) return;
     const telefono = (solicitud.numero || '').replace(/\D/g, '');
@@ -902,8 +893,8 @@ function App() {
           <Routes>
             <Route path="/reporte" element={<ReporteTerreno ots={ots} actualizarOtGlobal={actualizarOtGlobal} />} />
             <Route path="/" element={<IngresoScreen solicitudes={solicitudes} liberarSolicitudManual={liberarSolicitudManual} crearSolicitudGlobal={crearSolicitudGlobal} actualizarSolicitudGlobal={actualizarSolicitudGlobal} setSolicitudes={setSolicitudes} cargarDatos={cargarDatos} API={API} ots={ots} enviarPortalCliente={enviarPortalCliente} cargando={cargando} errorCarga={errorCarga} />} />
-            <Route path="/dashboard" element={<DashboardScreen solicitudes={solicitudes} ots={ots} eliminarOT={eliminarOT} actualizarEstadoSolicitud={actualizarEstadoSolicitud} enviarASupervisor={enviarASupervisor} recursos={recursos} API={API} cargando={cargando} errorCarga={errorCarga} cargarDatos={cargarDatos} guardarDisposicionGlobal={guardarDisposicionGlobal} eliminarDisposicionGlobal={eliminarDisposicionGlobal} />} />
-            <Route path="/tratamiento" element={<TratamientoScreen recurso={recursos} puestosDB={puestosDB} enviarASupervisor={enviarASupervisor} componentes={componentes} actualizarOtGlobal={actualizarOtGlobal} editarOtGlobal={editarOtGlobal} cargarDatos={cargarDatos} API={API} recursos={recursos} suministros={suministros} otSeleccionada={otSeleccionada} setOtSeleccionada={setOtSeleccionada} plantillas={plantillas} />} />
+            <Route path="/dashboard" element={<DashboardScreen solicitudes={solicitudes} ots={ots} eliminarOT={eliminarOT} actualizarEstadoSolicitud={actualizarEstadoSolicitud} aprobarYCrearOT={aprobarYCrearOT} recursos={recursos} API={API} cargando={cargando} errorCarga={errorCarga} cargarDatos={cargarDatos} guardarDisposicionGlobal={guardarDisposicionGlobal} eliminarDisposicionGlobal={eliminarDisposicionGlobal} />} />
+            <Route path="/tratamiento" element={<TratamientoScreen recurso={recursos} puestosDB={puestosDB} componentes={componentes} actualizarOtGlobal={actualizarOtGlobal} editarOtGlobal={editarOtGlobal} cargarDatos={cargarDatos} API={API} recursos={recursos} suministros={suministros} otSeleccionada={otSeleccionada} setOtSeleccionada={setOtSeleccionada} plantillas={plantillas} />} />
             <Route path="/gantt" element={<GanttScreen ots={ots} recursos={recursos} calendarios={calendarios} obtenerHorasParaDia={obtenerHorasParaDia} actualizarOtGlobal={actualizarOtGlobal} cargarDatos={cargarDatos} />} />
             <Route path="/recursos" element={
               <RecursosScreen

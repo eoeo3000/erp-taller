@@ -153,7 +153,7 @@ const valorCelda = (f, key, recursos = []) => {
     return '';
 };
 
-const DashboardScreen = ({ ots = [], solicitudes = [], eliminarOT, actualizarEstadoSolicitud, enviarASupervisor, recursos = [], API, cargando, errorCarga, cargarDatos, guardarDisposicionGlobal, eliminarDisposicionGlobal }) => {
+const DashboardScreen = ({ ots = [], solicitudes = [], eliminarOT, actualizarEstadoSolicitud, aprobarYCrearOT, recursos = [], API, cargando, errorCarga, cargarDatos, guardarDisposicionGlobal, eliminarDisposicionGlobal }) => {
     const navigate = useNavigate();
     const [filtro, setFiltro] = useState('todos');
     const [consulta, setConsulta] = useState('');
@@ -391,30 +391,17 @@ const DashboardScreen = ({ ots = [], solicitudes = [], eliminarOT, actualizarEst
         if (!detalle) return [];
         const { ot, s } = detalle;
         if (!ot) {
-            if (s.estado === 'Pendiente') return [
-                { label: 'Aprobar', onClick: () => actualizarEstadoSolicitud?.(s._id, 'Aprobada') },
-                { label: 'Rechazar', onClick: () => { if (window.confirm('¿Rechazar esta solicitud?')) actualizarEstadoSolicitud?.(s._id, 'Rechazada'); } },
-            ];
-            if (s.estado === 'Aprobada') return [
-                { label: 'Crear OT', onClick: () => navigate('/tratamiento', { state: s }) },
-                { label: 'Rechazar', onClick: () => { if (window.confirm('¿Rechazar esta solicitud?')) actualizarEstadoSolicitud?.(s._id, 'Rechazada'); } },
-            ];
-            return [{ label: 'Reabrir', onClick: () => actualizarEstadoSolicitud?.(s._id, 'Pendiente') }];
+            if (s.estado === 'Rechazada') return [{ label: 'Reabrir', onClick: () => actualizarEstadoSolicitud?.(s._id, 'Pendiente') }];
+            return [{ label: 'Rechazar', onClick: () => { if (window.confirm('¿Rechazar esta solicitud?')) actualizarEstadoSolicitud?.(s._id, 'Rechazada'); } }];
         }
-        const acciones = [{ label: 'Abrir tratamiento', onClick: () => navigate('/tratamiento', { state: ot }) }];
-        if (['Planificada', 'Aprobada', 'Programada'].includes(ot.estado)) {
-            acciones.push({ label: 'Programar', onClick: () => navigate('/gantt', { state: { otId: ot._id, programar: true } }) });
-        }
-        acciones.push({ label: 'Eliminar OT', onClick: () => { if (window.confirm('¿Eliminar esta OT? La solicitud vuelve a Pendiente.')) eliminarOT?.(ot._id); } });
-        return acciones;
+        return [{ label: 'Eliminar OT', onClick: () => { if (window.confirm('¿Eliminar esta OT? La solicitud vuelve a Pendiente.')) eliminarOT?.(ot._id); } }];
     };
 
     const primario = (() => {
         if (!detalle) return null;
-        const { ot, info } = detalle;
-        if (!ot) return { label: 'Convertir en OT', onClick: () => navigate('/tratamiento', { state: detalle.s }), nota: 'La conversión abre Tratamiento para armar tareas, componentes y cotización.' };
-        if (info.rechazada || info.idx >= 6) return { label: 'Abrir tratamiento', onClick: () => navigate('/tratamiento', { state: ot }), nota: 'Revisa tareas, cotización y pago desde Tratamiento.' };
-        return { label: 'Enviar al supervisor', onClick: () => enviarASupervisor?.(ot), nota: 'El supervisor recibe un enlace con token; no requiere cuenta.' };
+        const { ot, s } = detalle;
+        if (!ot) return { label: 'Aprobar', onClick: () => aprobarYCrearOT?.(s), nota: 'Aprobar crea la OT de inmediato — queda visible para el supervisor en su app.' };
+        return { label: 'Abrir OT', onClick: () => navigate('/tratamiento', { state: ot }) };
     })();
 
     const encabezadoSeccion = (titulo, key, resumen) => (
