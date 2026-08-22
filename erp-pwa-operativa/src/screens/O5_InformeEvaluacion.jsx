@@ -1,13 +1,16 @@
 import { useEffect, useState } from 'react';
-import { obtenerOT, actualizarOT, cerrarAsignacion, subirFoto } from '../api.js';
+import { obtenerOT, actualizarOT, cerrarAsignacion, subirFoto, obtenerTiposTrabajo, obtenerCondicionesEntorno } from '../api.js';
+import { nuevoHallazgo, guardarHallazgoEnInforme, eliminarHallazgoDeInforme } from '../hallazgos.js';
+import EditorHallazgo from './EditorHallazgo.jsx';
 
-// Los cuatro pasos siguen el modelo existente OT.informeEvaluacion (erp-backend/src/models/OT.js):
-// condicionesSitio, riesgos, metodologia, recursosObservados. El handoff solo ilustra el
-// paso de Riesgos (paso 2) — para 1/3/4 no hay maqueta, así que se resolvieron como un
-// textarea simple, la opción más chica y consistente con el resto del sistema.
+// Los cuatro pasos cualitativos siguen el modelo existente OT.informeEvaluacion
+// (erp-backend/src/models/OT.js): condicionesSitio, riesgos, metodologia, recursosObservados.
+// El handoff solo ilustra el paso de Riesgos (paso 2) — para 1/3/4 no hay maqueta, así que se
+// resolvieron como un textarea simple, la opción más chica y consistente con el resto del
+// sistema. "hallazgos" es el paso nuevo del formulario adaptativo (plan §10).
 const RIESGOS_COMUNES = ['Trabajo en altura', 'Espacio confinado', 'Energía eléctrica', 'Manejo de cargas'];
-const PASOS = ['condicionesSitio', 'riesgos', 'metodologia', 'recursosObservados'];
-const TITULOS = { condicionesSitio: 'Condiciones del sitio', riesgos: 'Riesgos', metodologia: 'Metodología', recursosObservados: 'Recursos observados' };
+const PASOS = ['condicionesSitio', 'riesgos', 'metodologia', 'recursosObservados', 'hallazgos'];
+const TITULOS = { condicionesSitio: 'Condiciones del sitio', riesgos: 'Riesgos', metodologia: 'Metodología', recursosObservados: 'Recursos observados', hallazgos: 'Hallazgos' };
 
 export default function O5InformeEvaluacion({ nav, asignacion }) {
     // El _id de la Solicitud es también el que va a tener la OT una vez creada (mismo
@@ -17,17 +20,22 @@ export default function O5InformeEvaluacion({ nav, asignacion }) {
     const targetId = asignacion?.otId || asignacion?.solicitudId;
     const [ot, setOt] = useState(null);
     const [paso, setPaso] = useState(0);
-    const [informe, setInforme] = useState({ condicionesSitio: '', riesgos: '', metodologia: '', recursosObservados: '', fotos: [] });
+    const [informe, setInforme] = useState({ condicionesSitio: '', riesgos: '', metodologia: '', recursosObservados: '', fotos: [], hallazgos: [], tareas: [] });
     const [riesgosSeleccionados, setRiesgosSeleccionados] = useState([]);
     const [otroRiesgo, setOtroRiesgo] = useState('');
     const [guardando, setGuardando] = useState(false);
+    const [tiposTrabajo, setTiposTrabajo] = useState([]);
+    const [condicionesEntorno, setCondicionesEntorno] = useState([]);
+    const [editandoHallazgo, setEditandoHallazgo] = useState(null); // null = lista; objeto = editor abierto
 
     useEffect(() => {
         if (!targetId) return;
         obtenerOT(targetId).then((o) => {
             setOt(o);
-            if (o.informeEvaluacion) setInforme((i) => ({ ...i, ...o.informeEvaluacion, fotos: o.informeEvaluacion.fotos || [] }));
+            if (o.informeEvaluacion) setInforme((i) => ({ ...i, ...o.informeEvaluacion, fotos: o.informeEvaluacion.fotos || [], hallazgos: o.informeEvaluacion.hallazgos || [], tareas: o.informeEvaluacion.tareas || [] }));
         }).catch(() => setOt({})); // primera visita: la OT todavía no existe, se crea al guardar
+        obtenerTiposTrabajo().then(setTiposTrabajo).catch(() => {});
+        obtenerCondicionesEntorno().then(setCondicionesEntorno).catch(() => {});
     }, [targetId]);
 
     if (!targetId) {
@@ -39,6 +47,54 @@ export default function O5InformeEvaluacion({ nav, asignacion }) {
         );
     }
     if (!ot) return null;
+
+    // Los hallazgos se guardan de inmediato (no esperan al "Siguiente"/"Guardar y salir" del
+    // asistente) — cada uno es su propia unidad de trabajo, mismo criterio que "sin
+    // automatismo, sin bloqueo" del plan §9. Declaradas antes del return de "editandoHallazgo"
+    // porque ese bloque ya las referencia.
+    const guardarHallazgo = async (hallazgoEditado) => {
+        const nuevo = guardarHallazgoEnInforme(informe, hallazgoEditado);
+        setGuardando(true);
+        try {
+            await actualizarOT(targetId, { informeEvaluacion: nuevo });
+            setInforme(nuevo);
+            setEditandoHallazgo(null);
+        } catch {
+            window.alert('No se pudo guardar el hallazgo — revisa la señal e intenta de nuevo.');
+        } finally { setGuardando(false); }
+    };
+
+    const eliminarHallazgo = async (hallazgoId) => {
+        if (!window.confirm('¿Eliminar este hallazgo?')) return;
+        const nuevo = eliminarHallazgoDeInforme(informe, hallazgoId);
+        setGuardando(true);
+        try {
+            await actualizarOT(targetId, { informeEvaluacion: nuevo });
+            setInforme(nuevo);
+            setEditandoHallazgo(null);
+        } finally { setGuardando(false); }
+    };
+
+    if (editandoHallazgo) {
+        return (
+            <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+                <header style={{ padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <button onClick={() => setEditandoHallazgo(null)} className="mono" style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', padding: 8, marginLeft: -8 }}>‹</button>
+                    <span style={{ fontSize: 'var(--fs-card-titulo)', fontWeight: 600 }}>Hallazgo</span>
+                </header>
+                <div style={{ flex: 1, overflowY: 'auto' }}>
+                    <EditorHallazgo
+                        hallazgo={editandoHallazgo}
+                        tiposTrabajo={tiposTrabajo}
+                        condicionesEntorno={condicionesEntorno}
+                        onGuardar={guardarHallazgo}
+                        onEliminar={editandoHallazgo._id ? () => eliminarHallazgo(editandoHallazgo._id) : null}
+                        onCancelar={() => setEditandoHallazgo(null)}
+                    />
+                </div>
+            </div>
+        );
+    }
 
     const toggleRiesgo = (r) => setRiesgosSeleccionados((s) => (s.includes(r) ? s.filter((x) => x !== r) : [...s, r]));
 
@@ -111,6 +167,29 @@ export default function O5InformeEvaluacion({ nav, asignacion }) {
                             </label>
                         </div>
                     </>
+                ) : campo === 'hallazgos' ? (
+                    <div>
+                        {(informe.hallazgos || []).length === 0 && (
+                            <div style={{ fontSize: 'var(--fs-secundario)', color: 'var(--texto-atenuado-1)', marginBottom: 12 }}>
+                                Sin hallazgos todavía. Agrega uno por cada cosa distinta que observaste.
+                            </div>
+                        )}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                            {(informe.hallazgos || []).map((h) => {
+                                const tipo = tiposTrabajo.find((t) => String(t._id) === String(h.tipoTrabajoId));
+                                return (
+                                    <button key={h._id} onClick={() => setEditandoHallazgo(h)} className="boton-secundario" style={{ textAlign: 'left', minHeight: 64, padding: 12, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                        <span style={{ fontSize: 14, fontWeight: 700 }}>
+                                            {tipo?.nombre || 'Sin tipo de trabajo'}
+                                            {h.casoNoCubierto && <span style={{ color: 'var(--atencion)', fontWeight: 600 }}> · para revisar</span>}
+                                        </span>
+                                        <span style={{ fontSize: 13, color: 'var(--texto-secundario-2)' }}>{h.textoDescriptivo || '(sin texto)'}</span>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                        <button className="boton-primario" style={{ marginTop: 14 }} onClick={() => setEditandoHallazgo(nuevoHallazgo())}>+ Agregar hallazgo</button>
+                    </div>
                 ) : (
                     <textarea
                         value={informe[campo] || ''}
