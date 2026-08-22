@@ -109,3 +109,24 @@ button { border-radius: var(--radio); }
   align-self: stretch;
   flex: none;
 }
+
+/* Círculo de carga: la cabecera de cada pantalla se pinta de inmediato (ver S1-S6), pero el
+   contenido de abajo tarda lo que tarde la red — antes quedaba en blanco mientras tanto. */
+.spinner-caja {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 0;
+}
+.spinner {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 3px solid var(--linea-zona);
+  border-top-color: var(--texto-principal);
+  animation: girar .7s linear infinite;
+}
+@keyframes girar {
+  to { transform: rotate(360deg); }
+}

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ejecutadas, obtenerOT } from '../api.js';
+import Cargando from './Cargando.jsx';
 
 const MES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 const fechaCorta = (iso) => new Date(iso).toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit' });
@@ -35,7 +36,7 @@ export default function S6Ejecutadas({ nav }) {
     );
 
     if (error) return <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>{cabecera}<div style={{ padding: 24, fontSize: 'var(--fs-cuerpo)', color: 'var(--detenido)' }}>{error}</div></div>;
-    if (!datos) return <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>{cabecera}</div>;
+    if (!datos) return <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>{cabecera}<Cargando /></div>;
 
     if (seleccionada) {
         return <DetalleEjecutada otId={seleccionada} onVolver={() => setSeleccionada(null)} />;

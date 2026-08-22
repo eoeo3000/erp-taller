@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { solicitudesSinInforme, tomarSolicitud, miSemana } from '../api.js';
+import Cargando from './Cargando.jsx';
 
 const CAPACIDAD_DIARIA = 8; // mismo placeholder documentado que O6MiSemana — no hay endpoint de capacidad real.
 
@@ -38,7 +39,7 @@ export default function S4SinInformeInicial({ nav }) {
     );
 
     if (error) return <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>{cabecera}<div style={{ padding: 24, fontSize: 'var(--fs-cuerpo)', color: 'var(--detenido)' }}>{error}</div></div>;
-    if (!lista) return <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>{cabecera}</div>;
+    if (!lista) return <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>{cabecera}<Cargando /></div>;
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>

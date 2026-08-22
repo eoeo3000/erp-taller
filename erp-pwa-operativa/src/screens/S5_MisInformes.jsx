@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { misInformes } from '../api.js';
+import Cargando from './Cargando.jsx';
 
 const fechaCorta = (iso) => new Date(iso + 'T12:00:00').toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit' });
 const hoyISO = () => new Date().toISOString().slice(0, 10);
@@ -24,7 +25,7 @@ export default function S5MisInformes({ nav }) {
     );
 
     if (error) return <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>{cabecera}<div style={{ padding: 24, fontSize: 'var(--fs-cuerpo)', color: 'var(--detenido)' }}>{error}</div></div>;
-    if (!datos) return <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>{cabecera}</div>;
+    if (!datos) return <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>{cabecera}<Cargando /></div>;
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
