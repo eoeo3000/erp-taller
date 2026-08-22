@@ -38,7 +38,7 @@ export function agruparPorOtYDia(tareas) {
         const clave = `${t.otId}__${t.fecha}`;
         if (!grupos.has(clave)) {
             grupos.set(clave, {
-                otId: t.otId, numeroOT: t.numeroOT, etiqueta: t.etiqueta, estadoOT: t.estadoOT,
+                otId: t.otId, numeroOT: t.numeroOT, descripcion: t.descripcion, estadoOT: t.estadoOT,
                 fecha: t.fecha, duracion: 0, horaInicio: t.horaInicio, horaFin: t.horaFin,
             });
         }
