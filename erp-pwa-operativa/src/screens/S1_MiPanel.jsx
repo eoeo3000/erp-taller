@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { miPanel, miSemana } from '../api.js';
 import { detectarCruces, agruparPorOtYDia } from '../cruces.js';
+import Cargando from './Cargando.jsx';
 
 const fechaMono = (iso) => new Date(iso + 'T12:00:00').toLocaleDateString('es-CL', { day: '2-digit', month: 'short' });
 const rangoSemana = (dias) => dias ? `${fechaMono(dias[0])} – ${fechaMono(dias[6]).split(' ')[0]}` : '';
@@ -35,7 +36,7 @@ export default function S1MiPanel({ nav }) {
             </div>
 
             {error && <div style={{ padding: 24, fontSize: 'var(--fs-cuerpo)', color: 'var(--detenido)' }}>{error}</div>}
-            {!error && !panel && null}
+            {!error && !panel && <Cargando />}
             {!error && panel && (
             <div style={{ flex: 1, overflowY: 'auto' }}>
                 <div style={{ padding: '15px 18px 6px' }}><span className="versalita">Por dónde entrar</span></div>

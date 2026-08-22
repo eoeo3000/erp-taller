@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { miSemana } from '../api.js';
 import { detectarCruces, agruparPorOtYDia } from '../cruces.js';
+import Cargando from './Cargando.jsx';
 
 const NOMBRE_DIA = ['LUN', 'MAR', 'MIÉ', 'JUE', 'VIE', 'SÁB', 'DOM'];
 const hoyISO = () => new Date().toISOString().slice(0, 10);
@@ -77,7 +78,7 @@ export default function S2MiSemanaSupervisor({ nav }) {
     );
 
     if (error) return <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>{cabecera}<div style={{ padding: 24, fontSize: 'var(--fs-cuerpo)', color: 'var(--detenido)' }}>{error}</div></div>;
-    if (!datos) return <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>{cabecera}</div>;
+    if (!datos) return <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>{cabecera}<Cargando /></div>;
 
     const tareas = datos.tareasSupervisadas || [];
     const grupos = agruparPorOtYDia(tareas);

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { obtenerOT, actualizarOT, accionOT, miSemana, subirFoto } from '../api.js';
 import { detectarCruces } from '../cruces.js';
+import Cargando from './Cargando.jsx';
 
 const COLOR_ESTADO = { 'En Ejecución': 'var(--en-curso)', 'Trabajo Terminado': 'var(--listo)', 'Con Informe': 'var(--listo)', 'Pagada': 'var(--listo)' };
 const NOMBRE_DIA = { 1: 'LUN', 2: 'MAR', 3: 'MIÉ', 4: 'JUE', 5: 'VIE', 6: 'SÁB', 0: 'DOM' };
@@ -74,6 +75,7 @@ export default function S3Trabajo({ nav, asignacion, persona }) {
         return (
             <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
                 {cabecera}
+                <Cargando />
             </div>
         );
     }
