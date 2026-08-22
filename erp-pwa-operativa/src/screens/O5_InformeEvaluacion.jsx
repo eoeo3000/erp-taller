@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { obtenerOT, actualizarOT } from '../api.js';
+import { obtenerOT, actualizarOT, cerrarAsignacion } from '../api.js';
 
 // Los cuatro pasos siguen el modelo existente OT.informeEvaluacion (erp-backend/src/models/OT.js):
 // condicionesSitio, riesgos, metodologia, recursosObservados. El handoff solo ilustra el
@@ -18,6 +18,11 @@ function fotoAThumb(archivo) {
 }
 
 export default function O5InformeEvaluacion({ nav, asignacion }) {
+    // El _id de la Solicitud es también el que va a tener la OT una vez creada (mismo
+    // upsert que ya usa otController.actualizarOT) — por eso alcanza con un solo id para
+    // leer y guardar, exista o no la OT todavía. otId es el respaldo para cuando la
+    // asignación ya apunta a una OT real (por ejemplo, una segunda visita).
+    const targetId = asignacion?.otId || asignacion?.solicitudId;
     const [ot, setOt] = useState(null);
     const [paso, setPaso] = useState(0);
     const [informe, setInforme] = useState({ condicionesSitio: '', riesgos: '', metodologia: '', recursosObservados: '', fotos: [] });
@@ -26,16 +31,17 @@ export default function O5InformeEvaluacion({ nav, asignacion }) {
     const [guardando, setGuardando] = useState(false);
 
     useEffect(() => {
-        if (asignacion?.otId) obtenerOT(asignacion.otId).then((o) => {
+        if (!targetId) return;
+        obtenerOT(targetId).then((o) => {
             setOt(o);
             if (o.informeEvaluacion) setInforme((i) => ({ ...i, ...o.informeEvaluacion, fotos: o.informeEvaluacion.fotos || [] }));
-        });
-    }, [asignacion]);
+        }).catch(() => setOt({})); // primera visita: la OT todavía no existe, se crea al guardar
+    }, [targetId]);
 
-    if (!asignacion?.otId) {
+    if (!targetId) {
         return (
             <div style={{ padding: 24 }}>
-                <p style={{ fontSize: 'var(--fs-cuerpo)' }}>Esta visita todavía no tiene una OT asociada — avisa a la oficina antes de levantar el informe.</p>
+                <p style={{ fontSize: 'var(--fs-cuerpo)' }}>Esta visita todavía no tiene una solicitud u OT asociada — avisa a la oficina antes de levantar el informe.</p>
                 <button className="boton-secundario" onClick={nav.volver}>Volver</button>
             </div>
         );
@@ -55,10 +61,15 @@ export default function O5InformeEvaluacion({ nav, asignacion }) {
     const guardar = async (avanzar) => {
         setGuardando(true);
         const riesgosTexto = [...riesgosSeleccionados, otroRiesgo].filter(Boolean).join(', ') || informe.riesgos;
-        const nuevo = { ...informe, riesgos: riesgosTexto, completo: paso === PASOS.length - 1 };
+        const completo = paso === PASOS.length - 1;
+        const nuevo = { ...informe, riesgos: riesgosTexto, completo };
         try {
-            await actualizarOT(asignacion.otId, { informeEvaluacion: nuevo });
+            await actualizarOT(targetId, { informeEvaluacion: nuevo });
             setInforme(nuevo);
+            // Último paso: se marca la Asignacion como completada para que S5 · Mis informes
+            // la mueva de "pendientes" a "enviados este mes" — si esto falla no se bloquea el
+            // guardado del informe en sí, que ya quedó persistido en la línea de arriba.
+            if (completo && asignacion?._id) await cerrarAsignacion(asignacion._id).catch(() => {});
             if (avanzar && paso < PASOS.length - 1) setPaso(paso + 1);
             else if (avanzar) nav.volver();
         } finally { setGuardando(false); }
