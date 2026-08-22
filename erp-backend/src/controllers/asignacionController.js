@@ -69,10 +69,9 @@ async function tareasSemanaSupervisada(OT, recursoId, diasISO) {
             if (!t.fecha || !diasISO.includes(t.fecha)) continue;
             filas.push({
                 otId: ot._id, numeroOT: ot.numeroOT,
-                // Etiqueta corta de la barra (README §4: "0007 Coronel 6 h") — se usa el
-                // nombre del solicitante de la OT, truncado; no hay un campo de comuna
-                // propio en Solicitud/OT para reproducir exactamente el ejemplo del handoff.
-                etiqueta: (ot.solicitante || '').slice(0, 18),
+                // Rótulo de la barra en S2: número de OT + descripción de la OT, nada más
+                // (pedido explícito — antes mostraba el cliente y las horas).
+                descripcion: (ot.descripcion || '').slice(0, 40),
                 estadoOT: ot.estado, tareaId: String(t._id || ''),
                 fecha: t.fecha, duracion: Number(t.duracion) || 0,
                 horaInicio: t.horaInicio || t.hora || '', horaFin: t.horaFin || '',

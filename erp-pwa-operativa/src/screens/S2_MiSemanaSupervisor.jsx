@@ -175,14 +175,13 @@ function FilaDia({ dia, nombre, grupos, cruces, esHoy, onEntrar }) {
                                 display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap', fontSize: 12.5, fontWeight: 600,
                                 color: enCurso ? 'var(--texto-principal)' : 'var(--texto-secundario-1)',
                                 // Espacio real disponible a la izquierda de la barra (README §4: el rótulo
-                                // cabe porque la carga real vive entre 08:30 y 17:00) — con un cliente de
-                                // nombre largo o una barra que arranca muy temprano, sin este tope el
-                                // rótulo se sale de esta columna y pisa la fecha del día (columna de 44px).
+                                // cabe porque la carga real vive entre 08:30 y 17:00) — con una descripción
+                                // larga o una barra que arranca muy temprano, sin este tope el rótulo se
+                                // sale de esta columna y pisa la fecha del día (columna de 44px).
                                 maxWidth: `calc(${pctHora(hIni)} - 8px)`, overflow: 'hidden', textOverflow: 'ellipsis',
                             }}>
                                 <span className="mono" style={{ fontSize: 12, flex: 'none' }}>{(g.numeroOT || '').replace('OT-2026-', '')}</span>
-                                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{g.etiqueta}</span>
-                                <span className="mono" style={{ fontWeight: 400, color: 'var(--texto-atenuado-2)', fontSize: 11.5, flex: 'none' }}>{g.duracion} h</span>
+                                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{g.descripcion}</span>
                             </span>
                         </span>
                     );
