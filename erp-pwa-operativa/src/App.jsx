@@ -16,9 +16,8 @@ import S6Ejecutadas from './screens/S6_Ejecutadas.jsx';
 
 export default function App() {
     const [pila, setPila] = useState([{ pantalla: 'cargando' }]);
-    // Solo para decidir el destino de "Entrar" (S1 vs O2) y si O2 muestra las pestañas del
-    // modo supervisor (ver docs/rediseno/design_handoff_pwa_supervisor/README.md §1) — O1
-    // sigue haciendo su propio whoami() para la ficha, este no lo reemplaza.
+    // Solo para decidir el destino de "Entrar" (S1 vs O2) y para el autor del registro de
+    // evidencia en S3 — O1 sigue haciendo su propio whoami() para la ficha, este no lo reemplaza.
     const [persona, setPersona] = useState(null);
 
     // O1 (bienvenida + ficha de persona/puesto) se muestra en cada apertura de la app, no
@@ -69,7 +68,7 @@ export default function App() {
         case 'o1':
             return <O1PrimerAcceso onEntrar={() => reemplazar(persona?.rol === 'supervisor' ? 's1' : 'o2')} />;
         case 'o2':
-            return <O2MiDia nav={nav} persona={persona} />;
+            return <O2MiDia nav={nav} />;
         case 'o3':
             return <O3TrabajoEnCurso nav={nav} asignacion={actual.contexto?.asignacion} />;
         case 'o4':

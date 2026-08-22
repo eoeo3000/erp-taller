@@ -54,6 +54,7 @@ export default function S3Trabajo({ nav, asignacion, persona }) {
     const [error, setError] = useState('');
     const [motivoAbierto, setMotivoAbierto] = useState(null);
     const [motivoTexto, setMotivoTexto] = useState('');
+    const [verInforme, setVerInforme] = useState(false);
 
     const cargar = () => obtenerOT(otId).then(setOt).catch((e) => setError(e.message));
 
@@ -69,6 +70,8 @@ export default function S3Trabajo({ nav, asignacion, persona }) {
     if (!otId) return <Mensaje texto="Esta pantalla necesita una OT asociada." nav={nav} />;
     if (error) return <Mensaje texto={error} nav={nav} />;
     if (!ot) return null;
+
+    if (verInforme) return <VistaInforme ot={ot} onVolver={() => setVerInforme(false)} />;
 
     const tareas = ot.tareas || [];
     const resueltas = tareas.filter((t) => t.completada || t.motivoNoRealizada).length;
@@ -88,7 +91,14 @@ export default function S3Trabajo({ nav, asignacion, persona }) {
         try { await actualizarOT(otId, { tareas: nuevasTareas }); await cargar(); } finally { setGuardando(false); }
     };
 
-    const marcarRealizada = (idx) => guardarTarea(idx, { completada: true, motivoNoRealizada: '' });
+    // Toggle, no solo marcar: un supervisor que se equivoca al tocar la casilla debe poder
+    // dejarla como estaba, no quedar atrapado en "realizada" para siempre.
+    const toggleRealizada = (idx) => {
+        const t = tareas[idx];
+        if (t.completada) return guardarTarea(idx, { completada: false });
+        if (t.motivoNoRealizada) return guardarTarea(idx, { motivoNoRealizada: '' });
+        return guardarTarea(idx, { completada: true, motivoNoRealizada: '' });
+    };
 
     const confirmarNoRealizada = async (idx) => {
         if (!motivoTexto.trim()) return;
@@ -178,7 +188,7 @@ export default function S3Trabajo({ nav, asignacion, persona }) {
                             motivoAbierto={motivoAbierto === idx}
                             motivoTexto={motivoTexto}
                             guardando={guardando}
-                            onMarcarRealizada={() => marcarRealizada(idx)}
+                            onMarcarRealizada={() => toggleRealizada(idx)}
                             onAbrirMotivo={() => { setMotivoAbierto(idx); setMotivoTexto(''); }}
                             onCancelarMotivo={() => setMotivoAbierto(null)}
                             onCambiarMotivoTexto={setMotivoTexto}
@@ -194,7 +204,7 @@ export default function S3Trabajo({ nav, asignacion, persona }) {
 
             <div className="pie-accion">
                 <button className="boton-primario" disabled={guardando} onClick={guardarLoIngresado}>Guardar lo ingresado</button>
-                <button className="boton-secundario" disabled title="Todavía no está definido qué muestra esta pantalla">Ver informe</button>
+                <button className="boton-secundario" onClick={() => setVerInforme(true)}>Ver informe</button>
                 <button
                     className="boton-secundario"
                     disabled={!puedeTerminar || guardando}
@@ -235,14 +245,15 @@ function FilaTarea({
             <span style={{ flex: 'none', width: 30, height: 48, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', paddingTop: 1 }}>
                 <button
                     onClick={onMarcarRealizada}
-                    disabled={resuelta || guardando}
+                    disabled={guardando}
+                    title={resuelta ? 'Volver a dejarla pendiente' : 'Marcar realizada'}
                     className="mono"
                     style={{
                         width: 26, height: 26, display: 'flex', alignItems: 'center', justifyContent: 'center',
                         background: t.completada ? 'oklch(0.48 0.10 155 / .12)' : '#fff',
                         border: `1.5px solid ${t.completada ? 'oklch(0.48 0.10 155)' : noRealizada ? 'var(--atencion)' : 'rgba(0,0,0,.28)'}`,
                         color: t.completada ? 'oklch(0.42 0.10 155)' : noRealizada ? 'var(--atencion)' : 'transparent',
-                        fontSize: 15, cursor: resuelta ? 'default' : 'pointer', padding: 0,
+                        fontSize: 15, cursor: 'pointer', padding: 0,
                     }}
                 >{t.completada ? '×' : noRealizada ? '–' : '×'}</button>
             </span>
@@ -324,6 +335,57 @@ function FilaTarea({
                     </>
                 )}
             </span>
+        </div>
+    );
+}
+
+// Compila cada tarea con lo que se hizo y sus fotos (README §5: eso es "el informe final").
+// Fotos en miniatura, no a tamaño completo: la OT ya viene con todas las fotos cargadas
+// desde obtenerOT (nada nuevo que pesar), pero pintar varias imágenes grandes a la vez sí
+// puede sentirse lento en un teléfono en terreno — se mantienen chicas a propósito.
+function VistaInforme({ ot, onVolver }) {
+    const tareas = ot.tareas || [];
+    return (
+        <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+            <header style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: 12, height: 52, padding: '0 14px 0 8px', background: 'var(--superficie)', borderBottom: '1px solid var(--linea-zona)' }}>
+                <button onClick={onVolver} className="mono" style={{ width: 44, height: 44, background: 'none', border: 'none', fontSize: 20, color: 'var(--texto-secundario-2)', cursor: 'pointer' }}>‹</button>
+                <span className="mono" style={{ fontSize: 15, fontWeight: 600 }}>{ot.numeroOT}</span>
+                <span style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: 'var(--texto-atenuado-1)' }}>Informe</span>
+            </header>
+            <div style={{ flex: 1, overflowY: 'auto' }}>
+                <div style={{ padding: '16px 18px', background: 'var(--superficie)', borderBottom: '1px solid var(--linea-fina)' }}>
+                    <div style={{ fontSize: 17, fontWeight: 600, lineHeight: 1.35 }}>{ot.descripcion}</div>
+                    <div style={{ marginTop: 6, fontSize: 13.5, color: 'var(--texto-secundario-2)' }}>{ot.solicitante}</div>
+                </div>
+                {tareas.map((t, i) => (
+                    <div key={t._id || i} style={{ padding: '13px 18px', background: 'var(--superficie)', borderBottom: '1px solid var(--linea-fina)' }}>
+                        <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
+                            <span style={{ flex: 1, minWidth: 0, fontSize: 15, fontWeight: 600 }}>{t.descripcion}</span>
+                            <span className="mono" style={{ flex: 'none', fontSize: 12, color: 'var(--texto-atenuado-1)' }}>{t.duracion} h</span>
+                        </div>
+                        <div style={{ marginTop: 3, fontSize: 13, color: 'var(--texto-secundario-2)' }}>{(t.operarioNombre || []).join(', ')}</div>
+                        {t.completada && <div style={{ marginTop: 4, fontSize: 12.5, fontWeight: 600, color: 'var(--listo)' }}>Realizada</div>}
+                        {t.motivoNoRealizada && <div style={{ marginTop: 4, fontSize: 12.5, fontWeight: 600, color: 'var(--atencion)' }}>No realizada: {t.motivoNoRealizada}</div>}
+                        {!t.completada && !t.motivoNoRealizada && <div style={{ marginTop: 4, fontSize: 12.5, color: 'var(--texto-atenuado-3)' }}>Todavía pendiente</div>}
+                        {(t.registro?.texto || t.registro?.fotos?.length > 0) && (
+                            <div style={{ marginTop: 8 }}>
+                                {t.registro.texto && <div style={{ fontSize: 13.5, lineHeight: 1.45, color: 'var(--texto-secundario-1)' }}>{t.registro.texto}</div>}
+                                {t.registro.fotos?.length > 0 && (
+                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
+                                        {t.registro.fotos.map((f, fi) => (
+                                            <img key={fi} src={f} alt="" loading="lazy" style={{ width: 70, height: 52, objectFit: 'cover' }} />
+                                        ))}
+                                    </div>
+                                )}
+                                <div className="mono" style={{ marginTop: 4, fontSize: 11.5, color: 'var(--texto-atenuado-3)' }}>
+                                    {t.registro.hora}{t.registro.autor ? ` · ${t.registro.autor}` : ''}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                ))}
+                <div style={{ height: 18 }} />
+            </div>
         </div>
     );
 }
