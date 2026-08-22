@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { miPanel, miSemana } from '../api.js';
 import { detectarCruces, agruparPorOtYDia } from '../cruces.js';
-import TabsSupervisor from './TabsSupervisor.jsx';
 
 const fechaMono = (iso) => new Date(iso + 'T12:00:00').toLocaleDateString('es-CL', { day: '2-digit', month: 'short' });
 const rangoSemana = (dias) => dias ? `${fechaMono(dias[0])} – ${fechaMono(dias[6]).split(' ')[0]}` : '';
@@ -27,34 +26,25 @@ export default function S1MiPanel({ nav }) {
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
-            <div style={{ flex: 'none', padding: '14px 18px 0', background: 'var(--superficie)', borderBottom: '1px solid var(--linea-zona)' }}>
+            <div style={{ flex: 'none', padding: '14px 18px', background: 'var(--superficie)', borderBottom: '1px solid var(--linea-zona)' }}>
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
                     <span style={{ fontSize: 'var(--fs-titulo)', fontWeight: 'var(--fw-titulo)' }}>{panel.usuario.nombre}</span>
                     <span style={{ fontSize: 'var(--fs-secundario)', color: 'var(--texto-atenuado-1)' }}>{panel.usuario.puesto || ''}</span>
-                </div>
-                <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 22 }}>
-                    <TabsSupervisor activa="s1" nav={nav} />
-                    <span className="mono" style={{ marginLeft: 'auto', paddingBottom: 9, fontSize: 13, color: 'var(--texto-atenuado-1)' }}>{hoyMono()}</span>
+                    <span className="mono" style={{ marginLeft: 'auto', fontSize: 13, color: 'var(--texto-atenuado-1)' }}>{hoyMono()}</span>
                 </div>
             </div>
 
             <div style={{ flex: 1, overflowY: 'auto' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '9px 8px 9px 18px', background: 'var(--superficie)', borderBottom: '1px solid var(--linea-fina)' }}>
-                    <span style={{ fontSize: 15, fontWeight: 600 }}>Semana</span>
-                    <span className="mono" style={{ marginLeft: 'auto', fontSize: 14 }}>{rangoSemana(semana?.dias)}</span>
-                    <button onClick={() => nav.ir('s2')} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 15, fontWeight: 600, color: 'var(--en-curso)', paddingRight: 10 }}>Ver</button>
-                </div>
-
-                <div className="franja" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                    <span className="mono" style={{ fontSize: 17, fontWeight: 600 }}>{trabajosVivos}</span>
-                    <span style={{ fontSize: 13, color: 'var(--texto-secundario-2)' }}>trabajos vivos{personas ? ` · ${personas} persona${personas > 1 ? 's' : ''}` : ''}</span>
-                    {cruces.length > 0 && (
-                        <span className="mono" style={{ marginLeft: 'auto', fontSize: 13, fontWeight: 600, color: 'var(--detenido)' }}>{cruces.length} cruce{cruces.length > 1 ? 's' : ''}</span>
-                    )}
-                </div>
-
                 <div style={{ padding: '15px 18px 6px' }}><span className="versalita">Por dónde entrar</span></div>
                 <div style={{ background: 'var(--superficie)', borderTop: '1px solid var(--linea-fina)', borderBottom: '1px solid var(--linea-fina)' }}>
+                    <Entrada
+                        conteo={trabajosVivos} borde="var(--texto-principal)"
+                        titulo="Mi semana"
+                        lineas={[`${rangoSemana(semana?.dias)}${personas ? ` · ${personas} persona${personas > 1 ? 's' : ''}` : ''}`]}
+                        extra={cruces.length > 0 ? `${cruces.length} cruce${cruces.length > 1 ? 's' : ''}` : null}
+                        colorExtra="var(--detenido)"
+                        onClick={() => nav.ir('s2')}
+                    />
                     <Entrada
                         conteo={panel.hoyEnTerreno.count} borde="var(--en-curso)"
                         titulo="Hoy en terreno"

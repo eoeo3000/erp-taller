@@ -65,13 +65,22 @@ export default function S2MiSemanaSupervisor({ nav }) {
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
-            <header style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: 12, height: 52, padding: '0 14px 0 8px', background: 'var(--superficie)', borderBottom: '1px solid var(--linea-zona)' }}>
-                <button onClick={nav.volver} className="mono" style={{ width: 44, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', fontSize: 20, color: 'var(--texto-secundario-2)', cursor: 'pointer' }}>‹</button>
-                <span style={{ fontSize: 17, fontWeight: 700 }}>Mi semana</span>
-                <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 4 }}>
-                    <button onClick={() => setDesde(sumarDias(datos.dias[0], -7))} className="mono" style={{ width: 44, height: 44, background: 'none', border: 'none', fontSize: 18, color: 'var(--texto-secundario-2)', cursor: 'pointer' }}>‹</button>
-                    <span className="mono" style={{ fontSize: 13 }}>{fechaMono(datos.dias[0])} – {fechaMono(datos.dias[6])}</span>
-                    <button onClick={() => setDesde(sumarDias(datos.dias[0], 7))} className="mono" style={{ width: 44, height: 44, background: 'none', border: 'none', fontSize: 18, color: 'var(--texto-secundario-2)', cursor: 'pointer' }}>›</button>
+            <header style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: 8, height: 52, padding: '0 8px', background: 'var(--superficie)', borderBottom: '1px solid var(--linea-zona)' }}>
+                <button onClick={nav.volver} className="mono" style={{ flex: 'none', width: 40, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', fontSize: 20, color: 'var(--texto-secundario-2)', cursor: 'pointer' }}>‹</button>
+                <span style={{ flex: 'none', fontSize: 16, fontWeight: 700, whiteSpace: 'nowrap' }}>Mi semana</span>
+                <span style={{ marginLeft: 'auto', flex: 'none', display: 'flex', alignItems: 'center' }}>
+                    <button onClick={() => setDesde(sumarDias(datos.dias[0], -7))} className="mono" style={{ width: 40, height: 44, background: 'none', border: 'none', fontSize: 18, color: 'var(--texto-secundario-2)', cursor: 'pointer' }}>‹</button>
+                    {/* Rótulo tapable: abre el selector de fecha nativo para ir directo a
+                        cualquier semana, no solo semana anterior/siguiente de a una. */}
+                    <label style={{ position: 'relative', display: 'flex', alignItems: 'center', height: 44, padding: '0 4px', cursor: 'pointer' }}>
+                        <span className="mono" style={{ fontSize: 12.5, whiteSpace: 'nowrap' }}>{fechaMono(datos.dias[0])} – {fechaMono(datos.dias[6])}</span>
+                        <input
+                            type="date" value={datos.dias[0]} aria-label="Elegir semana"
+                            onChange={(e) => e.target.value && setDesde(e.target.value)}
+                            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', opacity: 0, cursor: 'pointer' }}
+                        />
+                    </label>
+                    <button onClick={() => setDesde(sumarDias(datos.dias[0], 7))} className="mono" style={{ width: 40, height: 44, background: 'none', border: 'none', fontSize: 18, color: 'var(--texto-secundario-2)', cursor: 'pointer' }}>›</button>
                 </span>
             </header>
 
@@ -146,16 +155,23 @@ function FilaDia({ dia, nombre, grupos, cruces, esHoy, onEntrar }) {
                     const enCurso = g.estadoOT === 'En Ejecución' && esHoy;
                     return (
                         <span key={i}>
+                            {/* Carril completo (README: "debería tomar todo el rectángulo de esta
+                                OT") — la barra visible puede medir unos pocos px de ancho a 24h de
+                                eje, así que el doble toque real se capta en todo el ancho del carril,
+                                no solo sobre la barra angosta. */}
                             <span
                                 onDoubleClick={() => onEntrar?.(g.otId)}
+                                style={{ position: 'absolute', left: 0, width: '100%', top: laneTop(i), height: 42, cursor: onEntrar ? 'pointer' : 'default' }}
+                            />
+                            <span
                                 style={{
                                     position: 'absolute', boxSizing: 'border-box', left: pctHora(hIni), width: `calc(${pctHora(g.duracion)} - 3px)`,
-                                    top: laneTop(i), height: 42, cursor: onEntrar ? 'pointer' : 'default',
+                                    top: laneTop(i), height: 42, pointerEvents: 'none',
                                     background: enCurso ? 'oklch(0.48 0.10 250 / .18)' : '#e6e4dd',
                                     borderLeft: `3px solid ${enCurso ? 'oklch(0.48 0.10 250)' : '#a3a29a'}`,
                                 }} />
                             <span style={{
-                                position: 'absolute', right: `calc(${pctHora(24 - hIni)} + 5px)`, top: laneTop(i), height: 42,
+                                position: 'absolute', right: `calc(${pctHora(24 - hIni)} + 5px)`, top: laneTop(i), height: 42, pointerEvents: 'none',
                                 display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap', fontSize: 12.5, fontWeight: 600,
                                 color: enCurso ? 'var(--texto-principal)' : 'var(--texto-secundario-1)',
                                 // Espacio real disponible a la izquierda de la barra (README §4: el rótulo
