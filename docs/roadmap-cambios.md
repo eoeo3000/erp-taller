@@ -30,21 +30,46 @@ No se requiere frenar el uso actual del sistema para hacer este trabajo — todo
 
 ## 3. Roadmap por fases
 
-```
-Fase 1                Fase 2                    Fase 3                 Fase 4
-Fundamentos            Compras y reserva          Control macro          Pulido
-operativos             de recursos                consolidado
+**Actualización (revisión de producto, agosto 2026): se agrega una Fase 0 de estabilización, antes de cualquier feature nueva.** Se detectó una tanda de bugs — tres de ellos bloqueantes — registrados en [bugs-conocidos.md](bugs-conocidos.md). El criterio es simple: no tiene sentido seguir agregando funcionalidad nueva sobre una base que hoy produce datos incorrectos (fecha de programación equivocada) o deja partes de una pantalla inaccesibles. La Fase 0 va antes de la Fase 1 original, sin excepción.
 
-- Informe de           - Módulo de Compras        - Dashboard con        - Alineación
-  Evaluación             (proveedores + OCs)         5 KPIs                 visual
-- Stock básico         - Reserva de recursos      - Tabla operativa       - UX según uso
-- SLA de respuesta      - Validación de stock                               real
-                          en cotización
-
-  ~1-2 semanas            ~2-3 semanas               ~1-2 semanas           variable
 ```
+Fase 0             Fase 1                Fase 2                    Fase 3                 Fase 4
+Estabilización     Fundamentos            Compras y reserva          Control macro          Pulido
+                   operativos             de recursos                consolidado
+
+- B1, B2, B3       - Informe de           - Módulo de Compras        - Dashboard con        - Alineación
+  (bloqueantes)      Evaluación             (proveedores + OCs)         5 KPIs                 visual
+- B4 (alta         - Stock básico         - Reserva de recursos      - Tabla operativa       - UX según uso
+  severidad)       - SLA de respuesta      - Validación de stock                               real
+- B5, B6                                     en cotización
+  (rendimiento,
+  si el volumen
+  de datos ya
+  lo justifica)
+
+  variable, según    ~1-2 semanas            ~2-3 semanas               ~1-2 semanas           variable
+  alcance de cada
+  bug (ver detalle
+  en bugs-conocidos.md)
+```
+
+La Fase 0 no tiene dependencias — puede (y debe) empezar de inmediato, en paralelo a que se termine de aprobar el resto de este roadmap. La Fase 1 puede avanzar sin esperar a que la Fase 0 esté 100% cerrada, siempre que los tres bloqueantes (B1, B2, B3) ya estén resueltos — B4, B5 y B6 no bloquean el inicio de la Fase 1 pero se recomienda no dejarlos indefinidamente abiertos.
 
 La Fase 2 depende de que la Fase 1 esté cerrada. La Fase 3 depende de la Fase 2 (sus KPIs nuevos necesitan que existan las Compras y el Stock). La Fase 4 es la más flexible y se puede diferir sin costo operativo.
+
+### Gaps nuevos de la revisión de agosto de 2026 — dónde entran
+
+Estos gaps (detalle completo en [funcionalidades-v2.md](funcionalidades-v2.md), Parte IV.A) no tenían un lugar definido en el roadmap original de 4 fases. Se priorizan así, para ubicarlos en las fases de arriba según su prioridad de negocio:
+
+| Gap | Prioridad | Fase sugerida |
+|---|---|---|
+| 13 — Dependencias entre tareas | Alta | Fase 1 o 2, a definir junto con el resto de Programación |
+| 14 — Edición de solicitud antes de evaluación | Alta | Fase 1 — esfuerzo bajo (S), regla de negocio simple sobre algo que ya existe |
+| 15 — Configuración de identidad de empresa | Media | Fase 2 o 3 |
+| 16 — Ajuste de tablas (Solicitudes) | Baja | Fase 3 o 4 — reutiliza un patrón ya construido, esfuerzo bajo, pero no es urgente |
+| 18 — Rediseño Importar/Exportar | Baja | Fase 4, junto con el resto del pulido visual |
+
+**Gap 17 no aparece en esta tabla**: se verificó en la Fase 1 de la revisión de producto que la asignación de trabajos al personal ya está completamente implementada (modelo y pantalla) — no hay nada que priorizar.
 
 ---
 

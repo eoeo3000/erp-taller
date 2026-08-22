@@ -20,6 +20,7 @@ const upload = multer({ storage: storage });
 // --- ENDPOINTS ACTUALIZADOS ---
 
 router.get('/', solicitudController.obtenerSolicitudes);
+router.get('/:id', solicitudController.obtenerSolicitud);
 
 // Usamos upload.single('archivo') para interceptar el archivo físico
 // El nombre 'archivo' debe coincidir con el formData.append('archivo', ...) de App.js

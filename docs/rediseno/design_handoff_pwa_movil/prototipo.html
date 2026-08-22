@@ -1,0 +1,704 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<style>
+  body { margin:0; background:#e8e6e0; font-family:"Helvetica Neue", Helvetica, Arial, sans-serif; -webkit-font-smoothing:antialiased; }
+  a { color:oklch(0.48 0.10 250); }
+  a:hover { color:oklch(0.40 0.10 250); }
+</style>
+</helmet>
+
+<section style="padding:40px 44px 64px;display:flex;flex-direction:column;gap:34px">
+
+  <div style="max-width:1180px">
+    <div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap">
+      <span style="font-family:ui-monospace,Menlo,monospace;font-size:11px;font-weight:700;letter-spacing:.06em;color:#fff;background:#1c1d1b;padding:3px 7px;border-radius:2px">1a · 1b</span>
+      <h1 style="margin:0;font-size:21px;font-weight:700;letter-spacing:-.01em;color:#1a1a18">Implementación móvil · dos PWA</h1>
+      <span style="font-size:13px;color:#75746e">Prototipo de entrega para Claude Code · <a href="#1a">1a Operativa</a> · <a href="#1b">1b Cliente</a></span>
+    </div>
+    <p style="margin:10px 0 0;max-width:760px;font-size:13.5px;line-height:1.62;color:#3a3a35;text-wrap:pretty">Pantallas para las dos PWA de <span style="font-family:ui-monospace,Menlo,monospace">docs/estrategia-movil.md</span>. Datos tomados del juego de demostración real (<span style="font-family:ui-monospace,Menlo,monospace">seeds/generar-demo.js</span>): OT-2026-0006 a 0008, Camila Reyes supervisora, Diego Fuentes técnico hidráulico, gran total $ 113.000 por OT. Los tokens de color y familia son los del rediseño de escritorio; la escala tipográfica y los objetivos táctiles son propios del móvil.</p>
+  </div>
+
+  <sc-if value="{{ mostrarSpec }}" hint-placeholder-val="{{ true }}">
+    <div style="display:flex;flex-wrap:wrap;gap:14px;max-width:1180px">
+      <div style="flex:1 1 340px;min-width:300px;background:#fff;border:1px solid rgba(0,0,0,.12);border-radius:2px;padding:14px 16px 16px">
+        <div style="font-size:9.5px;letter-spacing:.13em;text-transform:uppercase;color:#75746e;font-weight:700;margin-bottom:10px">Escala tipográfica móvil</div>
+        <div style="display:grid;grid-template-columns:auto 1fr;gap:7px 14px;align-items:baseline;font-size:12px;color:#57564f">
+          <span style="font-family:ui-monospace,Menlo,monospace;color:#1a1a18">20 / 700</span><span>Título de pantalla</span>
+          <span style="font-family:ui-monospace,Menlo,monospace;color:#1a1a18">17 / 600</span><span>Cifras y montos (monoespaciada)</span>
+          <span style="font-family:ui-monospace,Menlo,monospace;color:#1a1a18">15 / 400</span><span>Cuerpo — mínimo absoluto en terreno</span>
+          <span style="font-family:ui-monospace,Menlo,monospace;color:#1a1a18">13 / 400</span><span>Secundario, una línea de apoyo</span>
+          <span style="font-family:ui-monospace,Menlo,monospace;color:#1a1a18">11 / 700</span><span>Versalita de sección, .13em</span>
+        </div>
+        <div style="margin-top:12px;padding-top:11px;border-top:1px solid rgba(0,0,0,.10);font-size:12px;line-height:1.6;color:#57564f">El 13 px base del escritorio no viaja: es densidad de planilla. En terreno, con guantes y sol directo, el cuerpo parte en 15 px.</div>
+      </div>
+      <div style="flex:1 1 340px;min-width:300px;background:#fff;border:1px solid rgba(0,0,0,.12);border-radius:2px;padding:14px 16px 16px">
+        <div style="font-size:9.5px;letter-spacing:.13em;text-transform:uppercase;color:#75746e;font-weight:700;margin-bottom:10px">Reglas de interacción</div>
+        <div style="display:flex;flex-direction:column;gap:7px;font-size:12px;line-height:1.55;color:#57564f">
+          <div>Objetivo táctil mínimo <span style="font-family:ui-monospace,Menlo,monospace;color:#1a1a18">48 px</span>, sin excepciones. Acción principal <span style="font-family:ui-monospace,Menlo,monospace;color:#1a1a18">56 px</span>, anclada al pie.</div>
+          <div>Una sola acción primaria por pantalla. Las destructivas piden confirmación en hoja inferior, nunca en diálogo del navegador.</div>
+          <div>Sin iconos ni emoji. El estado se dice con palabra y color; el color nunca es el único portador.</div>
+          <div>Radio máximo <span style="font-family:ui-monospace,Menlo,monospace;color:#1a1a18">2 px</span>, sin sombras. Separación por líneas de 1 px.</div>
+          <div>Una columna. Nada de tablas horizontales: la fila se vuelve bloque de dos líneas.</div>
+        </div>
+      </div>
+      <div style="flex:1 1 300px;min-width:280px;background:#fff;border:1px solid rgba(0,0,0,.12);border-radius:2px;padding:14px 16px 16px">
+        <div style="font-size:9.5px;letter-spacing:.13em;text-transform:uppercase;color:#75746e;font-weight:700;margin-bottom:10px">Paleta — igual al escritorio</div>
+        <div style="display:flex;flex-direction:column;gap:6px;font-size:12px;color:#57564f">
+          <div style="display:flex;align-items:center;gap:9px"><span style="width:26px;height:14px;background:#1c1d1b;flex:none"></span><span style="font-family:ui-monospace,Menlo,monospace;font-size:11px">#1c1d1b</span><span>acción primaria</span></div>
+          <div style="display:flex;align-items:center;gap:9px"><span style="width:26px;height:14px;background:oklch(0.48 0.10 250);flex:none"></span><span style="font-family:ui-monospace,Menlo,monospace;font-size:11px">0.48 250</span><span>en curso</span></div>
+          <div style="display:flex;align-items:center;gap:9px"><span style="width:26px;height:14px;background:oklch(0.48 0.10 155);flex:none"></span><span style="font-family:ui-monospace,Menlo,monospace;font-size:11px">0.48 155</span><span>listo, pagado</span></div>
+          <div style="display:flex;align-items:center;gap:9px"><span style="width:26px;height:14px;background:oklch(0.55 0.11 65);flex:none"></span><span style="font-family:ui-monospace,Menlo,monospace;font-size:11px">0.55 65</span><span>atención, sin señal</span></div>
+          <div style="display:flex;align-items:center;gap:9px"><span style="width:26px;height:14px;background:oklch(0.52 0.13 25);flex:none"></span><span style="font-family:ui-monospace,Menlo,monospace;font-size:11px">0.52 25</span><span>detenido, vencido</span></div>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <div id="1a" style="display:flex;flex-direction:column;gap:16px">
+    <div style="display:flex;align-items:baseline;gap:11px;flex-wrap:wrap;padding-top:6px;border-top:2px solid #1c1d1b;max-width:1180px">
+      <span style="font-family:ui-monospace,Menlo,monospace;font-size:11px;font-weight:700;color:#fff;background:#1c1d1b;padding:3px 7px;border-radius:2px;margin-top:8px">1a</span>
+      <h2 style="margin:8px 0 0;font-size:17px;font-weight:700;color:#1a1a18">PWA Operativa — supervisor y ejecutor</h2>
+      <span style="font-size:12.5px;color:#75746e;margin-top:8px">Token persistente por persona · reemplaza el portal HTML por OT</span>
+    </div>
+
+    <div style="display:flex;flex-wrap:wrap;gap:30px 26px">
+
+      <div style="display:flex;flex-direction:column;gap:9px">
+        <div style="display:flex;align-items:baseline;gap:8px"><span style="font-family:ui-monospace,Menlo,monospace;font-size:11px;color:#8a8981">O1</span><span style="font-size:13px;font-weight:600;color:#1a1a18">Primer acceso desde el correo</span></div>
+        <x-import component-from-global-scope="AndroidDevice" from="./android-frame.jsx" hint-size="428px,908px">
+          <div style="height:100%;display:flex;flex-direction:column;background:#f6f5f2;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;color:#1a1a18">
+            <div style="flex:none;padding:26px 20px 0">
+              <div style="font-size:11px;font-weight:700;letter-spacing:.13em;text-transform:uppercase;color:#75746e">Maestranza Vergara</div>
+              <div style="margin-top:26px;font-size:20px;font-weight:700;line-height:1.3">Hola, Camila.</div>
+              <div style="margin-top:9px;font-size:15px;line-height:1.55;color:#3a3a35">Este link es tu acceso permanente. No caduca al terminar un trabajo y no necesitas clave.</div>
+            </div>
+            <div style="flex:none;margin:24px 20px 0;background:#fff;border:1px solid rgba(0,0,0,.12);border-radius:2px;padding:15px 16px">
+              <div style="font-size:11px;font-weight:700;letter-spacing:.13em;text-transform:uppercase;color:#75746e">Tu acceso</div>
+              <div style="margin-top:9px;display:grid;grid-template-columns:auto 1fr;gap:8px 14px;font-size:13px;color:#57564f">
+                <span>Persona</span><span style="color:#1a1a18">Camila Reyes</span>
+                <span>Puesto</span><span style="color:#1a1a18">Supervisora de Terreno</span>
+                <span>Emitido</span><span style="font-family:ui-monospace,Menlo,monospace;color:#1a1a18">18-08-2026</span>
+              </div>
+            </div>
+            <div style="flex:none;margin:14px 20px 0;padding:13px 15px;background:#f0efeb;border-left:2px solid oklch(0.55 0.11 65)">
+              <div style="font-size:13px;line-height:1.55;color:#3a3a35">Instálalo para no volver al correo: menú del navegador, <span style="font-weight:600;color:#1a1a18">Añadir a pantalla de inicio</span>.</div>
+            </div>
+            <div style="margin-top:auto;flex:none;padding:16px 20px 22px;background:#fff;border-top:1px solid rgba(0,0,0,.12)">
+              <div style="height:56px;display:flex;align-items:center;justify-content:center;background:#1c1d1b;color:#fff;font-size:16px;font-weight:600;border-radius:2px">Entrar a mi día</div>
+              <div style="margin-top:11px;font-size:12.5px;line-height:1.5;color:#8a8981;text-align:center">Si pierdes el teléfono, avisa a la oficina: se revoca este acceso y se emite otro.</div>
+            </div>
+          </div>
+        </x-import>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:9px">
+        <div style="display:flex;align-items:baseline;gap:8px"><span style="font-family:ui-monospace,Menlo,monospace;font-size:11px;color:#8a8981">O2</span><span style="font-size:13px;font-weight:600;color:#1a1a18">Mi día</span></div>
+        <x-import component-from-global-scope="AndroidDevice" from="./android-frame.jsx" hint-size="428px,908px">
+          <div style="height:100%;display:flex;flex-direction:column;background:#f6f5f2;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;color:#1a1a18">
+            <div style="flex:none;display:flex;align-items:center;gap:10px;height:52px;padding:0 18px;background:#fff;border-bottom:1px solid rgba(0,0,0,.12)">
+              <span style="font-size:20px;font-weight:700">Mi día</span>
+              <span style="font-family:ui-monospace,Menlo,monospace;font-size:13px;color:#75746e">mar 18-08</span>
+              <span style="margin-left:auto;font-size:13px;font-weight:600;color:oklch(0.48 0.10 250)">Mi semana</span>
+            </div>
+            <div style="flex:none;display:flex;align-items:center;gap:14px;padding:11px 18px;background:#f0efeb;border-bottom:1px solid rgba(0,0,0,.10)">
+              <span style="font-family:ui-monospace,Menlo,monospace;font-size:17px;font-weight:600">3</span>
+              <span style="font-size:13px;color:#57564f">asignaciones · 10 h planificadas</span>
+              <span style="margin-left:auto;font-family:ui-monospace,Menlo,monospace;font-size:12px;color:oklch(0.55 0.11 65)">1 sin enviar</span>
+            </div>
+            <div style="flex:1;overflow:auto">
+              <div style="padding:15px 18px;background:#fff;border-bottom:1px solid rgba(0,0,0,.06);border-left:3px solid oklch(0.48 0.10 250)">
+                <div style="display:flex;align-items:baseline;gap:9px">
+                  <span style="font-family:ui-monospace,Menlo,monospace;font-size:13px;color:#57564f">OT-2026-0007</span>
+                  <span style="font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:oklch(0.48 0.10 250)">En ejecución</span>
+                  <span style="margin-left:auto;font-family:ui-monospace,Menlo,monospace;font-size:13px;color:#57564f">09:00</span>
+                </div>
+                <div style="margin-top:7px;font-size:16px;font-weight:600;line-height:1.35">Habilitación eléctrica de bodega nueva</div>
+                <div style="margin-top:5px;font-size:13.5px;color:#57564f">Puerto Coronel Terminal · Camino Industrial s/n</div>
+                <div style="margin-top:10px;display:flex;align-items:center;gap:10px">
+                  <span style="font-size:13px;color:#8a8981">Ejecución de trabajo principal</span>
+                  <span style="margin-left:auto;font-family:ui-monospace,Menlo,monospace;font-size:13px;color:#57564f">4 h</span>
+                </div>
+                <div style="margin-top:12px;display:flex;gap:8px">
+                  <div style="flex:1;height:48px;display:flex;align-items:center;justify-content:center;background:#1c1d1b;color:#fff;font-size:15px;font-weight:600;border-radius:2px">Continuar</div>
+                  <div style="width:120px;height:48px;display:flex;align-items:center;justify-content:center;background:#fff;border:1px solid rgba(0,0,0,.20);font-size:15px;font-weight:600;border-radius:2px">Reportar</div>
+                </div>
+              </div>
+              <div style="padding:15px 18px;background:#fff;border-bottom:1px solid rgba(0,0,0,.06);border-left:3px solid #a3a29a">
+                <div style="display:flex;align-items:baseline;gap:9px">
+                  <span style="font-family:ui-monospace,Menlo,monospace;font-size:13px;color:#57564f">OT-2026-0006</span>
+                  <span style="font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#6b6a63">Programada</span>
+                  <span style="margin-left:auto;font-family:ui-monospace,Menlo,monospace;font-size:13px;color:#57564f">13:30</span>
+                </div>
+                <div style="margin-top:7px;font-size:16px;font-weight:600;line-height:1.35">Fuga hidráulica en elevador de carga</div>
+                <div style="margin-top:5px;font-size:13.5px;color:#57564f">Agrícola Las Vertientes · Camino Industrial s/n</div>
+                <div style="margin-top:10px;display:flex;align-items:center;gap:10px">
+                  <span style="font-size:13px;color:#8a8981">Diagnóstico inicial en terreno</span>
+                  <span style="margin-left:auto;font-family:ui-monospace,Menlo,monospace;font-size:13px;color:#57564f">2 h</span>
+                </div>
+                <div style="margin-top:12px;height:48px;display:flex;align-items:center;justify-content:center;background:#1c1d1b;color:#fff;font-size:15px;font-weight:600;border-radius:2px">Iniciar trabajo</div>
+              </div>
+              <div style="padding:15px 18px;background:#fff;border-bottom:1px solid rgba(0,0,0,.06);border-left:3px solid oklch(0.55 0.11 65)">
+                <div style="display:flex;align-items:baseline;gap:9px">
+                  <span style="font-family:ui-monospace,Menlo,monospace;font-size:13px;color:#57564f">SOL-2026-0013</span>
+                  <span style="font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:oklch(0.55 0.11 65)">Evaluar</span>
+                  <span style="margin-left:auto;font-family:ui-monospace,Menlo,monospace;font-size:13px;color:#57564f">16:00</span>
+                </div>
+                <div style="margin-top:7px;font-size:16px;font-weight:600;line-height:1.35">Mantención correctiva de sistema hidráulico</div>
+                <div style="margin-top:5px;font-size:13.5px;color:#57564f">Transportes Bío Bío · visita de evaluación</div>
+                <div style="margin-top:12px;height:48px;display:flex;align-items:center;justify-content:center;background:#fff;border:1px solid rgba(0,0,0,.20);font-size:15px;font-weight:600;border-radius:2px">Levantar informe</div>
+              </div>
+              <div style="padding:16px 18px;font-size:13px;line-height:1.55;color:#8a8981">Después de las 16:00 no hay más asignaciones. La programación la hace la oficina.</div>
+            </div>
+          </div>
+        </x-import>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:9px">
+        <div style="display:flex;align-items:baseline;gap:8px"><span style="font-family:ui-monospace,Menlo,monospace;font-size:11px;color:#8a8981">O3</span><span style="font-size:13px;font-weight:600;color:#1a1a18">Trabajo en curso</span></div>
+        <x-import component-from-global-scope="AndroidDevice" from="./android-frame.jsx" hint-size="428px,908px">
+          <div style="height:100%;display:flex;flex-direction:column;background:#f6f5f2;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;color:#1a1a18">
+            <div style="flex:none;display:flex;align-items:center;gap:12px;height:52px;padding:0 14px 0 8px;background:#fff;border-bottom:1px solid rgba(0,0,0,.12)">
+              <span style="width:44px;height:44px;display:flex;align-items:center;justify-content:center;font-family:ui-monospace,Menlo,monospace;font-size:20px;color:#57564f">‹</span>
+              <span style="font-family:ui-monospace,Menlo,monospace;font-size:15px;font-weight:600">OT-2026-0007</span>
+              <span style="margin-left:auto;font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:oklch(0.48 0.10 250)">En ejecución</span>
+            </div>
+            <div style="flex:1;overflow:auto">
+              <div style="padding:16px 18px;background:#fff;border-bottom:1px solid rgba(0,0,0,.10)">
+                <div style="font-size:17px;font-weight:600;line-height:1.35">Habilitación eléctrica de bodega nueva</div>
+                <div style="margin-top:6px;font-size:13.5px;color:#57564f">Puerto Coronel Terminal · Hugo Sanhueza</div>
+                <div style="margin-top:3px;font-size:13.5px;color:#8a8981">Camino Industrial s/n, Parque Industrial</div>
+              </div>
+              <div style="display:flex;align-items:center;gap:16px;padding:14px 18px;background:#f0efeb;border-bottom:1px solid rgba(0,0,0,.10)">
+                <div>
+                  <div style="font-size:11px;font-weight:700;letter-spacing:.13em;text-transform:uppercase;color:#75746e">En obra desde</div>
+                  <div style="margin-top:4px;font-family:ui-monospace,Menlo,monospace;font-size:17px;font-weight:600">09:12 · 2 h 41</div>
+                </div>
+                <div style="margin-left:auto;text-align:right">
+                  <div style="font-size:11px;font-weight:700;letter-spacing:.13em;text-transform:uppercase;color:#75746e">Planificado</div>
+                  <div style="margin-top:4px;font-family:ui-monospace,Menlo,monospace;font-size:17px;font-weight:600">6 h</div>
+                </div>
+              </div>
+              <div style="padding:14px 18px 4px;font-size:11px;font-weight:700;letter-spacing:.13em;text-transform:uppercase;color:#75746e">Tareas</div>
+              <div style="background:#fff;border-top:1px solid rgba(0,0,0,.10);border-bottom:1px solid rgba(0,0,0,.10)">
+                <div style="display:flex;align-items:center;gap:12px;min-height:56px;padding:11px 18px;border-bottom:1px solid rgba(0,0,0,.06)">
+                  <span style="font-family:ui-monospace,Menlo,monospace;font-size:15px;color:oklch(0.48 0.10 155)">×</span>
+                  <span style="flex:1;min-width:0">
+                    <span style="display:block;font-size:15px;color:#8a8981;text-decoration:line-through">Diagnóstico inicial en terreno</span>
+                    <span style="display:block;margin-top:2px;font-size:13px;color:#8a8981">Manuel Zúñiga · 2 h</span>
+                  </span>
+                </div>
+                <div style="display:flex;align-items:center;gap:12px;min-height:56px;padding:11px 18px">
+                  <span style="font-family:ui-monospace,Menlo,monospace;font-size:15px;color:#a3a29a">·</span>
+                  <span style="flex:1;min-width:0">
+                    <span style="display:block;font-size:15px">Ejecución de trabajo principal</span>
+                    <span style="display:block;margin-top:2px;font-size:13px;color:#57564f">Patricia Elgueta, Jorge Huenchullán · 4 h</span>
+                  </span>
+                  <span style="width:88px;height:44px;display:flex;align-items:center;justify-content:center;background:#fff;border:1px solid rgba(0,0,0,.20);font-size:14px;font-weight:600;border-radius:2px;flex:none">Listo</span>
+                </div>
+              </div>
+              <div style="padding:14px 18px 4px;font-size:11px;font-weight:700;letter-spacing:.13em;text-transform:uppercase;color:#75746e">Reportes de hoy</div>
+              <div style="background:#fff;border-top:1px solid rgba(0,0,0,.10);border-bottom:1px solid rgba(0,0,0,.10)">
+                <div style="display:flex;gap:12px;padding:12px 18px;border-bottom:1px solid rgba(0,0,0,.06)">
+                  <span style="width:56px;height:42px;background:#57564f;flex:none;border-radius:2px"></span>
+                  <span style="flex:1;min-width:0">
+                    <span style="display:block;font-size:14px;line-height:1.45">Canalización montada, falta conexionado de tablero.</span>
+                    <span style="display:block;margin-top:3px;font-family:ui-monospace,Menlo,monospace;font-size:12px;color:#8a8981">11:40 · enviado</span>
+                  </span>
+                </div>
+                <div style="display:flex;gap:12px;padding:12px 18px">
+                  <span style="width:56px;height:42px;background:#8a8981;flex:none;border-radius:2px"></span>
+                  <span style="flex:1;min-width:0">
+                    <span style="display:block;font-size:14px;line-height:1.45">Se detecta empalme fuera de norma en la caja antigua.</span>
+                    <span style="display:block;margin-top:3px;font-family:ui-monospace,Menlo,monospace;font-size:12px;color:oklch(0.55 0.11 65)">11:52 · en cola, sin señal</span>
+                  </span>
+                </div>
+              </div>
+              <div style="height:16px"></div>
+            </div>
+            <div style="flex:none;padding:12px 18px 20px;background:#fff;border-top:1px solid rgba(0,0,0,.12)">
+              <div style="display:flex;gap:8px">
+                <div style="flex:1;height:48px;display:flex;align-items:center;justify-content:center;background:#fff;border:1px solid rgba(0,0,0,.20);font-size:15px;font-weight:600;border-radius:2px">Reportar avance</div>
+                <div style="flex:1;height:48px;display:flex;align-items:center;justify-content:center;background:#fff;border:1px solid rgba(0,0,0,.20);font-size:15px;font-weight:600;color:oklch(0.52 0.13 25);border-radius:2px">Interrupción</div>
+              </div>
+              <div style="margin-top:9px;height:56px;display:flex;align-items:center;justify-content:center;background:#1c1d1b;color:#fff;font-size:16px;font-weight:600;border-radius:2px">Terminar trabajo</div>
+            </div>
+          </div>
+        </x-import>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:9px">
+        <div style="display:flex;align-items:baseline;gap:8px"><span style="font-family:ui-monospace,Menlo,monospace;font-size:11px;color:#8a8981">O4</span><span style="font-size:13px;font-weight:600;color:#1a1a18">Reporte de terreno</span></div>
+        <x-import component-from-global-scope="AndroidDevice" from="./android-frame.jsx" hint-size="428px,908px">
+          <div style="height:100%;display:flex;flex-direction:column;background:#f6f5f2;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;color:#1a1a18">
+            <div style="flex:none;display:flex;align-items:center;gap:12px;height:52px;padding:0 14px 0 8px;background:#fff;border-bottom:1px solid rgba(0,0,0,.12)">
+              <span style="width:44px;height:44px;display:flex;align-items:center;justify-content:center;font-family:ui-monospace,Menlo,monospace;font-size:20px;color:#57564f">‹</span>
+              <span style="font-size:17px;font-weight:700">Reportar avance</span>
+            </div>
+            <div style="flex:1;overflow:auto">
+              <div style="padding:14px 18px;background:#f0efeb;border-bottom:1px solid rgba(0,0,0,.10);font-size:13.5px;color:#3a3a35">OT-2026-0007 · Habilitación eléctrica de bodega nueva</div>
+              <div style="padding:16px 18px 4px;font-size:11px;font-weight:700;letter-spacing:.13em;text-transform:uppercase;color:#75746e">Fotografía</div>
+              <div style="padding:0 18px">
+                <div style="height:220px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;background:#fff;border:1px solid rgba(0,0,0,.20);border-radius:2px">
+                  <span style="font-size:15px;font-weight:600">Tomar foto</span>
+                  <span style="font-size:13px;color:#8a8981">o elegir de la galería</span>
+                </div>
+                <div style="margin-top:10px;display:flex;gap:8px">
+                  <span style="width:64px;height:48px;background:#57564f;border-radius:2px;flex:none"></span>
+                  <span style="width:64px;height:48px;background:#8a8981;border-radius:2px;flex:none"></span>
+                  <span style="flex:1;height:48px;display:flex;align-items:center;justify-content:center;background:#f0efeb;border:1px solid rgba(0,0,0,.12);font-size:13px;color:#57564f;border-radius:2px">2 fotos en este reporte</span>
+                </div>
+              </div>
+              <div style="padding:18px 18px 4px;font-size:11px;font-weight:700;letter-spacing:.13em;text-transform:uppercase;color:#75746e">Qué pasó</div>
+              <div style="padding:0 18px">
+                <div style="min-height:120px;padding:13px 14px;background:#fff;border:1px solid rgba(0,0,0,.20);border-radius:2px;font-size:15px;line-height:1.5;color:#1a1a18">Se detecta empalme fuera de norma en la caja antigua. Se requiere autorización del cliente para reemplazarla.</div>
+                <div style="margin-top:7px;display:flex;gap:12px;font-size:12.5px;color:#8a8981"><span>Se ve en el portal del cliente</span><span style="margin-left:auto;font-family:ui-monospace,Menlo,monospace">124 / 400</span></div>
+              </div>
+              <div style="padding:18px 18px 4px;font-size:11px;font-weight:700;letter-spacing:.13em;text-transform:uppercase;color:#75746e">Marcar como</div>
+              <div style="padding:0 18px;display:flex;flex-direction:column;gap:8px">
+                <div style="min-height:52px;display:flex;align-items:center;gap:12px;padding:0 14px;background:#fff;border:1px solid #1c1d1b;border-radius:2px">
+                  <span style="font-family:ui-monospace,Menlo,monospace;font-size:14px">▪</span>
+                  <span style="font-size:15px;font-weight:600">Avance normal</span>
+                </div>
+                <div style="min-height:52px;display:flex;align-items:center;gap:12px;padding:0 14px;background:#fff;border:1px solid rgba(0,0,0,.20);border-radius:2px">
+                  <span style="font-family:ui-monospace,Menlo,monospace;font-size:14px;color:#a3a29a">·</span>
+                  <span style="font-size:15px;color:#3a3a35">Requiere decisión de la oficina</span>
+                </div>
+              </div>
+              <div style="height:16px"></div>
+            </div>
+            <div style="flex:none;padding:12px 18px 20px;background:#fff;border-top:1px solid rgba(0,0,0,.12)">
+              <div style="margin-bottom:10px;padding:10px 13px;background:#f0efeb;border-left:2px solid oklch(0.55 0.11 65);font-size:13px;line-height:1.5;color:#3a3a35">Sin señal. El reporte queda en el teléfono y se envía solo al recuperar conexión.</div>
+              <div style="height:56px;display:flex;align-items:center;justify-content:center;background:#1c1d1b;color:#fff;font-size:16px;font-weight:600;border-radius:2px">Guardar y enviar</div>
+            </div>
+          </div>
+        </x-import>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:9px">
+        <div style="display:flex;align-items:baseline;gap:8px"><span style="font-family:ui-monospace,Menlo,monospace;font-size:11px;color:#8a8981">O5</span><span style="font-size:13px;font-weight:600;color:#1a1a18">Informe de evaluación · 4 pasos</span></div>
+        <x-import component-from-global-scope="AndroidDevice" from="./android-frame.jsx" hint-size="428px,908px">
+          <div style="height:100%;display:flex;flex-direction:column;background:#f6f5f2;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;color:#1a1a18">
+            <div style="flex:none;display:flex;align-items:center;gap:12px;height:52px;padding:0 14px 0 8px;background:#fff;border-bottom:1px solid rgba(0,0,0,.12)">
+              <span style="width:44px;height:44px;display:flex;align-items:center;justify-content:center;font-family:ui-monospace,Menlo,monospace;font-size:20px;color:#57564f">‹</span>
+              <span style="font-size:17px;font-weight:700">Evaluación en terreno</span>
+              <span style="margin-left:auto;font-family:ui-monospace,Menlo,monospace;font-size:13px;color:#57564f">2 / 4</span>
+            </div>
+            <div style="flex:none;display:flex;height:3px">
+              <span style="flex:1;background:oklch(0.48 0.10 250)"></span>
+              <span style="flex:1;background:oklch(0.48 0.10 250)"></span>
+              <span style="flex:1;background:#e4e2dc"></span>
+              <span style="flex:1;background:#e4e2dc"></span>
+            </div>
+            <div style="flex:1;overflow:auto">
+              <div style="padding:14px 18px;background:#f0efeb;border-bottom:1px solid rgba(0,0,0,.10);font-size:13.5px;color:#3a3a35">SOL-2026-0013 · Transportes Bío Bío</div>
+              <div style="padding:18px 18px 4px;font-size:11px;font-weight:700;letter-spacing:.13em;text-transform:uppercase;color:#75746e">Riesgos detectados</div>
+              <div style="padding:0 18px;display:flex;flex-direction:column;gap:8px">
+                <div style="min-height:52px;display:flex;align-items:center;gap:12px;padding:0 14px;background:#fff;border:1px solid #1c1d1b;border-radius:2px">
+                  <span style="font-family:ui-monospace,Menlo,monospace;font-size:14px">×</span><span style="font-size:15px;font-weight:600">Trabajo en altura media</span>
+                </div>
+                <div style="min-height:52px;display:flex;align-items:center;gap:12px;padding:0 14px;background:#fff;border:1px solid #1c1d1b;border-radius:2px">
+                  <span style="font-family:ui-monospace,Menlo,monospace;font-size:14px">×</span><span style="font-size:15px;font-weight:600">Superficies con aceite residual</span>
+                </div>
+                <div style="min-height:52px;display:flex;align-items:center;gap:12px;padding:0 14px;background:#fff;border:1px solid rgba(0,0,0,.20);border-radius:2px">
+                  <span style="font-family:ui-monospace,Menlo,monospace;font-size:14px;color:#a3a29a">·</span><span style="font-size:15px;color:#3a3a35">Espacio confinado</span>
+                </div>
+                <div style="min-height:52px;display:flex;align-items:center;gap:12px;padding:0 14px;background:#fff;border:1px solid rgba(0,0,0,.20);border-radius:2px">
+                  <span style="font-family:ui-monospace,Menlo,monospace;font-size:14px;color:#a3a29a">·</span><span style="font-size:15px;color:#3a3a35">Energía eléctrica activa</span>
+                </div>
+              </div>
+              <div style="padding:18px 18px 4px;font-size:11px;font-weight:700;letter-spacing:.13em;text-transform:uppercase;color:#75746e">Otro riesgo</div>
+              <div style="padding:0 18px">
+                <div style="min-height:52px;display:flex;align-items:center;padding:0 14px;background:#fff;border:1px solid rgba(0,0,0,.20);border-radius:2px;font-size:15px;color:#a3a29a">Escribe si falta alguno</div>
+              </div>
+              <div style="padding:18px 18px 4px;font-size:11px;font-weight:700;letter-spacing:.13em;text-transform:uppercase;color:#75746e">Fotos del sitio</div>
+              <div style="padding:0 18px;display:flex;gap:8px">
+                <span style="width:76px;height:60px;background:#3a3a35;border-radius:2px;flex:none"></span>
+                <span style="width:76px;height:60px;background:#6b6a63;border-radius:2px;flex:none"></span>
+                <span style="flex:1;height:60px;display:flex;align-items:center;justify-content:center;background:#fff;border:1px solid rgba(0,0,0,.20);font-size:14px;font-weight:600;border-radius:2px">Agregar</span>
+              </div>
+              <div style="height:16px"></div>
+            </div>
+            <div style="flex:none;display:flex;gap:8px;padding:12px 18px 20px;background:#fff;border-top:1px solid rgba(0,0,0,.12)">
+              <div style="width:120px;height:56px;display:flex;align-items:center;justify-content:center;background:#fff;border:1px solid rgba(0,0,0,.20);font-size:16px;font-weight:600;border-radius:2px">Atrás</div>
+              <div style="flex:1;height:56px;display:flex;align-items:center;justify-content:center;background:#1c1d1b;color:#fff;font-size:16px;font-weight:600;border-radius:2px">Siguiente</div>
+            </div>
+          </div>
+        </x-import>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:9px">
+        <div style="display:flex;align-items:baseline;gap:8px"><span style="font-family:ui-monospace,Menlo,monospace;font-size:11px;color:#8a8981">O6</span><span style="font-size:13px;font-weight:600;color:#1a1a18">Mi semana</span></div>
+        <x-import component-from-global-scope="AndroidDevice" from="./android-frame.jsx" hint-size="428px,908px">
+          <div style="height:100%;display:flex;flex-direction:column;background:#f6f5f2;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;color:#1a1a18">
+            <div style="flex:none;display:flex;align-items:center;gap:12px;height:52px;padding:0 18px;background:#fff;border-bottom:1px solid rgba(0,0,0,.12)">
+              <span style="font-size:20px;font-weight:700">Mi semana</span>
+              <span style="margin-left:auto;font-family:ui-monospace,Menlo,monospace;font-size:13px;color:#57564f">Sem 34</span>
+            </div>
+            <div style="flex:none;display:flex;align-items:center;gap:14px;padding:11px 18px;background:#f0efeb;border-bottom:1px solid rgba(0,0,0,.10)">
+              <span style="font-family:ui-monospace,Menlo,monospace;font-size:17px;font-weight:600">38 / 44 h</span>
+              <span style="font-size:13px;color:#57564f">86 % de mi capacidad</span>
+            </div>
+            <div style="flex:1;overflow:auto">
+              <div style="display:flex;align-items:center;gap:14px;min-height:64px;padding:12px 18px;background:#fff;border-bottom:1px solid rgba(0,0,0,.06)">
+                <span style="width:52px;flex:none"><span style="display:block;font-family:ui-monospace,Menlo,monospace;font-size:13px;color:#8a8981">lun 17</span><span style="display:block;margin-top:2px;font-family:ui-monospace,Menlo,monospace;font-size:15px;font-weight:600">8 h</span></span>
+                <span style="flex:1;min-width:0;font-size:14.5px;line-height:1.45;color:#3a3a35">OT-2026-0007 · Habilitación eléctrica<br><span style="color:#8a8981;font-size:13px">Puerto Coronel Terminal</span></span>
+              </div>
+              <div style="display:flex;align-items:center;gap:14px;min-height:64px;padding:12px 18px;background:#fff;border-bottom:1px solid rgba(0,0,0,.06);border-left:3px solid #1c1d1b">
+                <span style="width:52px;flex:none"><span style="display:block;font-family:ui-monospace,Menlo,monospace;font-size:13px;color:#1a1a18;font-weight:600">mar 18</span><span style="display:block;margin-top:2px;font-family:ui-monospace,Menlo,monospace;font-size:15px;font-weight:600">10 h</span></span>
+                <span style="flex:1;min-width:0;font-size:14.5px;line-height:1.45;color:#3a3a35">3 asignaciones · hoy<br><span style="color:#8a8981;font-size:13px">2 OT + 1 evaluación</span></span>
+              </div>
+              <div style="display:flex;align-items:center;gap:14px;min-height:64px;padding:12px 18px;background:#fff;border-bottom:1px solid rgba(0,0,0,.06)">
+                <span style="width:52px;flex:none"><span style="display:block;font-family:ui-monospace,Menlo,monospace;font-size:13px;color:#8a8981">mié 19</span><span style="display:block;margin-top:2px;font-family:ui-monospace,Menlo,monospace;font-size:15px;font-weight:600;color:oklch(0.52 0.13 25)">12 h</span></span>
+                <span style="flex:1;min-width:0;font-size:14.5px;line-height:1.45;color:#3a3a35">Sobre mi capacidad de 11 h<br><span style="color:oklch(0.52 0.13 25);font-size:13px">Avisar a la oficina</span></span>
+              </div>
+              <div style="display:flex;align-items:center;gap:14px;min-height:64px;padding:12px 18px;background:#fff;border-bottom:1px solid rgba(0,0,0,.06)">
+                <span style="width:52px;flex:none"><span style="display:block;font-family:ui-monospace,Menlo,monospace;font-size:13px;color:#8a8981">jue 20</span><span style="display:block;margin-top:2px;font-family:ui-monospace,Menlo,monospace;font-size:15px;font-weight:600">8 h</span></span>
+                <span style="flex:1;min-width:0;font-size:14.5px;line-height:1.45;color:#3a3a35">OT-2026-0008 · Soldadura de refuerzo<br><span style="color:#8a8981;font-size:13px">Viña Los Robles</span></span>
+              </div>
+              <div style="display:flex;align-items:center;gap:14px;min-height:64px;padding:12px 18px;background:#fff;border-bottom:1px solid rgba(0,0,0,.06)">
+                <span style="width:52px;flex:none"><span style="display:block;font-family:ui-monospace,Menlo,monospace;font-size:13px;color:#8a8981">vie 21</span><span style="display:block;margin-top:2px;font-family:ui-monospace,Menlo,monospace;font-size:15px;color:#a3a29a">—</span></span>
+                <span style="flex:1;min-width:0;font-size:14.5px;color:#8a8981">Sin asignaciones</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:14px;min-height:64px;padding:12px 18px;background:#f6f5f2;border-bottom:1px solid rgba(0,0,0,.06)">
+                <span style="width:52px;flex:none"><span style="display:block;font-family:ui-monospace,Menlo,monospace;font-size:13px;color:#a3a29a">sáb 22</span><span style="display:block;margin-top:2px;font-family:ui-monospace,Menlo,monospace;font-size:15px;color:#a3a29a">4 h</span></span>
+                <span style="flex:1;min-width:0;font-size:14.5px;color:#8a8981">Turno taller mañana</span>
+              </div>
+              <div style="padding:16px 18px;font-size:13px;line-height:1.55;color:#8a8981">La semana la arma la oficina. Aquí solo se consulta y se avisa.</div>
+            </div>
+          </div>
+        </x-import>
+      </div>
+
+    </div>
+
+    <sc-if value="{{ mostrarNotas }}" hint-placeholder-val="{{ true }}">
+      <div style="max-width:1180px;background:#fff;border:1px solid rgba(0,0,0,.12);border-radius:2px;padding:16px 18px 18px">
+        <div style="font-size:9.5px;letter-spacing:.13em;text-transform:uppercase;color:#75746e;font-weight:700">Notas de implementación · PWA Operativa</div>
+        <div style="margin-top:11px;display:grid;grid-template-columns:150px 1fr;gap:9px 16px;font-size:12.5px;line-height:1.55;color:#3a3a35">
+          <span style="font-family:ui-monospace,Menlo,monospace;color:#57564f">Ya existe</span><span>Subir foto y comentario, iniciar, posponer, registrar interrupción y finalizar viven en <span style="font-family:ui-monospace,Menlo,monospace">otController.supervisorPortal / supervisorAccion</span> y en <span style="font-family:ui-monospace,Menlo,monospace">ReporteTerreno.jsx</span>. O3 y O4 son esas acciones reordenadas, no funciones nuevas.</span>
+          <span style="font-family:ui-monospace,Menlo,monospace;color:#57564f">Nuevo</span><span>O1 (token por persona), O2 (mi día), O5 (informe de evaluación en 4 pasos) y O6 (mi semana). Dependen del modelo de Usuario y de Asignación.</span>
+          <span style="font-family:ui-monospace,Menlo,monospace;color:#57564f">Cola local</span><span>La marca «en cola, sin señal» de O3 y el aviso de O4 son el mínimo contra pérdida de fotos: el reporte se retiene en el dispositivo y se reintenta. Sin esto, una foto tomada sin señal se pierde.</span>
+          <span style="font-family:ui-monospace,Menlo,monospace;color:#57564f">Entorno demo</span><span>Toda llamada lleva el entorno en la URL, no en el header <span style="font-family:ui-monospace,Menlo,monospace">X-Entorno</span> — ver punto 7 de CORRECCIONES.md. La PWA se abre fuera de la SPA.</span>
+          <span style="font-family:ui-monospace,Menlo,monospace;color:#57564f">Sin iconos</span><span>Los glifos <span style="font-family:ui-monospace,Menlo,monospace">× · ▪ ‹</span> son texto monoespaciado, como en el escritorio. No incorporar una librería de iconos.</span>
+        </div>
+      </div>
+    </sc-if>
+  </div>
+
+  <div id="1b" style="display:flex;flex-direction:column;gap:16px">
+    <div style="display:flex;align-items:baseline;gap:11px;flex-wrap:wrap;padding-top:6px;border-top:2px solid #1c1d1b;max-width:1180px">
+      <span style="font-family:ui-monospace,Menlo,monospace;font-size:11px;font-weight:700;color:#fff;background:#1c1d1b;padding:3px 7px;border-radius:2px;margin-top:8px">1b</span>
+      <h2 style="margin:8px 0 0;font-size:17px;font-weight:700;color:#1a1a18">PWA Cliente</h2>
+      <span style="font-size:12.5px;color:#75746e;margin-top:8px">Sin cuenta · N° de solicitud más un dato que solo el cliente tiene</span>
+    </div>
+
+    <div style="display:flex;flex-wrap:wrap;gap:30px 26px">
+
+      <div style="display:flex;flex-direction:column;gap:9px">
+        <div style="display:flex;align-items:baseline;gap:8px"><span style="font-family:ui-monospace,Menlo,monospace;font-size:11px;color:#8a8981">C1</span><span style="font-size:13px;font-weight:600;color:#1a1a18">Consultar sin cuenta</span></div>
+        <x-import component-from-global-scope="AndroidDevice" from="./android-frame.jsx" hint-size="428px,908px">
+          <div style="height:100%;display:flex;flex-direction:column;background:#f6f5f2;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;color:#1a1a18">
+            <div style="flex:none;padding:26px 20px 0">
+              <div style="font-size:11px;font-weight:700;letter-spacing:.13em;text-transform:uppercase;color:#75746e">Maestranza Vergara</div>
+              <div style="margin-top:24px;font-size:20px;font-weight:700;line-height:1.3">Seguimiento de sus trabajos</div>
+              <div style="margin-top:9px;font-size:15px;line-height:1.55;color:#3a3a35">Sin cuenta ni contraseña. Con estos dos datos abrimos <span style="font-weight:600">todos</span> los trabajos de su empresa, no solo uno.</div>
+            </div>
+            <div style="flex:none;padding:24px 20px 0;display:flex;flex-direction:column;gap:16px">
+              <div>
+                <div style="font-size:11px;font-weight:700;letter-spacing:.13em;text-transform:uppercase;color:#75746e">Teléfono registrado</div>
+                <div style="margin-top:7px;height:52px;display:flex;align-items:center;padding:0 14px;background:#fff;border:1px solid #1c1d1b;border-radius:2px;font-family:ui-monospace,Menlo,monospace;font-size:17px">+56 9 7700685</div>
+                <div style="margin-top:6px;font-size:12.5px;color:#8a8981">El que dejó al pedir el servicio. Identifica a su empresa.</div>
+              </div>
+              <div>
+                <div style="font-size:11px;font-weight:700;letter-spacing:.13em;text-transform:uppercase;color:#75746e">N° de cualquiera de sus solicitudes</div>
+                <div style="margin-top:7px;height:52px;display:flex;align-items:center;padding:0 14px;background:#fff;border:1px solid rgba(0,0,0,.20);border-radius:2px;font-family:ui-monospace,Menlo,monospace;font-size:17px;color:#a3a29a">SOL-2026-____</div>
+                <div style="margin-top:6px;font-size:12.5px;color:#8a8981">Cualquiera sirve: está en el correo o el WhatsApp que le enviamos. Confirma que el teléfono es suyo.</div>
+              </div>
+            </div>
+            <div style="flex:none;margin:16px 20px 0;padding:12px 15px;background:#f0efeb;border-left:2px solid oklch(0.48 0.10 250)">
+              <div style="font-size:13px;line-height:1.55;color:#3a3a35">Si llegó por el link del WhatsApp o del correo, ya está identificado: entra directo al listado.</div>
+            </div>
+            <div style="margin-top:auto;flex:none;padding:16px 20px 22px;background:#fff;border-top:1px solid rgba(0,0,0,.12)">
+              <div style="height:56px;display:flex;align-items:center;justify-content:center;background:#1c1d1b;color:#fff;font-size:16px;font-weight:600;border-radius:2px">Ver mis trabajos</div>
+              <div style="margin-top:12px;height:48px;display:flex;align-items:center;justify-content:center;background:#fff;border:1px solid rgba(0,0,0,.20);font-size:15px;font-weight:600;border-radius:2px">Pedir un servicio nuevo</div>
+            </div>
+          </div>
+        </x-import>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:9px">
+        <div style="display:flex;align-items:baseline;gap:8px"><span style="font-family:ui-monospace,Menlo,monospace;font-size:11px;color:#8a8981">C2</span><span style="font-size:13px;font-weight:600;color:#1a1a18">Mis solicitudes — pantalla de entrada</span></div>
+        <x-import component-from-global-scope="AndroidDevice" from="./android-frame.jsx" hint-size="428px,908px">
+          <div style="height:100%;display:flex;flex-direction:column;background:#f6f5f2;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;color:#1a1a18">
+            <div style="flex:none;padding:14px 18px 12px;background:#fff;border-bottom:1px solid rgba(0,0,0,.12)">
+              <div style="display:flex;align-items:baseline;gap:10px">
+                <span style="font-size:20px;font-weight:700">Mis solicitudes</span>
+                <span style="margin-left:auto;font-size:13px;font-weight:600;color:oklch(0.48 0.10 250)">Salir</span>
+              </div>
+              <div style="margin-top:4px;font-size:13.5px;color:#57564f">Agrícola Las Vertientes · Soledad Aravena</div>
+            </div>
+            <div style="flex:none;display:flex;flex-wrap:nowrap;gap:7px;padding:10px 18px;background:#f0efeb;border-bottom:1px solid rgba(0,0,0,.10);overflow-x:auto">
+              <span style="height:38px;display:flex;align-items:center;padding:0 13px;background:#1c1d1b;color:#fff;font-size:14px;font-weight:600;border-radius:2px;white-space:nowrap;flex:none">Todas 5</span>
+              <span style="height:38px;display:flex;align-items:center;padding:0 13px;background:#fff;border:1px solid rgba(0,0,0,.20);font-size:14px;color:#3a3a35;border-radius:2px;white-space:nowrap;flex:none">En curso 2</span>
+              <span style="height:38px;display:flex;align-items:center;padding:0 13px;background:#fff;border:1px solid rgba(0,0,0,.20);font-size:14px;color:#3a3a35;border-radius:2px;white-space:nowrap;flex:none">Por pagar 1</span>
+              <span style="height:38px;display:flex;align-items:center;padding:0 13px;background:#fff;border:1px solid rgba(0,0,0,.20);font-size:14px;color:#3a3a35;border-radius:2px;white-space:nowrap;flex:none">Cerradas 2</span>
+            </div>
+            <div style="flex:1;overflow:auto">
+              <div style="min-height:96px;padding:14px 18px;background:#fff;border-bottom:1px solid rgba(0,0,0,.06);border-left:3px solid oklch(0.55 0.11 65)">
+                <div style="display:flex;align-items:baseline;gap:9px">
+                  <span style="font-family:ui-monospace,Menlo,monospace;font-size:13px;color:#57564f">SOL-2026-0014</span>
+                  <span style="margin-left:auto;font-family:ui-monospace,Menlo,monospace;font-size:12.5px;color:#8a8981">18-08</span>
+                </div>
+                <div style="margin-top:6px;font-size:15.5px;font-weight:600;line-height:1.35">Inspección de tuberías y válvulas de proceso</div>
+                <div style="margin-top:7px;display:flex;align-items:baseline;gap:10px">
+                  <span style="font-size:14px;font-weight:600;color:oklch(0.55 0.11 65)">Recibida</span>
+                  <span style="font-size:13px;color:#8a8981">Coordinamos la visita de evaluación</span>
+                </div>
+              </div>
+              <div style="min-height:96px;padding:14px 18px;background:#fff;border-bottom:1px solid rgba(0,0,0,.06);border-left:3px solid oklch(0.48 0.10 250)">
+                <div style="display:flex;align-items:baseline;gap:9px">
+                  <span style="font-family:ui-monospace,Menlo,monospace;font-size:13px;color:#57564f">OT-2026-0006</span>
+                  <span style="margin-left:auto;font-family:ui-monospace,Menlo,monospace;font-size:12.5px;color:#8a8981">14-08</span>
+                </div>
+                <div style="margin-top:6px;font-size:15.5px;font-weight:600;line-height:1.35">Fuga hidráulica en elevador de carga</div>
+                <div style="margin-top:7px;display:flex;align-items:baseline;gap:10px">
+                  <span style="font-size:14px;font-weight:600;color:oklch(0.48 0.10 250)">Programada</span>
+                  <span style="font-size:13px;color:#8a8981">Llegamos el 19-08</span>
+                </div>
+                <div style="margin-top:8px;height:3px;background:#e4e2dc"><span style="display:block;height:3px;width:50%;background:oklch(0.48 0.10 250)"></span></div>
+              </div>
+              <div style="min-height:96px;padding:14px 18px;background:#fff;border-bottom:1px solid rgba(0,0,0,.06);border-left:3px solid oklch(0.52 0.13 25)">
+                <div style="display:flex;align-items:baseline;gap:9px">
+                  <span style="font-family:ui-monospace,Menlo,monospace;font-size:13px;color:#57564f">OT-2026-0010</span>
+                  <span style="margin-left:auto;font-family:ui-monospace,Menlo,monospace;font-size:12.5px;color:#8a8981">02-08</span>
+                </div>
+                <div style="margin-top:6px;font-size:15.5px;font-weight:600;line-height:1.35">Cambio de rodamientos en cinta transportadora</div>
+                <div style="margin-top:7px;display:flex;align-items:baseline;gap:10px">
+                  <span style="font-size:14px;font-weight:600;color:#1a1a18">Informe entregado</span>
+                  <span style="font-size:13px;color:oklch(0.52 0.13 25)">Saldo $ 67.800</span>
+                </div>
+              </div>
+              <div style="min-height:96px;padding:14px 18px;background:#fff;border-bottom:1px solid rgba(0,0,0,.06);border-left:3px solid oklch(0.48 0.10 155)">
+                <div style="display:flex;align-items:baseline;gap:9px">
+                  <span style="font-family:ui-monospace,Menlo,monospace;font-size:13px;color:#57564f">OT-2026-0002</span>
+                  <span style="margin-left:auto;font-family:ui-monospace,Menlo,monospace;font-size:12.5px;color:#8a8981">10-07</span>
+                </div>
+                <div style="margin-top:6px;font-size:15.5px;font-weight:600;line-height:1.35">Instalación de tablero eléctrico</div>
+                <div style="margin-top:7px;display:flex;align-items:baseline;gap:10px">
+                  <span style="font-size:14px;font-weight:600;color:oklch(0.48 0.10 155)">Pagada</span>
+                  <span style="font-size:13px;color:#8a8981">$ 113.000 · 20-07</span>
+                </div>
+              </div>
+              <div style="min-height:96px;padding:14px 18px;background:#fff;border-bottom:1px solid rgba(0,0,0,.06);border-left:3px solid #a3a29a">
+                <div style="display:flex;align-items:baseline;gap:9px">
+                  <span style="font-family:ui-monospace,Menlo,monospace;font-size:13px;color:#57564f">SOL-2026-0005</span>
+                  <span style="margin-left:auto;font-family:ui-monospace,Menlo,monospace;font-size:12.5px;color:#8a8981">28-06</span>
+                </div>
+                <div style="margin-top:6px;font-size:15.5px;font-weight:600;line-height:1.35">Certificación anual de grúa horquilla</div>
+                <div style="margin-top:7px;display:flex;align-items:baseline;gap:10px">
+                  <span style="font-size:14px;font-weight:600;color:#6b6a63">No continuó</span>
+                  <span style="font-size:13px;color:#8a8981">Presupuesto no aceptado</span>
+                </div>
+              </div>
+              <div style="padding:16px 18px;font-size:13px;line-height:1.55;color:#8a8981">Toque una solicitud para ver su recorrido, las fotos del avance y la cuenta.</div>
+            </div>
+            <div style="flex:none;padding:12px 18px 20px;background:#fff;border-top:1px solid rgba(0,0,0,.12)">
+              <div style="height:56px;display:flex;align-items:center;justify-content:center;background:#1c1d1b;color:#fff;font-size:16px;font-weight:600;border-radius:2px">Pedir un servicio nuevo</div>
+            </div>
+          </div>
+        </x-import>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:9px">
+        <div style="display:flex;align-items:baseline;gap:8px"><span style="font-family:ui-monospace,Menlo,monospace;font-size:11px;color:#8a8981">C3</span><span style="font-size:13px;font-weight:600;color:#1a1a18">Estado del trabajo</span></div>
+        <x-import component-from-global-scope="AndroidDevice" from="./android-frame.jsx" hint-size="428px,908px">
+          <div style="height:100%;display:flex;flex-direction:column;background:#f6f5f2;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;color:#1a1a18">
+            <div style="flex:none;display:flex;align-items:center;gap:12px;height:52px;padding:0 14px 0 8px;background:#fff;border-bottom:1px solid rgba(0,0,0,.12)">
+              <span style="width:44px;height:44px;display:flex;align-items:center;justify-content:center;font-family:ui-monospace,Menlo,monospace;font-size:20px;color:#57564f">‹</span>
+              <span style="font-family:ui-monospace,Menlo,monospace;font-size:15px;font-weight:600">OT-2026-0006</span>
+            </div>
+            <div style="flex:1;overflow:auto">
+              <div style="padding:16px 18px;background:#fff;border-bottom:1px solid rgba(0,0,0,.10)">
+                <div style="font-size:17px;font-weight:600;line-height:1.35">Fuga hidráulica en elevador de carga</div>
+                <div style="margin-top:6px;font-size:13.5px;color:#57564f">Solicitada el 14-08-2026 · Agrícola Las Vertientes</div>
+              </div>
+              <div style="padding:16px 18px;background:#f0efeb;border-bottom:1px solid rgba(0,0,0,.10)">
+                <div style="font-size:11px;font-weight:700;letter-spacing:.13em;text-transform:uppercase;color:#75746e">Estado hoy</div>
+                <div style="margin-top:7px;font-size:20px;font-weight:700;color:oklch(0.48 0.10 250)">Programada</div>
+                <div style="margin-top:6px;font-size:14.5px;line-height:1.5;color:#3a3a35">Nuestro equipo llega el <span style="font-family:ui-monospace,Menlo,monospace;font-weight:600">19-08-2026</span>, en la mañana.</div>
+              </div>
+              <div style="padding:16px 18px 6px;font-size:11px;font-weight:700;letter-spacing:.13em;text-transform:uppercase;color:#75746e">Recorrido</div>
+              <div style="background:#fff;border-top:1px solid rgba(0,0,0,.10);border-bottom:1px solid rgba(0,0,0,.10)">
+                <div style="display:flex;align-items:center;gap:14px;min-height:48px;padding:0 18px;border-bottom:1px solid rgba(0,0,0,.06)"><span style="font-family:ui-monospace,Menlo,monospace;font-size:14px;color:#6b6a63;width:14px">×</span><span style="font-size:15px;color:#6b6a63">Solicitud recibida</span><span style="margin-left:auto;font-family:ui-monospace,Menlo,monospace;font-size:13px;color:#8a8981">14-08</span></div>
+                <div style="display:flex;align-items:center;gap:14px;min-height:48px;padding:0 18px;border-bottom:1px solid rgba(0,0,0,.06)"><span style="font-family:ui-monospace,Menlo,monospace;font-size:14px;color:#6b6a63;width:14px">×</span><span style="font-size:15px;color:#6b6a63">Visita de evaluación</span><span style="margin-left:auto;font-family:ui-monospace,Menlo,monospace;font-size:13px;color:#8a8981">15-08</span></div>
+                <div style="display:flex;align-items:center;gap:14px;min-height:48px;padding:0 18px;border-bottom:1px solid rgba(0,0,0,.06)"><span style="font-family:ui-monospace,Menlo,monospace;font-size:14px;color:#6b6a63;width:14px">×</span><span style="font-size:15px;color:#6b6a63">Presupuesto aceptado</span><span style="margin-left:auto;font-family:ui-monospace,Menlo,monospace;font-size:13px;color:#8a8981">16-08</span></div>
+                <div style="display:flex;align-items:center;gap:14px;min-height:48px;padding:0 18px;border-bottom:1px solid rgba(0,0,0,.06);background:#f6f5f2"><span style="font-family:ui-monospace,Menlo,monospace;font-size:14px;color:oklch(0.48 0.10 250);width:14px">▪</span><span style="font-size:15px;font-weight:700">Trabajo programado</span><span style="margin-left:auto;font-family:ui-monospace,Menlo,monospace;font-size:13px;color:#57564f">19-08</span></div>
+                <div style="display:flex;align-items:center;gap:14px;min-height:48px;padding:0 18px;border-bottom:1px solid rgba(0,0,0,.06)"><span style="font-family:ui-monospace,Menlo,monospace;font-size:14px;color:#c9c7c0;width:14px">·</span><span style="font-size:15px;color:#a3a29a">Trabajo en ejecución</span></div>
+                <div style="display:flex;align-items:center;gap:14px;min-height:48px;padding:0 18px;border-bottom:1px solid rgba(0,0,0,.06)"><span style="font-family:ui-monospace,Menlo,monospace;font-size:14px;color:#c9c7c0;width:14px">·</span><span style="font-size:15px;color:#a3a29a">Trabajo terminado</span></div>
+                <div style="display:flex;align-items:center;gap:14px;min-height:48px;padding:0 18px;border-bottom:1px solid rgba(0,0,0,.06)"><span style="font-family:ui-monospace,Menlo,monospace;font-size:14px;color:#c9c7c0;width:14px">·</span><span style="font-size:15px;color:#a3a29a">Informe entregado</span></div>
+                <div style="display:flex;align-items:center;gap:14px;min-height:48px;padding:0 18px"><span style="font-family:ui-monospace,Menlo,monospace;font-size:14px;color:#c9c7c0;width:14px">·</span><span style="font-size:15px;color:#a3a29a">Pagado</span></div>
+              </div>
+              <div style="padding:16px 18px 6px;font-size:11px;font-weight:700;letter-spacing:.13em;text-transform:uppercase;color:#75746e">Presupuesto</div>
+              <div style="padding:14px 18px;background:#fff;border-top:1px solid rgba(0,0,0,.10);border-bottom:1px solid rgba(0,0,0,.10);display:flex;align-items:center">
+                <span style="font-size:15px">Total aceptado</span>
+                <span style="margin-left:auto;font-family:ui-monospace,Menlo,monospace;font-size:17px;font-weight:600">$ 113.000</span>
+              </div>
+              <div style="height:16px"></div>
+            </div>
+            <div style="flex:none;padding:12px 18px 20px;background:#fff;border-top:1px solid rgba(0,0,0,.12)">
+              <div style="height:56px;display:flex;align-items:center;justify-content:center;background:#1c1d1b;color:#fff;font-size:16px;font-weight:600;border-radius:2px">Escribir a la oficina</div>
+            </div>
+          </div>
+        </x-import>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:9px">
+        <div style="display:flex;align-items:baseline;gap:8px"><span style="font-family:ui-monospace,Menlo,monospace;font-size:11px;color:#8a8981">C4</span><span style="font-size:13px;font-weight:600;color:#1a1a18">Avance con fotos</span></div>
+        <x-import component-from-global-scope="AndroidDevice" from="./android-frame.jsx" hint-size="428px,908px">
+          <div style="height:100%;display:flex;flex-direction:column;background:#f6f5f2;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;color:#1a1a18">
+            <div style="flex:none;display:flex;align-items:center;gap:12px;height:52px;padding:0 14px 0 8px;background:#fff;border-bottom:1px solid rgba(0,0,0,.12)">
+              <span style="width:44px;height:44px;display:flex;align-items:center;justify-content:center;font-family:ui-monospace,Menlo,monospace;font-size:20px;color:#57564f">‹</span>
+              <span style="font-size:17px;font-weight:700">Avance</span>
+              <span style="margin-left:auto;font-family:ui-monospace,Menlo,monospace;font-size:13px;color:#57564f">OT-2026-0007</span>
+            </div>
+            <div style="flex:1;overflow:auto">
+              <div style="padding:14px 18px;background:#f0efeb;border-bottom:1px solid rgba(0,0,0,.10)">
+                <div style="font-size:15px;font-weight:600">En ejecución · 2 de 3 tareas listas</div>
+                <div style="margin-top:8px;height:4px;background:#e4e2dc"><span style="display:block;height:4px;width:66%;background:oklch(0.48 0.10 250)"></span></div>
+              </div>
+              <div style="background:#fff;border-bottom:1px solid rgba(0,0,0,.10)">
+                <div style="padding:15px 18px;border-bottom:1px solid rgba(0,0,0,.06)">
+                  <div style="display:flex;align-items:baseline;gap:10px">
+                    <span style="font-family:ui-monospace,Menlo,monospace;font-size:13px;color:#57564f">Hoy 11:40</span>
+                    <span style="font-size:13px;color:#8a8981">Camila Reyes</span>
+                  </div>
+                  <div style="margin-top:8px;height:190px;background:#57564f;border-radius:2px"></div>
+                  <div style="margin-top:9px;font-size:14.5px;line-height:1.5;color:#3a3a35">Canalización montada, falta conexionado de tablero.</div>
+                </div>
+                <div style="padding:15px 18px">
+                  <div style="display:flex;align-items:baseline;gap:10px">
+                    <span style="font-family:ui-monospace,Menlo,monospace;font-size:13px;color:#57564f">Ayer 16:20</span>
+                    <span style="font-size:13px;color:#8a8981">Diego Fuentes</span>
+                  </div>
+                  <div style="margin-top:8px;height:190px;background:#8a8981;border-radius:2px"></div>
+                  <div style="margin-top:9px;font-size:14.5px;line-height:1.5;color:#3a3a35">Retiro de canalización antigua terminado. Se deja sitio despejado.</div>
+                </div>
+              </div>
+              <div style="padding:16px 18px;font-size:13px;line-height:1.55;color:#8a8981">Las fotos las sube el equipo en terreno. Se publican al momento, sin edición.</div>
+            </div>
+          </div>
+        </x-import>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:9px">
+        <div style="display:flex;align-items:baseline;gap:8px"><span style="font-family:ui-monospace,Menlo,monospace;font-size:11px;color:#8a8981">C5</span><span style="font-size:13px;font-weight:600;color:#1a1a18">Cuenta y pago</span></div>
+        <x-import component-from-global-scope="AndroidDevice" from="./android-frame.jsx" hint-size="428px,908px">
+          <div style="height:100%;display:flex;flex-direction:column;background:#f6f5f2;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;color:#1a1a18">
+            <div style="flex:none;display:flex;align-items:center;gap:12px;height:52px;padding:0 14px 0 8px;background:#fff;border-bottom:1px solid rgba(0,0,0,.12)">
+              <span style="width:44px;height:44px;display:flex;align-items:center;justify-content:center;font-family:ui-monospace,Menlo,monospace;font-size:20px;color:#57564f">‹</span>
+              <span style="font-size:17px;font-weight:700">Cuenta</span>
+              <span style="margin-left:auto;font-family:ui-monospace,Menlo,monospace;font-size:13px;color:#57564f">OT-2026-0010</span>
+            </div>
+            <div style="flex:1;overflow:auto">
+              <div style="padding:16px 18px;background:#f0efeb;border-bottom:1px solid rgba(0,0,0,.10)">
+                <div style="font-size:11px;font-weight:700;letter-spacing:.13em;text-transform:uppercase;color:#75746e">Saldo pendiente</div>
+                <div style="margin-top:6px;font-family:ui-monospace,Menlo,monospace;font-size:26px;font-weight:600">$ 67.800</div>
+                <div style="margin-top:6px;font-size:14px;color:#3a3a35">Anticipo de $ 45.200 recibido el 12-08-2026.</div>
+              </div>
+              <div style="padding:16px 18px 6px;font-size:11px;font-weight:700;letter-spacing:.13em;text-transform:uppercase;color:#75746e">Detalle</div>
+              <div style="background:#fff;border-top:1px solid rgba(0,0,0,.10);border-bottom:1px solid rgba(0,0,0,.10)">
+                <div style="display:flex;align-items:center;min-height:52px;padding:10px 18px;border-bottom:1px solid rgba(0,0,0,.06)"><span style="flex:1;min-width:0;font-size:15px">Mano de obra<br><span style="font-size:13px;color:#8a8981">6 h</span></span><span style="font-family:ui-monospace,Menlo,monospace;font-size:15px">$ 63.000</span></div>
+                <div style="display:flex;align-items:center;min-height:52px;padding:10px 18px;border-bottom:1px solid rgba(0,0,0,.06)"><span style="flex:1;min-width:0;font-size:15px">Materiales<br><span style="font-size:13px;color:#8a8981">2 ítems</span></span><span style="font-family:ui-monospace,Menlo,monospace;font-size:15px">$ 25.000</span></div>
+                <div style="display:flex;align-items:center;min-height:52px;padding:10px 18px;border-bottom:1px solid rgba(0,0,0,.06)"><span style="flex:1;min-width:0;font-size:15px">Traslado<br><span style="font-size:13px;color:#8a8981">Camioneta 01</span></span><span style="font-family:ui-monospace,Menlo,monospace;font-size:15px">$ 25.000</span></div>
+                <div style="display:flex;align-items:center;min-height:56px;padding:10px 18px;background:#f6f5f2"><span style="flex:1;font-size:15px;font-weight:700">Total</span><span style="font-family:ui-monospace,Menlo,monospace;font-size:17px;font-weight:600">$ 113.000</span></div>
+              </div>
+              <div style="padding:16px 18px 6px;font-size:11px;font-weight:700;letter-spacing:.13em;text-transform:uppercase;color:#75746e">Documentos</div>
+              <div style="background:#fff;border-top:1px solid rgba(0,0,0,.10);border-bottom:1px solid rgba(0,0,0,.10)">
+                <div style="display:flex;align-items:center;gap:12px;min-height:56px;padding:0 18px;border-bottom:1px solid rgba(0,0,0,.06)"><span style="flex:1;font-size:15px">Presupuesto aceptado</span><span style="font-size:14px;font-weight:600;color:oklch(0.48 0.10 250)">Ver PDF</span></div>
+                <div style="display:flex;align-items:center;gap:12px;min-height:56px;padding:0 18px"><span style="flex:1;font-size:15px">Informe de trabajo</span><span style="font-size:14px;font-weight:600;color:oklch(0.48 0.10 250)">Ver PDF</span></div>
+              </div>
+              <div style="height:16px"></div>
+            </div>
+            <div style="flex:none;padding:12px 18px 20px;background:#fff;border-top:1px solid rgba(0,0,0,.12)">
+              <div style="height:56px;display:flex;align-items:center;justify-content:center;background:#1c1d1b;color:#fff;font-size:16px;font-weight:600;border-radius:2px">Datos para transferir</div>
+              <div style="margin-top:10px;font-size:12.5px;line-height:1.5;color:#8a8981;text-align:center">No se cobra en línea. El pago se registra en la oficina al recibir la transferencia.</div>
+            </div>
+          </div>
+        </x-import>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:9px">
+        <div style="display:flex;align-items:baseline;gap:8px"><span style="font-family:ui-monospace,Menlo,monospace;font-size:11px;color:#8a8981">C6</span><span style="font-size:13px;font-weight:600;color:#1a1a18">Pedir un servicio</span></div>
+        <x-import component-from-global-scope="AndroidDevice" from="./android-frame.jsx" hint-size="428px,908px">
+          <div style="height:100%;display:flex;flex-direction:column;background:#f6f5f2;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;color:#1a1a18">
+            <div style="flex:none;display:flex;align-items:center;gap:12px;height:52px;padding:0 14px 0 8px;background:#fff;border-bottom:1px solid rgba(0,0,0,.12)">
+              <span style="width:44px;height:44px;display:flex;align-items:center;justify-content:center;font-family:ui-monospace,Menlo,monospace;font-size:20px;color:#57564f">‹</span>
+              <span style="font-size:17px;font-weight:700">Nuevo servicio</span>
+              <span style="margin-left:auto;font-family:ui-monospace,Menlo,monospace;font-size:13px;color:#57564f">1 / 2</span>
+            </div>
+            <div style="flex:1;overflow:auto">
+              <div style="padding:16px 18px;font-size:14.5px;line-height:1.55;color:#3a3a35;background:#fff;border-bottom:1px solid rgba(0,0,0,.10)">Cuéntenos qué pasó. Con esto agendamos una visita de evaluación; el presupuesto llega después.</div>
+              <div style="padding:18px 18px 4px;font-size:11px;font-weight:700;letter-spacing:.13em;text-transform:uppercase;color:#75746e">Qué necesita</div>
+              <div style="padding:0 18px">
+                <div style="min-height:120px;padding:13px 14px;background:#fff;border:1px solid #1c1d1b;border-radius:2px;font-size:15px;line-height:1.5;color:#a3a29a">Ej: la bomba de la línea 2 está botando aceite</div>
+              </div>
+              <div style="padding:18px 18px 4px;font-size:11px;font-weight:700;letter-spacing:.13em;text-transform:uppercase;color:#75746e">Urgencia</div>
+              <div style="padding:0 18px;display:flex;flex-direction:column;gap:8px">
+                <div style="min-height:52px;display:flex;align-items:center;gap:12px;padding:0 14px;background:#fff;border:1px solid rgba(0,0,0,.20);border-radius:2px"><span style="font-family:ui-monospace,Menlo,monospace;font-size:14px;color:#a3a29a">·</span><span style="font-size:15px;color:#3a3a35">Puede esperar</span></div>
+                <div style="min-height:52px;display:flex;align-items:center;gap:12px;padding:0 14px;background:#fff;border:1px solid #1c1d1b;border-radius:2px"><span style="font-family:ui-monospace,Menlo,monospace;font-size:14px">▪</span><span style="font-size:15px;font-weight:600">Esta semana</span></div>
+                <div style="min-height:52px;display:flex;align-items:center;gap:12px;padding:0 14px;background:#fff;border:1px solid rgba(0,0,0,.20);border-radius:2px"><span style="font-family:ui-monospace,Menlo,monospace;font-size:14px;color:#a3a29a">·</span><span style="font-size:15px;color:#3a3a35">Detiene la producción</span></div>
+              </div>
+              <div style="padding:18px 18px 4px;font-size:11px;font-weight:700;letter-spacing:.13em;text-transform:uppercase;color:#75746e">Foto (opcional)</div>
+              <div style="padding:0 18px">
+                <div style="height:96px;display:flex;align-items:center;justify-content:center;background:#fff;border:1px solid rgba(0,0,0,.20);border-radius:2px;font-size:15px;font-weight:600">Agregar foto</div>
+              </div>
+              <div style="height:16px"></div>
+            </div>
+            <div style="flex:none;padding:12px 18px 20px;background:#fff;border-top:1px solid rgba(0,0,0,.12)">
+              <div style="height:56px;display:flex;align-items:center;justify-content:center;background:#1c1d1b;color:#fff;font-size:16px;font-weight:600;border-radius:2px">Siguiente: sus datos</div>
+            </div>
+          </div>
+        </x-import>
+      </div>
+
+    </div>
+
+    <sc-if value="{{ mostrarNotas }}" hint-placeholder-val="{{ true }}">
+      <div style="max-width:1180px;background:#fff;border:1px solid rgba(0,0,0,.12);border-radius:2px;padding:16px 18px 18px">
+        <div style="font-size:9.5px;letter-spacing:.13em;text-transform:uppercase;color:#75746e;font-weight:700">Notas de implementación · PWA Cliente</div>
+        <div style="margin-top:11px;display:grid;grid-template-columns:150px 1fr;gap:9px 16px;font-size:12.5px;line-height:1.55;color:#3a3a35">
+          <span style="font-family:ui-monospace,Menlo,monospace;color:#57564f">Punto de partida</span><span><span style="font-family:ui-monospace,Menlo,monospace">PortalClienteScreen.jsx</span> y <span style="font-family:ui-monospace,Menlo,monospace">portalController</span>. La refactorización incluye alinear la pantalla a estos tokens: no es envolverla en un manifest.</span>
+          <span style="font-family:ui-monospace,Menlo,monospace;color:#57564f">Acceso acoplado</span><span>El identificador es el <span style="font-weight:600">teléfono</span>, no el número de solicitud: eso es lo que permite pasar de C1 a C2 y listar todo. El número de solicitud queda como segundo factor — cualquiera de las suyas sirve, y solo prueba que ese teléfono es suyo. Del par (teléfono, solicitud) el backend deriva la empresa y devuelve todas sus solicitudes y OT.</span>
+          <span style="font-family:ui-monospace,Menlo,monospace;color:#57564f">Privacidad</span><span>Sin el segundo factor, un teléfono suelto abriría la cartera completa de un cliente. El mensaje de error es uno solo para teléfono inexistente, solicitud inexistente y par que no coincide — nunca decir cuál de los dos falló. Sesión corta en el dispositivo (por ejemplo 30 días) y revocable desde la oficina.</span>
+          <span style="font-family:ui-monospace,Menlo,monospace;color:#57564f">Entrada por link</span><span>El link de WhatsApp o correo lleva un token firmado por contacto y aterriza directo en C2, saltándose C1. Es el camino esperado; C1 es el respaldo para quien perdió el mensaje.</span>
+          <span style="font-family:ui-monospace,Menlo,monospace;color:#57564f">Ocho etapas</span><span>El recorrido de C3 es el mismo <span style="font-family:ui-monospace,Menlo,monospace">ETAPAS_VISUAL</span> del escritorio, en vertical y con nombres para cliente («Presupuesto aceptado», no «Aprobada»). Rechazada se muestra en su lugar, en rojo.</span>
+          <span style="font-family:ui-monospace,Menlo,monospace;color:#57564f">Sin pago en línea</span><span>C5 muestra el saldo y los datos de transferencia. No hay pasarela: el pago lo registra la oficina, igual que hoy.</span>
+          <span style="font-family:ui-monospace,Menlo,monospace;color:#57564f">Fotos reales</span><span>Los rectángulos grises son marcadores. Las fotos vienen de <span style="font-family:ui-monospace,Menlo,monospace">ot.reportes[].foto</span>; hay que definir compresión y ancho máximo antes de publicarlas al cliente.</span>
+        </div>
+      </div>
+    </sc-if>
+  </div>
+
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;mostrarSpec&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Entrega&quot;},&quot;mostrarNotas&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Entrega&quot;}}">
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      mostrarSpec: this.props.mostrarSpec ?? true,
+      mostrarNotas: this.props.mostrarNotas ?? true,
+    };
+  }
+}
+</script>
+</body>
+</html>

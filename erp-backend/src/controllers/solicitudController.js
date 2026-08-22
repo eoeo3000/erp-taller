@@ -25,6 +25,20 @@ exports.obtenerSolicitudes = async (req, res) => {
     }
 };
 
+// GET /api/solicitudes/:id — no existía: la SPA siempre trabajó sobre el listado completo
+// de /api/data, pero la PWA Operativa (S4/S5, modo supervisor) necesita traer una sola
+// solicitud sin cargar todo el catálogo.
+exports.obtenerSolicitud = async (req, res) => {
+    const Solicitud = getSolicitud(req.db);
+    try {
+        const solicitud = await Solicitud.findById(req.params.id);
+        if (!solicitud) return res.status(404).json({ error: 'Solicitud no encontrada' });
+        res.json(solicitud);
+    } catch (error) {
+        res.status(500).json({ error: 'Error al obtener la solicitud' });
+    }
+};
+
 exports.crearSolicitud = async (req, res) => {
     const Solicitud = getSolicitud(req.db);
     try {

@@ -300,6 +300,116 @@ Cada KPI es clickeable para filtrar la vista tabular inferior. Aprovechar mejor 
 
 **Dependencias**: Gap 3 (KPI de OCs pendientes de pago necesita que existan las OCs), Gap 6 (comparte la misma pantalla).
 
+### Gap 8 — Estrategia de conexión móvil
+
+**Descripción**: hoy el trabajo se comparte con el supervisor mediante un token aleatorio guardado en `OT.tokenEjecucion` (`crypto.randomBytes(20)`, 40 caracteres hex), enviado por correo vía Brevo (`otController.enviarAlSupervisor`), que abre una página HTML servida por el propio backend (`otController.supervisorPortal`). El control de acceso es la comparación `ot.tokenEjecucion !== token` (`otController.supervisorAccion`, `otController.iniciarEjecucion`). No hay usuario, sesión ni rol — es la misma ausencia de modelo de permisos que ya señala la Contradicción 1 de la Parte VII.
+
+**Por qué no escala**: un token por OT significa un link nuevo por cada trabajo en la bandeja del supervisor, sin acumularse en ningún lugar. No existe ninguna vista que responda "qué tengo que hacer hoy": el supervisor solo ve la OT que ese link puntual le abrió, nunca el conjunto de su trabajo. Nada persiste entre trabajos — cerrado un link, no queda rastro navegable de los anteriores salvo revisando el correo original. Y no hay forma de revocar acceso a una persona: solo se puede invalidar el token de una OT puntual, nunca "esta persona ya no debe ver nada".
+
+**Solución propuesta**: dos PWA instalables — **Cliente** (ampliación de `PortalClienteScreen`, que ya funciona sin login por búsqueda de número de solicitud/OT) y **Operativa** (nueva, para supervisores y ejecutores, con token persistente por persona y una vista de "mi día").
+
+**Requisitos que arrastra**:
+- Concepto de Usuario, con token persistente por persona (no uno por OT).
+- Concepto de Asignación, como colección propia o como extensión de `OT.tareas` — decisión pendiente, ver detalle.
+- Ampliación de la programación para mostrar asignaciones por supervisor.
+- Notificación por correo al asignar (reutiliza la infraestructura Brevo existente).
+
+**Dependencia explícita**: el Gap 8 no se puede implementar antes de que exista el modelo de Usuario que la Contradicción 1 (Parte VII) ya identifica como faltante. Si el roadmap general ubica la estrategia móvil en Fase 3 o 4, el modelo de Usuario debe quedar resuelto en la fase anterior — no dentro de la fase móvil misma.
+
+Detalle completo en [estrategia-movil.md](estrategia-movil.md).
+
+### Nota — numeración de gaps 9 a 12
+
+Los Gaps 9 a 12 (Carpeta de OT / Documentos de terreno, Metodología por tarea, Tablero de supervisores, Cotización ampliada) corresponden al conjunto de mejoras construido directamente en código ("mejoras v3"), y sus números ya están en uso en los prototipos de diseño (`docs/rediseno/design_handoff_mejoras_v3/`), pero nunca se escribieron formalmente en este documento como entradas de gap. No se completan retroactivamente en esta actualización — queda fuera de alcance. La numeración de los gaps nuevos que siguen (13 en adelante) continúa después del 12 para no chocar con esas referencias ya existentes en los prototipos.
+
+### Verificación previa: asignación de trabajos al personal (no se crea gap — ya implementado)
+
+Antes de escribir los gaps nuevos de abajo, se verificó si existe forma de asignar ejecutores a tareas concretas de una OT, más allá de la asignación de supervisor (ya resuelta en Parte V/Antecedentes).
+
+**Resultado de la verificación**: **ya está implementado por completo**, modelo y pantalla. `OT.tareas[].operarioId`/`operarioNombre` (arrays, soportan más de un asignado por tarea) tienen su editor funcional en `TratamientoScreen.jsx`, pestaña Tareas (líneas ~1318-1339): selector que agrega un operario a la tarea, tecla Retroceso para quitar el último agregado, multi-asignación visible como lista de nombres. La misma información se usa después para calcular horas-hombre, armar el PDF de cotización, y alimentar `GanttScreen` y la carga de capacidad.
+
+**No se crea un gap para esto** — se documenta aquí como referencia, para que no se vuelva a plantear como pendiente.
+
+---
+
+## Parte IV.A — Gaps nuevos (revisión de producto, agosto 2026)
+
+### Gap 13 — Dependencias entre tareas (precedencia)
+
+**Descripción**: hoy una tarea de OT no tiene forma de decir "no puedo empezar antes que esta otra". `OT.tareas[]` no tiene ningún campo de precedencia — se verificó el schema completo en `erp-backend/src/models/OT.js` y no existe (ni `dependeDe`, ni `predecesora`, ni equivalente).
+
+**Consecuencia directa**: al mover la fecha de inicio de una OT, ninguna tarea dependiente se mueve con ella — hoy cada tarea se reprograma a mano, una por una, sin que el sistema mantenga las relaciones entre ellas.
+
+**Solución propuesta**: agregar a cada tarea una referencia opcional a otra tarea de la misma OT (predecesora). Al guardar una fecha nueva para una tarea, recalcular en cascada la fecha de las tareas que dependen de ella (misma OT), respetando la duración de cada una. Requiere UI en `TratamientoScreen` (pestaña Tareas) para elegir la predecesora de cada tarea, y lógica de recálculo tanto ahí como en `GanttScreen` cuando se reprograma arrastrando.
+
+**Impacto de negocio**: alto — es funcionalidad estándar de cualquier herramienta de Gantt y hoy no existe; sin ella, reprogramar una OT con tareas encadenadas es enteramente manual y propenso a error.
+
+**Esfuerzo estimado**: L (cambio de modelo, lógica de recálculo en cascada, UI en dos pantallas).
+
+**Pantallas afectadas**: `TratamientoScreen`, `GanttScreen`.
+
+**Dependencias**: ninguna sobre los otros gaps de este documento.
+
+**Requiere confirmación**: ¿qué pasa si se intenta mover una tarea a una fecha que violaría la precedencia (por ejemplo, adelantarla antes que su predecesora)? — no se define aquí si eso se bloquea con un aviso o se permite y solo se sugiere la corrección.
+
+### Gap 14 — Edición de solicitud antes de evaluación
+
+**Descripción**: se verificó si es posible editar una solicitud ya creada. **Resultado: sí es posible** — `IngresoScreen.jsx` permite hacer doble clic sobre una solicitud, ver sus datos, y pasar a un formulario de edición (`actualizarSolicitudGlobal`, `PUT /api/solicitudes/:id`) que guarda cualquier campo, incluido el adjunto. Lo que **no existe** es la regla de negocio pedida: hoy se puede editar una solicitud en cualquier estado, incluso después de que ya se convirtió en OT y avanzó en el proceso — no hay ningún bloqueo por estado.
+
+**Solución propuesta**: agregar la regla de que la edición completa (no solo el estado) se permite mientras la solicitud siga sin evaluación iniciada, y se bloquea una vez que la OT vinculada llega a un estado posterior (a definir cuál exactamente — ver pregunta abajo). El backend (`solicitudController.actualizarEstado`) debe rechazar la edición de campos de contenido cuando corresponda, no solo confiar en que la pantalla oculte el formulario.
+
+**Impacto de negocio**: medio-alto — evita que se pierda de vista una corrección hecha después de que el trabajo ya avanzó, y evita tener que recrear una solicitud completa por un error menor de tipeo.
+
+**Esfuerzo estimado**: S — la edición en sí ya existe; falta solo la validación de estado, en el backend y reflejada en la pantalla (ocultar o deshabilitar el botón "Editar" cuando corresponda).
+
+**Pantallas afectadas**: `IngresoScreen`.
+
+**Dependencias**: ninguna.
+
+**Requiere confirmación**: ¿cuál es el punto de corte exacto? La solicitud no tiene hoy un estado "en evaluación" propio — lo más cercano es que la OT vinculada llegue a `Tratada` (mismo punto de corte que ya usa el Gap 5, SLA, para dejar de contar el tiempo de respuesta). Se sugiere usar ese mismo punto de corte por consistencia, pero queda para confirmar.
+
+### Gap 15 — Configuración de identidad de empresa
+
+**Descripción**: se verificó si existe algún lugar del sistema para definir el logo u otros datos de identidad de la empresa que usa el sistema (razón social propia, no la del cliente). **Resultado: no existe** — no hay modelo, ni pantalla, ni campo. Los "logo" encontrados al buscar en el código eran coincidencias de texto con la palabra "catálogo", no un logo real. Las cotizaciones y documentos generados en PDF (`TratamientoScreen`, `jspdf`) no llevan ningún logo ni encabezado de identidad configurable.
+
+**Solución propuesta**: pantalla nueva de configuración donde se cargue el logo (imagen) y los datos de identidad de la empresa (razón social, RUT, dirección, contacto), usados como encabezado en cotizaciones, informes y demás documentos generados en PDF. Una sola configuración global — no hay hoy ningún concepto de "empresa dueña del sistema" distinto de una configuración única, coherente con que el sistema hoy sirve a una sola empresa por instalación (ver Parte I.2).
+
+**Impacto de negocio**: medio hoy (documentos sin marca propia); se vuelve alto si el sistema se ofrece a más de una empresa, porque hoy no habría forma de diferenciar la identidad visual de los documentos de una empresa de otra.
+
+**Esfuerzo estimado**: S-M (modelo simple + endpoint de subida de imagen, reutilizando el patrón ya existente de `multer`/`uploads/` — + integrarlo en la generación de PDF ya existente).
+
+**Pantallas afectadas**: nueva pantalla de configuración; `TratamientoScreen` (PDF de cotización).
+
+**Dependencias**: ninguna.
+
+### Gap 16 — Ajuste de tablas por el usuario (tabla de Solicitudes)
+
+**Descripción**: se pidió permitir ajustar ancho de columnas y configurar la tabla de solicitudes ingresadas (orden, columnas visibles). Se verificó si algo así ya existe en el sistema — **y sí existe, pero solo en una pantalla**: `DashboardScreen.jsx` tiene un sistema completo de disposición de tabla (mostrar/ocultar columnas, cambiar ancho arrastrando, reordenar, guardar variantes con nombre, alto de fila), persistido tanto en `localStorage` como en el backend (`DisposicionTabla`, modelo genérico ya preparado para más de una pantalla vía su campo `pantalla`). La tabla de Solicitudes en `IngresoScreen.jsx`, en cambio, usa una grilla de ancho fijo (`GRID` constante) sin ninguna de esas opciones.
+
+**Solución propuesta**: extender el mismo patrón de `DisposicionTabla` (ya construido y en uso) a la tabla de `IngresoScreen`, usando `pantalla: 'ingreso'` en vez de `'panel-control'`. No es una funcionalidad nueva que diseñar desde cero — es reutilizar un mecanismo que ya funciona en otra pantalla.
+
+**Impacto de negocio**: medio, mejora de usabilidad en una pantalla que se usa a diario.
+
+**Esfuerzo estimado**: S (se ajusta a la baja respecto de lo esperado originalmente, precisamente porque el patrón y el modelo ya existen — no hay que construirlos, solo aplicarlos a esta pantalla).
+
+**Pantallas afectadas**: `IngresoScreen`.
+
+**Dependencias**: ninguna.
+
+### Gap 18 — Rediseño de pantalla Importar/Exportar
+
+**Descripción**: `ImportExportScreen.jsx` no pasó por el rediseño visual aplicado al resto de las pantallas administrativas — mantiene su estética original.
+
+**Solución propuesta**: no se propone estética aquí — esta pantalla debe evaluarse dentro del criterio y las decisiones ya definidas en [plan-sistema-diseno.md](plan-sistema-diseno.md), del mismo modo que las demás pantallas pendientes de rediseño.
+
+**Impacto de negocio**: bajo-medio — no bloquea ninguna operación, es una discontinuidad visual frente al resto del sistema ya rediseñado.
+
+**Esfuerzo estimado**: M.
+
+**Pantallas afectadas**: `ImportExportScreen`.
+
+**Dependencias**: alineado con el criterio general de `plan-sistema-diseno.md`, no con otros gaps de este documento.
+
 ---
 
 ## Parte V — Propuesta de integración
@@ -427,6 +537,18 @@ OT
 | 6. Vista tabular consolidada | Gap 2 | M | Media |
 | 7. Dashboard consolidado | Gap 3, Gap 6 | S–M | Baja–Media |
 
+*(Esta tabla cubre los Gaps 1-7, tal como se definió originalmente. El Gap 8 — estrategia móvil — se prioriza aparte en [estrategia-movil.md](estrategia-movil.md); los Gaps 9-12 son la nota de la Parte IV.A ya explicada. Los Gaps nuevos de la revisión de agosto de 2026 quedan abajo, y su priorización de roadmap está en [roadmap-cambios.md](roadmap-cambios.md), junto con la fase de estabilización de bugs que va antes que todos ellos.)*
+
+| Gap | Depende de | Esfuerzo | Prioridad de negocio |
+|---|---|---|---|
+| 13. Dependencias entre tareas | — | L | Alta |
+| 14. Edición de solicitud antes de evaluación | — | S | Alta |
+| 15. Configuración de identidad de empresa | — | S-M | Media |
+| 16. Ajuste de tablas (Solicitudes) | — | S | Baja |
+| 18. Rediseño Importar/Exportar | alineado con `plan-sistema-diseno.md` | M | Baja |
+
+*(No hay Gap 17 en esta tabla: se verificó en Fase 1 de la revisión que la asignación de trabajos al personal ya está completamente implementada — ver la nota antes del Gap 13.)*
+
 ---
 
 ## Parte VI — Roadmap sugerido
@@ -519,4 +641,10 @@ OT
 
 ### Preguntas abiertas
 
-Ninguna — las 7 preguntas planteadas en las dos rondas de revisión quedaron resueltas.
+Las 7 preguntas planteadas en las dos rondas de revisión de 2026-08-16 quedaron resueltas. La revisión de producto de agosto de 2026 (gaps 13-18, ver Parte IV.A) agrega preguntas nuevas, sin resolver todavía:
+
+11. **Gap 13 (dependencias entre tareas)**: ¿qué pasa si se intenta mover una tarea a una fecha que violaría la precedencia? — ¿se bloquea con un aviso, o se permite y solo se sugiere la corrección?
+
+12. **Gap 14 (edición de solicitud antes de evaluación)**: ¿cuál es el punto de corte exacto en el que deja de poder editarse? Se sugiere usar el mismo punto que ya usa el Gap 5 (SLA) — la OT vinculada llegando a `Tratada` — por consistencia, pero no está confirmado.
+
+Además, dos bugs registrados en [bugs-conocidos.md](bugs-conocidos.md) quedaron con causa no determinada por lectura de código y requieren información adicional para poder corregirse: B2 (selección de turno que no se aplica — no se pudo confirmar en qué pantalla ocurre exactamente) y B6 (portal del cliente lento — no se pudo confirmar si el reporte se refiere a la PWA standalone `erp-pwa-cliente` o a la pestaña `/portal` dentro de `erp-web`, que son dos cosas distintas con causas distintas).

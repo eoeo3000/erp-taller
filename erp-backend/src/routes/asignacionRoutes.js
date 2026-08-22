@@ -7,6 +7,11 @@ const ctrl = require('../controllers/asignacionController');
 
 router.get('/mi-dia', ctrl.miDia);
 router.get('/mi-semana', ctrl.miSemana);
+router.get('/mi-panel', ctrl.miPanel);
+router.get('/solicitudes-sin-informe', ctrl.solicitudesSinInforme);
+router.put('/tomar-solicitud/:solicitudId', ctrl.tomarSolicitud);
+router.get('/mis-informes', ctrl.misInformes);
+router.get('/ejecutadas', ctrl.ejecutadas);
 router.get('/tablero-supervisores', ctrl.tableroSupervisores);
 router.post('/', ctrl.crear);
 router.get('/', ctrl.listar);

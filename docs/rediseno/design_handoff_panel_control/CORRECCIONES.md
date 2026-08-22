@@ -172,10 +172,33 @@ En `filaCapacidad`, las celdas por día no declaran altura, así que el alto de 
 
 **Corrección:** preseleccionar la primera OT visible al montar (como el prototipo), de modo que el panel nunca aparezca vacío. Si se mantiene el estado vacío, el texto es "Selecciona una OT para ver el detalle."
 
+### 4.13 Falta una barra de filtros para acotar por operario/supervisor
+
+**Síntoma:** con muchos recursos programados en la semana, la grilla de Programación no tiene forma de acotar la vista a un operario o supervisor puntual — hay que recorrer visualmente todas las filas para encontrar las de una persona.
+
+**Corrección:** agregar una barra de filtros bajo la barra de contexto, mismo patrón visual que ya usan Ingreso (§5) y Panel de control (§3): fondo `#f0efeb`, 37 px de alto, input de texto + chips. El control propio de esta barra es un `<select>` simple de operario/supervisor (mismo patrón que el selector de método de pago en Tratamiento, §6 — no el dropdown con `▼` embebido en `<th>` que Ingreso descarta). Al elegir una persona, filtra tanto las filas de OT donde participa como su fila de capacidad; el resto de la grilla se oculta sin recalcular ni perder la semana seleccionada.
+
+**Verificación:** con un operario elegido en el filtro, solo quedan visibles las filas de OT donde participa y su fila de capacidad; al volver a "Todos", reaparece la grilla completa en la misma semana.
+
 ## 5. Limpieza menor
 
 - `App.jsx:248` y `:325` — `alert("✅ OT eliminada…")` y `alert("✅ Estado reseteado…")` siguen con emoji en texto visible al usuario. Los emoji en `console.log` y comentarios son inofensivos, pero estos dos los ve el usuario.
 - El directorio `Incomplete web app design/design_handoff_panel_control/` quedó comiteado dentro del repo. Conviene moverlo a `docs/rediseno/` o sacarlo del control de versiones.
+
+## 7. El link del supervisor enviado desde demo aterriza en producción
+
+**Síntoma:** al enviar una OT al supervisor estando en modo demostración, el correo y el link generado igual apuntan a producción; el supervisor ve "OT no encontrada" (404) al abrirlo.
+
+**Causa:** `resolverEntorno` (`erp-backend/src/middlewares/entorno.js`) decide el entorno leyendo el header `X-Entorno` en cada request bajo `/api`. Ese header solo lo agrega `axios.defaults` dentro de la SPA (`erp-web/src/utils/entorno.js`), al cargar `App.jsx`. El portal del supervisor (`otController.supervisorPortal`, servido en `/api/ots/:id/supervisor`) es una página HTML aparte, abierta directo desde el link del correo sin pasar nunca por la SPA — ni la carga de esa página ni su `fetch()` interno (`postJson`, dentro del HTML) agregan ese header. Al faltar, `resolverEntorno` cae a su valor por defecto, `'producción'`; y como demo y producción son conexiones Mongo separadas (`config/conexiones.js`), el `_id` de una OT creada en demo no existe en la base de producción.
+
+**Corrección**, en tres pasos:
+1. `otController.enviarAlSupervisor` incluye el entorno activo (`req.entorno`) como parámetro de query en el link que genera: `.../api/ots/:id/supervisor?token=...&entorno=demo`.
+2. `resolverEntorno` acepta el entorno también desde `req.query.entorno` además del header `X-Entorno` (el header sigue mandando para las rutas que vienen de la SPA; el query param cubre las que no pasan por ella), para no duplicar la lógica de resolución en `supervisorPortal`/`supervisorAccion` por separado.
+3. El HTML servido por `supervisorPortal` (la constante `BASE` de su `<script>`) propaga ese mismo parámetro `entorno` en cada `fetch()` que dispara `postJson`, para que las acciones (iniciar/posponer/reportar/terminar) sigan operando sobre la misma conexión que abrió el link.
+
+**Verificación:** cargar datos de demo, enviar una OT al supervisor con el entorno demo activo, abrir el link recibido y confirmar que la OT aparece (no 404) y que las acciones del portal quedan reflejadas en la base de datos demo, no en producción. Repetir el mismo envío desde producción y confirmar que sigue resolviendo contra producción.
+
+Implementar en un commit aparte del resto de las correcciones de este documento — no es un ajuste visual, es una corrección de enrutamiento de datos con su propio riesgo si se hace mal. Contexto completo en [estrategia-movil.md §6.7](../../estrategia-movil.md).
 
 ---
 
@@ -183,7 +206,8 @@ En `filaCapacidad`, las celdas por día no declaran altura, así que el alto de 
 
 1. Puntos 1 y 2 juntos — ambos tocan `index.css` y arreglan las seis pantallas de una vez. Verificar antes de seguir.
 2. Punto 3 — `DashboardScreen.jsx`.
-3. Punto 4 — `GanttScreen.jsx`. Empezar por 4.0 (alineación del divisor, afecta toda la pantalla), luego 4.1–4.3, y cerrar con 4.6–4.11 juntos, que tocan todos el bloque de capacidad.
-4. Punto 5 — limpieza.
+3. Punto 7 — corrección de enrutamiento del link de supervisor en modo demo (`otController.js`, `middlewares/entorno.js`). Va antes que el resto: es una corrección de datos, no visual, y un envío mal enrutado en demo no se nota hasta que alguien lo prueba en terreno.
+4. Punto 4 — `GanttScreen.jsx`. Empezar por 4.0 (alineación del divisor, afecta toda la pantalla), luego 4.1–4.3, 4.13 (barra de filtros, en cualquier momento de este bloque), y cerrar con 4.6–4.11 juntos, que tocan todos el bloque de capacidad.
+5. Punto 5 — limpieza.
 
 Reglas transversales, sin excepción: sin emoji ni iconos, sin sombras (salvo menús flotantes), radio máximo 2 px, color solo como información, números en monoespaciada, tamaños en px explícitos, nada de librerías nuevas.
