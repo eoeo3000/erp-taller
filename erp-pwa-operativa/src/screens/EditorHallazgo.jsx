@@ -11,6 +11,7 @@ import { subirFoto } from '../api.js';
 // componente es solo el cuadro y sus fotos/condiciones.
 export default function EditorHallazgo({ hallazgo, onCambiar, tiposTrabajo, condicionesEntorno }) {
     const [hojaAbierta, setHojaAbierta] = useState(null); // campo completo (clave, tipoDato, opciones, etiqueta)
+    const [condicionesAbiertas, setCondicionesAbiertas] = useState(false);
     const [subiendoFoto, setSubiendoFoto] = useState(false);
 
     const tipoElegido = tiposTrabajo.find((t) => String(t._id) === String(hallazgo.tipoTrabajoId));
@@ -122,19 +123,21 @@ export default function EditorHallazgo({ hallazgo, onCambiar, tiposTrabajo, cond
                     )}
 
                     {condicionesDisponibles.length > 0 && (
-                        <div>
-                            <div className="versalita" style={{ marginBottom: 6 }}>Condiciones de entorno</div>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                                {condicionesDisponibles.map((c) => {
-                                    const marcada = (hallazgo.condicionesEntorno || []).includes(c._id);
-                                    return (
-                                        <button key={c._id} onClick={() => toggleCondicion(c._id)} className="boton-secundario" style={{ minHeight: 48, textAlign: 'left', paddingLeft: 14, borderColor: marcada ? 'var(--texto-principal)' : 'var(--linea-zona)' }}>
-                                            <span className="mono" style={{ marginRight: 8 }}>{marcada ? '×' : '·'}</span>{c.nombre}
-                                        </button>
-                                    );
-                                })}
-                            </div>
-                        </div>
+                        <button
+                            onClick={() => setCondicionesAbiertas(true)}
+                            className="boton-secundario"
+                            style={{ minHeight: 52, textAlign: 'left', paddingLeft: 14, paddingRight: 14, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}
+                        >
+                            <span style={{ minWidth: 0 }}>
+                                <span className="versalita" style={{ display: 'block', fontSize: 11 }}>Condiciones de entorno</span>
+                                <span style={{ display: 'block', fontSize: 14, marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                    {(hallazgo.condicionesEntorno || []).length
+                                        ? condicionesDisponibles.filter((c) => hallazgo.condicionesEntorno.includes(c._id)).map((c) => c.nombre).join(', ')
+                                        : 'Ninguna'}
+                                </span>
+                            </span>
+                            <span className="mono" style={{ fontSize: 18, color: 'var(--deshabilitado-1)', flex: 'none' }}>›</span>
+                        </button>
                     )}
                 </>
             )}
@@ -161,6 +164,40 @@ export default function EditorHallazgo({ hallazgo, onCambiar, tiposTrabajo, cond
                     onCerrar={() => setHojaAbierta(null)}
                 />
             )}
+
+            {condicionesAbiertas && (
+                <HojaCondiciones
+                    condiciones={condicionesDisponibles}
+                    seleccionadas={hallazgo.condicionesEntorno || []}
+                    onToggle={toggleCondicion}
+                    onCerrar={() => setCondicionesAbiertas(false)}
+                />
+            )}
+        </div>
+    );
+}
+
+// Misma hoja inferior que HojaCampo para "seleccionMultiple", pero sobre el catálogo
+// transversal de condiciones (id/nombre) en vez de las opciones de un campo — antes esto se
+// mostraba siempre abierto como una lista de botones, ocupando más de la mitad de la
+// pantalla; ahora es una sola fila resumen que abre esto al tocarla.
+function HojaCondiciones({ condiciones, seleccionadas, onToggle, onCerrar }) {
+    return (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.35)', zIndex: 50, display: 'flex', alignItems: 'flex-end' }} onClick={onCerrar}>
+            <div onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxHeight: '70vh', overflowY: 'auto', background: '#fff', borderRadius: '8px 8px 0 0', padding: 16 }}>
+                <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 10 }}>Condiciones de entorno</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {condiciones.map((c) => {
+                        const marcada = seleccionadas.includes(c._id);
+                        return (
+                            <button key={c._id} onClick={() => onToggle(c._id)} className="boton-secundario" style={{ minHeight: 52, textAlign: 'left', paddingLeft: 14, borderColor: marcada ? 'var(--texto-principal)' : 'var(--linea-zona)' }}>
+                                <span className="mono" style={{ marginRight: 8 }}>{marcada ? '×' : '·'}</span>{c.nombre}
+                            </button>
+                        );
+                    })}
+                </div>
+                <button onClick={onCerrar} className="boton-primario" style={{ marginTop: 12, width: '100%' }}>Listo</button>
+            </div>
         </div>
     );
 }
