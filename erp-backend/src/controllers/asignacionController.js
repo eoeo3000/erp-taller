@@ -34,6 +34,34 @@ function lunesDeLaSemana(fecha) {
 }
 function aISO(d) { return d.toISOString().slice(0, 10); }
 
+// Solicitudes que todavía necesitan una visita de evaluación: dos orígenes (Solicitud en
+// 'Pendiente', o una OT que la oficina ya aprobó/creó pero cuyo informeEvaluacion sigue sin
+// completarse), menos las que ya tiene tomadas algún supervisor (Asignacion tipo
+// 'evaluacion' existente). ANTES esta lógica estaba duplicada en solicitudesSinInforme (S4,
+// el listado) y en miPanel (S1, solo el conteo) — al agregar acá el caso de la OT ya creada
+// se actualizó el listado pero no el conteo, así que el panel mostraba 0 mientras la
+// bandeja S4 sí mostraba la solicitud (bug real, encontrado por el dueño del negocio). Un
+// solo cálculo compartido para que esto no se vuelva a desincronizar.
+async function solicitudesSinInformeDocs({ Solicitud, OT, Asignacion }) {
+    const [solicitudesPendientes, otsSinInforme] = await Promise.all([
+        Solicitud.find({ estado: 'Pendiente' }).select('_id').lean(),
+        OT.find({
+            estado: { $nin: ['Rechazada', 'Pagada'] },
+            $or: [{ 'informeEvaluacion.completo': { $ne: true } }, { informeEvaluacion: { $exists: false } }],
+        }).select('_id solicitudId').lean(),
+    ]);
+    const idsCandidatos = [...new Set([
+        ...solicitudesPendientes.map(s => String(s._id)),
+        ...otsSinInforme.map(o => String(o.solicitudId || o._id)),
+    ])];
+    if (!idsCandidatos.length) return [];
+
+    const solicitudes = await Solicitud.find({ _id: { $in: idsCandidatos } }).sort({ fechaCreacion: 1 }).lean();
+    const evaluaciones = await Asignacion.find({ tipo: 'evaluacion', solicitudId: { $in: solicitudes.map(s => s._id) } }).select('solicitudId').lean();
+    const tomadas = new Set(evaluaciones.map(a => String(a.solicitudId)));
+    return solicitudes.filter(s => !tomadas.has(String(s._id)));
+}
+
 // Nadie ve las asignaciones de otro (siempre filtra por usuarioId); el rol solo decide
 // qué TIPOS de las suyas aparecen. El ejecutor solo ejecuta; el supervisor además
 // supervisa y levanta informes de evaluación (README §5, O5). Vista de carga del equipo
@@ -333,11 +361,11 @@ exports.miPanel = async (req, res) => {
         // Las cuatro consultas de arriba no dependen entre sí — en paralelo en vez de en
         // secuencia (cada round-trip a Mongo pesa, ver resolverUsuarioPorToken; en
         // producción esto era buena parte de por qué mi-panel tardaba ~1.8s).
-        const [otsActivas, solicitudesPendientes, misEvaluaciones, ejecutadas] = await Promise.all([
+        const [otsActivas, solicitudesSinInforme, misEvaluaciones, ejecutadas] = await Promise.all([
             // Hoy en terreno: OT que este supervisor supervisa, con trabajo hoy.
             OT.find({ supervisorId: usuario.recursoId, estado: { $in: ['Programada', 'En Ejecución'] } }).lean(),
-            // Solicitudes sin informe inicial: pendientes (se cruzan con Asignacion más abajo).
-            Solicitud.find({ estado: 'Pendiente' }).select('_id fechaCreacion').lean(),
+            // Solicitudes sin informe inicial: mismo cálculo que S4 (ver solicitudesSinInformeDocs).
+            solicitudesSinInformeDocs({ Solicitud, OT, Asignacion }),
             // Informes iniciales míos sin enviar: mis propias Asignacion de evaluación, no completadas.
             Asignacion.find({ tipo: 'evaluacion', usuarioId: usuario._id, estado: { $ne: 'completada' } }).sort({ createdAt: 1 }).lean(),
             // Solicitudes ejecutadas: OT que este supervisor supervisó, ya cerradas, últimos 30 días.
@@ -361,13 +389,7 @@ exports.miPanel = async (req, res) => {
         // intermedia que el handoff no especifica.
         const itemsHoy = hoyEnTerreno.map(ot => ({ otId: ot._id, numeroOT: ot.numeroOT }));
 
-        // Depende de solicitudesPendientes (necesita sus IDs) — no se puede sumar al Promise.all de arriba.
-        const evaluacionesExistentes = solicitudesPendientes.length
-            ? await Asignacion.find({ tipo: 'evaluacion', solicitudId: { $in: solicitudesPendientes.map(s => s._id) } }).select('solicitudId').lean()
-            : [];
-        const conEvaluacion = new Set(evaluacionesExistentes.map(a => String(a.solicitudId)));
-        const solicitudesSinInforme = solicitudesPendientes.filter(s => !conEvaluacion.has(String(s._id)));
-        const masAntigua = solicitudesSinInforme.reduce((min, s) => (!min || s.fechaCreacion < min.fechaCreacion) ? s : min, null);
+        const masAntigua = solicitudesSinInforme[0] || null;
 
         let numeroMasAntigua = null;
         if (misEvaluaciones[0]) {
@@ -394,7 +416,7 @@ exports.miPanel = async (req, res) => {
 
 // GET /api/asignaciones/solicitudes-sin-informe?token=&entorno= — S4 · Sin informe inicial.
 // "Sin supervisor" = ninguna Asignacion de evaluación creada todavía para esa Solicitud
-// (mismo criterio que miPanel.solicitudesSinInforme, acá con el detalle completo de cada una).
+// (mismo cálculo que el conteo de miPanel, ver solicitudesSinInformeDocs).
 exports.solicitudesSinInforme = async (req, res) => {
     const Usuario = getUsuario(req.db);
     const Asignacion = getAsignacion(req.db);
@@ -405,31 +427,7 @@ exports.solicitudesSinInforme = async (req, res) => {
         if (!usuario) return res.status(403).json({ error: 'Token inválido o revocado' });
         if (usuario.rol !== 'supervisor') return res.status(403).json({ error: 'Solo para supervisores' });
 
-        // Dos orígenes: solicitudes recién llegadas (estado 'Pendiente', sin OT todavía) y
-        // OTs que la oficina ya aprobó/creó pero cuyo informe de evaluación sigue sin
-        // completarse — antes solo se consideraba el primer caso, así que apenas la oficina
-        // aprobaba la solicitud y creaba la OT (estado pasa a 'Tratada'), desaparecía de esta
-        // bandeja aunque la visita de evaluación en terreno siguiera pendiente.
-        const [solicitudesPendientes, otsSinInforme] = await Promise.all([
-            Solicitud.find({ estado: 'Pendiente' }).select('_id').lean(),
-            OT.find({
-                estado: { $nin: ['Rechazada', 'Pagada'] },
-                $or: [{ 'informeEvaluacion.completo': { $ne: true } }, { informeEvaluacion: { $exists: false } }],
-            }).select('_id solicitudId').lean(),
-        ]);
-        const idsCandidatos = [...new Set([
-            ...solicitudesPendientes.map(s => String(s._id)),
-            ...otsSinInforme.map(o => String(o.solicitudId || o._id)),
-        ])];
-
-        const solicitudes = idsCandidatos.length
-            ? await Solicitud.find({ _id: { $in: idsCandidatos } }).sort({ fechaCreacion: 1 }).lean()
-            : [];
-        const evaluaciones = solicitudes.length
-            ? await Asignacion.find({ tipo: 'evaluacion', solicitudId: { $in: solicitudes.map(s => s._id) } }).select('solicitudId').lean()
-            : [];
-        const tomadas = new Set(evaluaciones.map(a => String(a.solicitudId)));
-        const disponibles = solicitudes.filter(s => !tomadas.has(String(s._id)));
+        const disponibles = await solicitudesSinInformeDocs({ Solicitud, OT, Asignacion });
 
         res.json({
             solicitudes: disponibles.map(s => ({
