@@ -23,6 +23,7 @@ const demoRoutes = require('./demoRoutes');
 const usuarioRoutes = require('./usuarioRoutes');
 const asignacionRoutes = require('./asignacionRoutes');
 const clienteRoutes = require('./clienteRoutes');
+const uploadRoutes = require('./uploadRoutes');
 
 // Definir los prefijos de las URLs
 router.use('/data', dataRoutes);
@@ -45,5 +46,6 @@ router.use('/demo', demoRoutes);
 router.use('/usuarios', usuarioRoutes);
 router.use('/asignaciones', asignacionRoutes);
 router.use('/clientes', clienteRoutes);
+router.use('/uploads', uploadRoutes);
 
 module.exports = router;

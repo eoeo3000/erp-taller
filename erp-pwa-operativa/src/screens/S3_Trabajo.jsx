@@ -1,29 +1,6 @@
 import { useEffect, useState } from 'react';
-import { obtenerOT, actualizarOT, accionOT, miSemana } from '../api.js';
+import { obtenerOT, actualizarOT, accionOT, miSemana, subirFoto } from '../api.js';
 import { detectarCruces } from '../cruces.js';
-
-// Misma compresión que ya usa O4_ReporteTerreno (previsualizarFoto en otController.supervisorPortal).
-function comprimirFoto(archivo) {
-    return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            const img = new Image();
-            img.onload = () => {
-                const MAX = 1200;
-                let w = img.width, h = img.height;
-                if (w > MAX) { h = Math.round((h * MAX) / w); w = MAX; }
-                const canvas = document.createElement('canvas');
-                canvas.width = w; canvas.height = h;
-                canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-                resolve(canvas.toDataURL('image/jpeg', 0.75));
-            };
-            img.onerror = reject;
-            img.src = e.target.result;
-        };
-        reader.onerror = reject;
-        reader.readAsDataURL(archivo);
-    });
-}
 
 const COLOR_ESTADO = { 'En Ejecución': 'var(--en-curso)', 'Trabajo Terminado': 'var(--listo)', 'Con Informe': 'var(--listo)', 'Pagada': 'var(--listo)' };
 const NOMBRE_DIA = { 1: 'LUN', 2: 'MAR', 3: 'MIÉ', 4: 'JUE', 5: 'VIE', 6: 'SÁB', 0: 'DOM' };
@@ -139,11 +116,15 @@ export default function S3Trabajo({ nav, asignacion, persona }) {
     const actualizarBorrador = (idx, campo, valor) => setBorradores((b) => ({ ...b, [idx]: { texto: '', fotos: [], ...b[idx], [campo]: valor } }));
 
     const agregarFotoBorrador = async (idx, archivo) => {
-        const b64 = await comprimirFoto(archivo);
-        setBorradores((b) => {
-            const previo = b[idx] || { texto: '', fotos: [] };
-            return { ...b, [idx]: { ...previo, fotos: [...previo.fotos, b64] } };
-        });
+        try {
+            const url = await subirFoto(archivo);
+            setBorradores((b) => {
+                const previo = b[idx] || { texto: '', fotos: [] };
+                return { ...b, [idx]: { ...previo, fotos: [...previo.fotos, url] } };
+            });
+        } catch {
+            window.alert('No se pudo subir la foto — revisa la señal e intenta de nuevo.');
+        }
     };
 
     const guardarLoIngresado = async () => {

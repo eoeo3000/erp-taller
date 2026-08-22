@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { setSesion, haySesion, accionOT, whoami } from './api.js';
+import { setSesion, haySesion, accionOT, whoami, subirDataURL } from './api.js';
 import { reintentarCola } from './db.js';
 import O1PrimerAcceso from './screens/O1_PrimerAcceso.jsx';
 import O2MiDia from './screens/O2_MiDia.jsx';
@@ -41,9 +41,14 @@ export default function App() {
     }, []);
 
     // Cola de reportes sin señal (README pwa_movil §8): se reintenta al recuperar
-    // conexión, sin importar en qué pantalla esté la persona en ese momento.
+    // conexión, sin importar en qué pantalla esté la persona en ese momento. El item de la
+    // cola trae la foto como data: URI (así se guardó sin señal); recién acá, con señal de
+    // vuelta, se sube como archivo real antes de mandar el reporte.
     useEffect(() => {
-        const intentar = () => reintentarCola((item) => accionOT(item.otId, { accion: 'reporte', comentario: item.comentario, foto: item.foto }));
+        const intentar = () => reintentarCola(async (item) => {
+            const fotoUrl = item.foto ? await subirDataURL(item.foto) : '';
+            return accionOT(item.otId, { accion: 'reporte', comentario: item.comentario, foto: fotoUrl });
+        });
         intentar();
         window.addEventListener('online', intentar);
         return () => window.removeEventListener('online', intentar);

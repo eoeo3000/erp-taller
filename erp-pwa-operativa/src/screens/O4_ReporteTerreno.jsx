@@ -1,10 +1,12 @@
 import { useState } from 'react';
-import { accionOT } from '../api.js';
+import { accionOT, subirDataURL } from '../api.js';
 import { encolarReporte } from '../db.js';
 
-// Misma compresión que ya usa el portal por token (previsualizarFoto en
-// otController.supervisorPortal): reescala a un ancho máximo antes de mandar, para no
-// llenar el POST (ni la cola de IndexedDB) con fotos de cámara sin comprimir.
+// La foto se mantiene como data: URI SOLO en memoria/IndexedDB (para la vista previa y la
+// cola sin señal); recién al enviar (o al reintentar, ver App.jsx) se sube como archivo
+// real y se manda la URL — nunca queda un base64 guardado en el documento de la OT (una
+// sola foto de 256KB así hacía que cualquier consulta de esa OT tardara varios segundos,
+// visto en producción).
 function comprimirFoto(archivo) {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -49,12 +51,14 @@ export default function O4ReporteTerreno({ nav, asignacion }) {
         if (!comentario.trim() && fotos.length === 0) return;
         setEnviando(true);
         const comentarioFinal = tipo === 'decision' ? `[Requiere decisión de la oficina] ${comentario}` : comentario;
-        const cuerpo = { otId, comentario: comentarioFinal, foto: fotos[0] || '' };
         try {
-            await accionOT(otId, { accion: 'reporte', comentario: cuerpo.comentario, foto: cuerpo.foto });
+            // Se sube recién acá, no al tomar la foto: si falla (sin señal), el data: URI
+            // todavía en memoria es justo lo que hay que encolar para reintentar después.
+            const fotoUrl = fotos[0] ? await subirDataURL(fotos[0]) : '';
+            await accionOT(otId, { accion: 'reporte', comentario: comentarioFinal, foto: fotoUrl });
             nav.volver();
         } catch {
-            await encolarReporte(cuerpo);
+            await encolarReporte({ otId, comentario: comentarioFinal, foto: fotos[0] || '' });
             setAvisoCola(true);
             setTimeout(() => nav.volver(), 1200);
         } finally {
