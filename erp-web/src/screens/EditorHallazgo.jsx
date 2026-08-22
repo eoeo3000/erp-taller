@@ -22,16 +22,12 @@ const t = {
 };
 
 const estiloInput = { width: '100%', padding: '8px 10px', fontSize: 13, border: `1px solid ${t.bordeZona}`, borderRadius: 2, fontFamily: 'inherit' };
-const estiloBotonChip = (activo) => ({
-    minHeight: 32, padding: '0 12px', border: `1px solid ${activo ? t.textoPrincipal : t.bordeZona}`,
-    background: activo ? t.textoPrincipal : '#fff', color: activo ? '#fff' : t.textoPrincipal,
-    borderRadius: 2, fontSize: 12.5, fontWeight: 600, cursor: 'pointer',
-});
 const estiloBotonSecundario = { padding: '7px 12px', fontSize: 12.5, fontWeight: 600, border: `1px solid ${t.bordeZona}`, background: '#fff', color: t.textoPrincipal, borderRadius: 2, cursor: 'pointer' };
 const estiloBotonPrimario = { padding: '8px 16px', fontSize: 12.5, fontWeight: 700, border: 'none', background: t.textoPrincipal, color: '#fff', borderRadius: 2, cursor: 'pointer' };
 
 export default function EditorHallazgo({ hallazgo, onCambiar, tiposTrabajo, condicionesEntorno, apiBase }) {
     const [menuAbierto, setMenuAbierto] = useState(null); // campo completo (clave, tipoDato, opciones, etiqueta)
+    const [condicionesAbiertas, setCondicionesAbiertas] = useState(false);
     const [subiendoFoto, setSubiendoFoto] = useState(false);
 
     const tipoElegido = tiposTrabajo.find((tp) => String(tp._id) === String(hallazgo.tipoTrabajoId));
@@ -142,19 +138,20 @@ export default function EditorHallazgo({ hallazgo, onCambiar, tiposTrabajo, cond
                     )}
 
                     {condicionesDisponibles.length > 0 && (
-                        <div>
-                            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.04em', textTransform: 'uppercase', color: t.textoAtenuado2, marginBottom: 5 }}>Condiciones de entorno</div>
-                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                                {condicionesDisponibles.map((c) => {
-                                    const marcada = (hallazgo.condicionesEntorno || []).includes(c._id);
-                                    return (
-                                        <button key={c._id} onClick={() => toggleCondicion(c._id)} style={estiloBotonChip(marcada)}>
-                                            {c.nombre}
-                                        </button>
-                                    );
-                                })}
-                            </div>
-                        </div>
+                        <button
+                            onClick={() => setCondicionesAbiertas(true)}
+                            style={{ ...estiloBotonSecundario, textAlign: 'left', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, width: '100%' }}
+                        >
+                            <span style={{ minWidth: 0 }}>
+                                <span style={{ display: 'block', fontSize: 10.5, fontWeight: 700, letterSpacing: '.04em', textTransform: 'uppercase', color: t.textoAtenuado2 }}>Condiciones de entorno</span>
+                                <span style={{ display: 'block', fontSize: 12.5, marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                    {(hallazgo.condicionesEntorno || []).length
+                                        ? condicionesDisponibles.filter((c) => hallazgo.condicionesEntorno.includes(c._id)).map((c) => c.nombre).join(', ')
+                                        : 'Ninguna'}
+                                </span>
+                            </span>
+                            <span style={{ color: t.textoAtenuado1, flex: 'none' }}>›</span>
+                        </button>
                     )}
                 </>
             )}
@@ -181,6 +178,40 @@ export default function EditorHallazgo({ hallazgo, onCambiar, tiposTrabajo, cond
                     onCerrar={() => setMenuAbierto(null)}
                 />
             )}
+
+            {condicionesAbiertas && (
+                <MenuCondiciones
+                    condiciones={condicionesDisponibles}
+                    seleccionadas={hallazgo.condicionesEntorno || []}
+                    onToggle={toggleCondicion}
+                    onCerrar={() => setCondicionesAbiertas(false)}
+                />
+            )}
+        </div>
+    );
+}
+
+// Mismo menú centrado que MenuSelector para "seleccionMultiple", pero sobre el catálogo
+// transversal de condiciones (id/nombre) en vez de las opciones de un campo — antes esto se
+// mostraba siempre como una fila de chips, hoy es una sola fila resumen que abre esto al
+// hacer clic.
+function MenuCondiciones({ condiciones, seleccionadas, onToggle, onCerrar }) {
+    return (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.35)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={onCerrar}>
+            <div onClick={(e) => e.stopPropagation()} style={{ width: 320, maxHeight: '70vh', overflowY: 'auto', background: '#fff', borderRadius: 3, padding: 14 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>Condiciones de entorno</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                    {condiciones.map((c) => {
+                        const marcada = seleccionadas.includes(c._id);
+                        return (
+                            <button key={c._id} onClick={() => onToggle(c._id)} style={{ ...estiloBotonSecundario, textAlign: 'left', borderColor: marcada ? t.textoPrincipal : t.bordeZona }}>
+                                {marcada ? '× ' : '· '}{c.nombre}
+                            </button>
+                        );
+                    })}
+                </div>
+                <button onClick={onCerrar} style={{ ...estiloBotonPrimario, marginTop: 10, width: '100%' }}>Listo</button>
+            </div>
         </div>
     );
 }
