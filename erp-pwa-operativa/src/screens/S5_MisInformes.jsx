@@ -73,7 +73,7 @@ function TarjetaPendiente({ p, nav }) {
     else if (p.fechaPlanificada === hoy) { etiqueta = `visita hoy ${p.horaPlanificada || ''}`.trim(); colorEtiqueta = 'var(--en-curso)'; }
     else { etiqueta = `visita ${fechaCorta(p.fechaPlanificada)} ${p.horaPlanificada || ''}`.trim(); colorEtiqueta = 'var(--texto-atenuado-1)'; }
 
-    const borde = p.pasos === 0 ? 'var(--atencion)' : (p.fechaPlanificada < hoy ? 'var(--detenido)' : 'var(--atencion)');
+    const borde = p.hallazgos === 0 ? 'var(--atencion)' : (p.fechaPlanificada < hoy ? 'var(--detenido)' : 'var(--atencion)');
 
     return (
         <div style={{ padding: '15px 18px', background: 'var(--superficie)', borderBottom: '1px solid var(--linea-fina)', borderLeft: `3px solid ${borde}` }}>
@@ -84,26 +84,20 @@ function TarjetaPendiente({ p, nav }) {
             <div style={{ marginTop: 7, fontSize: 16, fontWeight: 600, lineHeight: 1.35 }}>{p.descripcion}</div>
             <div style={{ marginTop: 4, fontSize: 13.5, color: 'var(--texto-secundario-2)' }}>{p.empresaSolicitante}</div>
 
-            {p.pasos > 0 ? (
-                <>
-                    <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <span style={{ flex: 1, height: 6, background: 'var(--encabezado-tabla)' }}>
-                            <span style={{ display: 'block', width: `${(p.pasos / 4) * 100}%`, height: 6, background: 'var(--atencion)' }} />
-                        </span>
-                        <span className="mono" style={{ fontSize: 12.5, color: 'var(--texto-secundario-2)' }}>{p.pasos} de 4 pasos</span>
-                    </div>
-                    {p.pasos < 4 && <div style={{ marginTop: 7, fontSize: 13, color: 'var(--texto-atenuado-3)' }}>Faltan {4 - p.pasos} pasos. La oficina no puede cotizar sin esto.</div>}
-                </>
+            {p.hallazgos > 0 ? (
+                <div style={{ marginTop: 10, fontSize: 13, color: 'var(--texto-secundario-2)' }}>
+                    {p.hallazgos} hallazgo{p.hallazgos !== 1 ? 's' : ''} registrado{p.hallazgos !== 1 ? 's' : ''}
+                </div>
             ) : (
-                <div style={{ marginTop: 10, fontSize: 13, color: 'var(--texto-atenuado-3)' }}>Sin empezar. Se puede prellenar antes de salir a terreno.</div>
+                <div style={{ marginTop: 10, fontSize: 13, color: 'var(--texto-atenuado-3)' }}>Sin empezar.</div>
             )}
 
             <button
                 onClick={() => nav.ir('o5', { asignacion: { _id: p._id, solicitudId: p.solicitudId } })}
-                className={p.pasos > 0 ? 'boton-primario' : 'boton-secundario'}
-                style={{ marginTop: 12, height: p.pasos > 0 ? 56 : 48 }}
+                className={p.hallazgos > 0 ? 'boton-primario' : 'boton-secundario'}
+                style={{ marginTop: 12, height: p.hallazgos > 0 ? 56 : 48 }}
             >
-                {p.pasos > 0 ? 'Continuar informe' : 'Abrir informe'}
+                {p.hallazgos > 0 ? 'Continuar informe' : 'Abrir informe'}
             </button>
         </div>
     );
