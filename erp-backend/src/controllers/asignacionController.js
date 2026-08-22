@@ -482,10 +482,11 @@ exports.tomarSolicitud = async (req, res) => {
     }
 };
 
-const PASOS_INFORME = ['condicionesSitio', 'riesgos', 'metodologia', 'recursosObservados'];
-function pasosCompletos(informeEvaluacion) {
-    if (!informeEvaluacion) return 0;
-    return PASOS_INFORME.filter(p => (informeEvaluacion[p] || '').trim() !== '').length;
+// El informe ya no tiene los 4 pasos cualitativos (condicionesSitio/riesgos/metodologia/
+// recursosObservados) — se retiraron a pedido explícito, el informe es directamente la lista
+// de hallazgos. Antes esto contaba esos 4 campos; ahora cuenta hallazgos registrados.
+function hallazgosRegistrados(informeEvaluacion) {
+    return (informeEvaluacion?.hallazgos || []).length;
 }
 
 // GET /api/asignaciones/mis-informes?token=&entorno= — S5 · Mis informes.
@@ -530,7 +531,7 @@ exports.misInformes = async (req, res) => {
                     enviados.push({ ...base, numeroOT: ot?.numeroOT || null, fechaEnvio: a.updatedAt, desenlace });
                 }
             } else {
-                pendientes.push({ ...base, pasos: pasosCompletos(ot?.informeEvaluacion), diasDesdeVisita: diasDesde(a.fechaPlanificada) });
+                pendientes.push({ ...base, hallazgos: hallazgosRegistrados(ot?.informeEvaluacion), diasDesdeVisita: diasDesde(a.fechaPlanificada) });
             }
         }
 
