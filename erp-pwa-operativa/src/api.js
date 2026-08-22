@@ -2,6 +2,10 @@
 // se abre fuera de la SPA de escritorio y axios.defaults no existe aquí (ver
 // docs/rediseno/design_handoff_panel_control/CORRECCIONES.md punto 7).
 const API = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+// El backend sirve /uploads en su propia raíz (server.js), no bajo /api — esta PWA y el
+// backend son hosts distintos (cada uno su propio Render Static Site/Web Service), así que
+// una URL de foto tiene que llevar el host del backend, no quedar relativa a esta PWA.
+const BACKEND_ORIGIN = API.replace(/\/api\/?$/, '');
 
 const CLAVE_TOKEN = 'operativo.token';
 const CLAVE_ENTORNO = 'operativo.entorno';
@@ -117,4 +121,57 @@ export function ejecutadas() {
 // directa de campos (aca: marcar una tarea puntual como completada).
 export function actualizarOT(otId, body) {
     return pedir(`/ots/${otId}`, { method: 'PUT', body: JSON.stringify(body) });
+}
+
+// --- Fotos: se suben como archivo real, nunca se guardan como base64 en el documento de
+// la OT. Una sola foto de 256KB incrustada en tareas[].registro hacía que cualquier
+// consulta que trajera esa OT tardara varios segundos en producción — no por índices ni
+// por red, el propio servidor de Mongo tardaba igual sirviendo esa OT (diagnosticado
+// directo contra la base). El backend guarda el archivo y devuelve la URL (ver
+// erp-backend/src/routes/uploadRoutes.js); acá solo se guarda esa URL.
+
+function comprimirABlob(archivo) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const img = new Image();
+            img.onload = () => {
+                const MAX = 1200;
+                let w = img.width, h = img.height;
+                if (w > MAX) { h = Math.round((h * MAX) / w); w = MAX; }
+                const canvas = document.createElement('canvas');
+                canvas.width = w; canvas.height = h;
+                canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+                canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error('No se pudo comprimir la foto'))), 'image/jpeg', 0.75);
+            };
+            img.onerror = reject;
+            img.src = e.target.result;
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(archivo);
+    });
+}
+
+async function subirBlob(blob) {
+    const formData = new FormData();
+    formData.append('foto', blob, 'foto.jpg');
+    const resp = await fetch(`${API}/uploads/foto`, { method: 'POST', body: formData });
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok) throw new Error(data.error || `Error ${resp.status}`);
+    return `${BACKEND_ORIGIN}${data.url}`;
+}
+
+// Comprime (máx. 1200px, JPEG 0.75) y sube un archivo recién tomado de la cámara/galería.
+// Devuelve la URL absoluta ya lista para guardar en tareas[].registro.fotos / informe.fotos.
+export function subirFoto(archivo) {
+    return comprimirABlob(archivo).then(subirBlob);
+}
+
+// Para la cola de reintento sin señal (O4/App.jsx): ahí solo queda un data: URI ya
+// comprimido en IndexedDB (nunca llega a Mongo); recién al reintentar con señal se sube
+// como archivo real y se manda la URL resultante.
+export async function subirDataURL(dataUrl) {
+    if (!dataUrl) return '';
+    const blob = await fetch(dataUrl).then((r) => r.blob());
+    return subirBlob(blob);
 }

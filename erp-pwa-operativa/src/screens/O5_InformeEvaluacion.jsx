@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { obtenerOT, actualizarOT, cerrarAsignacion } from '../api.js';
+import { obtenerOT, actualizarOT, cerrarAsignacion, subirFoto } from '../api.js';
 
 // Los cuatro pasos siguen el modelo existente OT.informeEvaluacion (erp-backend/src/models/OT.js):
 // condicionesSitio, riesgos, metodologia, recursosObservados. El handoff solo ilustra el
@@ -8,14 +8,6 @@ import { obtenerOT, actualizarOT, cerrarAsignacion } from '../api.js';
 const RIESGOS_COMUNES = ['Trabajo en altura', 'Espacio confinado', 'Energía eléctrica', 'Manejo de cargas'];
 const PASOS = ['condicionesSitio', 'riesgos', 'metodologia', 'recursosObservados'];
 const TITULOS = { condicionesSitio: 'Condiciones del sitio', riesgos: 'Riesgos', metodologia: 'Metodología', recursosObservados: 'Recursos observados' };
-
-function fotoAThumb(archivo) {
-    return new Promise((resolve) => {
-        const reader = new FileReader();
-        reader.onload = (e) => resolve(e.target.result);
-        reader.readAsDataURL(archivo);
-    });
-}
 
 export default function O5InformeEvaluacion({ nav, asignacion }) {
     // El _id de la Solicitud es también el que va a tener la OT una vez creada (mismo
@@ -53,9 +45,13 @@ export default function O5InformeEvaluacion({ nav, asignacion }) {
     const agregarFotoSitio = async (e) => {
         const archivo = e.target.files?.[0];
         if (!archivo) return;
-        const b64 = await fotoAThumb(archivo);
-        setInforme((i) => ({ ...i, fotos: [...i.fotos, b64] }));
         e.target.value = '';
+        try {
+            const url = await subirFoto(archivo);
+            setInforme((i) => ({ ...i, fotos: [...i.fotos, url] }));
+        } catch {
+            window.alert('No se pudo subir la foto — revisa la señal e intenta de nuevo.');
+        }
     };
 
     const guardar = async (avanzar) => {
