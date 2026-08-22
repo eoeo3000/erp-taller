@@ -163,7 +163,15 @@ function FilaDia({ dia, nombre, grupos, cruces, esHoy, onEntrar }) {
             }}>
                 {grupos.map((g, i) => {
                     const hIni = horas(g.horaInicio) ?? 0;
+                    const hFin = hIni + (Number(g.duracion) || 0);
                     const enCurso = g.estadoOT === 'En Ejecución' && esHoy;
+                    // Barra muy temprana (poco antes de las 4 de la mañana): casi no hay espacio a
+                    // su izquierda para el rótulo — ahí pasaba por encima de la barra. Se vira el
+                    // rótulo a la derecha del final de la barra, donde sí sobra ancho.
+                    const pocoEspacioIzq = hIni < 4;
+                    const estiloRotulo = pocoEspacioIzq
+                        ? { left: `calc(${pctHora(hFin)} + 5px)`, alignItems: 'flex-start', textAlign: 'left', maxWidth: `calc(${pctHora(24 - hFin)} - 8px)` }
+                        : { right: `calc(${pctHora(24 - hIni)} + 5px)`, alignItems: 'flex-end', textAlign: 'right', maxWidth: `calc(${pctHora(hIni)} - 8px)` };
                     return (
                         <span key={i}>
                             {/* Carril completo (README: "debería tomar todo el rectángulo de esta
@@ -182,12 +190,9 @@ function FilaDia({ dia, nombre, grupos, cruces, esHoy, onEntrar }) {
                                     borderLeft: `3px solid ${enCurso ? 'oklch(0.48 0.10 250)' : '#a3a29a'}`,
                                 }} />
                             <span style={{
-                                position: 'absolute', right: `calc(${pctHora(24 - hIni)} + 5px)`, top: laneTop(i), pointerEvents: 'none',
-                                display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 1, textAlign: 'right',
-                                // Espacio real disponible a la izquierda de la barra (README §4). Ya no se
-                                // recorta con "…": el número de OT va completo y la descripción puede
-                                // saltar de línea (pedido del usuario) — por eso el carril se hizo más alto.
-                                maxWidth: `calc(${pctHora(hIni)} - 8px)`,
+                                position: 'absolute', top: laneTop(i), pointerEvents: 'none',
+                                display: 'flex', flexDirection: 'column', gap: 1,
+                                ...estiloRotulo,
                             }}>
                                 <span className="mono" style={{ fontSize: 14, fontWeight: 700, whiteSpace: 'nowrap', color: enCurso ? 'var(--texto-principal)' : 'var(--texto-secundario-1)' }}>{g.numeroOT}</span>
                                 {/* Máximo 2 líneas: sin este tope, una descripción larga en una barra
