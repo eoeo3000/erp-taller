@@ -5,10 +5,6 @@ import useIsMobile from '../hooks/useIsMobile';
 import autoTable from 'jspdf-autotable';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
-import { headerEntorno } from '../utils/entorno';
-import { subirFoto } from '../utils/fotos';
-import { nuevoHallazgo, guardarHallazgoEnInforme, eliminarHallazgoDeInforme } from '../utils/hallazgos';
-import EditorHallazgo from './EditorHallazgo';
 
 // Paso 4 del rediseño (ver docs/rediseno/design_handoff_panel_control/README.md §6):
 // pipeline + 7 tabs (se agrega "0 · Informe Inicial", que no estaba en el mock, ver resumen
@@ -363,21 +359,6 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
     const [tareas, setTareas] = useState([]);
     const [componentes, setComponentes] = useState([]);
     const [informeEvaluacion, setInformeEvaluacion] = useState({ ...informeEvaluacionVacio, ...(datosRecibidos?.informeEvaluacion || {}) });
-    // Catálogo del formulario adaptativo — se auto-carga acá (no vía App.jsx/cargarDatos) con
-    // el mismo criterio ya usado en ImportExportScreen: catálogos chicos, sin necesidad de
-    // sumarlos al polling global de /api/data que consume el resto de la SPA.
-    const [tiposTrabajo, setTiposTrabajo] = useState([]);
-    const [condicionesEntorno, setCondicionesEntorno] = useState([]);
-    const [editandoHallazgo, setEditandoHallazgo] = useState(null); // null = lista; objeto = editor abierto
-    useEffect(() => {
-        fetch(`${API}/tipos-trabajo`, { headers: headerEntorno() }).then(r => r.json()).then(setTiposTrabajo).catch(() => {});
-        fetch(`${API}/condiciones-entorno`, { headers: headerEntorno() }).then(r => r.json()).then(setCondicionesEntorno).catch(() => {});
-    }, [API]);
-    // Se mantiene solo para no romper el contrato de /ots/convertir-ot (ver prepararPayload) — ya no tiene UI propia.
-    const [cotizacion] = useState({
-        materiales: [], equipos: [], manoObra: [], lineaMando: [],
-        insumos: [], logistica: { alimentacion: 0, traslado: 0, examenes: 0, banos: 0 }
-    });
     const [isModalEnvioOpen, setIsModalEnvioOpen] = useState(false);
     const [emailsEnvio, setEmailsEnvio] = useState([]);
     const [nuevoEmail, setNuevoEmail] = useState('');
@@ -409,26 +390,6 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
         window.addEventListener('pointerup', soltar);
     };
 
-    const manejarGuardadoFinal = async () => {
-        try {
-            const otParaGuardar = {
-                ...otSeleccionada,
-                solicitudId: otSeleccionada.solicitudId || otSeleccionada._id,
-                tareas, componentes, cotizacion, pago,
-            };
-            const resultado = await actualizarOtGlobal(otSeleccionada._id, otParaGuardar);
-            if (resultado && resultado.exito) {
-                const otNumerada = resultado.otActualizada;
-                setOtSeleccionada(otNumerada);
-                if (otNumerada.tareas) setTareas(otNumerada.tareas);
-                if (otNumerada.pago) setPago(otNumerada.pago);
-                alert(`Guardado con éxito. OT #${otNumerada.numeroOT}`);
-            }
-        } catch (err) {
-            console.error("Error en el cliente:", err);
-        }
-    };
-
     const actualizarTarea = (index, campo, valor) => {
         setTareas(tareas.map((tItem, i) => {
             if (i !== index) return tItem;
@@ -449,19 +410,6 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
 
     const calcularSubtotal = (lista) => lista.reduce((sum, i) => sum + (Number(i.cantidad || 0) * Number(i.unitario || 0)), 0);
     void calcularSubtotal;
-
-    const prepararPayload = () => {
-        const idReal = datosRecibidos?._id;
-        return {
-            solicitudId: idReal,
-            otId: idReal,
-            esEdicion: !!(datosRecibidos?.tareas && datosRecibidos.tareas.length > 0),
-            tareas, componentes,
-            cotizacionDetalle: { ...cotizacion, logistica, totalCalculadoMat: totalMat },
-            resumenFinanciero: { totalNeto: granTotal, iva: granTotal * 0.19, totalGeneral: granTotal * 1.19 },
-            fechaGeneracion: new Date().toISOString()
-        };
-    };
 
     const limpiarIds = (lista) => (lista || []).map(item => {
         const { _id, id: _omitido, ...resto } = item;
@@ -747,26 +695,6 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
         } catch (e) { console.warn('No se pudo registrar la carpeta en la OT:', e.message); }
     };
 
-    const finalizarYCotizar = async () => {
-        if (granTotal === 0) {
-            if (!window.confirm("La cotización está en $0. ¿Deseas generar el PDF de todas formas?")) return;
-        }
-        try {
-            const payload = prepararPayload();
-            const respuestaConvertir = await axios.post(`${API}/ots/convertir-ot`, payload);
-            if (respuestaConvertir.status === 200 || respuestaConvertir.status === 201) {
-                if (typeof cargarDatos === 'function') await cargarDatos();
-                const correoBase = datosRecibidos?.correo || "";
-                setEmailsEnvio([correoBase]);
-                setIsModalEnvioOpen(true);
-                generarPDF();
-            }
-        } catch (error) {
-            console.error("Error al finalizar:", error);
-            alert(`No se pudo procesar: ${error.response?.data?.error || "Error al conectar con el servidor."}`);
-        }
-    };
-
     // Pestaña Antecedentes: al agregar una tarea en una OT que ya tiene supervisor
     // asignado, se precarga su nombre como responsable por defecto (solo valor inicial,
     // el usuario puede cambiarlo). operarioId/operarioNombre son arreglos paralelos que
@@ -885,15 +813,6 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
         if (!item) return null;
         return (item.stockActual || 0) - (item.stockReservado || 0);
     };
-    const faltantesComponentes = componentes
-        .filter(c => c.tipo === 'Equipo' || c.tipo === 'Herramienta')
-        .map(c => ({ ...c, estadoCatalogo: disponibilidadEquipo(c.codigo) }))
-        .filter(c => c.codigo && c.estadoCatalogo && c.estadoCatalogo !== 'Disponible');
-    const faltantesLogistica = (logistica || [])
-        .map(l => ({ ...l, disponible: disponibilidadSuministro(l.codigo || l.unidad) }))
-        .filter(l => (l.codigo || l.unidad) && l.disponible !== null && Number(l.cantidad) > l.disponible);
-    const hayFaltantesStock = faltantesComponentes.length > 0 || faltantesLogistica.length > 0;
-
     const agregarLogistica = () => setLogistica([...logistica, { _id: Date.now().toString(), descripcion: '', cantidad: 1, precio: 0 }]);
     const actualizarLogistica = (index, campo, valor) => {
         setLogistica(prev => {
@@ -954,55 +873,6 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
         alert(`Hoja de ruta "${plantilla.nombre}" aplicada. Ahora asigna fechas, horarios y responsables a las tareas.`);
     };
 
-    const itemVacioInforme = (lista) => {
-        if (lista === 'tareas') return { descripcion: '', puesto: '', duracion: 0 };
-        if (lista === 'componentes') return { codigo: '', descripcion: '', cantidad: 1, precio: 0, tipo: 'Material' };
-        return { descripcion: '', cantidad: 1, unidad: '', precio: 0 };
-    };
-    const setInformeCampo = (campo, valor) => setInformeEvaluacion(prev => ({ ...prev, [campo]: valor }));
-    const agregarInformeItem = (lista) => setInformeEvaluacion(prev => ({ ...prev, [lista]: [...prev[lista], itemVacioInforme(lista)] }));
-    const actualizarInformeItem = (lista, idx, campo, valor) => setInformeEvaluacion(prev => ({
-        ...prev,
-        [lista]: prev[lista].map((it, i) => i === idx ? { ...it, [campo]: (['cantidad', 'precio', 'duracion'].includes(campo)) ? Number(valor) || 0 : valor } : it)
-    }));
-    const eliminarInformeItem = (lista, idx) => setInformeEvaluacion(prev => ({ ...prev, [lista]: prev[lista].filter((_, i) => i !== idx) }));
-    // A diferencia de O5 (PWA), acá el hallazgo no se persiste de inmediato — queda en el
-    // estado local de este tab, igual que fecha/condicionesSitio/etc., y se guarda junto con
-    // el resto al usar "Guardar"/"Terminar planificación" (guardarPlanificacion). Nunca
-    // gateado por informeEvaluacion.completo: un hallazgo individual puede seguir editándose
-    // aunque el informe ya esté marcado completo (plan-formulario-adaptativo.md, sección final).
-    const guardarHallazgo = (hallazgoEditado) => {
-        setInformeEvaluacion(prev => guardarHallazgoEnInforme(prev, hallazgoEditado));
-        setEditandoHallazgo(null);
-    };
-    const eliminarHallazgo = (hallazgoId) => {
-        if (!window.confirm('¿Eliminar este hallazgo?')) return;
-        setInformeEvaluacion(prev => eliminarHallazgoDeInforme(prev, hallazgoId));
-        setEditandoHallazgo(null);
-    };
-    // Se sube como archivo real (nunca base64 incrustado en la OT, ver utils/fotos.js) — este
-    // campo guardaba antes la foto como data: URI directo en el documento, mismo antipatrón ya
-    // corregido para las fotos de evidencia de terreno (ver docs/bugs-conocidos.md).
-    const agregarFotoInforme = async (e) => {
-        const archivo = e.target.files?.[0];
-        if (!archivo) return;
-        e.target.value = '';
-        try {
-            const url = await subirFoto(archivo, API);
-            setInformeEvaluacion(prev => ({ ...prev, fotos: [...prev.fotos, url] }));
-        } catch {
-            alert('No se pudo subir la foto — intenta de nuevo.');
-        }
-    };
-    const eliminarFotoInforme = (idx) => setInformeEvaluacion(prev => ({ ...prev, fotos: prev.fotos.filter((_, i) => i !== idx) }));
-    const marcarInformeCompleto = () => {
-        if (!informeEvaluacion.fecha || !informeEvaluacion.responsable || !informeEvaluacion.condicionesSitio) {
-            alert('Completa al menos fecha, responsable y condiciones del sitio antes de marcar el informe como completo.');
-            return;
-        }
-        setInformeEvaluacion(prev => ({ ...prev, completo: true }));
-    };
-    const reabrirInforme = () => setInformeEvaluacion(prev => ({ ...prev, completo: false }));
     const aplicarInformeAOT = () => {
         const { tareas: tInforme = [], componentes: cInforme = [], logistica: lInforme = [] } = informeEvaluacion;
         if (!tInforme.length && !cInforme.length && !lInforme.length) {
@@ -1113,42 +983,9 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
             if (!id) return;
             const { data } = await axios.get(`${API}/ots/${id}`);
             setOtSeleccionada(data);
+            if (data.informeEvaluacion) setInformeEvaluacion({ ...informeEvaluacionVacio, ...data.informeEvaluacion });
             if (cargarDatos) await cargarDatos();
         } catch (e) { alert('Error al actualizar: ' + e.message); }
-    };
-
-    const notificarSupervisor = async () => {
-        try {
-            const otId = otSeleccionada?._id || datosRecibidos?._id;
-            const ids = [...new Set(tareas.flatMap(tt => Array.isArray(tt.operarioId) ? tt.operarioId : [tt.operarioId]).filter(Boolean))];
-            const recurso = recursos.find(r => ids.map(String).includes(String(r._id)) && (r.email || r.telefono));
-            let supervisorEmail = recurso?.email || '';
-            const supervisorNombre = recurso?.nombre || 'Supervisor';
-            const telefono = recurso?.telefono;
-            if (!supervisorEmail) {
-                supervisorEmail = window.prompt(`Sin email registrado para ${supervisorNombre}.\nIngresa el email del supervisor:`);
-                if (!supervisorEmail) return;
-            }
-            const emailFinal = supervisorEmail.trim();
-            if (!emailFinal || !emailFinal.includes('@')) { alert('Ingresa un email válido para el supervisor.'); return; }
-            const { data } = await axios.post(`${API}/ots/${otId}/enviar-supervisor`, { supervisorEmail: emailFinal, supervisorNombre });
-            const link = data.link;
-            const tareasTexto = tareas.map(tt => `  • ${tt.descripcion}${tt.fecha ? ` — ${tt.fecha}` : ''}${tt.hora ? ` ${tt.hora}` : ''}${tt.operarioNombre?.length ? ` (${[].concat(tt.operarioNombre).join(', ')})` : ''}`).join('\n');
-            const resumen = [
-                `*ORDEN DE TRABAJO: ${otSeleccionada?.numeroOT || ''}*`,
-                `Cliente: ${otSeleccionada?.solicitante || ''}`,
-                `Descripción: ${otSeleccionada?.descripcion || ''}`,
-                ``, `*Tareas programadas:*`, tareasTexto || '  Sin tareas', ``,
-                `Se te envió el PDF completo a ${supervisorEmail}`, ``,
-                `Para confirmar inicio del trabajo toca el link:`, link
-            ].join('\n');
-            const msg = encodeURIComponent(resumen);
-            if (telefono) window.open(`https://wa.me/${telefono}?text=${msg}`, '_blank');
-            else {
-                const num = window.prompt(`Sin teléfono registrado para ${supervisorNombre}.\nIngresa el número (ej: 56912345678):`);
-                if (num) window.open(`https://wa.me/${num.trim()}?text=${msg}`, '_blank');
-            }
-        } catch (e) { alert('Error al enviar al supervisor: ' + e.message); }
     };
 
     if (!datosRecibidos) return <div style={{ padding: '50px', fontFamily: t.fontUi }}>No hay datos.</div>;
@@ -1156,7 +993,6 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
     const info = etapaInfo(otSeleccionada?.estado);
     const puedeEjecucion = ['Programada', 'En Ejecución', 'Trabajo Terminado', 'Con Informe', 'Pagada'].includes(otSeleccionada.estado);
     const habilitadoTabs14 = informeEvaluacion.completo || yaTeniaContenidoPrevio;
-    const requiereSupervisorAntesQueOT = !otSeleccionada?.numeroOT;
 
     return (
         <div style={styles.raiz}>
@@ -1227,130 +1063,84 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                     {/* 0 · INFORME INICIAL */}
                     {tabActiva === 'informe' && (
                         <div style={{ padding: 16 }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+                                <div style={styles.tituloSub}>Informe inicial</div>
+                                <button onClick={recargarOT} title="Actualizar estado desde el servidor" style={styles.btnSecundario}>Actualizar</button>
+                            </div>
+
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px,1fr))', gap: 10, marginBottom: 16 }}>
+                                <div style={styles.campoLabel}>
+                                    <span style={styles.etiqueta}>Estado</span>
+                                    <span style={{ fontSize: 13, fontWeight: 700, color: informeEvaluacion.completo ? t.verde : t.ambar }}>
+                                        {informeEvaluacion.completo ? `Completo${informeEvaluacion.fecha ? ` · ${informeEvaluacion.fecha}` : ''}` : 'Pendiente — a la espera de la visita del supervisor'}
+                                    </span>
+                                </div>
+                                <div style={styles.campoLabel}>
+                                    <span style={styles.etiqueta}>Hallazgos registrados</span>
+                                    <span style={{ fontSize: 13 }}>
+                                        {(informeEvaluacion.hallazgos || []).length}
+                                        {(informeEvaluacion.hallazgos || []).some(h => h.casoNoCubierto)
+                                            ? ` · ${(informeEvaluacion.hallazgos || []).filter(h => h.casoNoCubierto).length} para revisar`
+                                            : ''}
+                                    </span>
+                                </div>
+                            </div>
+
+                            <div style={{ ...styles.campoLabel, marginBottom: 16 }}>
+                                <span style={styles.etiqueta}>Supervisor asignado</span>
+                                <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                                    <select style={styles.inputPlano} value={formAsignacion.supervisorId} onChange={e => campoAsignacion('supervisorId', e.target.value)} disabled={cargandoAntecedentes}>
+                                        <option value="">Sin asignar</option>
+                                        {(antecedentes?.candidatos || []).map(c => <option key={c.id} value={c.id}>{c.nombre} · {c.puesto}</option>)}
+                                    </select>
+                                    <button onClick={guardarAsignacion} disabled={guardandoAsignacion} style={styles.btnAccion}>
+                                        {guardandoAsignacion ? 'Guardando…' : (antecedentes?.ot?.supervisor ? 'Cambiar' : 'Asignar')}
+                                    </button>
+                                    {avisoAsignacion && <span style={{ fontSize: 11, color: avisoAsignacion.tipo === 'ok' ? t.verde : t.rojo }}>{avisoAsignacion.texto}</span>}
+                                </div>
+                            </div>
+
+                            <p style={{ fontSize: 11, color: t.textoAtenuado3, marginBottom: 16 }}>
+                                El detalle del informe (condiciones del sitio, riesgos, hallazgos y fotos) se completa desde la aplicación del supervisor en terreno.
+                            </p>
+
                             {informeEvaluacion.completo && (
-                                <div style={styles.avisoOk}>
-                                    <span>Informe marcado como completo.</span>
-                                    <button onClick={reabrirInforme} style={styles.btnSecundario}>Reabrir para editar</button>
-                                </div>
-                            )}
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px,1fr))', gap: 10, marginBottom: 14 }}>
-                                <label style={styles.campoLabel}>
-                                    <span style={styles.etiqueta}>Fecha del levantamiento *</span>
-                                    <input type="date" className="campo-ed" style={styles.inputPlano} value={informeEvaluacion.fecha} onChange={e => setInformeCampo('fecha', e.target.value)} disabled={informeEvaluacion.completo} />
-                                </label>
-                                <label style={styles.campoLabel}>
-                                    <span style={styles.etiqueta}>Responsable *</span>
-                                    <input className="campo-ed" style={styles.inputPlano} value={informeEvaluacion.responsable} onChange={e => setInformeCampo('responsable', e.target.value)} disabled={informeEvaluacion.completo} />
-                                </label>
-                            </div>
-                            {[
-                                ['condicionesSitio', 'Condiciones del sitio *'],
-                                ['recursosObservados', 'Recursos observados en terreno'],
-                                ['riesgos', 'Riesgos'],
-                                ['metodologia', 'Metodología propuesta'],
-                            ].map(([campo, label]) => (
-                                <label key={campo} style={{ ...styles.campoLabel, marginBottom: 10 }}>
-                                    <span style={styles.etiqueta}>{label}</span>
-                                    <textarea className="campo-ed" style={{ ...styles.inputPlano, minHeight: 60, lineHeight: 1.5 }} value={informeEvaluacion[campo]} onChange={e => setInformeCampo(campo, e.target.value)} disabled={informeEvaluacion.completo} />
-                                </label>
-                            ))}
-
-                            <div style={styles.etiqueta}>Fotos del sitio</div>
-                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, margin: '6px 0 16px' }}>
-                                {informeEvaluacion.fotos.map((foto, idx) => (
-                                    <div key={idx} style={{ position: 'relative' }}>
-                                        <img src={foto} alt="" style={{ width: 72, height: 72, objectFit: 'cover', borderRadius: 2 }} />
-                                        {!informeEvaluacion.completo && <span onClick={() => eliminarFotoInforme(idx)} style={styles.xFoto}>×</span>}
+                                <>
+                                    {informeEvaluacion.tareas.length > 0 && (
+                                        <>
+                                            <div style={styles.tituloSub}>Tareas identificadas</div>
+                                            <ul style={{ margin: '4px 0 14px', paddingLeft: 18, fontSize: 12 }}>
+                                                {informeEvaluacion.tareas.map((it, idx) => (
+                                                    <li key={idx}>{it.descripcion}{it.puesto ? ` · ${it.puesto}` : ''}{it.duracion ? ` · ${it.duracion} h` : ''}</li>
+                                                ))}
+                                            </ul>
+                                        </>
+                                    )}
+                                    {informeEvaluacion.componentes.length > 0 && (
+                                        <>
+                                            <div style={styles.tituloSub}>Equipos y materiales identificados</div>
+                                            <ul style={{ margin: '4px 0 14px', paddingLeft: 18, fontSize: 12 }}>
+                                                {informeEvaluacion.componentes.map((c, idx) => (
+                                                    <li key={idx}>{c.descripcion}{c.codigo ? ` (${c.codigo})` : ''} · {c.cantidad}</li>
+                                                ))}
+                                            </ul>
+                                        </>
+                                    )}
+                                    {informeEvaluacion.logistica.length > 0 && (
+                                        <>
+                                            <div style={styles.tituloSub}>Logística identificada</div>
+                                            <ul style={{ margin: '4px 0 14px', paddingLeft: 18, fontSize: 12 }}>
+                                                {informeEvaluacion.logistica.map((l, idx) => (
+                                                    <li key={idx}>{l.descripcion} · {l.cantidad} {l.unidad}</li>
+                                                ))}
+                                            </ul>
+                                        </>
+                                    )}
+                                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
+                                        <button onClick={aplicarInformeAOT} style={styles.btnPrimario}>Aplicar a la OT →</button>
                                     </div>
-                                ))}
-                                {!informeEvaluacion.completo && (
-                                    <label style={styles.agregarFoto}>
-                                        + Agregar
-                                        <input type="file" accept="image/*" capture="environment" style={{ display: 'none' }} onChange={agregarFotoInforme} />
-                                    </label>
-                                )}
-                            </div>
-
-                            {/* Hallazgos del formulario adaptativo — nunca gateado por
-                                informeEvaluacion.completo (ver comentario en guardarHallazgo). */}
-                            <div style={styles.tituloSub}>Hallazgos</div>
-                            {(informeEvaluacion.hallazgos || []).length === 0 && (
-                                <div style={{ fontSize: 11.5, color: t.textoAtenuado3, marginBottom: 8 }}>
-                                    Sin hallazgos todavía — se cargan desde la visita de evaluación en terreno, o se pueden agregar acá directamente.
-                                </div>
+                                </>
                             )}
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 10 }}>
-                                {(informeEvaluacion.hallazgos || []).map((h) => {
-                                    const tipo = tiposTrabajo.find((tp) => String(tp._id) === String(h.tipoTrabajoId));
-                                    return (
-                                        <div key={h._id} onClick={() => setEditandoHallazgo(h)} style={{ cursor: 'pointer', padding: '8px 10px', border: `1px solid ${t.hairlineBloque}`, borderRadius: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
-                                            <span style={{ fontSize: 12.5, fontWeight: 700 }}>
-                                                {tipo?.nombre || 'Sin tipo de trabajo'}
-                                                {h.casoNoCubierto && <span style={{ color: t.ambar, fontWeight: 600 }}> · para revisar</span>}
-                                            </span>
-                                            <span style={{ fontSize: 11.5, color: t.textoAtenuado2 }}>{h.textoDescriptivo || '(sin texto)'}</span>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                            <button onClick={() => setEditandoHallazgo(nuevoHallazgo())} style={styles.btnAgregar}>+ Agregar hallazgo</button>
-
-                            <div style={styles.tituloSub}>Tareas identificadas</div>
-                            <div style={styles.tablaHeader('minmax(200px,1fr) 132px 62px 24px')}>
-                                <span>Descripción</span><span>Puesto</span><span style={{ textAlign: 'right' }}>Hrs</span><span />
-                            </div>
-                            {informeEvaluacion.tareas.map((it, idx) => (
-                                <div key={idx} style={styles.tablaFila('minmax(200px,1fr) 132px 62px 24px')}>
-                                    <input className="campo-ed" style={styles.inputCelda} value={it.descripcion} onChange={e => actualizarInformeItem('tareas', idx, 'descripcion', e.target.value)} disabled={informeEvaluacion.completo} />
-                                    <select className="campo-ed" style={styles.inputCelda} value={it.puesto} onChange={e => actualizarInformeItem('tareas', idx, 'puesto', e.target.value)} disabled={informeEvaluacion.completo}>
-                                        <option value="">—</option>
-                                        {puestosDB.map(p => <option key={p._id} value={p.nombre}>{p.nombre}</option>)}
-                                    </select>
-                                    <input type="number" className="campo-ed" style={{ ...styles.inputCelda, textAlign: 'right' }} value={it.duracion} onChange={e => actualizarInformeItem('tareas', idx, 'duracion', e.target.value)} disabled={informeEvaluacion.completo} />
-                                    {!informeEvaluacion.completo ? <span onClick={() => eliminarInformeItem('tareas', idx)} style={styles.xFila}>×</span> : <span />}
-                                </div>
-                            ))}
-                            {!informeEvaluacion.completo && <button onClick={() => agregarInformeItem('tareas')} style={styles.btnAgregar}>Agregar tarea</button>}
-
-                            <div style={{ ...styles.tituloSub, marginTop: 18 }}>Herramientas / equipos / materiales identificados</div>
-                            <div style={styles.tablaHeader('96px minmax(200px,1fr) 104px 62px 96px 24px')}>
-                                <span>Código</span><span>Descripción</span><span>Tipo</span><span style={{ textAlign: 'right' }}>Cant.</span><span style={{ textAlign: 'right' }}>Precio</span><span />
-                            </div>
-                            {informeEvaluacion.componentes.map((c, idx) => (
-                                <div key={idx} style={styles.tablaFila('96px minmax(200px,1fr) 104px 62px 96px 24px')}>
-                                    <input className="campo-ed" style={styles.inputCelda} value={c.codigo} onChange={e => actualizarInformeItem('componentes', idx, 'codigo', e.target.value)} disabled={informeEvaluacion.completo} />
-                                    <input className="campo-ed" style={styles.inputCelda} value={c.descripcion} onChange={e => actualizarInformeItem('componentes', idx, 'descripcion', e.target.value)} disabled={informeEvaluacion.completo} />
-                                    <select className="campo-ed" style={styles.inputCelda} value={c.tipo} onChange={e => actualizarInformeItem('componentes', idx, 'tipo', e.target.value)} disabled={informeEvaluacion.completo}>
-                                        <option value="Material">Material</option><option value="Equipo">Equipo</option><option value="Herramienta">Herramienta</option>
-                                    </select>
-                                    <input type="number" className="campo-ed" style={{ ...styles.inputCelda, textAlign: 'right' }} value={c.cantidad} onChange={e => actualizarInformeItem('componentes', idx, 'cantidad', e.target.value)} disabled={informeEvaluacion.completo} />
-                                    <input type="number" className="campo-ed" style={{ ...styles.inputCelda, textAlign: 'right' }} value={c.precio} onChange={e => actualizarInformeItem('componentes', idx, 'precio', e.target.value)} disabled={informeEvaluacion.completo} />
-                                    {!informeEvaluacion.completo ? <span onClick={() => eliminarInformeItem('componentes', idx)} style={styles.xFila}>×</span> : <span />}
-                                </div>
-                            ))}
-                            {!informeEvaluacion.completo && <button onClick={() => agregarInformeItem('componentes')} style={styles.btnAgregar}>Agregar ítem</button>}
-
-                            <div style={{ ...styles.tituloSub, marginTop: 18 }}>Logística identificada</div>
-                            <div style={styles.tablaHeader('minmax(200px,1fr) 96px 62px 96px 24px')}>
-                                <span>Descripción</span><span>Unidad</span><span style={{ textAlign: 'right' }}>Cant.</span><span style={{ textAlign: 'right' }}>Precio</span><span />
-                            </div>
-                            {informeEvaluacion.logistica.map((l, idx) => (
-                                <div key={idx} style={styles.tablaFila('minmax(200px,1fr) 96px 62px 96px 24px')}>
-                                    <input className="campo-ed" style={styles.inputCelda} value={l.descripcion} onChange={e => actualizarInformeItem('logistica', idx, 'descripcion', e.target.value)} disabled={informeEvaluacion.completo} />
-                                    <input className="campo-ed" style={styles.inputCelda} value={l.unidad} onChange={e => actualizarInformeItem('logistica', idx, 'unidad', e.target.value)} disabled={informeEvaluacion.completo} />
-                                    <input type="number" className="campo-ed" style={{ ...styles.inputCelda, textAlign: 'right' }} value={l.cantidad} onChange={e => actualizarInformeItem('logistica', idx, 'cantidad', e.target.value)} disabled={informeEvaluacion.completo} />
-                                    <input type="number" className="campo-ed" style={{ ...styles.inputCelda, textAlign: 'right' }} value={l.precio} onChange={e => actualizarInformeItem('logistica', idx, 'precio', e.target.value)} disabled={informeEvaluacion.completo} />
-                                    {!informeEvaluacion.completo ? <span onClick={() => eliminarInformeItem('logistica', idx)} style={styles.xFila}>×</span> : <span />}
-                                </div>
-                            ))}
-                            {!informeEvaluacion.completo && <button onClick={() => agregarInformeItem('logistica')} style={styles.btnAgregar}>Agregar ítem</button>}
-
-                            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 20, flexWrap: 'wrap', gap: 8 }}>
-                                {!informeEvaluacion.completo
-                                    ? <button onClick={marcarInformeCompleto} style={styles.btnPrimario}>Marcar informe como completo</button>
-                                    : <span />}
-                                <button onClick={aplicarInformeAOT} disabled={!informeEvaluacion.completo} style={{ ...styles.btnPrimario, opacity: informeEvaluacion.completo ? 1 : .5, cursor: informeEvaluacion.completo ? 'pointer' : 'not-allowed' }}>Aplicar a la OT →</button>
-                            </div>
                         </div>
                     )}
 
@@ -1656,6 +1446,10 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                                 </label>
                             ))}
                             <button onClick={() => generarPDF(seccionesPdf)} style={{ ...styles.btnPrimario, width: '100%', marginTop: 11 }}>Descargar PDF</button>
+                            <button
+                                onClick={() => { setEmailsEnvio([datosRecibidos?.correo || '']); setIsModalEnvioOpen(true); }}
+                                style={{ ...styles.btnSecundario, width: '100%', marginTop: 6 }}
+                            >Enviar cotización por correo</button>
                             <div style={{ fontSize: 10.5, color: t.textoAtenuado3, marginTop: 9, lineHeight: 1.5 }}>Las cotizaciones ya emitidas se siguen viendo con su formato original.</div>
                         </div>
                         </div>
@@ -1666,7 +1460,7 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                         <div style={{ padding: 16 }}>
                             <div style={{ marginBottom: 20, border: `1px solid ${t.bordeZona}`, borderRadius: 2 }}>
                                 <div style={{ padding: '10px 14px', background: t.encabezadoTabla, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                    <span style={{ fontSize: 11.5, fontWeight: 700 }}>Despacho al supervisor</span>
+                                    <span style={{ fontSize: 11.5, fontWeight: 700 }}>Estado en terreno</span>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                                         <span style={{ fontSize: 11, fontWeight: 600, color: t.textoSecundario1 }}>{otSeleccionada?.estado || 'Sin estado'}</span>
                                         <button onClick={recargarOT} title="Actualizar estado desde el servidor" style={styles.btnSecundario}>Actualizar</button>
@@ -1676,19 +1470,9 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                                     <div style={{ fontSize: 11.5, color: t.textoSecundario2, marginBottom: 10 }}>
                                         <div><span style={{ color: t.textoAtenuado3 }}>OT: </span><strong>{otSeleccionada?.numeroOT || '—'}</strong> · <span style={{ color: t.textoAtenuado3 }}>Cliente: </span><strong>{otSeleccionada?.solicitante || '—'}</strong></div>
                                     </div>
-                                    {otSeleccionada?.estado === 'En Ejecución' ? (
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                                            <div style={{ fontSize: 11.5, color: t.verde, fontWeight: 600 }}>Trabajo en ejecución — el supervisor confirmó el inicio.</div>
-                                            <button onClick={notificarSupervisor} style={styles.btnPrimario}>Reenviar link al supervisor</button>
-                                        </div>
-                                    ) : otSeleccionada?.estado === 'Programada' ? (
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                                            <p style={{ margin: 0, fontSize: 11.5, color: t.textoSecundario2 }}>La OT está programada. Envía la orden al supervisor para que confirme el inicio del trabajo.</p>
-                                            <button onClick={notificarSupervisor} style={styles.btnPrimario}>Enviar OT al supervisor por WhatsApp</button>
-                                        </div>
-                                    ) : (
-                                        <p style={{ color: t.textoAtenuado3, fontSize: 11.5, margin: 0 }}>El despacho se habilita cuando la OT esté <strong>Programada</strong>.</p>
-                                    )}
+                                    <p style={{ color: t.textoAtenuado3, fontSize: 11.5, margin: 0 }}>
+                                        El supervisor asignado ve esta OT en su aplicación de terreno — ya no hace falta despacharla manualmente desde acá.
+                                    </p>
                                 </div>
                             </div>
 
@@ -1863,28 +1647,7 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                                 </div>
                                 <div style={{ padding: '11px 16px 14px' }}>
                                     <div style={styles.tituloSub}>Acciones</div>
-                                    <div style={styles.accionesGrid}>
-                                        <button onClick={() => guardarPlanificacion(false)} style={styles.btnAccion}>Guardar</button>
-                                        <button onClick={() => setModalPlantilla(true)} style={styles.btnAccion}>Hoja de ruta</button>
-                                        <button onClick={generarPDF} style={styles.btnAccion}>Cotización PDF</button>
-                                        <button
-                                            onClick={() => { if (hayFaltantesStock) { alert('No se puede programar: hay equipos/herramientas no disponibles o suministros con stock insuficiente. Revisa las pestañas Equipos y materiales / Suministros directos.'); return; } navigate('/gantt'); }}
-                                            title={hayFaltantesStock ? 'Hay faltantes de stock sin cubrir' : ''}
-                                            style={{ ...styles.btnAccion, ...(hayFaltantesStock ? { color: t.rojo, borderColor: t.rojo } : {}) }}
-                                        >{hayFaltantesStock ? 'Programar (faltantes)' : 'Programar'}</button>
-                                    </div>
-                                    {requiereSupervisorAntesQueOT ? (
-                                        <>
-                                            <button onClick={finalizarYCotizar} style={styles.btnPrimarioAside}>Finalizar y cotizar</button>
-                                            <div style={styles.notaAside}>Convierte la solicitud en OT, genera el PDF y abre el envío por correo.</div>
-                                        </>
-                                    ) : (
-                                        <>
-                                            <button onClick={notificarSupervisor} style={styles.btnPrimarioAside}>Enviar al supervisor</button>
-                                            <div style={styles.notaAside}>El supervisor recibe un enlace con token; no requiere cuenta.</div>
-                                        </>
-                                    )}
-                                    <button onClick={manejarGuardadoFinal} style={{ ...styles.btnSecundario, width: '100%', marginTop: 6 }}>Guardar y actualizar OT completa</button>
+                                    <button onClick={() => guardarPlanificacion(false)} style={{ ...styles.btnPrimarioAside, width: '100%' }}>Guardar</button>
                                 </div>
                             </div>
                         </aside>
@@ -1899,29 +1662,6 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
             <datalist id="lista-suministros-recursos">
                 {(suministrosDB || []).map((item, idx) => <option key={item._id || idx} value={item.codigo}>{item.descripcion} - {CLP(item.precio)}</option>)}
             </datalist>
-
-            {/* MODAL HALLAZGO (formulario adaptativo) */}
-            {editandoHallazgo && (
-                <div style={styles.overlay}>
-                    <div style={{ ...styles.modal, width: 560, maxWidth: '95vw', maxHeight: '85vh', display: 'flex', flexDirection: 'column' }}>
-                        <div style={styles.modalHeader}>
-                            <span style={{ fontSize: 12.5, fontWeight: 700 }}>Hallazgo</span>
-                            <span onClick={() => setEditandoHallazgo(null)} style={styles.xModal}>×</span>
-                        </div>
-                        <div style={{ padding: 14, overflowY: 'auto' }}>
-                            <EditorHallazgo
-                                hallazgo={editandoHallazgo}
-                                tiposTrabajo={tiposTrabajo}
-                                condicionesEntorno={condicionesEntorno}
-                                apiBase={API}
-                                onGuardar={guardarHallazgo}
-                                onEliminar={editandoHallazgo._id ? () => eliminarHallazgo(editandoHallazgo._id) : null}
-                                onCancelar={() => setEditandoHallazgo(null)}
-                            />
-                        </div>
-                    </div>
-                </div>
-            )}
 
             {/* MODAL HOJA DE RUTA */}
             {modalPlantilla && (
