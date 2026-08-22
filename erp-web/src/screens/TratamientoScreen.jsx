@@ -5,6 +5,10 @@ import useIsMobile from '../hooks/useIsMobile';
 import autoTable from 'jspdf-autotable';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
+import { headerEntorno } from '../utils/entorno';
+import { subirFoto } from '../utils/fotos';
+import { nuevoHallazgo, guardarHallazgoEnInforme, eliminarHallazgoDeInforme } from '../utils/hallazgos';
+import EditorHallazgo from './EditorHallazgo';
 
 // Paso 4 del rediseño (ver docs/rediseno/design_handoff_panel_control/README.md §6):
 // pipeline + 7 tabs (se agrega "0 · Informe Inicial", que no estaba en el mock, ver resumen
@@ -56,7 +60,7 @@ const etapaInfo = (estado) => {
 const informeEvaluacionVacio = {
     fecha: '', responsable: '', condicionesSitio: '', recursosObservados: '',
     riesgos: '', metodologia: '', fotos: [], completo: false,
-    tareas: [], componentes: [], logistica: []
+    tareas: [], componentes: [], logistica: [], hallazgos: [],
 };
 
 // Grillas fijas de cada tabla editable (README §6). Las de materiales/suministros suman una
@@ -359,6 +363,16 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
     const [tareas, setTareas] = useState([]);
     const [componentes, setComponentes] = useState([]);
     const [informeEvaluacion, setInformeEvaluacion] = useState({ ...informeEvaluacionVacio, ...(datosRecibidos?.informeEvaluacion || {}) });
+    // Catálogo del formulario adaptativo — se auto-carga acá (no vía App.jsx/cargarDatos) con
+    // el mismo criterio ya usado en ImportExportScreen: catálogos chicos, sin necesidad de
+    // sumarlos al polling global de /api/data que consume el resto de la SPA.
+    const [tiposTrabajo, setTiposTrabajo] = useState([]);
+    const [condicionesEntorno, setCondicionesEntorno] = useState([]);
+    const [editandoHallazgo, setEditandoHallazgo] = useState(null); // null = lista; objeto = editor abierto
+    useEffect(() => {
+        fetch(`${API}/tipos-trabajo`, { headers: headerEntorno() }).then(r => r.json()).then(setTiposTrabajo).catch(() => {});
+        fetch(`${API}/condiciones-entorno`, { headers: headerEntorno() }).then(r => r.json()).then(setCondicionesEntorno).catch(() => {});
+    }, [API]);
     // Se mantiene solo para no romper el contrato de /ots/convertir-ot (ver prepararPayload) — ya no tiene UI propia.
     const [cotizacion] = useState({
         materiales: [], equipos: [], manoObra: [], lineaMando: [],
@@ -952,13 +966,33 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
         [lista]: prev[lista].map((it, i) => i === idx ? { ...it, [campo]: (['cantidad', 'precio', 'duracion'].includes(campo)) ? Number(valor) || 0 : valor } : it)
     }));
     const eliminarInformeItem = (lista, idx) => setInformeEvaluacion(prev => ({ ...prev, [lista]: prev[lista].filter((_, i) => i !== idx) }));
-    const agregarFotoInforme = (e) => {
+    // A diferencia de O5 (PWA), acá el hallazgo no se persiste de inmediato — queda en el
+    // estado local de este tab, igual que fecha/condicionesSitio/etc., y se guarda junto con
+    // el resto al usar "Guardar"/"Terminar planificación" (guardarPlanificacion). Nunca
+    // gateado por informeEvaluacion.completo: un hallazgo individual puede seguir editándose
+    // aunque el informe ya esté marcado completo (plan-formulario-adaptativo.md, sección final).
+    const guardarHallazgo = (hallazgoEditado) => {
+        setInformeEvaluacion(prev => guardarHallazgoEnInforme(prev, hallazgoEditado));
+        setEditandoHallazgo(null);
+    };
+    const eliminarHallazgo = (hallazgoId) => {
+        if (!window.confirm('¿Eliminar este hallazgo?')) return;
+        setInformeEvaluacion(prev => eliminarHallazgoDeInforme(prev, hallazgoId));
+        setEditandoHallazgo(null);
+    };
+    // Se sube como archivo real (nunca base64 incrustado en la OT, ver utils/fotos.js) — este
+    // campo guardaba antes la foto como data: URI directo en el documento, mismo antipatrón ya
+    // corregido para las fotos de evidencia de terreno (ver docs/bugs-conocidos.md).
+    const agregarFotoInforme = async (e) => {
         const archivo = e.target.files?.[0];
         if (!archivo) return;
-        const reader = new FileReader();
-        reader.onload = (ev) => setInformeEvaluacion(prev => ({ ...prev, fotos: [...prev.fotos, ev.target.result] }));
-        reader.readAsDataURL(archivo);
         e.target.value = '';
+        try {
+            const url = await subirFoto(archivo, API);
+            setInformeEvaluacion(prev => ({ ...prev, fotos: [...prev.fotos, url] }));
+        } catch {
+            alert('No se pudo subir la foto — intenta de nuevo.');
+        }
     };
     const eliminarFotoInforme = (idx) => setInformeEvaluacion(prev => ({ ...prev, fotos: prev.fotos.filter((_, i) => i !== idx) }));
     const marcarInformeCompleto = () => {
@@ -1236,6 +1270,30 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                                     </label>
                                 )}
                             </div>
+
+                            {/* Hallazgos del formulario adaptativo — nunca gateado por
+                                informeEvaluacion.completo (ver comentario en guardarHallazgo). */}
+                            <div style={styles.tituloSub}>Hallazgos</div>
+                            {(informeEvaluacion.hallazgos || []).length === 0 && (
+                                <div style={{ fontSize: 11.5, color: t.textoAtenuado3, marginBottom: 8 }}>
+                                    Sin hallazgos todavía — se cargan desde la visita de evaluación en terreno, o se pueden agregar acá directamente.
+                                </div>
+                            )}
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 10 }}>
+                                {(informeEvaluacion.hallazgos || []).map((h) => {
+                                    const tipo = tiposTrabajo.find((tp) => String(tp._id) === String(h.tipoTrabajoId));
+                                    return (
+                                        <div key={h._id} onClick={() => setEditandoHallazgo(h)} style={{ cursor: 'pointer', padding: '8px 10px', border: `1px solid ${t.hairlineBloque}`, borderRadius: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                                            <span style={{ fontSize: 12.5, fontWeight: 700 }}>
+                                                {tipo?.nombre || 'Sin tipo de trabajo'}
+                                                {h.casoNoCubierto && <span style={{ color: t.ambar, fontWeight: 600 }}> · para revisar</span>}
+                                            </span>
+                                            <span style={{ fontSize: 11.5, color: t.textoAtenuado2 }}>{h.textoDescriptivo || '(sin texto)'}</span>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                            <button onClick={() => setEditandoHallazgo(nuevoHallazgo())} style={styles.btnAgregar}>+ Agregar hallazgo</button>
 
                             <div style={styles.tituloSub}>Tareas identificadas</div>
                             <div style={styles.tablaHeader('minmax(200px,1fr) 132px 62px 24px')}>
@@ -1841,6 +1899,29 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
             <datalist id="lista-suministros-recursos">
                 {(suministrosDB || []).map((item, idx) => <option key={item._id || idx} value={item.codigo}>{item.descripcion} - {CLP(item.precio)}</option>)}
             </datalist>
+
+            {/* MODAL HALLAZGO (formulario adaptativo) */}
+            {editandoHallazgo && (
+                <div style={styles.overlay}>
+                    <div style={{ ...styles.modal, width: 560, maxWidth: '95vw', maxHeight: '85vh', display: 'flex', flexDirection: 'column' }}>
+                        <div style={styles.modalHeader}>
+                            <span style={{ fontSize: 12.5, fontWeight: 700 }}>Hallazgo</span>
+                            <span onClick={() => setEditandoHallazgo(null)} style={styles.xModal}>×</span>
+                        </div>
+                        <div style={{ padding: 14, overflowY: 'auto' }}>
+                            <EditorHallazgo
+                                hallazgo={editandoHallazgo}
+                                tiposTrabajo={tiposTrabajo}
+                                condicionesEntorno={condicionesEntorno}
+                                apiBase={API}
+                                onGuardar={guardarHallazgo}
+                                onEliminar={editandoHallazgo._id ? () => eliminarHallazgo(editandoHallazgo._id) : null}
+                                onCancelar={() => setEditandoHallazgo(null)}
+                            />
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* MODAL HOJA DE RUTA */}
             {modalPlantilla && (
