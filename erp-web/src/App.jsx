@@ -384,7 +384,9 @@ function App() {
       if (!bloque.inicio || !bloque.fin) return total;
       const [hInicio, mInicio] = bloque.inicio.split(':').map(Number);
       const [hFin, mFin] = bloque.fin.split(':').map(Number);
-      const minutos = (hFin * 60 + mFin) - (hInicio * 60 + mInicio);
+      // Turno que cruza medianoche (ej. 22:00–06:00): sin el módulo, hFin*60+mFin < hInicio*60+mInicio
+      // da minutos negativos y las horas de S2/S3 en la PWA de supervisor salen mal.
+      const minutos = (((hFin * 60 + mFin) - (hInicio * 60 + mInicio)) % 1440 + 1440) % 1440;
       return total + (minutos / 60);
     }, 0);
   };
@@ -812,7 +814,7 @@ function App() {
 
   const actualizarProgresoTarea = async (otId, tareaId, evidencia) => {
     // 1. Buscamos la OT en el estado global
-    const otPrev = oTs.find(o => o._id === otId);
+    const otPrev = ots.find(o => o._id === otId);
     if (!otPrev) return;
 
     // 2. Actualizamos solo la tarea específica dentro del array

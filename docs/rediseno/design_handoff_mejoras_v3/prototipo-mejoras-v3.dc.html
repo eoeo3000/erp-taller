@@ -1,0 +1,727 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics>
+<style>
+*{box-sizing:border-box}
+html,body{height:100%;overflow:hidden}
+body{margin:0;background:#eceae5;font-family:"Helvetica Neue",Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased}
+a{color:oklch(0.48 0.10 250);text-decoration:none}
+a:hover{color:oklch(0.38 0.10 250)}
+button{font-family:inherit}
+::-webkit-scrollbar{width:9px;height:9px}
+::-webkit-scrollbar-thumb{background:rgba(0,0,0,.18)}
+</style>
+</helmet>
+<div style="display:flex;flex-direction:column;height:100dvh;max-height:100dvh;overflow:hidden;background:#eceae5;color:#1a1a18;font-size:13px">
+
+  <header style="flex:none;display:flex;align-items:center;gap:14px;padding:0 16px;height:44px;background:#1c1d1b;color:#e8e7e3">
+    <span style="font-size:12.5px;font-weight:700;letter-spacing:.14em;text-transform:uppercase">Taller ERP</span>
+    <span style="font-size:10.5px;letter-spacing:.11em;text-transform:uppercase;color:rgba(255,255,255,.42)">Prototipo mejoras v3</span>
+    <div style="margin-left:auto;display:flex;gap:1px">
+      <sc-for list="{{ pantallas }}" as="p" hint-placeholder-count="6">
+        <button onClick="{{ p.onClick }}" style="height:26px;padding:0 11px;background:{{ p.fondo }};border:1px solid {{ p.borde }};font-size:11px;font-weight:{{ p.peso }};color:{{ p.tono }};cursor:pointer;border-radius:2px" style-hover="border-color:rgba(255,255,255,.5)">{{ p.label }}</button>
+      </sc-for>
+    </div>
+  </header>
+
+  <div style="flex:none;display:flex;align-items:baseline;gap:10px;padding:9px 16px;background:#f0efeb;border-bottom:1px solid rgba(0,0,0,.10)">
+    <span style="font-size:13.5px;font-weight:700">{{ titulo }}</span>
+    <span style="font-size:11px;color:#75746e;text-wrap:pretty">{{ bajada }}</span>
+    <span style="margin-left:auto;font-size:9.5px;letter-spacing:.11em;text-transform:uppercase;color:#a3a29a">{{ gapTag }}</span>
+  </div>
+
+  <main style="flex:1;min-height:0;overflow:auto;padding:14px 16px 24px">
+
+    <sc-if value="{{ esMetodologia }}" hint-placeholder-val="{{ true }}">
+      <div style="background:#fff;border:1px solid rgba(0,0,0,.12);overflow:auto">
+        <div style="min-width:1100px">
+          <div style="display:grid;grid-template-columns:minmax(190px,1fr) minmax(200px,1.1fr) 118px 132px 52px 68px 84px 96px 24px;gap:8px;align-items:center;height:26px;padding:0 16px;background:#e4e2dc;border-bottom:1px solid rgba(0,0,0,.14);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:#6b6a63;font-weight:700">
+            <span>Descripción</span><span>Desarrollo / metodología</span><span>Puesto</span><span>Responsable</span>
+            <span style="text-align:right">Hrs</span><span style="text-align:right">Fecha</span>
+            <span style="text-align:right">$/hora</span><span style="text-align:right">Subtotal</span><span></span>
+          </div>
+          <sc-for list="{{ tareas }}" as="t" hint-placeholder-count="4">
+            <div>
+              <div style="display:grid;grid-template-columns:minmax(190px,1fr) minmax(200px,1.1fr) 118px 132px 52px 68px 84px 96px 24px;gap:8px;align-items:center;padding:4px 16px;border-bottom:1px solid rgba(0,0,0,.06)" style-hover="background:#fbfaf8">
+                <input value="{{ t.nombre }}" onChange="{{ t.onNombre }}" style="height:24px;min-width:0;padding:0 6px;border:1px solid transparent;background:transparent;font-family:inherit;font-size:11.5px;color:#1a1a18;outline:none;border-radius:2px" style-hover="border-color:rgba(0,0,0,.14)" style-focus="border-color:oklch(0.48 0.10 250);background:#fff" />
+                <input value="{{ t.resumen }}" onChange="{{ t.onResumen }}" onFocus="{{ t.onAbrir }}" placeholder="Cómo se ejecuta" style="height:24px;min-width:0;padding:0 6px;border:1px solid transparent;background:transparent;font-family:inherit;font-size:11.5px;color:#3a3a35;outline:none;border-radius:2px" style-hover="border-color:rgba(0,0,0,.14)" style-focus="border-color:oklch(0.48 0.10 250);background:#fff" />
+                <input value="{{ t.puesto }}" onChange="{{ t.onPuesto }}" style="height:24px;min-width:0;padding:0 6px;border:1px solid transparent;background:transparent;font-family:inherit;font-size:11.5px;color:#3a3a35;outline:none;border-radius:2px" style-hover="border-color:rgba(0,0,0,.14)" style-focus="border-color:oklch(0.48 0.10 250);background:#fff" />
+                <input value="{{ t.responsable }}" onChange="{{ t.onResponsable }}" style="height:24px;min-width:0;padding:0 6px;border:1px solid transparent;background:transparent;font-family:inherit;font-size:11.5px;color:#3a3a35;outline:none;border-radius:2px" style-hover="border-color:rgba(0,0,0,.14)" style-focus="border-color:oklch(0.48 0.10 250);background:#fff" />
+                <input value="{{ t.horas }}" onChange="{{ t.onHoras }}" style="height:24px;min-width:0;padding:0 4px;border:1px solid transparent;background:transparent;font-family:ui-monospace,Menlo,monospace;font-size:11.5px;color:#1a1a18;text-align:right;outline:none;border-radius:2px" style-hover="border-color:rgba(0,0,0,.14)" style-focus="border-color:oklch(0.48 0.10 250);background:#fff" />
+                <input value="{{ t.fecha }}" onChange="{{ t.onFecha }}" style="height:24px;min-width:0;padding:0 4px;border:1px solid transparent;background:transparent;font-family:ui-monospace,Menlo,monospace;font-size:11.5px;color:#3a3a35;text-align:right;outline:none;border-radius:2px" style-hover="border-color:rgba(0,0,0,.14)" style-focus="border-color:oklch(0.48 0.10 250);background:#fff" />
+                <input value="{{ t.valorHora }}" onChange="{{ t.onValorHora }}" style="height:24px;min-width:0;padding:0 4px;border:1px solid transparent;background:transparent;font-family:ui-monospace,Menlo,monospace;font-size:11.5px;color:#3a3a35;text-align:right;outline:none;border-radius:2px" style-hover="border-color:rgba(0,0,0,.14)" style-focus="border-color:oklch(0.48 0.10 250);background:#fff" />
+                <span style="font-family:ui-monospace,Menlo,monospace;font-size:11.5px;text-align:right;color:#1a1a18">{{ t.subtotal }}</span>
+                <span title="{{ t.estadoMetodo }}" style="font-family:ui-monospace,Menlo,monospace;font-size:12px;color:{{ t.tono }};text-align:center">{{ t.chevron }}</span>
+              </div>
+              <sc-if value="{{ t.abierta }}" hint-placeholder-val="{{ false }}">
+                <div style="padding:8px 16px 12px;background:#f7f6f2;border-bottom:1px solid rgba(0,0,0,.06)">
+                  <div style="display:flex;align-items:center;gap:10px;margin-bottom:5px">
+                    <span style="font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:#6b6a63;font-weight:700">Desarrollo extendido · {{ t.nombre }}</span>
+                    <span onClick="{{ t.onCerrar }}" style="font-size:11px;color:#75746e;cursor:pointer" style-hover="color:#1a1a18">Contraer</span>
+                  </div>
+                  <textarea value="{{ t.metodologia }}" onChange="{{ t.onMetodo }}" placeholder="Pasos, secuencia, consideraciones técnicas y criterios de término" style="width:100%;min-height:92px;padding:7px 8px;border:1px solid rgba(0,0,0,.18);background:#fff;font-family:inherit;font-size:11.5px;line-height:1.6;color:#1a1a18;outline:none;border-radius:2px;resize:vertical" style-focus="border-color:oklch(0.48 0.10 250)"></textarea>
+                  <div style="font-size:10.5px;color:#8a8981;margin-top:5px">Este texto viaja a la aplicación de terreno y se compara con el informe de ejecución al cierre.</div>
+                </div>
+              </sc-if>
+            </div>
+          </sc-for>
+          <div style="display:flex;align-items:center;gap:12px;padding:8px 16px">
+            <button style="height:24px;padding:0 10px;background:#fff;border:1px dashed rgba(0,0,0,.28);font-size:11.5px;color:#57564f;cursor:pointer;border-radius:2px" style-hover="border-color:#1c1d1b;color:#1a1a18">Agregar tarea</button>
+            <span style="font-size:10.5px;color:#8a8981">{{ conMetodo }} de {{ totalTareas }} tareas con desarrollo definido</span>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ esTablero }}" hint-placeholder-val="{{ false }}">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:11px">
+        <sc-for list="{{ periodos }}" as="p" hint-placeholder-count="3">
+          <button onClick="{{ p.onClick }}" style="height:26px;padding:0 11px;background:{{ p.fondo }};border:1px solid {{ p.borde }};font-size:11px;font-weight:{{ p.peso }};color:{{ p.tono }};cursor:pointer;border-radius:2px" style-hover="border-color:#1c1d1b">{{ p.label }}</button>
+        </sc-for>
+        <span style="margin-left:auto;font-size:10.5px;color:#8a8981">Vista interna del planificador. Los supervisores no la ven.</span>
+      </div>
+      <div style="max-width:1100px;background:#fff;border:1px solid rgba(0,0,0,.12)">
+        <div style="display:grid;grid-template-columns:184px repeat(6,1fr) 96px;gap:0;padding:7px 12px;background:#f7f6f2;border-bottom:1px solid rgba(0,0,0,.10);font-size:9.5px;letter-spacing:.09em;text-transform:uppercase;color:#8a8981">
+          <span>Supervisor</span><span style="text-align:center">Eval. pend.</span><span style="text-align:center">Eval. curso</span><span style="text-align:center">Ejec. pend.</span><span style="text-align:center">Ejec. curso</span><span style="text-align:center">Completadas</span><span style="text-align:center">Inf. atrasados</span><span style="text-align:right">Carga</span>
+        </div>
+        <sc-for list="{{ supervisores }}" as="s" hint-placeholder-count="5">
+          <div style="display:grid;grid-template-columns:184px repeat(6,1fr) 96px;gap:0;align-items:center;padding:9px 12px;border-bottom:1px solid rgba(0,0,0,.07)" style-hover="background:#faf9f6">
+            <div style="min-width:0">
+              <div style="font-size:12px;font-weight:600">{{ s.nombre }}</div>
+              <div style="font-size:10.5px;color:#8a8981">{{ s.puesto }}</div>
+            </div>
+            <span style="text-align:center;font-family:ui-monospace,Menlo,monospace;font-size:12px">{{ s.evalPend }}</span>
+            <span style="text-align:center;font-family:ui-monospace,Menlo,monospace;font-size:12px">{{ s.evalCurso }}</span>
+            <span style="text-align:center;font-family:ui-monospace,Menlo,monospace;font-size:12px">{{ s.ejecPend }}</span>
+            <span style="text-align:center;font-family:ui-monospace,Menlo,monospace;font-size:12px">{{ s.ejecCurso }}</span>
+            <span style="text-align:center;font-family:ui-monospace,Menlo,monospace;font-size:12px;color:#75746e">{{ s.completadas }}</span>
+            <span style="justify-self:center;font-family:ui-monospace,Menlo,monospace;font-size:12px;font-weight:{{ s.infPeso }};color:{{ s.infTono }}">{{ s.informes }}</span>
+            <div style="justify-self:end;width:88px">
+              <div style="height:6px;background:#eceae5;border-radius:1px;overflow:hidden"><div style="height:6px;width:{{ s.cargaPct }};background:{{ s.cargaTono }}"></div></div>
+              <div style="font-size:10px;color:#8a8981;text-align:right;margin-top:3px">{{ s.cargaTexto }}</div>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ esGantt }}" hint-placeholder-val="{{ false }}">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:11px">
+        <sc-for list="{{ modosGantt }}" as="m" hint-placeholder-count="2">
+          <button onClick="{{ m.onClick }}" style="height:26px;padding:0 11px;background:{{ m.fondo }};border:1px solid {{ m.borde }};font-size:11px;font-weight:{{ m.peso }};color:{{ m.tono }};cursor:pointer;border-radius:2px" style-hover="border-color:#1c1d1b">{{ m.label }}</button>
+        </sc-for>
+        <span style="margin-left:auto;display:flex;align-items:center;gap:12px;font-size:10.5px;color:#75746e">
+          <span style="display:flex;align-items:center;gap:5px"><span style="width:11px;height:9px;background:oklch(0.48 0.10 250);display:inline-block"></span>Ejecución</span>
+          <span style="display:flex;align-items:center;gap:5px"><span style="width:11px;height:9px;background:#8a8981;display:inline-block"></span>Evaluación</span>
+          <span style="display:flex;align-items:center;gap:5px"><span style="width:11px;height:9px;background:#a8412f;display:inline-block"></span>Sobrecarga</span>
+        </span>
+      </div>
+      <div style="background:#fff;border:1px solid rgba(0,0,0,.12);overflow:auto">
+        <div style="min-width:1080px">
+          <div style="display:grid;grid-template-columns:118px minmax(180px,1fr) 132px 104px 52px 62px 62px repeat(7,minmax(0,1fr));background:#e4e2dc;border-bottom:1px solid rgba(0,0,0,.14)">
+            <span style="padding:0 10px;height:32px;display:flex;align-items:center;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:#6b6a63;font-weight:700">{{ ganttColumna }}</span>
+            <span style="padding:0 10px;height:32px;display:flex;align-items:center;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:#6b6a63;font-weight:700">Detalle</span>
+            <span style="padding:0 10px;height:32px;display:flex;align-items:center;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:#6b6a63;font-weight:700">{{ ganttCol3 }}</span>
+            <span style="padding:0 8px;height:32px;display:flex;align-items:center;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:#6b6a63;font-weight:700">Estado</span>
+            <span style="padding:0 6px;height:32px;display:flex;align-items:center;justify-content:flex-end;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:#6b6a63;font-weight:700">Hrs</span>
+            <span style="padding:0 6px;height:32px;display:flex;align-items:center;justify-content:flex-end;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:#6b6a63;font-weight:700">Inicio</span>
+            <span style="padding:0 6px;height:32px;display:flex;align-items:center;justify-content:flex-end;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:#6b6a63;font-weight:700">Fin</span>
+            <sc-for list="{{ dias }}" as="d" hint-placeholder-count="7">
+              <span style="height:32px;display:flex;flex-direction:column;align-items:center;justify-content:center;background:{{ d.fondo }};border-left:1px solid rgba(0,0,0,.06)">
+                <span style="font-size:8.5px;color:{{ d.tono }};letter-spacing:.06em">{{ d.letra }}</span>
+                <span style="font-family:ui-monospace,Menlo,monospace;font-size:10px;font-weight:600;color:{{ d.tono }}">{{ d.label }}</span>
+              </span>
+            </sc-for>
+          </div>
+
+          <sc-for list="{{ filasGantt }}" as="f" hint-placeholder-count="5">
+            <div style="display:grid;grid-template-columns:118px minmax(180px,1fr) 132px 104px 52px 62px 62px repeat(7,minmax(0,1fr));align-items:stretch;border-bottom:1px solid rgba(0,0,0,.06)" style-hover="background:#faf9f6">
+              <span style="display:flex;align-items:center;padding:5px 10px;border-left:2px solid {{ f.marca }};min-width:0;font-family:ui-monospace,Menlo,monospace;font-size:11px;font-weight:600;color:oklch(0.42 0.10 250);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ f.codigo }}</span>
+              <span style="display:flex;flex-direction:column;justify-content:center;padding:5px 10px;min-width:0">
+                <span style="display:block;font-size:12px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ f.nombre }}</span>
+                <span style="display:block;font-size:10.5px;color:{{ f.notaTono }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ f.nota }}</span>
+              </span>
+              <span style="display:flex;flex-direction:column;justify-content:center;padding:5px 10px;min-width:0">
+                <span style="display:block;font-size:11px;color:#3a3a35;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ f.persona }}</span>
+                <span style="display:block;font-size:10px;color:#a3a29a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ f.puesto }}</span>
+              </span>
+              <span style="display:flex;align-items:center;padding:5px 8px;font-size:10.5px;font-weight:600;color:{{ f.estadoTono }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ f.estado }}</span>
+              <span style="display:flex;align-items:center;justify-content:flex-end;padding:5px 6px;font-family:ui-monospace,Menlo,monospace;font-size:11px;color:#3a3a35">{{ f.horas }}</span>
+              <span style="display:flex;align-items:center;justify-content:flex-end;padding:5px 6px;font-family:ui-monospace,Menlo,monospace;font-size:10.5px;color:#57564f">{{ f.inicio }}</span>
+              <span style="display:flex;align-items:center;justify-content:flex-end;padding:5px 6px;font-family:ui-monospace,Menlo,monospace;font-size:10.5px;color:#57564f;border-right:1px solid rgba(0,0,0,.08)">{{ f.fin }}</span>
+              <sc-for list="{{ f.celdas }}" as="c" hint-placeholder-count="7">
+                <span style="min-width:0;overflow:hidden;min-height:34px;display:flex;align-items:center;justify-content:center;padding:4px 5px;background:{{ c.zona }};border-left:1px solid rgba(0,0,0,.05)">
+                  <sc-if value="{{ c.hay }}" hint-placeholder-val="{{ false }}">
+                    <span style="width:100%;height:22px;display:flex;align-items:center;justify-content:center;background:{{ c.fondo }};color:{{ c.tono }};font-family:ui-monospace,Menlo,monospace;font-size:10px;font-weight:600;border-radius:2px;white-space:nowrap;overflow:hidden">{{ c.texto }}</span>
+                  </sc-if>
+                </span>
+              </sc-for>
+            </div>
+          </sc-for>
+
+          <div style="display:flex;align-items:center;height:30px;padding:0 16px;margin-top:14px;background:#e4e2dc;border-top:1px solid rgba(0,0,0,.12);border-bottom:1px solid rgba(0,0,0,.14);font-size:9.5px;letter-spacing:.11em;text-transform:uppercase;color:#6b6a63;font-weight:700">Carga de supervisores · asignaciones / capacidad</div>
+          <sc-for list="{{ capacidadSup }}" as="r" hint-placeholder-count="5">
+            <div style="display:grid;grid-template-columns:118px minmax(180px,1fr) 132px 104px 52px 62px 62px repeat(7,minmax(0,1fr));align-items:stretch;border-bottom:1px solid rgba(0,0,0,.06)">
+              <span style="display:flex;align-items:center;padding:5px 10px;font-size:11.5px;font-weight:600;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.nombre }}</span>
+              <span style="display:flex;flex-direction:column;justify-content:center;padding:5px 10px;min-width:0">
+                <span style="display:flex;gap:8px;font-size:10.5px;color:#8a8981;white-space:nowrap;overflow:hidden">
+                  <span style="flex:none">{{ r.puesto }}</span>
+                  <span style="overflow:hidden;text-overflow:ellipsis">{{ r.detalle }}</span>
+                </span>
+                <span style="display:block;height:3px;margin-top:4px;background:rgba(0,0,0,.09)">
+                  <span style="display:block;height:3px;background:{{ r.barra }};width:{{ r.pct }}"></span>
+                </span>
+              </span>
+              <span style="display:flex;align-items:center;padding:5px 10px;font-family:ui-monospace,Menlo,monospace;font-size:11px;color:{{ r.barra }}">{{ r.pct }}</span>
+              <span></span><span></span><span></span><span></span>
+              <sc-for list="{{ r.celdas }}" as="c" hint-placeholder-count="7">
+                <span style="min-width:0;min-height:26px;display:flex;align-items:center;justify-content:center;background:{{ c.zona }};border-left:1px solid rgba(0,0,0,.05);font-family:ui-monospace,Menlo,monospace;font-size:10px;color:{{ c.tono }}">{{ c.texto }}</span>
+              </sc-for>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+      <div style="max-width:1100px;margin-top:9px;font-size:10.5px;color:#8a8981;line-height:1.5">Es la misma pestaña de Programación que ya existe: se le agrega el conmutador de vista. En la vista por OT, cada barra muestra la OT con su supervisor a cargo; en la vista por supervisor, las mismas barras se agrupan por persona. La franja roja marca días donde el supervisor tiene más asignaciones simultáneas de las que puede atender. Requiere confirmación: cuántas asignaciones paralelas se consideran el límite.</div>
+    </sc-if>
+
+    <sc-if value="{{ esCotizacion }}" hint-placeholder-val="{{ false }}">
+      <div style="display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap">
+        <div style="width:660px;max-width:100%;background:#fff;border:1px solid rgba(0,0,0,.14);padding:30px 34px 34px;box-shadow:0 1px 3px rgba(0,0,0,.07)">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #1c1d1b;padding-bottom:10px">
+            <div>
+              <div style="font-size:14px;font-weight:700;letter-spacing:.14em;text-transform:uppercase">Taller Industrial</div>
+              <div style="font-size:10.5px;color:#75746e;margin-top:2px">Cotización COT-2026-0031 · 18-08-2026</div>
+            </div>
+            <div style="text-align:right;font-size:10.5px;color:#75746e;line-height:1.6">Minera Los Andes S.A.<br />Camila Reyes<br />Faena Norte, Calama</div>
+          </div>
+
+          <div style="font-size:9.5px;letter-spacing:.11em;text-transform:uppercase;color:#8a8981;margin:18px 0 7px">1. Detalle por tarea</div>
+          <div style="display:grid;grid-template-columns:1fr 62px 82px 92px;gap:0;font-size:9.5px;letter-spacing:.06em;text-transform:uppercase;color:#8a8981;padding-bottom:5px;border-bottom:1px solid rgba(0,0,0,.2)">
+            <span>Tarea</span><span style="text-align:right">HH</span><span style="text-align:right">Materiales</span><span style="text-align:right">Subtotal</span>
+          </div>
+          <sc-for list="{{ cotTareas }}" as="c" hint-placeholder-count="4">
+            <div style="display:grid;grid-template-columns:1fr 62px 82px 92px;gap:0;padding:7px 0;border-bottom:1px solid rgba(0,0,0,.07);align-items:baseline">
+              <span style="min-width:0;font-size:11.5px;text-wrap:pretty">{{ c.nombre }}</span>
+              <span style="text-align:right;font-family:ui-monospace,Menlo,monospace;font-size:11px">{{ c.hh }}</span>
+              <span style="text-align:right;font-family:ui-monospace,Menlo,monospace;font-size:11px">{{ c.mat }}</span>
+              <span style="text-align:right;font-family:ui-monospace,Menlo,monospace;font-size:11.5px;font-weight:700">{{ c.sub }}</span>
+            </div>
+          </sc-for>
+
+          <div style="font-size:9.5px;letter-spacing:.11em;text-transform:uppercase;color:#8a8981;margin:18px 0 7px">2. Materiales y suministros directos</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+            <div style="border:1px solid rgba(0,0,0,.10);padding:9px 10px">
+              <div style="font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#57564f;margin-bottom:6px">Materiales</div>
+              <sc-for list="{{ materiales }}" as="m" hint-placeholder-count="3">
+                <div style="display:flex;justify-content:space-between;gap:8px;padding:3px 0;font-size:11px"><span style="min-width:0">{{ m.nombre }}</span><span style="font-family:ui-monospace,Menlo,monospace;white-space:nowrap">{{ m.monto }}</span></div>
+              </sc-for>
+            </div>
+            <div style="border:1px solid rgba(0,0,0,.10);padding:9px 10px">
+              <div style="font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#57564f;margin-bottom:6px">Suministros directos</div>
+              <sc-for list="{{ suministros }}" as="m" hint-placeholder-count="3">
+                <div style="display:flex;justify-content:space-between;gap:8px;padding:3px 0;font-size:11px"><span style="min-width:0">{{ m.nombre }}</span><span style="font-family:ui-monospace,Menlo,monospace;white-space:nowrap">{{ m.monto }}</span></div>
+              </sc-for>
+            </div>
+          </div>
+
+          <div style="font-size:9.5px;letter-spacing:.11em;text-transform:uppercase;color:#8a8981;margin:18px 0 7px">3. Cronograma</div>
+          <sc-for list="{{ cronograma }}" as="g" hint-placeholder-count="4">
+            <div style="display:grid;grid-template-columns:150px 1fr;align-items:center;gap:10px;padding:3px 0">
+              <span style="font-size:11px;color:#3a3a35;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ g.nombre }}</span>
+              <div style="position:relative;height:12px;background:#f0efeb"><div style="position:absolute;left:{{ g.left }};width:{{ g.width }};height:12px;background:#1c1d1b"></div></div>
+            </div>
+          </sc-for>
+          <div style="display:grid;grid-template-columns:150px 1fr;gap:10px;margin-top:4px">
+            <span></span>
+            <div style="display:flex;justify-content:space-between;font-family:ui-monospace,Menlo,monospace;font-size:9.5px;color:#8a8981"><span>02 sep</span><span>16 sep</span></div>
+          </div>
+
+          <div style="display:flex;justify-content:flex-end;margin-top:18px">
+            <div style="width:280px">
+              <sc-for list="{{ totales }}" as="t" hint-placeholder-count="4">
+                <div style="display:flex;justify-content:space-between;padding:4px 0;border-top:1px solid {{ t.borde }};font-size:{{ t.tam }};font-weight:{{ t.peso }}"><span>{{ t.label }}</span><span style="font-family:ui-monospace,Menlo,monospace">{{ t.monto }}</span></div>
+              </sc-for>
+            </div>
+          </div>
+
+          <div style="font-size:9.5px;letter-spacing:.11em;text-transform:uppercase;color:#8a8981;margin:20px 0 7px">4. Condiciones comerciales</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 18px">
+            <sc-for list="{{ condiciones }}" as="c" hint-placeholder-count="6">
+              <div style="display:grid;grid-template-columns:104px 1fr;gap:8px;padding:3px 0;border-bottom:1px solid rgba(0,0,0,.06)">
+                <span style="font-size:10.5px;color:#8a8981">{{ c.label }}</span>
+                <span style="font-size:11px;color:#1a1a18;min-width:0;text-wrap:pretty">{{ c.valor }}</span>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+
+        <div style="width:264px;background:#fff;border:1px solid rgba(0,0,0,.12);padding:12px">
+          <div style="font-size:9.5px;letter-spacing:.11em;text-transform:uppercase;color:#8a8981;margin-bottom:8px">Secciones del PDF</div>
+          <sc-for list="{{ seccionesPdf }}" as="s" hint-placeholder-count="5">
+            <label style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid rgba(0,0,0,.06);cursor:pointer;font-size:11.5px">
+              <input type="checkbox" checked="{{ s.on }}" onChange="{{ s.onToggle }}" style="width:14px;height:14px;accent-color:oklch(0.48 0.10 250)" />
+              <span style="min-width:0">{{ s.label }}</span>
+              <span style="margin-left:auto;font-size:9.5px;letter-spacing:.07em;text-transform:uppercase;color:{{ s.tono }}">{{ s.estado }}</span>
+            </label>
+          </sc-for>
+          <button style="width:100%;height:30px;margin-top:11px;background:oklch(0.48 0.10 250);border:1px solid oklch(0.48 0.10 250);font-size:11.5px;font-weight:700;color:#fff;cursor:pointer;border-radius:2px" style-hover="background:oklch(0.42 0.10 250)">Descargar PDF</button>
+          <div style="font-size:10.5px;color:#8a8981;margin-top:9px;line-height:1.5">Las cotizaciones ya emitidas se siguen viendo con su formato original.</div>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ esCarpeta }}" hint-placeholder-val="{{ false }}">
+      <div style="display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap">
+        <div style="width:300px;background:#fff;border:1px solid rgba(0,0,0,.12)">
+          <div style="padding:9px 12px;background:#f7f6f2;border-bottom:1px solid rgba(0,0,0,.10);font-size:9.5px;letter-spacing:.11em;text-transform:uppercase;color:#8a8981">Contenido de la carpeta</div>
+          <sc-for list="{{ carpeta }}" as="c" hint-placeholder-count="6">
+            <label style="display:grid;grid-template-columns:16px 1fr auto;gap:9px;align-items:center;padding:9px 12px;border-bottom:1px solid rgba(0,0,0,.07);cursor:pointer" style-hover="background:#faf9f6">
+              <input type="checkbox" checked="{{ c.on }}" onChange="{{ c.onToggle }}" style="width:14px;height:14px;accent-color:oklch(0.48 0.10 250)" />
+              <span style="min-width:0">
+                <span style="display:block;font-size:11.5px;font-weight:600">{{ c.label }}</span>
+                <span style="display:block;font-size:10.5px;color:#8a8981">{{ c.detalle }}</span>
+              </span>
+              <span style="font-family:ui-monospace,Menlo,monospace;font-size:10.5px;color:#a3a29a">{{ c.pags }}</span>
+            </label>
+          </sc-for>
+          <div style="padding:11px 12px">
+            <div style="font-size:10.5px;color:#8a8981;line-height:1.5;margin-bottom:8px">Vive en la pestaña <strong style="color:#1a1a18">Documentos de terreno</strong> del tratamiento de OT, junto a los informes y adjuntos.</div>
+            <button onClick="{{ onGenerar }}" style="width:100%;height:30px;background:oklch(0.48 0.10 250);border:1px solid oklch(0.48 0.10 250);font-size:11.5px;font-weight:700;color:#fff;cursor:pointer;border-radius:2px" style-hover="background:oklch(0.42 0.10 250)">Generar carpeta de OT</button>
+            <div style="font-size:10.5px;color:#4c7a4c;margin-top:7px;min-height:14px">{{ avisoCarpeta }}</div>
+            <div style="font-size:10.5px;color:#8a8981;line-height:1.5">Documento interno. No se envía al cliente.</div>
+          </div>
+        </div>
+
+        <div style="width:600px;max-width:100%;background:#fff;border:1px solid rgba(0,0,0,.14);padding:28px 32px;box-shadow:0 1px 3px rgba(0,0,0,.07)">
+          <div style="border-bottom:2px solid #1c1d1b;padding-bottom:9px">
+            <div style="font-size:9.5px;letter-spacing:.13em;text-transform:uppercase;color:#8a8981">Carpeta de orden de trabajo</div>
+            <div style="font-size:19px;font-weight:700;margin-top:3px">OT-2026-0006</div>
+            <div style="font-size:11px;color:#75746e;margin-top:2px">Minera Los Andes S.A. · Faena Norte · Supervisor Camila Reyes · Cierre 12-09-2026</div>
+          </div>
+          <sc-for list="{{ indice }}" as="i" hint-placeholder-count="6">
+            <div style="display:grid;grid-template-columns:26px 1fr 46px;gap:10px;align-items:baseline;padding:8px 0;border-bottom:1px solid rgba(0,0,0,.07)">
+              <span style="font-family:ui-monospace,Menlo,monospace;font-size:11px;color:#a3a29a">{{ i.n }}</span>
+              <span style="min-width:0">
+                <span style="display:block;font-size:12.5px;font-weight:600">{{ i.titulo }}</span>
+                <span style="display:block;font-size:11px;color:#75746e;line-height:1.5;text-wrap:pretty">{{ i.resumen }}</span>
+              </span>
+              <span style="font-family:ui-monospace,Menlo,monospace;font-size:10.5px;color:#a3a29a;text-align:right">{{ i.pag }}</span>
+            </div>
+          </sc-for>
+          <div style="display:flex;justify-content:space-between;margin-top:14px;font-size:10.5px;color:#8a8981">
+            <span>Generado el 18-08-2026 por Andrea Soto</span>
+            <span style="font-family:ui-monospace,Menlo,monospace">{{ totalPags }} páginas</span>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ esTokens }}" hint-placeholder-val="{{ false }}">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:11px">
+        <sc-for list="{{ vistasToken }}" as="v" hint-placeholder-count="2">
+          <button onClick="{{ v.onClick }}" style="height:26px;padding:0 11px;background:{{ v.fondo }};border:1px solid {{ v.borde }};font-size:11px;font-weight:{{ v.peso }};color:{{ v.tono }};cursor:pointer;border-radius:2px" style-hover="border-color:#1c1d1b">{{ v.label }}</button>
+        </sc-for>
+      </div>
+
+      <sc-if value="{{ tokensActivos }}" hint-placeholder-val="{{ true }}">
+        <div style="max-width:1080px;background:#fff;border:1px solid rgba(0,0,0,.12)">
+          <div style="display:grid;grid-template-columns:170px 118px 1fr 104px 104px 92px 150px;gap:10px;padding:7px 12px;background:#f7f6f2;border-bottom:1px solid rgba(0,0,0,.10);font-size:9.5px;letter-spacing:.09em;text-transform:uppercase;color:#8a8981">
+            <span>Titular</span><span>Tipo · origen</span><span>Token</span><span>Emitido</span><span>Último acceso</span><span>Estado</span><span style="text-align:right">Acciones</span>
+          </div>
+          <sc-for list="{{ tokens }}" as="t" hint-placeholder-count="6">
+            <div style="display:grid;grid-template-columns:170px 118px 1fr 104px 104px 92px 150px;gap:10px;align-items:center;padding:8px 12px;border-bottom:1px solid rgba(0,0,0,.07)" style-hover="background:#faf9f6">
+              <div style="min-width:0">
+                <div style="font-size:12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ t.nombre }}</div>
+                <div style="font-size:10.5px;color:#8a8981;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ t.correo }}</div>
+              </div>
+              <span style="min-width:0">
+                <span style="display:block;font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:{{ t.tipoTono }}">{{ t.tipo }}</span>
+                <span style="display:block;font-size:10.5px;color:#8a8981;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ t.origen }}</span>
+              </span>
+              <span style="min-width:0;font-family:ui-monospace,Menlo,monospace;font-size:11px;color:#57564f;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ t.valor }}</span>
+              <span style="font-family:ui-monospace,Menlo,monospace;font-size:11px;color:#75746e">{{ t.emitido }}</span>
+              <span style="font-family:ui-monospace,Menlo,monospace;font-size:11px;color:{{ t.accesoTono }}">{{ t.acceso }}</span>
+              <span style="justify-self:start;font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;padding:2px 7px;border-radius:2px;background:{{ t.estFondo }};color:{{ t.estTono }}">{{ t.estado }}</span>
+              <div style="justify-self:end;display:flex;gap:4px">
+                <sc-for list="{{ t.acciones }}" as="a" hint-placeholder-count="3">
+                  <button onClick="{{ a.onClick }}" style="height:23px;padding:0 8px;background:#fff;border:1px solid rgba(0,0,0,.22);font-size:10.5px;color:{{ a.tono }};cursor:pointer;border-radius:2px" style-hover="border-color:#1c1d1b">{{ a.label }}</button>
+                </sc-for>
+              </div>
+            </div>
+          </sc-for>
+          <div style="padding:9px 12px;font-size:10.5px;color:#8a8981;line-height:1.6">Los tokens operativos se emiten desde la ficha de cada persona en Recursos. Los tokens cliente se emiten desde el contacto de la empresa en Clientes, al momento de habilitarle el portal. Requiere confirmación: si un mismo contacto puede tener acceso a varias empresas con un solo token. Cada acceso queda registrado con fecha, hora y dispositivo; al revocar se avisa por correo al titular.</div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ tokensEmitir }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-start">
+          <div style="width:420px;background:#fff;border:1px solid rgba(0,0,0,.12)">
+            <div style="padding:7px 12px;background:#e4e2dc;border-bottom:1px solid rgba(0,0,0,.14);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:#6b6a63;font-weight:700">Acceso cliente · desde la ficha de la empresa</div>
+            <div style="padding:12px;display:grid;grid-template-columns:96px 1fr;gap:9px 10px;align-items:center">
+              <span style="font-size:11px;color:#75746e">Empresa</span>
+              <select value="{{ emision.empresa }}" onChange="{{ emision.onEmpresa }}" style="height:26px;min-width:0;padding:0 6px;border:1px solid rgba(0,0,0,.22);background:#fff;font-family:inherit;font-size:11.5px;color:#1a1a18;outline:none;border-radius:2px" style-focus="border-color:oklch(0.48 0.10 250)">
+                <sc-for list="{{ emision.empresas }}" as="e" hint-placeholder-count="4">
+                  <option value="{{ e }}">{{ e }}</option>
+                </sc-for>
+              </select>
+              <span style="font-size:11px;color:#75746e">Contacto</span>
+              <select value="{{ emision.contacto }}" onChange="{{ emision.onContacto }}" style="height:26px;min-width:0;padding:0 6px;border:1px solid rgba(0,0,0,.22);background:#fff;font-family:inherit;font-size:11.5px;color:#1a1a18;outline:none;border-radius:2px" style-focus="border-color:oklch(0.48 0.10 250)">
+                <sc-for list="{{ emision.contactos }}" as="c" hint-placeholder-count="3">
+                  <option value="{{ c }}">{{ c }}</option>
+                </sc-for>
+              </select>
+              <span style="font-size:11px;color:#75746e">Correo</span>
+              <input value="{{ emision.correoCl }}" onChange="{{ emision.onCorreoCl }}" style="height:26px;min-width:0;padding:0 7px;border:1px solid rgba(0,0,0,.22);background:#fff;font-family:inherit;font-size:11.5px;color:#1a1a18;outline:none;border-radius:2px" style-focus="border-color:oklch(0.48 0.10 250)" />
+              <span style="font-size:11px;color:#75746e">Teléfono</span>
+              <input value="{{ emision.fono }}" onChange="{{ emision.onFono }}" placeholder="+56 9" style="height:26px;min-width:0;padding:0 7px;border:1px solid rgba(0,0,0,.22);background:#fff;font-family:ui-monospace,Menlo,monospace;font-size:11.5px;color:#1a1a18;outline:none;border-radius:2px" style-focus="border-color:oklch(0.48 0.10 250)" />
+              <span style="font-size:11px;color:#75746e">Ve</span>
+              <div style="display:flex;gap:4px">
+                <sc-for list="{{ emision.alcances }}" as="a" hint-placeholder-count="2">
+                  <button onClick="{{ a.onClick }}" style="height:26px;padding:0 10px;background:{{ a.fondo }};border:1px solid {{ a.borde }};font-size:11px;font-weight:{{ a.peso }};color:{{ a.tono }};cursor:pointer;border-radius:2px" style-hover="border-color:#1c1d1b">{{ a.label }}</button>
+                </sc-for>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;padding:0 12px 12px">
+              <button onClick="{{ emision.onEmitirCl }}" style="height:28px;padding:0 12px;background:oklch(0.48 0.10 250);border:1px solid oklch(0.48 0.10 250);font-size:11.5px;font-weight:700;color:#fff;cursor:pointer;border-radius:2px" style-hover="background:oklch(0.42 0.10 250)">Emitir acceso al portal</button>
+              <span style="font-size:11px;color:#4c7a4c">{{ emision.avisoCl }}</span>
+            </div>
+            <div style="padding:0 12px 12px;font-size:10.5px;color:#8a8981;line-height:1.6">Si el contacto no existe, se crea aquí mismo y queda guardado en la ficha de la empresa en Clientes. El mismo formulario está disponible desde esa ficha, así el ejecutivo no necesita entrar a esta pantalla.</div>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ tokensStock }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex;gap:14px;flex-wrap:wrap">
+          <sc-for list="{{ stock }}" as="s" hint-placeholder-count="2">
+            <div style="width:330px;background:#fff;border:1px solid rgba(0,0,0,.12);padding:14px">
+              <div style="font-size:9.5px;letter-spacing:.11em;text-transform:uppercase;color:#8a8981">{{ s.tipo }}</div>
+              <div style="display:flex;align-items:baseline;gap:8px;margin-top:6px">
+                <span style="font-family:ui-monospace,Menlo,monospace;font-size:30px;font-weight:700;line-height:1">{{ s.disponibles }}</span>
+                <span style="font-size:11px;color:#75746e">disponibles sin asignar</span>
+              </div>
+              <div style="font-size:11px;color:#75746e;margin-top:8px;line-height:1.6">Asignados este mes: {{ s.asignados }}<br />Vencen en 30 días: {{ s.vencen }}</div>
+              <div style="display:flex;align-items:center;gap:6px;margin-top:12px">
+                <input value="{{ s.cantidad }}" onChange="{{ s.onCantidad }}" style="width:56px;height:27px;padding:0 7px;border:1px solid rgba(0,0,0,.22);background:#fff;font-family:ui-monospace,Menlo,monospace;font-size:11.5px;outline:none;border-radius:2px" style-focus="border-color:oklch(0.48 0.10 250)" />
+                <button onClick="{{ s.onGenerar }}" style="height:27px;padding:0 11px;background:#1c1d1b;border:1px solid #1c1d1b;font-size:11px;font-weight:700;color:#fff;cursor:pointer;border-radius:2px" style-hover="background:#000">Generar lote</button>
+                <span style="font-size:10.5px;color:#4c7a4c">{{ s.aviso }}</span>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+        <div style="max-width:1080px;margin-top:11px;font-size:10.5px;color:#8a8981;line-height:1.5">Requiere confirmación: si un token pre-generado debe caducar solo, y en cuántos días.</div>
+      </sc-if>
+    </sc-if>
+
+  </main>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1280,&quot;height&quot;:860}}">
+const TAREAS = [
+  { n:'01', nombre:'Desmontaje de bomba centrífuga BC-14', puesto:'Maestro 1ª', responsable:'Diego Fuentes', horas:'12', fecha:'02-09', valorHora:'36000', subtotal:'$ 432.000',
+    metodologia:'1. Bloqueo y tarjeteo eléctrico junto a operaciones de faena.\n2. Drenaje de línea y purga con agua industrial.\n3. Desacople de brida de succión y descarga, torque en cruz.\n4. Retiro con tecle 2 t hacia zona de acopio demarcada.\nConsideración: no golpear el eje, se traslada apoyado en base de madera.' },
+  { n:'02', nombre:'Inspección dimensional de impulsor', puesto:'Supervisora', responsable:'Camila Reyes', horas:'6', fecha:'04-09', valorHora:'41000', subtotal:'$ 246.000',
+    metodologia:'Medir juego axial y radial con reloj comparador en tres puntos. Registrar en planilla y fotografiar desgaste de álabes. Criterio de rechazo: desgaste mayor a 3 mm.' },
+  { n:'03', nombre:'Recambio de sellos mecánicos', puesto:'Maestro 1ª', responsable:'Diego Fuentes', horas:'8', fecha:'05-09', valorHora:'36000', subtotal:'$ 288.000', metodologia:'' },
+  { n:'04', nombre:'Montaje, alineación láser y prueba en vacío', puesto:'Supervisor', responsable:'Rodrigo Vergara', horas:'10', fecha:'08-09', valorHora:'38000', subtotal:'$ 380.000', metodologia:'' },
+];
+
+const SUP = [
+  { nombre:'Camila Reyes', puesto:'Supervisora terreno', evalPend:3, evalCurso:1, ejecPend:2, ejecCurso:2, completadas:14, atrasados:0, carga:0.86 },
+  { nombre:'Rodrigo Vergara', puesto:'Supervisor', evalPend:1, evalCurso:0, ejecPend:4, ejecCurso:3, completadas:11, atrasados:2, carga:1.12 },
+  { nombre:'Marcela Ibáñez', puesto:'Supervisora', evalPend:2, evalCurso:2, ejecPend:1, ejecCurso:1, completadas:9, atrasados:0, carga:0.64 },
+  { nombre:'Jorge Peña', puesto:'Supervisor', evalPend:0, evalCurso:1, ejecPend:1, ejecCurso:0, completadas:7, atrasados:1, carga:0.38 },
+  { nombre:'Héctor Muñoz', puesto:'Supervisor senior', evalPend:2, evalCurso:0, ejecPend:3, ejecCurso:1, completadas:16, atrasados:0, carga:0.72 },
+];
+
+const G_OT = [
+  { codigo:'OT-2026-0006', nombre:'Minera Los Andes', nota:'Bomba centrífuga BC-14 · 4 tareas', persona:'Camila Reyes', puesto:'Supervisora terreno', estado:'En ejecución', horas:'36', inicio:'02-09', fin:'08-09', span:[0,4] },
+  { codigo:'OT-2026-0011', nombre:'Constructora Norte', nota:'Estructura pasarela · 6 tareas', persona:'Rodrigo Vergara', puesto:'Supervisor', estado:'Programada', horas:'48', inicio:'03-09', fin:'10-09', span:[1,5] },
+  { codigo:'OT-2026-0012', nombre:'Áridos del Sur', nota:'Harnero 2B · 3 tareas', persona:'Rodrigo Vergara', puesto:'Supervisor', estado:'Programada', horas:'22', inicio:'04-09', fin:'09-09', span:[2,5] },
+  { codigo:'OT-2026-0009', nombre:'Pesquera Bahía', nota:'Cambio de correas · 2 tareas', persona:'Jorge Peña', puesto:'Supervisor', estado:'En ejecución', horas:'14', inicio:'08-09', fin:'10-09', span:[4,6] },
+  { codigo:'SOL-2026-0151', nombre:'Cemento Andino', nota:'Visita de evaluación · sin OT', persona:'Marcela Ibáñez', puesto:'Supervisora', estado:'Evaluación', horas:'6', inicio:'05-09', fin:'05-09', span:[3,3], eval:true },
+];
+
+const G_SUP = [
+  { codigo:'SUP-01', nombre:'Camila Reyes', nota:'Supervisora terreno · 4 asignaciones', persona:'2 evaluaciones', puesto:'2 ejecuciones', estado:'Al día', horas:'36', inicio:'02-09', fin:'08-09', span:[0,4] },
+  { codigo:'SUP-02', nombre:'Rodrigo Vergara', nota:'Sobrecarga 04 al 08 de septiembre', notaRojo:true, persona:'1 evaluación', puesto:'5 ejecuciones', estado:'2 inf. atrasados', estadoRojo:true, horas:'70', inicio:'03-09', fin:'10-09', span:[1,5] },
+  { codigo:'SUP-03', nombre:'Marcela Ibáñez', nota:'Supervisora · 3 asignaciones', persona:'2 evaluaciones', puesto:'1 ejecución', estado:'Al día', horas:'18', inicio:'05-09', fin:'09-09', span:[3,5], eval:true },
+  { codigo:'SUP-04', nombre:'Jorge Peña', nota:'Supervisor · 1 asignación', persona:'0 evaluaciones', puesto:'1 ejecución', estado:'Disponible', horas:'14', inicio:'08-09', fin:'10-09', span:[4,6] },
+  { codigo:'SUP-05', nombre:'Héctor Muñoz', nota:'Supervisor senior · 4 asignaciones', persona:'2 evaluaciones', puesto:'2 ejecuciones', estado:'Al día', horas:'30', inicio:'02-09', fin:'06-09', span:[0,3] },
+];
+
+const G_OP = [
+  { codigo:'OT-2026-0006', nombre:'Diego Fuentes', nota:'Desmontaje bomba BC-14', persona:'Maestro 1ª', puesto:'Turno día', estado:'En ejecución', horas:'12', inicio:'02-09', fin:'04-09', span:[0,2] },
+  { codigo:'OT-2026-0011', nombre:'Luis Cárcamo', nota:'Soldadura de pasarela', persona:'Soldador', puesto:'Turno día', estado:'Programada', horas:'16', inicio:'04-09', fin:'08-09', span:[2,4] },
+  { codigo:'OT-2026-0009', nombre:'Pablo Ruiz', nota:'Cambio de correas', persona:'Técnico', puesto:'Turno día', estado:'En ejecución', horas:'8', inicio:'09-09', fin:'10-09', span:[5,6] },
+  { codigo:'SOL-2026-0151', nombre:'Sergio Díaz', nota:'Apoyo en evaluación', persona:'Maestro 2ª', puesto:'Turno tarde', estado:'Evaluación', horas:'6', inicio:'05-09', fin:'05-09', span:[3,3], eval:true },
+  { codigo:'OT-2026-0006', nombre:'Iván Torres', nota:'Montaje y alineación', persona:'Ayudante', puesto:'Turno día', estado:'Programada', horas:'10', inicio:'05-09', fin:'08-09', span:[3,4] },
+];
+
+const CAP_SUP = [
+  { nombre:'Camila Reyes', puesto:'Supervisora terreno', detalle:'4 de 5 asignaciones', carga:0.86, dias:[1,1,2,1,1,0,0] },
+  { nombre:'Rodrigo Vergara', puesto:'Supervisor', detalle:'6 de 5 asignaciones', carga:1.12, dias:[1,2,3,3,3,1,1] },
+  { nombre:'Marcela Ibáñez', puesto:'Supervisora', detalle:'3 de 5 asignaciones', carga:0.64, dias:[0,1,1,2,1,1,0] },
+  { nombre:'Jorge Peña', puesto:'Supervisor', detalle:'1 de 5 asignaciones', carga:0.38, dias:[0,0,0,1,1,1,0] },
+  { nombre:'Héctor Muñoz', puesto:'Supervisor senior', detalle:'4 de 6 asignaciones', carga:0.72, dias:[2,1,1,1,0,0,1] },
+];
+
+const FILAS_SUP = [
+  { nombre:'Camila Reyes', nota:'4 asignaciones', sobre:[], barras:[
+    { top:'6px', left:'0%', width:'28%', color:'#8a8981', label:'Eval. SOL-0148' },
+    { top:'25px', left:'20%', width:'40%', color:'oklch(0.48 0.10 250)', label:'OT-2026-0006' } ] },
+  { nombre:'Rodrigo Vergara', nota:'6 asignaciones · sobrecarga 04–06 sep', notaRojo:true, sobre:[2,3,4], barras:[
+    { top:'6px', left:'10%', width:'35%', color:'oklch(0.48 0.10 250)', label:'OT-2026-0011' },
+    { top:'25px', left:'20%', width:'45%', color:'oklch(0.48 0.10 250)', label:'OT-2026-0012' } ] },
+  { nombre:'Marcela Ibáñez', nota:'3 asignaciones', sobre:[], barras:[
+    { top:'6px', left:'40%', width:'30%', color:'#8a8981', label:'Eval. SOL-0151' } ] },
+  { nombre:'Jorge Peña', nota:'1 asignación · disponible', sobre:[], barras:[
+    { top:'6px', left:'60%', width:'20%', color:'oklch(0.48 0.10 250)', label:'OT-2026-0009' } ] },
+  { nombre:'Héctor Muñoz', nota:'4 asignaciones', sobre:[], barras:[
+    { top:'6px', left:'0%', width:'22%', color:'oklch(0.48 0.10 250)', label:'OT-2026-0004' },
+    { top:'25px', left:'50%', width:'38%', color:'#8a8981', label:'Eval. SOL-0153' } ] },
+];
+
+const FILAS_OP = [
+  { nombre:'Diego Fuentes', nota:'Maestro 1ª', sobre:[], barras:[{ top:'15px', left:'5%', width:'45%', color:'oklch(0.48 0.10 250)', label:'OT-2026-0006 · desmontaje' }] },
+  { nombre:'Luis Cárcamo', nota:'Soldador', sobre:[], barras:[{ top:'15px', left:'30%', width:'30%', color:'oklch(0.48 0.10 250)', label:'OT-2026-0011' }] },
+  { nombre:'Pablo Ruiz', nota:'Técnico', sobre:[], barras:[{ top:'15px', left:'55%', width:'25%', color:'oklch(0.48 0.10 250)', label:'OT-2026-0009' }] },
+  { nombre:'Sergio Díaz', nota:'Maestro 2ª', sobre:[], barras:[{ top:'15px', left:'0%', width:'20%', color:'#8a8981', label:'Apoyo eval.' }] },
+  { nombre:'Iván Torres', nota:'Ayudante', sobre:[], barras:[{ top:'15px', left:'20%', width:'35%', color:'oklch(0.48 0.10 250)', label:'OT-2026-0006 · montaje' }] },
+];
+
+const FILAS_OT = [
+  { nombre:'OT-2026-0006', nota:'Minera Los Andes · Camila Reyes', sobre:[], barras:[{ top:'15px', left:'5%', width:'48%', color:'oklch(0.48 0.10 250)', label:'Bomba BC-14 · 4 tareas' }] },
+  { nombre:'OT-2026-0011', nota:'Constructora Norte · Rodrigo Vergara', sobre:[2,3,4], barras:[{ top:'15px', left:'20%', width:'38%', color:'oklch(0.48 0.10 250)', label:'Estructura pasarela' }] },
+  { nombre:'OT-2026-0012', nota:'Áridos del Sur · Rodrigo Vergara', sobre:[2,3,4], barras:[{ top:'15px', left:'25%', width:'42%', color:'oklch(0.48 0.10 250)', label:'Harnero 2B' }] },
+  { nombre:'OT-2026-0009', nota:'Pesquera Bahía · Jorge Peña', sobre:[], barras:[{ top:'15px', left:'60%', width:'22%', color:'oklch(0.48 0.10 250)', label:'Cambio de correas' }] },
+  { nombre:'SOL-2026-0151', nota:'Sin OT · evaluación de Marcela Ibáñez', sobre:[], barras:[{ top:'15px', left:'40%', width:'28%', color:'#8a8981', label:'Visita de evaluación' }] },
+];
+
+const TOKENS = [
+  { nombre:'Camila Reyes', correo:'creyes@taller.cl', tipo:'Operativo', origen:'Recursos · supervisora', valor:'tk_op_9f2c…41ab', emitido:'02-06-2026', acceso:'hoy 08:12', estado:'Activo' },
+  { nombre:'Diego Fuentes', correo:'dfuentes@taller.cl', tipo:'Operativo', origen:'Recursos · maestro 1ª', valor:'tk_op_1d70…88e5', emitido:'02-06-2026', acceso:'ayer 17:40', estado:'Activo' },
+  { nombre:'Rodrigo Vergara', correo:'rvergara@taller.cl', tipo:'Operativo', origen:'Recursos · supervisor', valor:'tk_op_5b13…c027', emitido:'14-04-2026', acceso:'hace 26 días', estado:'Inactivo' },
+  { nombre:'Marta Godoy', correo:'compras@losandes.cl', tipo:'Cliente', origen:'Clientes · Minera Los Andes', valor:'tk_cl_77aa…3f19', emitido:'11-07-2026', acceso:'hoy 10:05', estado:'Activo' },
+  { nombre:'Javier Vidal', correo:'jvidal@cnorte.cl', tipo:'Cliente', origen:'Clientes · Constructora Norte', valor:'tk_cl_c4e8…9012', emitido:'30-05-2026', acceso:'nunca', estado:'Sin uso' },
+  { nombre:'Pablo Ruiz', correo:'pruiz@taller.cl', tipo:'Operativo', origen:'Recursos · técnico', valor:'tk_op_ab34…7dd1', emitido:'21-03-2026', acceso:'hace 3 meses', estado:'Revocado' },
+];
+
+class Component extends DCLogic {
+  state = {
+    pantalla:'metodologia', abierta:'01', metodos:{}, campos:{}, periodo:'Esta semana', modoGantt:'Por supervisor',
+    vistaToken:'Tokens activos', avisoCarpeta:'', modoGantt:'Por OT',
+    em:{ persona:'Camila Reyes · supervisora', perfil:'Supervisor', correoOp:'creyes@taller.cl', avisoOp:'',
+      empresa:'Minera Los Andes S.A.', contacto:'Marta Godoy · compras', correoCl:'compras@losandes.cl',
+      fono:'+56 9 8123 4455', alcance:'Toda la empresa', avisoCl:'' }, lote:{ Operativo:'10', Cliente:'10' }, avisoLote:{},
+    carpeta:{ evaluacion:true, tareas:true, recursos:true, cotizacion:true, ejecucion:true, ocs:true },
+    pdf:{ tareas:true, materiales:true, gantt:true, condiciones:true, fotos:false },
+  };
+
+  seg(activo, label, onClick) {
+    return { label, onClick, fondo: activo ? '#1c1d1b' : '#fff', borde: activo ? '#1c1d1b' : 'rgba(0,0,0,.22)',
+      tono: activo ? '#fff' : '#57564f', peso: activo ? '700' : '400' };
+  }
+
+  renderVals() {
+    const s = this.state;
+    const P = [
+      ['metodologia','Metodología por tarea','Gap 10'],
+      ['tablero','Tablero de supervisores','Gap 11'],
+      ['gantt','Carga en Gantt','Programación'],
+      ['cotizacion','Cotización ampliada','Gap 12'],
+      ['carpeta','Carpeta de OT','Gap 9'],
+      ['tokens','Bodega de tokens','Móvil'],
+    ];
+    const meta = P.find(p => p[0] === s.pantalla) || P[0];
+    const bajadas = {
+      metodologia:'Cada tarea suma un campo de desarrollo que viaja a terreno y se contrasta con el informe de ejecución.',
+      tablero:'Vista interna del planificador: evaluaciones, ejecuciones e informes de cada supervisor.',
+      gantt:'La programación agrega una vista por supervisor, además de la vista por operario.',
+      cotizacion:'El PDF suma detalle por tarea, separación de suministros, cronograma y condiciones comerciales.',
+      carpeta:'Un PDF interno que consolida todo el respaldo de la OT para auditoría y cierre formal.',
+      tokens:'Administración de accesos: tokens emitidos y stock pre-generado para nuevos usuarios.',
+    };
+
+    const tareas = TAREAS.map(t => {
+      const texto = s.metodos[t.n] !== undefined ? s.metodos[t.n] : t.metodologia;
+      const tiene = texto.trim().length > 0;
+      const campo = (k) => (s.campos[t.n] && s.campos[t.n][k] !== undefined) ? s.campos[t.n][k] : t[k];
+      const onCampo = (k) => (e) => { const v = e.target.value; this.setState(st => ({ campos:{ ...st.campos, [t.n]:{ ...(st.campos[t.n] || {}), [k]: v } } })); };
+      return { ...t, metodologia: texto, abierta: s.abierta === t.n,
+        nombre: campo('nombre'), puesto: campo('puesto'), responsable: campo('responsable'),
+        horas: campo('horas'), fecha: campo('fecha'), valorHora: campo('valorHora'),
+        onNombre: onCampo('nombre'), onPuesto: onCampo('puesto'), onResponsable: onCampo('responsable'),
+        onHoras: onCampo('horas'), onFecha: onCampo('fecha'), onValorHora: onCampo('valorHora'),
+        resumen: texto.split('\n')[0],
+        onResumen: e => { const v = e.target.value;
+          this.setState(st => {
+            const actual = st.metodos[t.n] !== undefined ? st.metodos[t.n] : t.metodologia;
+            const resto = actual.split('\n').slice(1);
+            return { metodos:{ ...st.metodos, [t.n]: [v].concat(resto).join('\n') } };
+          }); },
+        chevron: tiene ? '' : '!',
+        onAbrir: () => this.setState({ abierta: t.n }),
+        onCerrar: () => this.setState({ abierta: null }),
+        estadoMetodo: tiene ? 'Definida' : 'Pendiente',
+        tono: tiene ? '#8a8981' : '#a8412f',
+        onToggle: () => this.setState({ abierta: s.abierta === t.n ? null : t.n }),
+        onMetodo: e => { const v = e.target.value; this.setState(st => ({ metodos:{ ...st.metodos, [t.n]: v } })); } };
+    });
+
+    const sobrecarga = s.modoGantt === 'Por operario' ? [] : [2,3,4];
+    const fuente = s.modoGantt === 'Por supervisor' ? G_SUP : s.modoGantt === 'Por OT' ? G_OT : G_OP;
+    const filas = fuente.map(f => ({
+      codigo:f.codigo, nombre:f.nombre, nota:f.nota, persona:f.persona, puesto:f.puesto,
+      estado:f.estado, horas:f.horas, inicio:f.inicio, fin:f.fin,
+      notaTono: f.notaRojo ? '#a8412f' : '#8a8981',
+      estadoTono: f.estadoRojo ? '#a8412f' : f.estado === 'En ejecución' ? 'oklch(0.42 0.10 250)' : f.estado === 'Evaluación' ? '#7a5a2f' : '#57564f',
+      marca: f.eval ? '#8a8981' : 'oklch(0.48 0.10 250)',
+      celdas: Array.from({length:7}, (_, i) => {
+        const hay = i >= f.span[0] && i <= f.span[1];
+        return { hay, zona: i > 4 ? '#f7f6f2' : 'transparent',
+          fondo: f.eval ? '#e6e4dd' : 'oklch(0.48 0.10 250)',
+          tono: f.eval ? '#3a3a35' : '#fff',
+          texto: hay && i === f.span[0] ? f.horas + ' h' : '' };
+      }),
+    }));
+
+    return {
+      pantallas: P.map(p => ({ ...this.seg(s.pantalla === p[0], p[1], () => this.setState({ pantalla:p[0] })),
+        fondo: s.pantalla === p[0] ? '#e8e7e3' : 'transparent',
+        borde: s.pantalla === p[0] ? '#e8e7e3' : 'rgba(255,255,255,.22)',
+        tono: s.pantalla === p[0] ? '#1c1d1b' : 'rgba(255,255,255,.72)' })),
+      titulo: meta[1], gapTag: meta[2], bajada: bajadas[s.pantalla],
+      esMetodologia: s.pantalla === 'metodologia', esTablero: s.pantalla === 'tablero',
+      esGantt: s.pantalla === 'gantt', esCotizacion: s.pantalla === 'cotizacion',
+      esCarpeta: s.pantalla === 'carpeta', esTokens: s.pantalla === 'tokens',
+
+      tareas, totalTareas: TAREAS.length,
+      conMetodo: tareas.filter(t => t.estadoMetodo === 'Definida').length,
+
+      periodos: ['Esta semana','Este mes','Trimestre'].map(p => this.seg(s.periodo === p, p, () => this.setState({ periodo:p }))),
+      supervisores: SUP.map(x => ({ ...x,
+        informes: x.atrasados === 0 ? '0' : String(x.atrasados),
+        infTono: x.atrasados === 0 ? '#a3a29a' : '#a8412f',
+        infPeso: x.atrasados === 0 ? '400' : '700',
+        cargaPct: Math.min(100, Math.round(x.carga * 100)) + '%',
+        cargaTono: x.carga > 1 ? '#a8412f' : x.carga > 0.8 ? '#b8862f' : 'oklch(0.48 0.10 250)',
+        cargaTexto: Math.round(x.carga * 100) + '%' })),
+
+      modosGantt: ['Por OT','Por supervisor','Por operario'].map(m => this.seg(s.modoGantt === m, m, () => this.setState({ modoGantt:m }))),
+      ganttColumna: s.modoGantt === 'Por supervisor' ? 'Supervisor' : s.modoGantt === 'Por operario' ? 'OT · N°' : 'OT · N°',
+      ganttCol3: s.modoGantt === 'Por supervisor' ? 'Carga' : 'Responsable',
+      dias: ['02','03','04','05','06','07','08'].map((d, i) => ({
+        label:d, letra:['L','M','X','J','V','S','D'][i],
+        fondo: sobrecarga.includes(i) ? 'rgba(168,65,47,.13)' : i > 4 ? '#dedbd4' : 'transparent',
+        tono: sobrecarga.includes(i) ? '#a8412f' : i > 4 ? '#8a8981' : '#3a3a35' })),
+      filasGantt: filas,
+      capacidadSup: CAP_SUP.map(r => ({ nombre:r.nombre, puesto:r.puesto, detalle:r.detalle,
+        pct: Math.round(r.carga * 100) + '%',
+        barra: r.carga > 1 ? '#a8412f' : r.carga > 0.8 ? '#b8862f' : 'oklch(0.48 0.10 250)',
+        celdas: r.dias.map((n, i) => ({ texto: n === 0 ? '·' : String(n),
+          zona: sobrecarga.includes(i) ? 'rgba(168,65,47,.09)' : i > 4 ? '#f7f6f2' : 'transparent',
+          tono: n >= 3 ? '#a8412f' : n === 0 ? '#c4c2ba' : '#3a3a35' })) })),
+
+      cotTareas: [
+        { nombre:'Desmontaje de bomba centrífuga BC-14', hh:'12', mat:'$ 180.000', sub:'$ 612.000' },
+        { nombre:'Inspección dimensional de impulsor', hh:'6', mat:'$ 0', sub:'$ 246.000' },
+        { nombre:'Recambio de sellos mecánicos', hh:'8', mat:'$ 1.240.000', sub:'$ 1.568.000' },
+        { nombre:'Montaje, alineación láser y prueba en vacío', hh:'10', mat:'$ 95.000', sub:'$ 505.000' },
+      ],
+      materiales: [ { nombre:'Sello mecánico 65 mm', monto:'$ 890.000' }, { nombre:'Kit rodamientos SKF', monto:'$ 350.000' }, { nombre:'Empaquetadura grafitada', monto:'$ 95.000' } ],
+      suministros: [ { nombre:'Arriendo tecle 2 t', monto:'$ 120.000' }, { nombre:'Gas y consumibles soldadura', monto:'$ 78.000' }, { nombre:'Traslado a faena', monto:'$ 240.000' } ],
+      cronograma: [
+        { nombre:'Desmontaje', left:'0%', width:'22%' }, { nombre:'Inspección', left:'20%', width:'18%' },
+        { nombre:'Recambio de sellos', left:'36%', width:'34%' }, { nombre:'Montaje y prueba', left:'68%', width:'30%' },
+      ],
+      totales: [
+        { label:'Mano de obra', monto:'$ 1.516.000', borde:'rgba(0,0,0,.14)', tam:'11.5px', peso:'400' },
+        { label:'Materiales y suministros', monto:'$ 1.773.000', borde:'rgba(0,0,0,.07)', tam:'11.5px', peso:'400' },
+        { label:'Neto', monto:'$ 3.289.000', borde:'rgba(0,0,0,.07)', tam:'11.5px', peso:'600' },
+        { label:'Total con IVA', monto:'$ 3.913.910', borde:'#1c1d1b', tam:'13px', peso:'700' },
+      ],
+      condiciones: [
+        { label:'Validez', valor:'30 días corridos desde la emisión' },
+        { label:'Plazo de pago', valor:'30 días desde la factura' },
+        { label:'Forma de pago', valor:'Transferencia electrónica' },
+        { label:'Garantía', valor:'6 meses por defectos de montaje' },
+        { label:'Plazo de ejecución', valor:'11 días hábiles desde la OC' },
+        { label:'No incluye', valor:'Andamios ni permisos de faena' },
+      ],
+      seccionesPdf: [
+        ['tareas','Detalle por tarea','Nuevo'], ['materiales','Materiales vs. suministros','Nuevo'],
+        ['gantt','Cronograma','Nuevo'], ['condiciones','Condiciones comerciales','Nuevo'], ['fotos','Fotografías de referencia','Por definir'],
+      ].map(([k, label, estado]) => ({ label, estado, on: s.pdf[k],
+        tono: estado === 'Nuevo' ? '#4c7a4c' : '#a3a29a',
+        onToggle: () => this.setState(st => ({ pdf:{ ...st.pdf, [k]: !st.pdf[k] } })) })),
+
+      carpeta: [
+        ['evaluacion','Informe de evaluación','Visita del 21-08 · 4 fotos','3 p'],
+        ['tareas','Tareas y metodología','4 tareas con desarrollo','2 p'],
+        ['recursos','Recursos asignados','Personal, equipos y materiales','1 p'],
+        ['cotizacion','Cotización aprobada','COT-2026-0031 · aceptada 28-08','4 p'],
+        ['ejecucion','Informes de ejecución','3 informes de terreno · 11 fotos','7 p'],
+        ['ocs','Órdenes de compra','2 OC a proveedores','2 p'],
+      ].map(([k, label, detalle, pags]) => ({ label, detalle, pags, on: s.carpeta[k],
+        onToggle: () => this.setState(st => ({ carpeta:{ ...st.carpeta, [k]: !st.carpeta[k] }, avisoCarpeta:'' })) })),
+      indice: [
+        ['01','Informe de evaluación','Diagnóstico en faena, mediciones y registro fotográfico del estado inicial.','p. 2'],
+        ['02','Tareas y metodología','Alcance comprometido y cómo se ejecutó cada tarea.','p. 5'],
+        ['03','Recursos asignados','Personal, horas hombre, equipos y materiales consumidos.','p. 7'],
+        ['04','Cotización aprobada','Desglose comercial y condiciones aceptadas por el cliente.','p. 8'],
+        ['05','Informes de ejecución','Avance por jornada, desviaciones y respaldo fotográfico.','p. 12'],
+        ['06','Órdenes de compra','Compras asociadas a la OT con proveedor y monto.','p. 19'],
+      ].map(([n, titulo, resumen, pag]) => ({ n, titulo, resumen, pag })),
+      totalPags: 19,
+      avisoCarpeta: s.avisoCarpeta,
+      onGenerar: () => this.setState({ avisoCarpeta:'Carpeta generada: OT-2026-0006-carpeta.pdf' }),
+
+      vistasToken: ['Tokens activos','Emitir acceso cliente','Stock pre-generado'].map(v => this.seg(s.vistaToken === v, v, () => this.setState({ vistaToken:v }))),
+      tokensActivos: s.vistaToken === 'Tokens activos',
+      tokensEmitir: s.vistaToken === 'Emitir acceso cliente',
+      tokensStock: s.vistaToken === 'Stock pre-generado',
+      emision: {
+        empresas: ['Minera Los Andes S.A.','Constructora Norte','Áridos del Sur','Pesquera Bahía'],
+        empresa: s.em.empresa,
+        onEmpresa: e => { const v = e.target.value; this.setState(st => ({ em:{ ...st.em, empresa:v, avisoCl:'' } })); },
+        contactos: ['Marta Godoy · compras','Camila Reyes · operaciones','+ Nuevo contacto'],
+        contacto: s.em.contacto,
+        onContacto: e => { const v = e.target.value; this.setState(st => ({ em:{ ...st.em, contacto:v, avisoCl:'' } })); },
+        correoCl: s.em.correoCl,
+        onCorreoCl: e => { const v = e.target.value; this.setState(st => ({ em:{ ...st.em, correoCl:v, avisoCl:'' } })); },
+        fono: s.em.fono,
+        onFono: e => { const v = e.target.value; this.setState(st => ({ em:{ ...st.em, fono:v, avisoCl:'' } })); },
+        alcances: ['Toda la empresa','Solo sus solicitudes'].map(a => this.seg(s.em.alcance === a, a, () => this.setState(st => ({ em:{ ...st.em, alcance:a, avisoCl:'' } })))),
+        onEmitirCl: () => this.setState(st => ({ em:{ ...st.em, avisoCl:'Acceso enviado por correo' } })),
+        avisoCl: s.em.avisoCl,
+      },
+      tokens: TOKENS.map(t => ({ ...t,
+        tipoTono: t.tipo === 'Cliente' ? '#7a5a2f' : 'oklch(0.48 0.10 250)',
+        accesoTono: t.acceso === 'nunca' || t.acceso.includes('meses') ? '#a8412f' : '#75746e',
+        estFondo: t.estado === 'Activo' ? 'rgba(76,122,76,.13)' : t.estado === 'Revocado' ? 'rgba(168,65,47,.13)' : '#f0efeb',
+        estTono: t.estado === 'Activo' ? '#4c7a4c' : t.estado === 'Revocado' ? '#a8412f' : '#75746e',
+        acciones: (t.estado === 'Revocado' ? ['Reactivar'] : ['Revocar','Regenerar','Reenviar'])
+          .map(label => ({ label, tono: label === 'Revocar' ? '#a8412f' : '#57564f', onClick: () => {} })) })),
+      stock: ['Operativo','Cliente'].map(tipo => ({
+        tipo: tipo === 'Operativo' ? 'Tokens operativos · supervisores y ejecutores' : 'Tokens cliente · portal de solicitudes',
+        disponibles: tipo === 'Operativo' ? 7 : 12,
+        asignados: tipo === 'Operativo' ? 4 : 9,
+        vencen: tipo === 'Operativo' ? 2 : 0,
+        cantidad: s.lote[tipo], aviso: s.avisoLote[tipo] || '',
+        onCantidad: e => { const v = e.target.value; this.setState(st => ({ lote:{ ...st.lote, [tipo]: v } })); },
+        onGenerar: () => this.setState(st => ({ avisoLote:{ ...st.avisoLote, [tipo]: st.lote[tipo] + ' tokens generados' } })) })),
+    };
+  }
+}
+
+</script>
+</body>
+</html>

@@ -1022,11 +1022,18 @@ exports.accionMovil = async (req, res) => {
         const usuario = await Usuario.findOne({ token, estado: 'activo' });
         if (!usuario) return res.status(403).json({ error: 'Token inválido o revocado' });
 
-        const tieneAsignacion = await Asignacion.exists({ usuarioId: usuario._id, otId: id });
-        if (!tieneAsignacion) return res.status(403).json({ error: 'No tienes una asignación sobre esta OT' });
-
         const ot = await OT.findById(id);
         if (!ot) return res.status(404).json({ error: 'OT no encontrada' });
+
+        // Dos caminos de autorización, no uno: Asignacion (ejecución/evaluación puntual,
+        // ver docs/estrategia-movil.md §7.2) O ser el supervisor de la OT completa
+        // (OT.supervisorId, el mismo campo que ya usa asignacionController.otsSupervisadasEnFechas
+        // para MOSTRAR la OT en mi-día/mi-semana/mi-panel). Sin esto, un supervisor asignado
+        // solo por la pestaña Antecedentes puede VER su OT pero nunca actuar sobre ella desde
+        // S3 — 403 real, encontrado probando "Trabajo finalizado" contra datos reales.
+        const tieneAsignacion = await Asignacion.exists({ usuarioId: usuario._id, otId: id });
+        const esSupervisorDeLaOT = usuario.rol === 'supervisor' && usuario.recursoId && String(ot.supervisorId || '') === String(usuario.recursoId);
+        if (!tieneAsignacion && !esSupervisorDeLaOT) return res.status(403).json({ error: 'No tienes una asignación sobre esta OT' });
 
         aplicarAccionOT(ot, { ...req.body, usuarioNombre: usuario.nombre });
         await ot.save();

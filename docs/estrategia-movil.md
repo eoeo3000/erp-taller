@@ -136,6 +136,8 @@ Esto corrige una lectura anterior de este mismo documento, que interpretó mal `
 
 **Ejecutor.** Rol enteramente nuevo (ver §2). Se propone una versión reducida de lo anterior: ver su tarea del día, marcarla como hecha, sin las acciones de nivel-OT (posponer, interrumpir) que hoy son responsabilidad del Supervisor.
 
+**Ajuste (revisión de producto, agosto 2026) — backlog completo, no solo semana actual.** El alcance descrito arriba ("mi día"/"mi semana") asume que lo único pendiente de ver es la semana en curso. En la práctica, un supervisor puede acumular trabajo pendiente de semanas anteriores que nunca se cerró, y hoy no tiene forma de verlo desde la PWA — solo lo que cae dentro de la ventana de "hoy" o "esta semana". Se amplía el alcance funcional de PWA 2 para incluir una vista de **backlog**: todo lo pendiente acumulado (no solo lo de la semana actual), con la posibilidad de abrir y actuar sobre tareas de días siguientes, no únicamente las del día en curso. Esto es una ampliación de `GET /api/mi/semana` (§8) — o un endpoint nuevo equivalente, por ejemplo `GET /api/mi/pendientes` — que en vez de acotarse a una ventana de 7 días agregue todo lo que sigue sin cerrarse, ordenado por fecha. Queda pendiente de definir en implementación si esto es una pantalla nueva dentro de la PWA Operativa o una pestaña adicional sobre "mi semana" ya existente.
+
 ### 6.2 Autenticación por token persistente por persona
 
 **Entropía:** se mantiene `crypto.randomBytes(20)` → 40 caracteres hexadecimales, exactamente la que ya usa `OT.tokenEjecucion` hoy — no se propone una cifra distinta porque no hay ningún indicio en el sistema actual de que 40 hex sea insuficiente, y usar la misma evita introducir una segunda convención de seguridad en el mismo proyecto.

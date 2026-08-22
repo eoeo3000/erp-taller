@@ -70,10 +70,28 @@ const OTSchema = new mongoose.Schema({
         duracion: Number,
         fecha: String,
         hora: String,
+        // Real, no derivado de hora+duracion en cada lectura: la detección de cruces de
+        // horario (PWA Operativa, modo supervisor) los necesita ya calculados y persistidos.
+        // Se recalculan en TratamientoScreen.actualizarTarea cada vez que cambian hora/duracion.
+        horaInicio: { type: String, default: '' },
+        horaFin: { type: String, default: '' },
         operarioId: [String],
         operarioNombre: [String],
         valorHora: Number,
-        completada: { type: Boolean, default: false }
+        completada: { type: Boolean, default: false },
+        // PWA Operativa, modo supervisor (S3): motivo de una tarea NO realizada (ej. cancelada
+        // por el cliente). completada sigue en false — el Portal Cliente la sigue mostrando como
+        // no terminada, correcto desde su vista — pero con motivo no vacío la tarea ya no bloquea
+        // el cierre de la OT: se puede cerrar con todas realizadas O no-realizadas-y-notificadas.
+        motivoNoRealizada: { type: String, default: '' },
+        // Ingreso de lo realizado en terreno, por tarea (no por OT, a diferencia de OT.reportes
+        // que usa ReporteTerreno.jsx). Uno por tarea: se sobreescribe si se vuelve a guardar.
+        registro: {
+            texto: { type: String, default: '' },
+            fotos: [String],
+            hora: { type: String, default: '' },
+            autor: { type: String, default: '' }
+        }
     }],
 
     // 2. Componentes y Materiales

@@ -55,6 +55,35 @@ async function otsSupervisadasEnFechas(OT, recursoId, fechasISO) {
         }));
 }
 
+// Datos por-tarea de las OT supervisadas dentro de un rango de fechas (S2 Mi semana del
+// supervisor, docs/rediseno/design_handoff_pwa_supervisor/README.md §4): a diferencia de
+// otsSupervisadasEnFechas (una fila por OT, pensada para mi-dia/mi-semana del ejecutor),
+// acá se necesita granularidad de tarea — hora real y operarioId — para dibujar las barras
+// del calendario y detectar cruces de horario en el cliente.
+async function tareasSemanaSupervisada(OT, recursoId, diasISO) {
+    if (!recursoId) return [];
+    const ots = await OT.find({ supervisorId: recursoId, estado: { $ne: 'Pagada' } }).lean();
+    const filas = [];
+    for (const ot of ots) {
+        for (const t of (ot.tareas || [])) {
+            if (!t.fecha || !diasISO.includes(t.fecha)) continue;
+            filas.push({
+                otId: ot._id, numeroOT: ot.numeroOT,
+                // Etiqueta corta de la barra (README §4: "0007 Coronel 6 h") — se usa el
+                // nombre del solicitante de la OT, truncado; no hay un campo de comuna
+                // propio en Solicitud/OT para reproducir exactamente el ejemplo del handoff.
+                etiqueta: (ot.solicitante || '').slice(0, 18),
+                estadoOT: ot.estado, tareaId: String(t._id || ''),
+                fecha: t.fecha, duracion: Number(t.duracion) || 0,
+                horaInicio: t.horaInicio || t.hora || '', horaFin: t.horaFin || '',
+                operarioId: (t.operarioId || []).map(String), operarioNombre: t.operarioNombre || [],
+                completada: !!t.completada,
+            });
+        }
+    }
+    return filas;
+}
+
 function diasDeLaSemana(fecha) {
     const lunes = lunesDeLaSemana(fecha);
     return Array.from({ length: 7 }, (_, i) => {
@@ -238,7 +267,9 @@ exports.miDia = async (req, res) => {
     }
 };
 
-// GET /api/asignaciones/mi-semana?token=&entorno=
+// GET /api/asignaciones/mi-semana?token=&entorno=&desde= — `desde` (opcional, cualquier
+// fecha ISO de la semana deseada) permite a S2 · Mi semana navegar semana anterior/
+// siguiente; sin el parámetro se usa la semana actual, igual que antes (O6MiSemana no lo manda).
 exports.miSemana = async (req, res) => {
     const Asignacion = getAsignacion(req.db);
     const Usuario = getUsuario(req.db);
@@ -248,7 +279,8 @@ exports.miSemana = async (req, res) => {
         if (!usuario) return res.status(403).json({ error: 'Token inválido o revocado' });
 
         const tiposPermitidos = TIPOS_POR_ROL[usuario.rol] || [];
-        const dias = diasDeLaSemana(new Date());
+        const base = req.query.desde ? new Date(`${req.query.desde}T12:00:00`) : new Date();
+        const dias = diasDeLaSemana(base);
         const asignaciones = await Asignacion.find({
             usuarioId: usuario._id, fechaPlanificada: { $in: dias }, estado: { $ne: 'cancelada' },
             tipo: { $in: tiposPermitidos },
@@ -257,8 +289,248 @@ exports.miSemana = async (req, res) => {
         const supervisiones = tiposPermitidos.includes('supervision')
             ? await otsSupervisadasEnFechas(OT, usuario.recursoId, dias)
             : [];
+        const tareasSupervisadas = tiposPermitidos.includes('supervision')
+            ? await tareasSemanaSupervisada(OT, usuario.recursoId, dias)
+            : [];
 
-        res.json({ usuario: { nombre: usuario.nombre, rol: usuario.rol }, dias, asignaciones: [...asignaciones, ...supervisiones] });
+        res.json({ usuario: { nombre: usuario.nombre, rol: usuario.rol }, dias, asignaciones: [...asignaciones, ...supervisiones], tareasSupervisadas });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+};
+
+const DIAS_ARCHIVO_PANEL = 30; // "Solicitudes ejecutadas" de S1 (README §3): últimos 30 días.
+
+// GET /api/asignaciones/mi-panel?token=&entorno= — resumen de S1 · Mi panel (solo rol
+// supervisor). Cada conteo es de alcance distinto (hoy / backlog propio / archivo de 30
+// días) — no una vista de la semana, por eso no reutiliza tareasSemanaSupervisada.
+exports.miPanel = async (req, res) => {
+    const Usuario = getUsuario(req.db);
+    const Asignacion = getAsignacion(req.db);
+    const OT = getOT(req.db);
+    const Solicitud = getSolicitud(req.db);
+    try {
+        const usuario = await resolverUsuarioPorToken(Usuario, req.query.token);
+        if (!usuario) return res.status(403).json({ error: 'Token inválido o revocado' });
+        if (usuario.rol !== 'supervisor') return res.status(403).json({ error: 'Mi panel es solo para supervisores' });
+
+        const hoy = aISO(new Date());
+        const diasDesde = (fecha) => (fecha ? Math.floor((Date.now() - new Date(fecha).getTime()) / 86400000) : null);
+
+        // Hoy en terreno: OT que este supervisor supervisa, con trabajo hoy.
+        const otsActivas = await OT.find({ supervisorId: usuario.recursoId, estado: { $in: ['Programada', 'En Ejecución'] } }).lean();
+        const hoyEnTerreno = otsActivas.filter(ot =>
+            (ot.fechaEjecucion && aISO(new Date(ot.fechaEjecucion)) === hoy) || (ot.tareas || []).some(t => t.fecha === hoy)
+        );
+        const contextoHoy = hoyEnTerreno.slice(0, 2).map(ot => {
+            if (ot.estado === 'En Ejecución') return `${ot.numeroOT} en ejecución`;
+            const tHoy = (ot.tareas || []).find(t => t.fecha === hoy);
+            const hora = tHoy?.horaInicio || tHoy?.hora;
+            return `${ot.numeroOT}${hora ? ` a las ${hora}` : ''} · aún no inicia`;
+        });
+        // IDs para que S1 pueda enlazar directo a S3 (Trabajo) sin una pantalla de listado
+        // intermedia que el handoff no especifica.
+        const itemsHoy = hoyEnTerreno.map(ot => ({ otId: ot._id, numeroOT: ot.numeroOT }));
+
+        // Solicitudes sin informe inicial: pendientes y sin ninguna Asignacion de
+        // evaluación creada todavía (nadie la ha tomado) — misma noción de "sin
+        // supervisor" que usará S4.
+        const solicitudesPendientes = await Solicitud.find({ estado: 'Pendiente' }).select('_id fechaCreacion').lean();
+        const evaluacionesExistentes = solicitudesPendientes.length
+            ? await Asignacion.find({ tipo: 'evaluacion', solicitudId: { $in: solicitudesPendientes.map(s => s._id) } }).select('solicitudId').lean()
+            : [];
+        const conEvaluacion = new Set(evaluacionesExistentes.map(a => String(a.solicitudId)));
+        const solicitudesSinInforme = solicitudesPendientes.filter(s => !conEvaluacion.has(String(s._id)));
+        const masAntigua = solicitudesSinInforme.reduce((min, s) => (!min || s.fechaCreacion < min.fechaCreacion) ? s : min, null);
+
+        // Informes iniciales míos sin enviar: mis propias Asignacion de evaluación, no
+        // completadas todavía.
+        const misEvaluaciones = await Asignacion.find({ tipo: 'evaluacion', usuarioId: usuario._id, estado: { $ne: 'completada' } }).sort({ createdAt: 1 }).lean();
+        let numeroMasAntigua = null;
+        if (misEvaluaciones[0]) {
+            if (misEvaluaciones[0].solicitudId) {
+                const sol = await Solicitud.findById(misEvaluaciones[0].solicitudId).select('numeroSolicitud').lean();
+                numeroMasAntigua = sol?.numeroSolicitud || null;
+            } else if (misEvaluaciones[0].otId) {
+                const otRef = await OT.findById(misEvaluaciones[0].otId).select('numeroOT').lean();
+                numeroMasAntigua = otRef?.numeroOT || null;
+            }
+        }
+
+        // Solicitudes ejecutadas: OT que este supervisor supervisó, ya cerradas, últimos 30 días.
+        const limiteArchivo = new Date(Date.now() - DIAS_ARCHIVO_PANEL * 24 * 60 * 60 * 1000);
+        const ejecutadas = await OT.countDocuments({
+            supervisorId: usuario.recursoId,
+            estado: { $in: ['Trabajo Terminado', 'Con Informe', 'Pagada'] },
+            updatedAt: { $gte: limiteArchivo },
+        });
+
+        res.json({
+            usuario: { nombre: usuario.nombre, puesto: usuario.puesto },
+            hoyEnTerreno: { count: hoyEnTerreno.length, contexto: contextoHoy, items: itemsHoy },
+            solicitudesSinInforme: { count: solicitudesSinInforme.length, diasMasAntigua: diasDesde(masAntigua?.fechaCreacion) },
+            informesMiosSinEnviar: { count: misEvaluaciones.length, numeroMasAntigua, diasMasAntigua: misEvaluaciones[0] ? diasDesde(misEvaluaciones[0].createdAt) : null },
+            solicitudesEjecutadas: { count: ejecutadas },
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+};
+
+// GET /api/asignaciones/solicitudes-sin-informe?token=&entorno= — S4 · Sin informe inicial.
+// "Sin supervisor" = ninguna Asignacion de evaluación creada todavía para esa Solicitud
+// (mismo criterio que miPanel.solicitudesSinInforme, acá con el detalle completo de cada una).
+exports.solicitudesSinInforme = async (req, res) => {
+    const Usuario = getUsuario(req.db);
+    const Asignacion = getAsignacion(req.db);
+    const Solicitud = getSolicitud(req.db);
+    try {
+        const usuario = await resolverUsuarioPorToken(Usuario, req.query.token);
+        if (!usuario) return res.status(403).json({ error: 'Token inválido o revocado' });
+        if (usuario.rol !== 'supervisor') return res.status(403).json({ error: 'Solo para supervisores' });
+
+        const solicitudes = await Solicitud.find({ estado: 'Pendiente' }).sort({ fechaCreacion: 1 }).lean();
+        const evaluaciones = solicitudes.length
+            ? await Asignacion.find({ tipo: 'evaluacion', solicitudId: { $in: solicitudes.map(s => s._id) } }).select('solicitudId').lean()
+            : [];
+        const tomadas = new Set(evaluaciones.map(a => String(a.solicitudId)));
+        const disponibles = solicitudes.filter(s => !tomadas.has(String(s._id)));
+
+        res.json({
+            solicitudes: disponibles.map(s => ({
+                _id: s._id, numeroSolicitud: s.numeroSolicitud, descripcion: s.descripcion,
+                empresaSolicitante: s.empresaSolicitante, direccion: s.direccion,
+                diasEsperando: Math.floor((Date.now() - new Date(s.fechaCreacion).getTime()) / 86400000),
+            })),
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+};
+
+// PUT /api/asignaciones/tomar-solicitud/:solicitudId?token=&entorno= — S4: un solo PUT,
+// asigna supervisor + crea la visita de evaluación + saca la solicitud de la bandeja de los
+// demás, sin confirmación de oficina (README §6). El índice único de Asignacion.solicitudId
+// (ver models/Asignacion.js) es lo que hace el 409 real ante dos supervisores a la vez —
+// no una carrera de "leer y después escribir" que igual podría perder.
+exports.tomarSolicitud = async (req, res) => {
+    const Usuario = getUsuario(req.db);
+    const Asignacion = getAsignacion(req.db);
+    const Solicitud = getSolicitud(req.db);
+    try {
+        const usuario = await resolverUsuarioPorToken(Usuario, req.query.token);
+        if (!usuario) return res.status(403).json({ error: 'Token inválido o revocado' });
+        if (usuario.rol !== 'supervisor') return res.status(403).json({ error: 'Solo para supervisores' });
+
+        const { fecha, hora } = req.body;
+        if (!fecha || !hora) return res.status(400).json({ error: 'fecha y hora son requeridas' });
+
+        const solicitud = await Solicitud.findById(req.params.solicitudId);
+        if (!solicitud) return res.status(404).json({ error: 'Solicitud no encontrada' });
+
+        let asignacion;
+        try {
+            asignacion = await Asignacion.create({
+                tipo: 'evaluacion', usuarioId: usuario._id, solicitudId: solicitud._id,
+                fechaPlanificada: fecha, horaPlanificada: hora,
+            });
+        } catch (eCrear) {
+            if (eCrear.code === 11000) {
+                const existente = await Asignacion.findOne({ tipo: 'evaluacion', solicitudId: solicitud._id });
+                const otroUsuario = existente ? await Usuario.findById(existente.usuarioId).select('nombre').lean() : null;
+                return res.status(409).json({ error: `Ya la tomó ${otroUsuario?.nombre || 'otro supervisor'}` });
+            }
+            throw eCrear;
+        }
+
+        res.status(201).json(asignacion);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+};
+
+const PASOS_INFORME = ['condicionesSitio', 'riesgos', 'metodologia', 'recursosObservados'];
+function pasosCompletos(informeEvaluacion) {
+    if (!informeEvaluacion) return 0;
+    return PASOS_INFORME.filter(p => (informeEvaluacion[p] || '').trim() !== '').length;
+}
+
+// GET /api/asignaciones/mis-informes?token=&entorno= — S5 · Mis informes.
+// El informe vive en OT.informeEvaluacion, no en Solicitud — pero antes de guardarlo por
+// primera vez la OT todavía no existe como documento propio. Se busca en OT usando el MISMO
+// _id de la Solicitud, porque ese es el _id que va a tener la OT una vez creada (ver
+// otController.actualizarOT, upsert que reutiliza solicitud._id) — no es una coincidencia.
+exports.misInformes = async (req, res) => {
+    const Usuario = getUsuario(req.db);
+    const Asignacion = getAsignacion(req.db);
+    const Solicitud = getSolicitud(req.db);
+    const OT = getOT(req.db);
+    try {
+        const usuario = await resolverUsuarioPorToken(Usuario, req.query.token);
+        if (!usuario) return res.status(403).json({ error: 'Token inválido o revocado' });
+        if (usuario.rol !== 'supervisor') return res.status(403).json({ error: 'Solo para supervisores' });
+
+        const mias = await Asignacion.find({ tipo: 'evaluacion', usuarioId: usuario._id }).sort({ fechaPlanificada: 1 }).lean();
+        const solicitudIds = mias.map(a => a.solicitudId).filter(Boolean);
+        const solicitudes = solicitudIds.length ? await Solicitud.find({ _id: { $in: solicitudIds } }).lean() : [];
+        const solicitudPorId = new Map(solicitudes.map(s => [String(s._id), s]));
+        const ots = solicitudIds.length ? await OT.find({ _id: { $in: solicitudIds } }).lean() : [];
+        const otPorId = new Map(ots.map(o => [String(o._id), o]));
+
+        const diasDesde = (fecha) => (fecha ? Math.floor((Date.now() - new Date(fecha).getTime()) / 86400000) : null);
+        const inicioMes = new Date(); inicioMes.setDate(1); inicioMes.setHours(0, 0, 0, 0);
+
+        const pendientes = [];
+        const enviados = [];
+        for (const a of mias) {
+            const sol = solicitudPorId.get(String(a.solicitudId));
+            if (!sol) continue;
+            const ot = otPorId.get(String(a.solicitudId));
+            const base = {
+                _id: a._id, solicitudId: a.solicitudId, numeroSolicitud: sol.numeroSolicitud, descripcion: sol.descripcion,
+                empresaSolicitante: sol.empresaSolicitante, direccion: sol.direccion,
+                fechaPlanificada: a.fechaPlanificada, horaPlanificada: a.horaPlanificada,
+            };
+            if (a.estado === 'completada') {
+                if (new Date(a.updatedAt) >= inicioMes) {
+                    const desenlace = (ot && !['Pendiente', 'Tratada'].includes(ot.estado)) ? 'Cotizada' : 'En oficina';
+                    enviados.push({ ...base, numeroOT: ot?.numeroOT || null, fechaEnvio: a.updatedAt, desenlace });
+                }
+            } else {
+                pendientes.push({ ...base, pasos: pasosCompletos(ot?.informeEvaluacion), diasDesdeVisita: diasDesde(a.fechaPlanificada) });
+            }
+        }
+
+        res.json({ pendientes, enviados });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+};
+
+// GET /api/asignaciones/ejecutadas?token=&entorno= — S6 · archivo de solo consulta.
+exports.ejecutadas = async (req, res) => {
+    const Usuario = getUsuario(req.db);
+    const OT = getOT(req.db);
+    try {
+        const usuario = await resolverUsuarioPorToken(Usuario, req.query.token);
+        if (!usuario) return res.status(403).json({ error: 'Token inválido o revocado' });
+        if (usuario.rol !== 'supervisor') return res.status(403).json({ error: 'Solo para supervisores' });
+
+        const limite = new Date(Date.now() - DIAS_ARCHIVO_PANEL * 24 * 60 * 60 * 1000);
+        const ots = await OT.find({
+            supervisorId: usuario.recursoId,
+            estado: { $in: ['Trabajo Terminado', 'Con Informe', 'Pagada'] },
+            updatedAt: { $gte: limite },
+        }).sort({ updatedAt: -1 }).lean();
+
+        res.json({
+            ots: ots.map(ot => ({
+                _id: ot._id, numeroOT: ot.numeroOT, descripcion: ot.descripcion, solicitante: ot.solicitante,
+                cerrado: ot.updatedAt,
+                horas: (ot.tareas || []).reduce((a, t) => a + (Number(t.duracion) || 0), 0),
+                fotos: (ot.reportes || []).filter(r => r.foto).length + (ot.tareas || []).reduce((a, t) => a + (t.registro?.fotos?.length || 0), 0),
+            })),
+        });
     } catch (error) {
         res.status(500).json({ error: error.message });
     }

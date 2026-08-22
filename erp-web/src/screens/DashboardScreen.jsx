@@ -111,7 +111,7 @@ const CAMPOS = [
     { key: 'pago', label: 'Estado de pago', corto: 'Pago', origen: 'ot.pago', w: 80, align: 'right', tipo: 'texto' },
     { key: 'creacion', label: 'Fecha de creación', corto: 'Ingresada', origen: 'solicitud.fechaCreacion', w: 84, align: 'right', tipo: 'texto', mono: true },
     { key: 'ejecucion', label: 'Fecha de ejecución', corto: 'Ejecución', origen: 'solicitud.fechaEjecucionSolicitada', w: 84, align: 'right', tipo: 'texto', mono: true },
-    { key: 'supervisor', label: 'Supervisor a cargo', corto: 'Supervisor', origen: 'ot.tareas[]', w: 96, align: 'left', tipo: 'texto' },
+    { key: 'supervisor', label: 'Supervisor a cargo', corto: 'Supervisor', origen: 'ot.supervisorId', w: 96, align: 'left', tipo: 'texto' },
     { key: 'contacto', label: 'Contacto solicitante', corto: 'Contacto', origen: 'solicitante', w: 140, align: 'left', tipo: 'texto' },
     { key: 'tareas', label: 'N° de tareas', corto: 'Tareas', origen: 'ot.tareas', w: 60, align: 'right', tipo: 'texto', mono: true },
     { key: 'margen', label: 'Margen estimado', corto: 'Margen', origen: 'no disponible', w: 70, align: 'right', tipo: 'texto', mono: true },
@@ -134,7 +134,7 @@ const LS_KEY = 'erpTaller.disposicion.v2';
 
 // Valor de una columna 'texto' para una fila. 'margen' y 'oc' honestamente no tienen dato real
 // disponible hoy sin fabricarlo o sin un fetch por fila (ver nota en el resumen entregado al usuario).
-const valorCelda = (f, key) => {
+const valorCelda = (f, key, recursos = []) => {
     const { ot, solicitud: s } = f;
     if (key === 'ot') return ot?.numeroOT || '—';
     if (key === 'horas') { const h = horasDe(ot); return h ? `${h} h` : '—'; }
@@ -143,8 +143,8 @@ const valorCelda = (f, key) => {
     if (key === 'creacion') return fmtFecha(s?.fechaCreacion);
     if (key === 'ejecucion') return fmtFecha(s?.fechaEjecucionSolicitada);
     if (key === 'supervisor') {
-        const nombres = (ot?.tareas || []).filter(ta => ta.puesto === 'Supervisor').flatMap(ta => ta.operarioNombre || []);
-        return [...new Set(nombres)].join(', ') || '—';
+        const r = recursos.find(rr => String(rr._id) === String(ot?.supervisorId));
+        return r?.nombre || '—';
     }
     if (key === 'contacto') return s?.solicitante || '—';
     if (key === 'tareas') return ot?.tareas?.length ? String(ot.tareas.length) : '—';
@@ -153,7 +153,7 @@ const valorCelda = (f, key) => {
     return '';
 };
 
-const DashboardScreen = ({ ots = [], solicitudes = [], eliminarOT, actualizarEstadoSolicitud, enviarASupervisor, API, cargando, errorCarga, cargarDatos, guardarDisposicionGlobal, eliminarDisposicionGlobal }) => {
+const DashboardScreen = ({ ots = [], solicitudes = [], eliminarOT, actualizarEstadoSolicitud, enviarASupervisor, recursos = [], API, cargando, errorCarga, cargarDatos, guardarDisposicionGlobal, eliminarDisposicionGlobal }) => {
     const navigate = useNavigate();
     const [filtro, setFiltro] = useState('todos');
     const [consulta, setConsulta] = useState('');
@@ -346,11 +346,7 @@ const DashboardScreen = ({ ots = [], solicitudes = [], eliminarOT, actualizarEst
         if (!filaSel) return null;
         const { ot, solicitud: s } = filaSel;
         const info = etapaInfo(ot);
-        const supervisor = (ot?.tareas || [])
-            .filter(ta => ta.puesto === 'Supervisor')
-            .flatMap(ta => ta.operarioNombre || [])
-            .filter((v, i, arr) => arr.indexOf(v) === i)
-            .join(', ');
+        const supervisor = recursos.find(r => String(r._id) === String(ot?.supervisorId))?.nombre || '';
         const totalComponentes = (ot?.componentes || []).reduce((sum, c) => sum + Number(c.cantidad || 0) * Number(c.precio || 0), 0);
         const totalLogistica = (ot?.logistica || []).reduce((sum, l) => sum + Number(l.cantidad || 0) * Number(l.precio || 0), 0);
         const totalManoObra = Math.max(0, (ot?.granTotal || 0) - totalComponentes - totalLogistica);
@@ -604,7 +600,7 @@ const DashboardScreen = ({ ots = [], solicitudes = [], eliminarOT, actualizarEst
                                                     </span>
                                                 </span>
                                             );
-                                            const val = valorCelda(f, c.key);
+                                            const val = valorCelda(f, c.key, recursos);
                                             return (
                                                 <span
                                                     key={c.key}

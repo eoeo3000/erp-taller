@@ -75,6 +75,20 @@ const GRID_LOGISTICA = '96px 96px minmax(200px,1fr) 62px 96px 100px 140px 24px';
 
 const fmtFecha = (iso) => iso ? new Date(iso).toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—';
 
+// tareas[].horaFin, persistido junto a horaInicio para que la detección de cruces de horario
+// de la PWA Operativa (modo supervisor) no tenga que recalcularlo — soporta turnos que cruzan
+// medianoche (ver bug de calcularHorasDia en App.jsx, mismo problema de módulo 1440).
+const calcularHoraFin = (horaInicio, duracionHoras) => {
+    if (!horaInicio || !duracionHoras) return '';
+    const [h, m] = horaInicio.split(':').map(Number);
+    if (Number.isNaN(h) || Number.isNaN(m)) return '';
+    const totalMin = h * 60 + m + Math.round(Number(duracionHoras) * 60);
+    const minFin = ((totalMin % 1440) + 1440) % 1440;
+    const hh = String(Math.floor(minFin / 60)).padStart(2, '0');
+    const mm = String(minFin % 60).padStart(2, '0');
+    return `${hh}:${mm}`;
+};
+
 const filaAnte = { display: 'grid', gridTemplateColumns: '132px 1fr', gap: 8, padding: '7px 0', borderBottom: `1px solid ${t.hairlineFila}` };
 const etiquetaAnte = { fontSize: '11px', color: t.textoAtenuado2 };
 const valorAnte = { fontSize: '11.5px', color: t.textoPrincipal };
@@ -402,9 +416,15 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
     };
 
     const actualizarTarea = (index, campo, valor) => {
-        setTareas(tareas.map((tItem, i) => i === index
-            ? { ...tItem, [campo]: (campo === 'duracion' || campo === 'valorHora') ? Number(valor) : valor }
-            : tItem));
+        setTareas(tareas.map((tItem, i) => {
+            if (i !== index) return tItem;
+            const actualizado = { ...tItem, [campo]: (campo === 'duracion' || campo === 'valorHora') ? Number(valor) : valor };
+            if (campo === 'hora' || campo === 'duracion') {
+                actualizado.horaInicio = actualizado.hora || '';
+                actualizado.horaFin = calcularHoraFin(actualizado.hora, actualizado.duracion);
+            }
+            return actualizado;
+        }));
     };
     const agregarComponente = () => setComponentes([...componentes, { id: Date.now(), codigo: '', descripcion: '', cantidad: 1, precio: 0 }]);
     const actualizarComponente = (index, campo, valor) => {

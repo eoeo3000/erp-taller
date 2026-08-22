@@ -48,9 +48,19 @@ export function miDia() {
     return pedir(`/asignaciones/mi-dia?token=${encodeURIComponent(token)}`);
 }
 
-export function miSemana() {
+// `desde` (opcional, ISO de cualquier día de la semana deseada) permite a S2 · Mi semana
+// navegar semana anterior/siguiente; O6MiSemana la llama sin argumento y sigue viendo
+// siempre la semana actual, sin cambios.
+export function miSemana(desde) {
     const { token } = getSesion();
-    return pedir(`/asignaciones/mi-semana?token=${encodeURIComponent(token)}`);
+    const q = desde ? `&desde=${encodeURIComponent(desde)}` : '';
+    return pedir(`/asignaciones/mi-semana?token=${encodeURIComponent(token)}${q}`);
+}
+
+// Resumen de S1 · Mi panel (solo rol supervisor) — ver asignacionController.miPanel.
+export function miPanel() {
+    const { token } = getSesion();
+    return pedir(`/asignaciones/mi-panel?token=${encodeURIComponent(token)}`);
 }
 
 export function cerrarAsignacion(id, body = {}) {
@@ -71,6 +81,35 @@ export function accionOT(otId, body) {
 
 export function obtenerOT(otId) {
     return pedir(`/ots/${otId}`);
+}
+
+export function obtenerSolicitud(id) {
+    return pedir(`/solicitudes/${id}`);
+}
+
+// S4 · Sin informe inicial (solo rol supervisor).
+export function solicitudesSinInforme() {
+    const { token } = getSesion();
+    return pedir(`/asignaciones/solicitudes-sin-informe?token=${encodeURIComponent(token)}`);
+}
+
+export function tomarSolicitud(solicitudId, { fecha, hora }) {
+    const { token } = getSesion();
+    return pedir(`/asignaciones/tomar-solicitud/${solicitudId}?token=${encodeURIComponent(token)}`, {
+        method: 'PUT', body: JSON.stringify({ fecha, hora }),
+    });
+}
+
+// S5 · Mis informes (solo rol supervisor).
+export function misInformes() {
+    const { token } = getSesion();
+    return pedir(`/asignaciones/mis-informes?token=${encodeURIComponent(token)}`);
+}
+
+// S6 · Solicitudes ejecutadas (solo rol supervisor).
+export function ejecutadas() {
+    const { token } = getSesion();
+    return pedir(`/asignaciones/ejecutadas?token=${encodeURIComponent(token)}`);
 }
 
 // Mismo endpoint generico que ya usa el resto de la app (App.jsx: actualizarOtGlobal) para

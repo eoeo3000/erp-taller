@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { miDia, obtenerOT } from '../api.js';
 import { listarCola } from '../db.js';
+import TabsSupervisor from './TabsSupervisor.jsx';
 
 const fechaMono = (iso) => new Date(iso + 'T12:00:00').toLocaleDateString('es-CL', { weekday: 'short', day: '2-digit', month: 'short' });
 
@@ -18,7 +19,7 @@ async function cargarTarjetas(asignaciones) {
     }));
 }
 
-export default function O2MiDia({ nav }) {
+export default function O2MiDia({ nav, persona }) {
     const [datos, setDatos] = useState(null);
     const [tarjetas, setTarjetas] = useState([]);
     const [sinEnviar, setSinEnviar] = useState(0);
@@ -42,6 +43,14 @@ export default function O2MiDia({ nav }) {
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+            {/* La pantalla en sí queda igual que en el handoff anterior (README §1: "sin
+                cambios"); esta fila de pestañas se agrega solo para que un supervisor pueda
+                volver a Mi panel — un ejecutor nunca tiene persona.rol === 'supervisor'. */}
+            {persona?.rol === 'supervisor' && (
+                <div style={{ padding: '10px 16px 0', background: 'var(--superficie)' }}>
+                    <TabsSupervisor activa="o2" nav={nav} />
+                </div>
+            )}
             <header style={{ height: 52, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 16px', borderBottom: '1px solid var(--linea-zona)' }}>
                 <div>
                     <div style={{ fontSize: 'var(--fs-card-titulo)', fontWeight: 700 }}>Mi día</div>

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { setSesion, haySesion, accionOT } from './api.js';
+import { setSesion, haySesion, accionOT, whoami } from './api.js';
 import { reintentarCola } from './db.js';
 import O1PrimerAcceso from './screens/O1_PrimerAcceso.jsx';
 import O2MiDia from './screens/O2_MiDia.jsx';
@@ -7,9 +7,19 @@ import O3TrabajoEnCurso from './screens/O3_TrabajoEnCurso.jsx';
 import O4ReporteTerreno from './screens/O4_ReporteTerreno.jsx';
 import O5InformeEvaluacion from './screens/O5_InformeEvaluacion.jsx';
 import O6MiSemana from './screens/O6_MiSemana.jsx';
+import S1MiPanel from './screens/S1_MiPanel.jsx';
+import S2MiSemanaSupervisor from './screens/S2_MiSemanaSupervisor.jsx';
+import S3Trabajo from './screens/S3_Trabajo.jsx';
+import S4SinInformeInicial from './screens/S4_SinInformeInicial.jsx';
+import S5MisInformes from './screens/S5_MisInformes.jsx';
+import S6Ejecutadas from './screens/S6_Ejecutadas.jsx';
 
 export default function App() {
     const [pila, setPila] = useState([{ pantalla: 'cargando' }]);
+    // Solo para decidir el destino de "Entrar" (S1 vs O2) y si O2 muestra las pestañas del
+    // modo supervisor (ver docs/rediseno/design_handoff_pwa_supervisor/README.md §1) — O1
+    // sigue haciendo su propio whoami() para la ficha, este no lo reemplaza.
+    const [persona, setPersona] = useState(null);
 
     // O1 (bienvenida + ficha de persona/puesto) se muestra en cada apertura de la app, no
     // solo la primera vez — pedido explícito del dueño del negocio: quien abre la app debe
@@ -27,6 +37,7 @@ export default function App() {
             setPila([{ pantalla: 'sin-acceso' }]);
             return;
         }
+        whoami().then(setPersona).catch(() => {});
         setPila([{ pantalla: 'o1' }]);
     }, []);
 
@@ -56,9 +67,9 @@ export default function App() {
                 </div>
             );
         case 'o1':
-            return <O1PrimerAcceso onEntrar={() => reemplazar('o2')} />;
+            return <O1PrimerAcceso onEntrar={() => reemplazar(persona?.rol === 'supervisor' ? 's1' : 'o2')} />;
         case 'o2':
-            return <O2MiDia nav={nav} />;
+            return <O2MiDia nav={nav} persona={persona} />;
         case 'o3':
             return <O3TrabajoEnCurso nav={nav} asignacion={actual.contexto?.asignacion} />;
         case 'o4':
@@ -67,6 +78,18 @@ export default function App() {
             return <O5InformeEvaluacion nav={nav} asignacion={actual.contexto?.asignacion} />;
         case 'o6':
             return <O6MiSemana nav={nav} />;
+        case 's1':
+            return <S1MiPanel nav={nav} />;
+        case 's2':
+            return <S2MiSemanaSupervisor nav={nav} />;
+        case 's3':
+            return <S3Trabajo nav={nav} asignacion={actual.contexto?.asignacion} persona={persona} />;
+        case 's4':
+            return <S4SinInformeInicial nav={nav} />;
+        case 's5':
+            return <S5MisInformes nav={nav} />;
+        case 's6':
+            return <S6Ejecutadas nav={nav} />;
         default:
             return null;
     }
