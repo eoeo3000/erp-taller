@@ -5,13 +5,11 @@ import { recalcularTexto, deshacerEdicionManual } from '../hallazgos.js';
 import { subirFoto } from '../api.js';
 
 // Formulario adaptativo de un hallazgo — docs/plan-formulario-adaptativo.md §5/§11, rediseño
-// "lienzo en blanco": un solo cuadro donde se escribe, sin un buscador separado ni una lista
-// de campos aparte. Mientras no hay tipo elegido, ese cuadro ES el texto final (si nadie elige
-// una sugerencia, queda como texto libre — caso no cubierto). Al elegir una sugerencia, el
-// mismo cuadro se transforma en el párrafo con espacios en blanco tocables; cada espacio en
-// blanco (sin importar su tipo de dato) se llena tocándolo, nunca en una lista aparte.
-export default function EditorHallazgo({ hallazgo: hallazgoInicial, tiposTrabajo, condicionesEntorno, onGuardar, onEliminar, onCancelar }) {
-    const [hallazgo, setHallazgo] = useState(hallazgoInicial);
+// "lienzo en blanco": un solo cuadro donde se escribe, sin buscador separado ni lista de
+// campos aparte. Componente CONTROLADO (hallazgo + onCambiar) a propósito: no tiene guardar/
+// cancelar propios — la pantalla que lo usa (O5) es la que manda esos botones abajo, este
+// componente es solo el cuadro y sus fotos/condiciones.
+export default function EditorHallazgo({ hallazgo, onCambiar, tiposTrabajo, condicionesEntorno }) {
     const [hojaAbierta, setHojaAbierta] = useState(null); // campo completo (clave, tipoDato, opciones, etiqueta)
     const [subiendoFoto, setSubiendoFoto] = useState(false);
 
@@ -20,23 +18,23 @@ export default function EditorHallazgo({ hallazgo: hallazgoInicial, tiposTrabajo
     const segmentos = tipoElegido ? generarSegmentos(tipoElegido.plantillaTexto, hallazgo.valores) : [];
     const condicionesDisponibles = condicionesEntorno.filter((c) => !(tipoElegido?.condicionesNoAplicables || []).includes(c._id));
 
-    const escribir = (texto) => setHallazgo((h) => ({ ...h, textoDescriptivo: texto }));
-    const elegirTipo = (tipo) => setHallazgo((h) => recalcularTexto({ ...h, tipoTrabajoId: tipo._id, valores: {} }, tipo));
-    const cambiarTipo = () => setHallazgo((h) => recalcularTexto({ ...h, tipoTrabajoId: null, valores: {} }, null));
-    const cambiarValor = (clave, valor) => setHallazgo((h) => recalcularTexto({ ...h, valores: { ...h.valores, [clave]: valor } }, tipoElegido));
-    const editarTextoLibre = (nuevoTexto) => setHallazgo((h) => ({ ...h, textoDescriptivo: nuevoTexto, textoEditadoManualmente: true }));
-    const onDeshacer = () => setHallazgo(deshacerEdicionManual);
+    const escribir = (texto) => onCambiar({ ...hallazgo, textoDescriptivo: texto });
+    const elegirTipo = (tipo) => onCambiar(recalcularTexto({ ...hallazgo, tipoTrabajoId: tipo._id, valores: {} }, tipo));
+    const cambiarTipo = () => onCambiar(recalcularTexto({ ...hallazgo, tipoTrabajoId: null, valores: {} }, null));
+    const cambiarValor = (clave, valor) => onCambiar(recalcularTexto({ ...hallazgo, valores: { ...hallazgo.valores, [clave]: valor } }, tipoElegido));
+    const editarTextoLibre = (nuevoTexto) => onCambiar({ ...hallazgo, textoDescriptivo: nuevoTexto, textoEditadoManualmente: true });
+    const onDeshacer = () => onCambiar(deshacerEdicionManual(hallazgo));
 
-    const toggleCondicion = (id) => setHallazgo((h) => {
-        const actual = h.condicionesEntorno || [];
-        return { ...h, condicionesEntorno: actual.includes(id) ? actual.filter((x) => x !== id) : [...actual, id] };
-    });
+    const toggleCondicion = (id) => {
+        const actual = hallazgo.condicionesEntorno || [];
+        onCambiar({ ...hallazgo, condicionesEntorno: actual.includes(id) ? actual.filter((x) => x !== id) : [...actual, id] });
+    };
 
     const agregarFotoLibre = async (archivo) => {
         setSubiendoFoto(true);
         try {
             const url = await subirFoto(archivo);
-            setHallazgo((h) => ({ ...h, fotos: [...(h.fotos || []), url] }));
+            onCambiar({ ...hallazgo, fotos: [...(hallazgo.fotos || []), url] });
         } catch {
             window.alert('No se pudo subir la foto — revisa la señal e intenta de nuevo.');
         } finally { setSubiendoFoto(false); }
@@ -70,7 +68,7 @@ export default function EditorHallazgo({ hallazgo: hallazgoInicial, tiposTrabajo
                         value={hallazgo.textoDescriptivo}
                         onChange={(e) => escribir(e.target.value)}
                         placeholder="¿Qué observaste? (ej: cambiar cañería de 4 pulgadas)"
-                        style={{ width: '100%', minHeight: 90, padding: 12, fontSize: 16, border: '1px solid var(--linea-zona)', borderRadius: 'var(--radio)', fontFamily: 'inherit', resize: 'vertical' }}
+                        style={{ width: '100%', minHeight: 140, padding: 12, fontSize: 16, border: '1px solid var(--linea-zona)', borderRadius: 'var(--radio)', fontFamily: 'inherit', resize: 'vertical' }}
                     />
                     {sugerencias.length > 0 && (
                         <div style={{ position: 'absolute', left: 0, right: 0, top: '100%', marginTop: 4, background: '#fff', border: '1px solid var(--linea-zona)', borderRadius: 'var(--radio)', boxShadow: '0 4px 14px rgba(0,0,0,.12)', zIndex: 20 }}>
@@ -151,14 +149,6 @@ export default function EditorHallazgo({ hallazgo: hallazgoInicial, tiposTrabajo
                     </label>
                 </div>
             </div>
-
-            <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-                <button onClick={() => onGuardar(hallazgo)} className="boton-primario" style={{ flex: 1 }} disabled={!hallazgo.textoDescriptivo?.trim()}>Guardar hallazgo</button>
-                <button onClick={onCancelar} className="boton-secundario" style={{ width: 110 }}>Cancelar</button>
-            </div>
-            {onEliminar && (
-                <button onClick={onEliminar} style={{ background: 'none', border: 'none', color: 'var(--detenido)', fontSize: 14, cursor: 'pointer', padding: 8 }}>Eliminar este hallazgo</button>
-            )}
 
             {hojaAbierta && (
                 <HojaCampo

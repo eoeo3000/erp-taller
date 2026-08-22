@@ -7,9 +7,12 @@ import { subirFoto } from '../utils/fotos.js';
 // Versión de escritorio del formulario adaptativo — docs/plan-formulario-adaptativo.md §5/§10,
 // rediseño "lienzo en blanco": un solo cuadro donde se escribe, sin buscador separado ni lista
 // de campos aparte (misma lógica que erp-pwa-operativa/src/screens/EditorHallazgo.jsx — solo
-// cambia el envoltorio visual: menú centrado en vez de hoja inferior, ver §11). Paleta
-// duplicada de los tokens `t` de TratamientoScreen.jsx — evita un import circular
-// (TratamientoScreen ya importa este componente).
+// cambia el envoltorio visual: menú centrado en vez de hoja inferior, ver §11). Componente
+// CONTROLADO (hallazgo + onCambiar), sin guardar/cancelar propios — quien lo use manda esos
+// botones. Nota: hoy ninguna pantalla lo monta (TratamientoScreen pasó a resumen de solo
+// lectura); se mantiene actualizado por si se reactiva. Paleta duplicada de los tokens `t` de
+// TratamientoScreen.jsx — evita un import circular (TratamientoScreen ya importa este
+// componente si se reactiva).
 const t = {
     superficie: '#ffffff', fondo: '#f6f5f2',
     textoPrincipal: '#1a1a18', textoSecundario2: '#4a4a44',
@@ -27,8 +30,7 @@ const estiloBotonChip = (activo) => ({
 const estiloBotonSecundario = { padding: '7px 12px', fontSize: 12.5, fontWeight: 600, border: `1px solid ${t.bordeZona}`, background: '#fff', color: t.textoPrincipal, borderRadius: 2, cursor: 'pointer' };
 const estiloBotonPrimario = { padding: '8px 16px', fontSize: 12.5, fontWeight: 700, border: 'none', background: t.textoPrincipal, color: '#fff', borderRadius: 2, cursor: 'pointer' };
 
-export default function EditorHallazgo({ hallazgo: hallazgoInicial, tiposTrabajo, condicionesEntorno, apiBase, onGuardar, onEliminar, onCancelar }) {
-    const [hallazgo, setHallazgo] = useState(hallazgoInicial);
+export default function EditorHallazgo({ hallazgo, onCambiar, tiposTrabajo, condicionesEntorno, apiBase }) {
     const [menuAbierto, setMenuAbierto] = useState(null); // campo completo (clave, tipoDato, opciones, etiqueta)
     const [subiendoFoto, setSubiendoFoto] = useState(false);
 
@@ -37,23 +39,23 @@ export default function EditorHallazgo({ hallazgo: hallazgoInicial, tiposTrabajo
     const segmentos = tipoElegido ? generarSegmentos(tipoElegido.plantillaTexto, hallazgo.valores) : [];
     const condicionesDisponibles = condicionesEntorno.filter((c) => !(tipoElegido?.condicionesNoAplicables || []).includes(c._id));
 
-    const escribir = (texto) => setHallazgo((h) => ({ ...h, textoDescriptivo: texto }));
-    const elegirTipo = (tipo) => setHallazgo((h) => recalcularTexto({ ...h, tipoTrabajoId: tipo._id, valores: {} }, tipo));
-    const cambiarTipo = () => setHallazgo((h) => recalcularTexto({ ...h, tipoTrabajoId: null, valores: {} }, null));
-    const cambiarValor = (clave, valor) => setHallazgo((h) => recalcularTexto({ ...h, valores: { ...h.valores, [clave]: valor } }, tipoElegido));
-    const editarTextoLibre = (nuevoTexto) => setHallazgo((h) => ({ ...h, textoDescriptivo: nuevoTexto, textoEditadoManualmente: true }));
-    const onDeshacer = () => setHallazgo(deshacerEdicionManual);
+    const escribir = (texto) => onCambiar({ ...hallazgo, textoDescriptivo: texto });
+    const elegirTipo = (tipo) => onCambiar(recalcularTexto({ ...hallazgo, tipoTrabajoId: tipo._id, valores: {} }, tipo));
+    const cambiarTipo = () => onCambiar(recalcularTexto({ ...hallazgo, tipoTrabajoId: null, valores: {} }, null));
+    const cambiarValor = (clave, valor) => onCambiar(recalcularTexto({ ...hallazgo, valores: { ...hallazgo.valores, [clave]: valor } }, tipoElegido));
+    const editarTextoLibre = (nuevoTexto) => onCambiar({ ...hallazgo, textoDescriptivo: nuevoTexto, textoEditadoManualmente: true });
+    const onDeshacer = () => onCambiar(deshacerEdicionManual(hallazgo));
 
-    const toggleCondicion = (id) => setHallazgo((h) => {
-        const actual = h.condicionesEntorno || [];
-        return { ...h, condicionesEntorno: actual.includes(id) ? actual.filter((x) => x !== id) : [...actual, id] };
-    });
+    const toggleCondicion = (id) => {
+        const actual = hallazgo.condicionesEntorno || [];
+        onCambiar({ ...hallazgo, condicionesEntorno: actual.includes(id) ? actual.filter((x) => x !== id) : [...actual, id] });
+    };
 
     const agregarFotoLibre = async (archivo) => {
         setSubiendoFoto(true);
         try {
             const url = await subirFoto(archivo, apiBase);
-            setHallazgo((h) => ({ ...h, fotos: [...(h.fotos || []), url] }));
+            onCambiar({ ...hallazgo, fotos: [...(hallazgo.fotos || []), url] });
         } catch {
             alert('No se pudo subir la foto — intenta de nuevo.');
         } finally { setSubiendoFoto(false); }
@@ -86,7 +88,7 @@ export default function EditorHallazgo({ hallazgo: hallazgoInicial, tiposTrabajo
                         value={hallazgo.textoDescriptivo}
                         onChange={(e) => escribir(e.target.value)}
                         placeholder="¿Qué se observó? (ej: cambiar cañería de 4 pulgadas)"
-                        style={{ ...estiloInput, minHeight: 70, resize: 'vertical' }}
+                        style={{ ...estiloInput, minHeight: 120, resize: 'vertical' }}
                     />
                     {sugerencias.length > 0 && (
                         <div style={{ position: 'absolute', left: 0, right: 0, top: '100%', marginTop: 4, background: '#fff', border: `1px solid ${t.bordeZona}`, borderRadius: 2, boxShadow: '0 4px 14px rgba(0,0,0,.12)', zIndex: 20 }}>
@@ -166,16 +168,6 @@ export default function EditorHallazgo({ hallazgo: hallazgoInicial, tiposTrabajo
                         <input type="file" accept="image/*" style={{ display: 'none' }} onChange={(e) => { const f = e.target.files?.[0]; if (f) agregarFotoLibre(f); e.target.value = ''; }} />
                     </label>
                 </div>
-            </div>
-
-            <div style={{ display: 'flex', gap: 8, marginTop: 4, justifyContent: 'space-between' }}>
-                <div style={{ display: 'flex', gap: 8 }}>
-                    <button onClick={() => onGuardar(hallazgo)} style={estiloBotonPrimario} disabled={!hallazgo.textoDescriptivo?.trim()}>Guardar hallazgo</button>
-                    <button onClick={onCancelar} style={estiloBotonSecundario}>Cancelar</button>
-                </div>
-                {onEliminar && (
-                    <button onClick={onEliminar} style={{ background: 'none', border: 'none', color: t.rojo, fontSize: 12, cursor: 'pointer' }}>Eliminar este hallazgo</button>
-                )}
             </div>
 
             {menuAbierto && (
