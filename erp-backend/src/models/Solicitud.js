@@ -32,5 +32,8 @@ const solicitudSchema = new mongoose.Schema({
 // getAllData (dataController.js) y obtenerSolicitudes (solicitudController.js) ordenan por
 // fechaCreacion en cada carga/poll.
 solicitudSchema.index({ fechaCreacion: -1 });
+// mi-panel (PWA Operativa, S1) filtra por estado en cada request — mismo motivo que los
+// índices de OT/Asignacion: sin él, es un collection scan completo.
+solicitudSchema.index({ estado: 1 });
 
 module.exports = (conn) => conn.models.Solicitud || conn.model('Solicitud', solicitudSchema);

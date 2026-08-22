@@ -13,8 +13,13 @@ async function resolverUsuarioPorToken(Usuario, token) {
     if (!token) return null;
     const usuario = await Usuario.findOne({ token, estado: 'activo' });
     if (usuario) {
+        // No se espera este guardado: es solo una marca informativa de "último acceso", y
+        // cada request autenticado de la PWA pasa por acá — esperarlo duplica el
+        // round-trip a Mongo de CADA llamada (visto en producción: whoami, un solo
+        // findOne sin save, ya tarda ~600-800ms por la latencia propia de la conexión;
+        // sumar un segundo round-trip a mi-dia/mi-semana/mi-panel era buena parte de la lentitud).
         usuario.ultimoAcceso = new Date();
-        await usuario.save();
+        usuario.save().catch(() => {});
     }
     return usuario;
 }
@@ -257,14 +262,15 @@ exports.miDia = async (req, res) => {
 
         const tiposPermitidos = TIPOS_POR_ROL[usuario.rol] || [];
         const hoy = aISO(new Date());
-        const asignaciones = await Asignacion.find({
-            usuarioId: usuario._id, fechaPlanificada: hoy, estado: { $ne: 'cancelada' },
-            tipo: { $in: tiposPermitidos },
-        }).sort({ createdAt: 1 });
-
-        const otsSup = tiposPermitidos.includes('supervision')
-            ? await otsSupervisadasPorRecurso(OT, usuario.recursoId)
-            : [];
+        // Asignacion y OT son colecciones distintas, sin dependencia entre sí — en paralelo
+        // en vez de en secuencia (cada round-trip a Mongo pesa, ver resolverUsuarioPorToken).
+        const [asignaciones, otsSup] = await Promise.all([
+            Asignacion.find({
+                usuarioId: usuario._id, fechaPlanificada: hoy, estado: { $ne: 'cancelada' },
+                tipo: { $in: tiposPermitidos },
+            }).sort({ createdAt: 1 }),
+            tiposPermitidos.includes('supervision') ? otsSupervisadasPorRecurso(OT, usuario.recursoId) : [],
+        ]);
         const supervisiones = supervisionesDesdeOTs(otsSup, [hoy]);
 
         res.json({ usuario: { nombre: usuario.nombre, rol: usuario.rol }, fecha: hoy, asignaciones: [...asignaciones, ...supervisiones] });
@@ -287,14 +293,15 @@ exports.miSemana = async (req, res) => {
         const tiposPermitidos = TIPOS_POR_ROL[usuario.rol] || [];
         const base = req.query.desde ? new Date(`${req.query.desde}T12:00:00`) : new Date();
         const dias = diasDeLaSemana(base);
-        const asignaciones = await Asignacion.find({
-            usuarioId: usuario._id, fechaPlanificada: { $in: dias }, estado: { $ne: 'cancelada' },
-            tipo: { $in: tiposPermitidos },
-        }).sort({ fechaPlanificada: 1 });
-
-        const otsSup = tiposPermitidos.includes('supervision')
-            ? await otsSupervisadasPorRecurso(OT, usuario.recursoId)
-            : [];
+        // Asignacion y OT son colecciones distintas, sin dependencia entre sí — en paralelo
+        // en vez de en secuencia (cada round-trip a Mongo pesa, ver resolverUsuarioPorToken).
+        const [asignaciones, otsSup] = await Promise.all([
+            Asignacion.find({
+                usuarioId: usuario._id, fechaPlanificada: { $in: dias }, estado: { $ne: 'cancelada' },
+                tipo: { $in: tiposPermitidos },
+            }).sort({ fechaPlanificada: 1 }),
+            tiposPermitidos.includes('supervision') ? otsSupervisadasPorRecurso(OT, usuario.recursoId) : [],
+        ]);
         const supervisiones = supervisionesDesdeOTs(otsSup, dias);
         const tareasSupervisadas = tareasSemanaDesdeOTs(otsSup, dias);
 
@@ -321,9 +328,26 @@ exports.miPanel = async (req, res) => {
 
         const hoy = aISO(new Date());
         const diasDesde = (fecha) => (fecha ? Math.floor((Date.now() - new Date(fecha).getTime()) / 86400000) : null);
+        const limiteArchivo = new Date(Date.now() - DIAS_ARCHIVO_PANEL * 24 * 60 * 60 * 1000);
 
-        // Hoy en terreno: OT que este supervisor supervisa, con trabajo hoy.
-        const otsActivas = await OT.find({ supervisorId: usuario.recursoId, estado: { $in: ['Programada', 'En Ejecución'] } }).lean();
+        // Las cuatro consultas de arriba no dependen entre sí — en paralelo en vez de en
+        // secuencia (cada round-trip a Mongo pesa, ver resolverUsuarioPorToken; en
+        // producción esto era buena parte de por qué mi-panel tardaba ~1.8s).
+        const [otsActivas, solicitudesPendientes, misEvaluaciones, ejecutadas] = await Promise.all([
+            // Hoy en terreno: OT que este supervisor supervisa, con trabajo hoy.
+            OT.find({ supervisorId: usuario.recursoId, estado: { $in: ['Programada', 'En Ejecución'] } }).lean(),
+            // Solicitudes sin informe inicial: pendientes (se cruzan con Asignacion más abajo).
+            Solicitud.find({ estado: 'Pendiente' }).select('_id fechaCreacion').lean(),
+            // Informes iniciales míos sin enviar: mis propias Asignacion de evaluación, no completadas.
+            Asignacion.find({ tipo: 'evaluacion', usuarioId: usuario._id, estado: { $ne: 'completada' } }).sort({ createdAt: 1 }).lean(),
+            // Solicitudes ejecutadas: OT que este supervisor supervisó, ya cerradas, últimos 30 días.
+            OT.countDocuments({
+                supervisorId: usuario.recursoId,
+                estado: { $in: ['Trabajo Terminado', 'Con Informe', 'Pagada'] },
+                updatedAt: { $gte: limiteArchivo },
+            }),
+        ]);
+
         const hoyEnTerreno = otsActivas.filter(ot =>
             (ot.fechaEjecucion && aISO(new Date(ot.fechaEjecucion)) === hoy) || (ot.tareas || []).some(t => t.fecha === hoy)
         );
@@ -337,10 +361,7 @@ exports.miPanel = async (req, res) => {
         // intermedia que el handoff no especifica.
         const itemsHoy = hoyEnTerreno.map(ot => ({ otId: ot._id, numeroOT: ot.numeroOT }));
 
-        // Solicitudes sin informe inicial: pendientes y sin ninguna Asignacion de
-        // evaluación creada todavía (nadie la ha tomado) — misma noción de "sin
-        // supervisor" que usará S4.
-        const solicitudesPendientes = await Solicitud.find({ estado: 'Pendiente' }).select('_id fechaCreacion').lean();
+        // Depende de solicitudesPendientes (necesita sus IDs) — no se puede sumar al Promise.all de arriba.
         const evaluacionesExistentes = solicitudesPendientes.length
             ? await Asignacion.find({ tipo: 'evaluacion', solicitudId: { $in: solicitudesPendientes.map(s => s._id) } }).select('solicitudId').lean()
             : [];
@@ -348,9 +369,6 @@ exports.miPanel = async (req, res) => {
         const solicitudesSinInforme = solicitudesPendientes.filter(s => !conEvaluacion.has(String(s._id)));
         const masAntigua = solicitudesSinInforme.reduce((min, s) => (!min || s.fechaCreacion < min.fechaCreacion) ? s : min, null);
 
-        // Informes iniciales míos sin enviar: mis propias Asignacion de evaluación, no
-        // completadas todavía.
-        const misEvaluaciones = await Asignacion.find({ tipo: 'evaluacion', usuarioId: usuario._id, estado: { $ne: 'completada' } }).sort({ createdAt: 1 }).lean();
         let numeroMasAntigua = null;
         if (misEvaluaciones[0]) {
             if (misEvaluaciones[0].solicitudId) {
@@ -361,14 +379,6 @@ exports.miPanel = async (req, res) => {
                 numeroMasAntigua = otRef?.numeroOT || null;
             }
         }
-
-        // Solicitudes ejecutadas: OT que este supervisor supervisó, ya cerradas, últimos 30 días.
-        const limiteArchivo = new Date(Date.now() - DIAS_ARCHIVO_PANEL * 24 * 60 * 60 * 1000);
-        const ejecutadas = await OT.countDocuments({
-            supervisorId: usuario.recursoId,
-            estado: { $in: ['Trabajo Terminado', 'Con Informe', 'Pagada'] },
-            updatedAt: { $gte: limiteArchivo },
-        });
 
         res.json({
             usuario: { nombre: usuario.nombre, puesto: usuario.puesto },
