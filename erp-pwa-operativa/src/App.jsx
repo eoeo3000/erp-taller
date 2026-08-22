@@ -85,7 +85,7 @@ export default function App() {
         case 's1':
             return <S1MiPanel nav={nav} />;
         case 's2':
-            return <S2MiSemanaSupervisor nav={nav} />;
+            return <S2MiSemanaSupervisor nav={nav} contexto={actual.contexto} />;
         case 's3':
             return <S3Trabajo nav={nav} asignacion={actual.contexto?.asignacion} persona={persona} />;
         case 's4':
