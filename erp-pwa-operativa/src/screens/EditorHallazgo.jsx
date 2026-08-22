@@ -1,28 +1,27 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { sugerirTiposTrabajo } from '../motorSugerencia.js';
 import { generarSegmentos } from '../motorTexto.js';
 import { recalcularTexto, deshacerEdicionManual } from '../hallazgos.js';
 import { subirFoto } from '../api.js';
 
-// Formulario adaptativo de un hallazgo — docs/plan-formulario-adaptativo.md §5/§11. Pensado
-// para uso táctil en terreno: cada valor del texto es un objetivo táctil propio que abre una
-// hoja inferior (nunca un menú angosto pegado al punto tocado), las opciones son casillas de
-// toque (nunca un <select multiple> nativo), y el buscador no autocompleta de forma agresiva.
+// Formulario adaptativo de un hallazgo — docs/plan-formulario-adaptativo.md §5/§11, rediseño
+// "lienzo en blanco": un solo cuadro donde se escribe, sin un buscador separado ni una lista
+// de campos aparte. Mientras no hay tipo elegido, ese cuadro ES el texto final (si nadie elige
+// una sugerencia, queda como texto libre — caso no cubierto). Al elegir una sugerencia, el
+// mismo cuadro se transforma en el párrafo con espacios en blanco tocables; cada espacio en
+// blanco (sin importar su tipo de dato) se llena tocándolo, nunca en una lista aparte.
 export default function EditorHallazgo({ hallazgo: hallazgoInicial, tiposTrabajo, condicionesEntorno, onGuardar, onEliminar, onCancelar }) {
     const [hallazgo, setHallazgo] = useState(hallazgoInicial);
-    const [busqueda, setBusqueda] = useState('');
     const [hojaAbierta, setHojaAbierta] = useState(null); // campo completo (clave, tipoDato, opciones, etiqueta)
     const [subiendoFoto, setSubiendoFoto] = useState(false);
 
     const tipoElegido = tiposTrabajo.find((t) => String(t._id) === String(hallazgo.tipoTrabajoId));
-    const sugerencias = !tipoElegido && busqueda.trim() ? sugerirTiposTrabajo(busqueda, tiposTrabajo) : [];
+    const sugerencias = !tipoElegido && hallazgo.textoDescriptivo?.trim() ? sugerirTiposTrabajo(hallazgo.textoDescriptivo, tiposTrabajo) : [];
     const segmentos = tipoElegido ? generarSegmentos(tipoElegido.plantillaTexto, hallazgo.valores) : [];
     const condicionesDisponibles = condicionesEntorno.filter((c) => !(tipoElegido?.condicionesNoAplicables || []).includes(c._id));
 
-    const elegirTipo = (tipo) => {
-        setHallazgo(recalcularTexto({ ...hallazgo, tipoTrabajoId: tipo._id, valores: {} }, tipo));
-        setBusqueda('');
-    };
+    const escribir = (texto) => setHallazgo((h) => ({ ...h, textoDescriptivo: texto }));
+    const elegirTipo = (tipo) => setHallazgo((h) => recalcularTexto({ ...h, tipoTrabajoId: tipo._id, valores: {} }, tipo));
     const cambiarTipo = () => setHallazgo((h) => recalcularTexto({ ...h, tipoTrabajoId: null, valores: {} }, null));
     const cambiarValor = (clave, valor) => setHallazgo((h) => recalcularTexto({ ...h, valores: { ...h.valores, [clave]: valor } }, tipoElegido));
     const editarTextoLibre = (nuevoTexto) => setHallazgo((h) => ({ ...h, textoDescriptivo: nuevoTexto, textoEditadoManualmente: true }));
@@ -53,23 +52,28 @@ export default function EditorHallazgo({ hallazgo: hallazgoInicial, tiposTrabajo
         } finally { setSubiendoFoto(false); }
     };
 
-    const abrirSelectorDeCampo = (clave) => {
+    // Cada espacio en blanco se llena tocándolo, sea cual sea su tipo de dato — "foto" abre la
+    // cámara directo (sin hoja intermedia), el resto abre una hoja inferior (nunca un menú
+    // angosto pegado al punto tocado, ver §11).
+    const tocarSegmento = (clave, refInputFoto) => {
         const campo = tipoElegido?.campos.find((c) => c.clave === clave);
-        if (campo && (campo.tipoDato === 'seleccionUnica' || campo.tipoDato === 'seleccionMultiple')) setHojaAbierta(campo);
+        if (!campo) return;
+        if (campo.tipoDato === 'foto') { refInputFoto?.click(); return; }
+        setHojaAbierta(campo);
     };
 
     return (
         <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 14 }}>
             {!tipoElegido && (
-                <div>
-                    <input
-                        value={busqueda}
-                        onChange={(e) => setBusqueda(e.target.value)}
+                <div style={{ position: 'relative' }}>
+                    <textarea
+                        value={hallazgo.textoDescriptivo}
+                        onChange={(e) => escribir(e.target.value)}
                         placeholder="¿Qué observaste? (ej: cambiar cañería de 4 pulgadas)"
-                        style={{ width: '100%', height: 48, padding: '0 12px', fontSize: 16, border: '1px solid var(--linea-zona)', borderRadius: 'var(--radio)' }}
+                        style={{ width: '100%', minHeight: 90, padding: 12, fontSize: 16, border: '1px solid var(--linea-zona)', borderRadius: 'var(--radio)', fontFamily: 'inherit', resize: 'vertical' }}
                     />
                     {sugerencias.length > 0 && (
-                        <div style={{ marginTop: 8, border: '1px solid var(--linea-zona)', borderRadius: 'var(--radio)' }}>
+                        <div style={{ position: 'absolute', left: 0, right: 0, top: '100%', marginTop: 4, background: '#fff', border: '1px solid var(--linea-zona)', borderRadius: 'var(--radio)', boxShadow: '0 4px 14px rgba(0,0,0,.12)', zIndex: 20 }}>
                             {sugerencias.map(({ tipo }) => (
                                 <button
                                     key={tipo._id}
@@ -81,17 +85,6 @@ export default function EditorHallazgo({ hallazgo: hallazgoInicial, tiposTrabajo
                             ))}
                         </div>
                     )}
-                    {busqueda.trim() && sugerencias.length === 0 && (
-                        <div style={{ marginTop: 8, fontSize: 13, color: 'var(--texto-atenuado-1)' }}>
-                            Sin coincidencias en el catálogo — puedes seguir en texto libre más abajo.
-                        </div>
-                    )}
-                    <textarea
-                        value={hallazgo.textoDescriptivo}
-                        onChange={(e) => editarTextoLibre(e.target.value)}
-                        placeholder="Describe lo que observaste, en texto libre"
-                        style={{ width: '100%', minHeight: 90, marginTop: 12, padding: 10, fontSize: 15, border: '1px solid var(--linea-zona)', borderRadius: 'var(--radio)', fontFamily: 'inherit', resize: 'vertical' }}
-                    />
                 </div>
             )}
 
@@ -106,19 +99,14 @@ export default function EditorHallazgo({ hallazgo: hallazgoInicial, tiposTrabajo
                         {!hallazgo.textoEditadoManualmente ? segmentos.map((s, i) => (s.tipo === 'texto' ? (
                             <span key={i}>{s.contenido}</span>
                         ) : (
-                            <span
+                            <SegmentoCampo
                                 key={i}
-                                onClick={() => abrirSelectorDeCampo(s.clave)}
-                                style={{
-                                    display: 'inline-block', padding: '4px 8px', margin: '2px 1px', minHeight: 32,
-                                    background: s.pendiente ? '#fff' : 'var(--superficie)',
-                                    border: `1.5px solid ${s.pendiente ? 'var(--atencion)' : 'var(--en-curso)'}`,
-                                    borderRadius: 'var(--radio)', fontWeight: 600, cursor: 'pointer',
-                                    color: s.pendiente ? 'var(--atencion)' : 'var(--texto-principal)',
-                                }}
-                            >
-                                {s.contenido}
-                            </span>
+                                segmento={s}
+                                campo={tipoElegido.campos.find((c) => c.clave === s.clave)}
+                                onTocar={(refInputFoto) => tocarSegmento(s.clave, refInputFoto)}
+                                onSubirFoto={(archivo) => agregarFotoDeCampo(s.clave, archivo)}
+                                subiendo={subiendoFoto}
+                            />
                         ))) : (
                             <textarea
                                 value={hallazgo.textoDescriptivo}
@@ -134,19 +122,6 @@ export default function EditorHallazgo({ hallazgo: hallazgoInicial, tiposTrabajo
                             Editar el texto libremente
                         </button>
                     )}
-
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                        {[...tipoElegido.campos].sort((a, b) => a.orden - b.orden).map((campo) => (
-                            <CampoDinamico
-                                key={campo.clave}
-                                campo={campo}
-                                valor={hallazgo.valores[campo.clave]}
-                                onCambiar={(v) => cambiarValor(campo.clave, v)}
-                                onSubirFoto={(archivo) => agregarFotoDeCampo(campo.clave, archivo)}
-                                subiendo={subiendoFoto}
-                            />
-                        ))}
-                    </div>
 
                     {condicionesDisponibles.length > 0 && (
                         <div>
@@ -186,7 +161,7 @@ export default function EditorHallazgo({ hallazgo: hallazgoInicial, tiposTrabajo
             )}
 
             {hojaAbierta && (
-                <HojaSelector
+                <HojaCampo
                     campo={hojaAbierta}
                     valorActual={hallazgo.valores[hojaAbierta.clave]}
                     onElegir={(v) => {
@@ -200,86 +175,78 @@ export default function EditorHallazgo({ hallazgo: hallazgoInicial, tiposTrabajo
     );
 }
 
-function CampoDinamico({ campo, valor, onCambiar, onSubirFoto, subiendo }) {
-    if (campo.tipoDato === 'foto') {
-        return (
-            <div>
-                <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>{campo.etiqueta}</div>
-                {valor ? (
-                    <img src={valor} alt="" style={{ width: 100, height: 75, objectFit: 'cover', borderRadius: 'var(--radio)' }} />
-                ) : (
-                    <label className="boton-secundario" style={{ height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
-                        {subiendo ? 'Subiendo…' : 'Tomar foto'}
-                        <input type="file" accept="image/*" capture="environment" style={{ display: 'none' }} onChange={(e) => { const f = e.target.files?.[0]; if (f) onSubirFoto(f); e.target.value = ''; }} />
-                    </label>
-                )}
-            </div>
-        );
-    }
-    if (campo.tipoDato === 'seleccionUnica' || campo.tipoDato === 'seleccionMultiple') {
-        const seleccionados = campo.tipoDato === 'seleccionMultiple' ? (valor || []) : (valor ? [valor] : []);
-        return (
-            <div>
-                <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>{campo.etiqueta}{campo.obligatorio ? ' *' : ''}</div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                    {campo.opciones.map((op) => {
-                        const marcada = seleccionados.includes(op);
-                        return (
-                            <button
-                                key={op}
-                                onClick={() => onCambiar(campo.tipoDato === 'seleccionMultiple' ? (marcada ? seleccionados.filter((x) => x !== op) : [...seleccionados, op]) : op)}
-                                style={{
-                                    minHeight: 44, padding: '0 14px', border: `1.5px solid ${marcada ? 'var(--texto-principal)' : 'var(--linea-zona)'}`,
-                                    background: marcada ? 'var(--texto-principal)' : '#fff', color: marcada ? '#fff' : 'var(--texto-principal)',
-                                    borderRadius: 'var(--radio)', fontSize: 14, fontWeight: 600, cursor: 'pointer',
-                                }}
-                            >
-                                {op}
-                            </button>
-                        );
-                    })}
-                </div>
-            </div>
-        );
-    }
+// Un espacio en blanco dentro del párrafo — mismo objetivo táctil sea cual sea su tipo de
+// dato. "foto" lleva su propio <input type=file> oculto (se activa tocando el segmento, sin
+// pasar por la hoja inferior); el resto delega en onTocar (abre HojaCampo).
+function SegmentoCampo({ segmento, campo, onTocar, onSubirFoto, subiendo }) {
+    const inputFoto = useRef(null);
+    const esFoto = campo?.tipoDato === 'foto';
     return (
-        <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <span style={{ fontSize: 13, fontWeight: 600 }}>{campo.etiqueta}{campo.obligatorio ? ' *' : ''}</span>
-            <input
-                type={campo.tipoDato === 'numero' ? 'number' : campo.tipoDato === 'fecha' ? 'date' : 'text'}
-                value={valor || ''}
-                onChange={(e) => onCambiar(e.target.value)}
-                style={{ height: 44, padding: '0 12px', fontSize: 15, border: '1px solid var(--linea-zona)', borderRadius: 'var(--radio)' }}
-            />
-        </label>
+        <span
+            onClick={() => onTocar(inputFoto.current)}
+            style={{
+                display: 'inline-block', padding: '4px 8px', margin: '2px 1px', minHeight: 32,
+                background: segmento.pendiente ? '#fff' : 'var(--superficie)',
+                border: `1.5px solid ${segmento.pendiente ? 'var(--atencion)' : 'var(--en-curso)'}`,
+                borderRadius: 'var(--radio)', fontWeight: 600, cursor: 'pointer',
+                color: segmento.pendiente ? 'var(--atencion)' : 'var(--texto-principal)',
+            }}
+        >
+            {subiendo ? 'Subiendo…' : segmento.contenido}
+            {esFoto && (
+                <input
+                    ref={inputFoto}
+                    type="file" accept="image/*" capture="environment" style={{ display: 'none' }}
+                    onChange={(e) => { const f = e.target.files?.[0]; if (f) onSubirFoto(f); e.target.value = ''; }}
+                />
+            )}
+        </span>
     );
 }
 
 // Hoja inferior — mismo patrón ya usado en esta PWA para elegir semana (S2) o agendar una
-// visita (S4): nunca un menú angosto pegado al punto exacto donde se tocó.
-function HojaSelector({ campo, valorActual, onElegir, onCerrar }) {
+// visita (S4): nunca un menú angosto pegado al punto tocado. Cubre todos los tipos de dato
+// menos "foto" (esa abre la cámara directo desde el propio segmento).
+function HojaCampo({ campo, valorActual, onElegir, onCerrar }) {
+    const [borrador, setBorrador] = useState(valorActual || '');
     const esMultiple = campo.tipoDato === 'seleccionMultiple';
+    const esEleccion = campo.tipoDato === 'seleccionUnica' || esMultiple;
     const seleccionados = esMultiple ? (valorActual || []) : (valorActual ? [valorActual] : []);
     return (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.35)', zIndex: 50, display: 'flex', alignItems: 'flex-end' }} onClick={onCerrar}>
             <div onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxHeight: '70vh', overflowY: 'auto', background: '#fff', borderRadius: '8px 8px 0 0', padding: 16 }}>
                 <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 10 }}>{campo.etiqueta}</div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                    {campo.opciones.map((op) => {
-                        const marcada = seleccionados.includes(op);
-                        return (
-                            <button
-                                key={op}
-                                onClick={() => onElegir(esMultiple ? (marcada ? seleccionados.filter((x) => x !== op) : [...seleccionados, op]) : op)}
-                                className="boton-secundario"
-                                style={{ minHeight: 52, textAlign: 'left', paddingLeft: 14, borderColor: marcada ? 'var(--texto-principal)' : 'var(--linea-zona)' }}
-                            >
-                                <span className="mono" style={{ marginRight: 8 }}>{marcada ? '×' : '·'}</span>{op}
-                            </button>
-                        );
-                    })}
-                </div>
-                {esMultiple && <button onClick={onCerrar} className="boton-primario" style={{ marginTop: 12 }}>Listo</button>}
+                {esEleccion ? (
+                    <>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                            {campo.opciones.map((op) => {
+                                const marcada = seleccionados.includes(op);
+                                return (
+                                    <button
+                                        key={op}
+                                        onClick={() => onElegir(esMultiple ? (marcada ? seleccionados.filter((x) => x !== op) : [...seleccionados, op]) : op)}
+                                        className="boton-secundario"
+                                        style={{ minHeight: 52, textAlign: 'left', paddingLeft: 14, borderColor: marcada ? 'var(--texto-principal)' : 'var(--linea-zona)' }}
+                                    >
+                                        <span className="mono" style={{ marginRight: 8 }}>{marcada ? '×' : '·'}</span>{op}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                        {esMultiple && <button onClick={onCerrar} className="boton-primario" style={{ marginTop: 12 }}>Listo</button>}
+                    </>
+                ) : (
+                    <>
+                        <input
+                            autoFocus
+                            type={campo.tipoDato === 'numero' ? 'number' : campo.tipoDato === 'fecha' ? 'date' : 'text'}
+                            value={borrador}
+                            onChange={(e) => setBorrador(e.target.value)}
+                            style={{ width: '100%', height: 48, padding: '0 12px', fontSize: 16, border: '1px solid var(--linea-zona)', borderRadius: 'var(--radio)' }}
+                        />
+                        <button onClick={() => onElegir(borrador)} className="boton-primario" style={{ marginTop: 12, width: '100%' }}>Listo</button>
+                    </>
+                )}
             </div>
         </div>
     );

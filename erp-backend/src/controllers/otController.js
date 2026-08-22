@@ -457,7 +457,7 @@ exports.actualizarOT = async (req, res) => {
 
                 await ot.save();
                 // Actualizamos la solicitud original
-                await Solicitud.findByIdAndUpdate(id, { estado: 'Tratada', numeroOT: num });
+                await Solicitud.findByIdAndUpdate(id, { estado: 'Tratada', numeroOT: ot.numeroOT });
             }
         }
 
