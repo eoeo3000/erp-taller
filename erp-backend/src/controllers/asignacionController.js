@@ -69,9 +69,10 @@ async function tareasSemanaSupervisada(OT, recursoId, diasISO) {
             if (!t.fecha || !diasISO.includes(t.fecha)) continue;
             filas.push({
                 otId: ot._id, numeroOT: ot.numeroOT,
-                // Rótulo de la barra en S2: número de OT + descripción de la OT, nada más
-                // (pedido explícito — antes mostraba el cliente y las horas).
-                descripcion: (ot.descripcion || '').slice(0, 40),
+                // Rótulo de la barra en S2: número de OT completo + descripción de la OT, nada
+                // más (pedido explícito — antes mostraba el cliente y las horas). El rótulo
+                // puede saltar de línea en vez de recortarse, así que el límite es generoso.
+                descripcion: (ot.descripcion || '').slice(0, 60),
                 estadoOT: ot.estado, tareaId: String(t._id || ''),
                 fecha: t.fecha, duracion: Number(t.duracion) || 0,
                 horaInicio: t.horaInicio || t.hora || '', horaFin: t.horaFin || '',

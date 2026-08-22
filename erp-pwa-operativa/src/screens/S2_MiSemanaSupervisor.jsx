@@ -14,12 +14,12 @@ function horas(hhmm) {
 }
 const pctHora = (h) => `${h * (100 / 24)}%`;
 
-// Alto de fila y posición de carril — geometría exacta del prototipo (README §4): un carril
-// 50px, dos 96px, tres 142px; cada carril de 42px con el siguiente empezando 46px más abajo
-// (no los 8px que dice la prosa del handoff — la propia maqueta HTML usa 46, y la maqueta es
-// la fuente de verdad de fidelidad "alta").
-const laneTop = (i) => 4 + i * 46;
-const rowHeight = (carriles) => (carriles > 0 ? 50 + (carriles - 1) * 46 : 50);
+// Alto de fila y posición de carril. La geometría original del prototipo (carriles de 42px
+// cada 46px) se amplió a 60px de paso: el rótulo ahora muestra el número de OT completo y
+// puede saltar de línea (pedido del usuario) en vez de recortarse con "…", así que cada
+// carril necesita más aire vertical para no pisar el de al lado.
+const laneTop = (i) => 6 + i * 60;
+const rowHeight = (carriles) => (carriles > 0 ? 6 + carriles * 60 : 50);
 
 function sumarDias(iso, delta) {
     const d = new Date(iso + 'T12:00:00');
@@ -49,8 +49,35 @@ export default function S2MiSemanaSupervisor({ nav }) {
         nav.ir('s3', { asignacion: { otId } });
     };
 
-    if (error) return <div style={{ padding: 24, fontSize: 'var(--fs-cuerpo)', color: 'var(--detenido)' }}>{error}</div>;
-    if (!datos) return null;
+    // La barra superior se pinta de inmediato: al pasar de una pantalla a otra debe quedar
+    // una barra visible, no una pantalla en blanco mientras carga el contenido. Los botones
+    // de semana anterior/siguiente y el selector de fecha necesitan datos.dias, así que
+    // quedan inertes (sin acción) hasta que la semana termine de cargar.
+    const cabecera = (
+        <header style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: 8, height: 52, padding: '0 8px', background: 'var(--superficie)', borderBottom: '1px solid var(--linea-zona)' }}>
+            <button onClick={nav.volver} className="mono" style={{ flex: 'none', width: 40, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', fontSize: 20, color: 'var(--texto-secundario-2)', cursor: 'pointer' }}>‹</button>
+            <span style={{ flex: 'none', fontSize: 17, fontWeight: 700, whiteSpace: 'nowrap' }}>Mi semana</span>
+            <span style={{ marginLeft: 'auto', flex: 'none', display: 'flex', alignItems: 'center' }}>
+                <button onClick={() => datos && setDesde(sumarDias(datos.dias[0], -7))} disabled={!datos} className="mono" style={{ width: 40, height: 44, background: 'none', border: 'none', fontSize: 18, color: 'var(--texto-secundario-2)', cursor: datos ? 'pointer' : 'default' }}>‹</button>
+                {/* Rótulo tapable: abre el selector de fecha nativo para ir directo a
+                    cualquier semana, no solo semana anterior/siguiente de a una. */}
+                <label style={{ position: 'relative', display: 'flex', alignItems: 'center', height: 44, padding: '0 4px', cursor: datos ? 'pointer' : 'default' }}>
+                    <span className="mono" style={{ fontSize: 13.5, whiteSpace: 'nowrap' }}>{datos ? `${fechaMono(datos.dias[0])} – ${fechaMono(datos.dias[6])}` : '…'}</span>
+                    {datos && (
+                        <input
+                            type="date" value={datos.dias[0]} aria-label="Elegir semana"
+                            onChange={(e) => e.target.value && setDesde(e.target.value)}
+                            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', opacity: 0, cursor: 'pointer' }}
+                        />
+                    )}
+                </label>
+                <button onClick={() => datos && setDesde(sumarDias(datos.dias[0], 7))} disabled={!datos} className="mono" style={{ width: 40, height: 44, background: 'none', border: 'none', fontSize: 18, color: 'var(--texto-secundario-2)', cursor: datos ? 'pointer' : 'default' }}>›</button>
+            </span>
+        </header>
+    );
+
+    if (error) return <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>{cabecera}<div style={{ padding: 24, fontSize: 'var(--fs-cuerpo)', color: 'var(--detenido)' }}>{error}</div></div>;
+    if (!datos) return <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>{cabecera}</div>;
 
     const tareas = datos.tareasSupervisadas || [];
     const grupos = agruparPorOtYDia(tareas);
@@ -65,30 +92,13 @@ export default function S2MiSemanaSupervisor({ nav }) {
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
-            <header style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: 8, height: 52, padding: '0 8px', background: 'var(--superficie)', borderBottom: '1px solid var(--linea-zona)' }}>
-                <button onClick={nav.volver} className="mono" style={{ flex: 'none', width: 40, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', fontSize: 20, color: 'var(--texto-secundario-2)', cursor: 'pointer' }}>‹</button>
-                <span style={{ flex: 'none', fontSize: 16, fontWeight: 700, whiteSpace: 'nowrap' }}>Mi semana</span>
-                <span style={{ marginLeft: 'auto', flex: 'none', display: 'flex', alignItems: 'center' }}>
-                    <button onClick={() => setDesde(sumarDias(datos.dias[0], -7))} className="mono" style={{ width: 40, height: 44, background: 'none', border: 'none', fontSize: 18, color: 'var(--texto-secundario-2)', cursor: 'pointer' }}>‹</button>
-                    {/* Rótulo tapable: abre el selector de fecha nativo para ir directo a
-                        cualquier semana, no solo semana anterior/siguiente de a una. */}
-                    <label style={{ position: 'relative', display: 'flex', alignItems: 'center', height: 44, padding: '0 4px', cursor: 'pointer' }}>
-                        <span className="mono" style={{ fontSize: 12.5, whiteSpace: 'nowrap' }}>{fechaMono(datos.dias[0])} – {fechaMono(datos.dias[6])}</span>
-                        <input
-                            type="date" value={datos.dias[0]} aria-label="Elegir semana"
-                            onChange={(e) => e.target.value && setDesde(e.target.value)}
-                            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', opacity: 0, cursor: 'pointer' }}
-                        />
-                    </label>
-                    <button onClick={() => setDesde(sumarDias(datos.dias[0], 7))} className="mono" style={{ width: 40, height: 44, background: 'none', border: 'none', fontSize: 18, color: 'var(--texto-secundario-2)', cursor: 'pointer' }}>›</button>
-                </span>
-            </header>
+            {cabecera}
 
             <div className="franja" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <span style={{ fontSize: 13, color: 'var(--texto-secundario-2)' }}>{new Set(grupos.map((g) => String(g.otId))).size} trabajos · {totalHoras} h</span>
-                {semanaActual && <span className="mono" style={{ fontSize: 12.5 }}>{String(ahora.getHours()).padStart(2, '0')}:{String(ahora.getMinutes()).padStart(2, '0')}</span>}
+                <span style={{ fontSize: 14.5, color: 'var(--texto-secundario-2)' }}>{new Set(grupos.map((g) => String(g.otId))).size} trabajos · {totalHoras} h</span>
+                {semanaActual && <span className="mono" style={{ fontSize: 14 }}>{String(ahora.getHours()).padStart(2, '0')}:{String(ahora.getMinutes()).padStart(2, '0')}</span>}
                 {cruceHoy && (
-                    <span className="mono" style={{ marginLeft: 'auto', fontSize: 12.5, fontWeight: 600, color: 'var(--detenido)' }}>
+                    <span className="mono" style={{ marginLeft: 'auto', fontSize: 14, fontWeight: 600, color: 'var(--detenido)' }}>
                         {NOMBRE_DIA[datos.dias.indexOf(hoyISO())]} · cruce
                     </span>
                 )}
@@ -96,21 +106,22 @@ export default function S2MiSemanaSupervisor({ nav }) {
 
             {mostrarAyuda && (
                 <div style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: 8, padding: '8px 18px', background: 'var(--en-curso)', color: '#fff' }}>
-                    <span style={{ fontSize: 12.5 }}>Doble toque sobre una barra para entrar a esa OT.</span>
-                    <button onClick={() => { try { localStorage.setItem(CLAVE_AYUDA_VISTA, '1'); } catch { /* sin persistencia en incógnito */ } setMostrarAyuda(false); }} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: '#fff', fontSize: 12.5, fontWeight: 600, cursor: 'pointer', textDecoration: 'underline' }}>Entendido</button>
+                    <span style={{ fontSize: 13.5 }}>Doble toque sobre una barra para entrar a esa OT.</span>
+                    <button onClick={() => { try { localStorage.setItem(CLAVE_AYUDA_VISTA, '1'); } catch { /* sin persistencia en incógnito */ } setMostrarAyuda(false); }} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: '#fff', fontSize: 13.5, fontWeight: 600, cursor: 'pointer', textDecoration: 'underline' }}>Entendido</button>
                 </div>
             )}
 
-            <div style={{ flex: 'none', display: 'flex', height: 26, alignItems: 'center', background: 'var(--superficie)', borderBottom: '1px solid var(--linea-zona)' }}>
+            <div style={{ flex: 'none', display: 'flex', height: 30, alignItems: 'center', background: 'var(--superficie)', borderBottom: '1px solid var(--linea-zona)' }}>
                 <div style={{ width: 44, flex: 'none', borderRight: '1px solid var(--linea-fina)' }} />
                 <div style={{ flex: 1, display: 'flex' }}>
-                    {Array.from({ length: 24 }, (_, h) => (
+                    {/* De 2 en 2 horas, no cada hora — más legible que 24 números apretados. */}
+                    {Array.from({ length: 12 }, (_, i) => i * 2).map((h) => (
                         <div key={h} style={{
                             flex: 1, minWidth: 0, textAlign: 'center',
-                            borderLeft: h % 3 === 0 ? '1px solid var(--linea-zona)' : '1px solid var(--linea-fina)',
-                            background: semanaActual && h === ahora.getHours() ? '#1c1d1b' : 'none',
+                            borderLeft: '1px solid var(--linea-zona)',
+                            background: semanaActual && h === Math.floor(ahora.getHours() / 2) * 2 ? '#1c1d1b' : 'none',
                         }}>
-                            <span className="mono" style={{ fontSize: 9, fontWeight: h % 3 === 0 ? 700 : 400, color: semanaActual && h === ahora.getHours() ? '#fff' : (h % 3 === 0 ? 'var(--texto-atenuado-3)' : 'var(--deshabilitado-2)') }}>{h}</span>
+                            <span className="mono" style={{ fontSize: 12, fontWeight: 700, color: semanaActual && h === Math.floor(ahora.getHours() / 2) * 2 ? '#fff' : 'var(--texto-atenuado-3)' }}>{h}</span>
                         </div>
                     ))}
                 </div>
@@ -142,8 +153,8 @@ function FilaDia({ dia, nombre, grupos, cruces, esHoy, onEntrar }) {
     return (
         <div style={{ display: 'flex', borderBottom: '1px solid var(--linea-zona)', background: esHoy ? '#f2f1ec' : 'none' }}>
             <div style={{ width: 44, flex: 'none', padding: '7px 0 0', textAlign: 'center', borderRight: '1px solid var(--linea-fina)', background: esHoy ? '#1c1d1b' : 'none' }}>
-                <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '.06em', color: esHoy ? 'rgba(255,255,255,.62)' : 'var(--texto-atenuado-3)' }}>{nombre}</div>
-                <div className="mono" style={{ marginTop: 2, fontSize: 15, fontWeight: esHoy ? 700 : 400, color: esHoy ? '#fff' : 'var(--texto-secundario-2)' }}>{Number(dia.slice(-2))}</div>
+                <div style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: '.06em', color: esHoy ? 'rgba(255,255,255,.62)' : 'var(--texto-atenuado-3)' }}>{nombre}</div>
+                <div className="mono" style={{ marginTop: 2, fontSize: 17, fontWeight: esHoy ? 700 : 400, color: esHoy ? '#fff' : 'var(--texto-secundario-2)' }}>{Number(dia.slice(-2))}</div>
             </div>
             <div style={{
                 flex: 1, minWidth: 0, position: 'relative', height: alto,
@@ -171,17 +182,21 @@ function FilaDia({ dia, nombre, grupos, cruces, esHoy, onEntrar }) {
                                     borderLeft: `3px solid ${enCurso ? 'oklch(0.48 0.10 250)' : '#a3a29a'}`,
                                 }} />
                             <span style={{
-                                position: 'absolute', right: `calc(${pctHora(24 - hIni)} + 5px)`, top: laneTop(i), height: 42, pointerEvents: 'none',
-                                display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap', fontSize: 12.5, fontWeight: 600,
-                                color: enCurso ? 'var(--texto-principal)' : 'var(--texto-secundario-1)',
-                                // Espacio real disponible a la izquierda de la barra (README §4: el rótulo
-                                // cabe porque la carga real vive entre 08:30 y 17:00) — con una descripción
-                                // larga o una barra que arranca muy temprano, sin este tope el rótulo se
-                                // sale de esta columna y pisa la fecha del día (columna de 44px).
-                                maxWidth: `calc(${pctHora(hIni)} - 8px)`, overflow: 'hidden', textOverflow: 'ellipsis',
+                                position: 'absolute', right: `calc(${pctHora(24 - hIni)} + 5px)`, top: laneTop(i), pointerEvents: 'none',
+                                display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 1, textAlign: 'right',
+                                // Espacio real disponible a la izquierda de la barra (README §4). Ya no se
+                                // recorta con "…": el número de OT va completo y la descripción puede
+                                // saltar de línea (pedido del usuario) — por eso el carril se hizo más alto.
+                                maxWidth: `calc(${pctHora(hIni)} - 8px)`,
                             }}>
-                                <span className="mono" style={{ fontSize: 12, flex: 'none' }}>{(g.numeroOT || '').replace('OT-2026-', '')}</span>
-                                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{g.descripcion}</span>
+                                <span className="mono" style={{ fontSize: 14, fontWeight: 700, whiteSpace: 'nowrap', color: enCurso ? 'var(--texto-principal)' : 'var(--texto-secundario-1)' }}>{g.numeroOT}</span>
+                                {/* Máximo 2 líneas: sin este tope, una descripción larga en una barra
+                                    angosta (hora temprana → poco ancho disponible) se sale del carril y
+                                    pisa el de abajo — visto al probar con datos reales. */}
+                                <span style={{
+                                    fontSize: 13.5, fontWeight: 600, lineHeight: 1.25, color: enCurso ? 'var(--texto-principal)' : 'var(--texto-secundario-1)',
+                                    display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', textOverflow: 'ellipsis',
+                                }}>{g.descripcion}</span>
                             </span>
                         </span>
                     );
@@ -210,11 +225,11 @@ function FilaFinde({ dia, nombre, grupos, onEntrar }) {
         return (
             <div style={{ display: 'flex', borderBottom: '1px solid var(--linea-zona)' }}>
                 <div style={{ width: 44, flex: 'none', padding: '7px 0 0', textAlign: 'center', borderRight: '1px solid var(--linea-fina)' }}>
-                    <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '.06em', color: 'var(--deshabilitado-1)' }}>{nombre}</div>
-                    <div className="mono" style={{ marginTop: 2, fontSize: 15, color: 'var(--deshabilitado-2)' }}>{Number(dia.slice(-2))}</div>
+                    <div style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: '.06em', color: 'var(--deshabilitado-1)' }}>{nombre}</div>
+                    <div className="mono" style={{ marginTop: 2, fontSize: 17, color: 'var(--deshabilitado-2)' }}>{Number(dia.slice(-2))}</div>
                 </div>
                 <div style={{ flex: 1, minWidth: 0, position: 'relative', height: 38, background: 'var(--fondo-pantalla)' }}>
-                    <span style={{ position: 'absolute', left: 8, top: 12, fontSize: 12.5, color: 'var(--deshabilitado-1)' }}>Sin turno</span>
+                    <span style={{ position: 'absolute', left: 8, top: 12, fontSize: 13.5, color: 'var(--deshabilitado-1)' }}>Sin turno</span>
                 </div>
             </div>
         );

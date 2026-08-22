@@ -67,9 +67,39 @@ export default function S3Trabajo({ nav, asignacion, persona }) {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [otId]);
 
-    if (!otId) return <Mensaje texto="Esta pantalla necesita una OT asociada." nav={nav} />;
-    if (error) return <Mensaje texto={error} nav={nav} />;
-    if (!ot) return null;
+    // La barra superior se pinta de inmediato, sin esperar a que cargue la OT — al pasar de
+    // una pantalla a otra debe quedar una barra visible, no una pantalla en blanco.
+    const cabecera = (
+        <header style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: 12, height: 52, padding: '0 14px 0 8px', background: 'var(--superficie)', borderBottom: '1px solid var(--linea-zona)' }}>
+            <button onClick={nav.volver} className="mono" style={{ width: 44, height: 44, background: 'none', border: 'none', fontSize: 20, color: 'var(--texto-secundario-2)', cursor: 'pointer' }}>‹</button>
+            <span className="mono" style={{ fontSize: 15, fontWeight: 600 }}>{ot?.numeroOT || '…'}</span>
+            <span style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: ot ? (COLOR_ESTADO[ot.estado] || 'var(--texto-atenuado-1)') : 'var(--texto-atenuado-1)' }}>{ot?.estado || ''}</span>
+        </header>
+    );
+
+    if (!otId) {
+        return (
+            <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+                {cabecera}
+                <div style={{ padding: 24 }}><p style={{ fontSize: 'var(--fs-cuerpo)', color: 'var(--detenido)' }}>Esta pantalla necesita una OT asociada.</p></div>
+            </div>
+        );
+    }
+    if (error) {
+        return (
+            <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+                {cabecera}
+                <div style={{ padding: 24 }}><p style={{ fontSize: 'var(--fs-cuerpo)', color: 'var(--detenido)' }}>{error}</p></div>
+            </div>
+        );
+    }
+    if (!ot) {
+        return (
+            <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+                {cabecera}
+            </div>
+        );
+    }
 
     if (verInforme) return <VistaInforme ot={ot} onVolver={() => setVerInforme(false)} />;
 
@@ -138,11 +168,7 @@ export default function S3Trabajo({ nav, asignacion, persona }) {
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
-            <header style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: 12, height: 52, padding: '0 14px 0 8px', background: 'var(--superficie)', borderBottom: '1px solid var(--linea-zona)' }}>
-                <button onClick={nav.volver} className="mono" style={{ width: 44, height: 44, background: 'none', border: 'none', fontSize: 20, color: 'var(--texto-secundario-2)', cursor: 'pointer' }}>‹</button>
-                <span className="mono" style={{ fontSize: 15, fontWeight: 600 }}>{ot.numeroOT}</span>
-                <span style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: COLOR_ESTADO[ot.estado] || 'var(--texto-atenuado-1)' }}>{ot.estado}</span>
-            </header>
+            {cabecera}
 
             <div style={{ flex: 1, overflowY: 'auto' }}>
                 <div style={{ padding: '16px 18px', background: 'var(--superficie)', borderBottom: '1px solid var(--linea-fina)' }}>
@@ -386,15 +412,6 @@ function VistaInforme({ ot, onVolver }) {
                 ))}
                 <div style={{ height: 18 }} />
             </div>
-        </div>
-    );
-}
-
-function Mensaje({ texto, nav }) {
-    return (
-        <div style={{ padding: 24 }}>
-            <p style={{ fontSize: 'var(--fs-cuerpo)', color: 'var(--detenido)' }}>{texto}</p>
-            <button className="boton-secundario" onClick={nav.volver}>Volver</button>
         </div>
     );
 }

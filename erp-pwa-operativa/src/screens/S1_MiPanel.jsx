@@ -16,9 +16,6 @@ export default function S1MiPanel({ nav }) {
         miSemana().then(setSemana).catch(() => {});
     }, []);
 
-    if (error) return <div style={{ padding: 24, fontSize: 'var(--fs-cuerpo)', color: 'var(--detenido)' }}>{error}</div>;
-    if (!panel) return null;
-
     const grupos = semana ? agruparPorOtYDia(semana.tareasSupervisadas || []) : [];
     const cruces = semana ? detectarCruces(semana.tareasSupervisadas || []) : [];
     const trabajosVivos = new Set(grupos.map((g) => String(g.otId))).size;
@@ -26,14 +23,20 @@ export default function S1MiPanel({ nav }) {
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+            {/* La cabecera se pinta de inmediato, sin esperar a panel: al pasar de una
+                pantalla a otra debe quedar una barra visible, no una pantalla en blanco
+                mientras carga el contenido. */}
             <div style={{ flex: 'none', padding: '14px 18px', background: 'var(--superficie)', borderBottom: '1px solid var(--linea-zona)' }}>
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
-                    <span style={{ fontSize: 'var(--fs-titulo)', fontWeight: 'var(--fw-titulo)' }}>{panel.usuario.nombre}</span>
-                    <span style={{ fontSize: 'var(--fs-secundario)', color: 'var(--texto-atenuado-1)' }}>{panel.usuario.puesto || ''}</span>
+                    <span style={{ fontSize: 'var(--fs-titulo)', fontWeight: 'var(--fw-titulo)' }}>{panel?.usuario.nombre || '…'}</span>
+                    <span style={{ fontSize: 'var(--fs-secundario)', color: 'var(--texto-atenuado-1)' }}>{panel?.usuario.puesto || ''}</span>
                     <span className="mono" style={{ marginLeft: 'auto', fontSize: 13, color: 'var(--texto-atenuado-1)' }}>{hoyMono()}</span>
                 </div>
             </div>
 
+            {error && <div style={{ padding: 24, fontSize: 'var(--fs-cuerpo)', color: 'var(--detenido)' }}>{error}</div>}
+            {!error && !panel && null}
+            {!error && panel && (
             <div style={{ flex: 1, overflowY: 'auto' }}>
                 <div style={{ padding: '15px 18px 6px' }}><span className="versalita">Por dónde entrar</span></div>
                 <div style={{ background: 'var(--superficie)', borderTop: '1px solid var(--linea-fina)', borderBottom: '1px solid var(--linea-fina)' }}>
@@ -111,6 +114,7 @@ export default function S1MiPanel({ nav }) {
 
                 <div style={{ height: 18 }} />
             </div>
+            )}
         </div>
     );
 }

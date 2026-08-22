@@ -27,16 +27,22 @@ export default function S4SinInformeInicial({ nav }) {
     const cargar = () => solicitudesSinInforme().then((d) => setLista(d.solicitudes)).catch((e) => setError(e.message));
     useEffect(() => { cargar(); }, []);
 
-    if (error) return <div style={{ padding: 24, fontSize: 'var(--fs-cuerpo)', color: 'var(--detenido)' }}>{error}</div>;
-    if (!lista) return null;
+    // La barra superior se pinta de inmediato: al pasar de una pantalla a otra debe quedar
+    // una barra visible, no una pantalla en blanco mientras carga el contenido.
+    const cabecera = (
+        <header style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: 12, height: 52, padding: '0 14px 0 8px', background: 'var(--superficie)', borderBottom: '1px solid var(--linea-zona)' }}>
+            <button onClick={nav.volver} className="mono" style={{ width: 44, height: 44, background: 'none', border: 'none', fontSize: 20, color: 'var(--texto-secundario-2)', cursor: 'pointer' }}>‹</button>
+            <span style={{ fontSize: 17, fontWeight: 700 }}>Sin informe inicial</span>
+            <span className="mono" style={{ marginLeft: 'auto', fontSize: 13, color: 'var(--texto-atenuado-1)' }}>{lista ? `${lista.length} sin tomar` : ''}</span>
+        </header>
+    );
+
+    if (error) return <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>{cabecera}<div style={{ padding: 24, fontSize: 'var(--fs-cuerpo)', color: 'var(--detenido)' }}>{error}</div></div>;
+    if (!lista) return <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>{cabecera}</div>;
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
-            <header style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: 12, height: 52, padding: '0 14px 0 8px', background: 'var(--superficie)', borderBottom: '1px solid var(--linea-zona)' }}>
-                <button onClick={nav.volver} className="mono" style={{ width: 44, height: 44, background: 'none', border: 'none', fontSize: 20, color: 'var(--texto-secundario-2)', cursor: 'pointer' }}>‹</button>
-                <span style={{ fontSize: 17, fontWeight: 700 }}>Sin informe inicial</span>
-                <span className="mono" style={{ marginLeft: 'auto', fontSize: 13, color: 'var(--texto-atenuado-1)' }}>{lista.length} sin tomar</span>
-            </header>
+            {cabecera}
 
             <div style={{ flex: 1, overflowY: 'auto' }}>
                 {lista.length === 0 && <div style={{ padding: 24, fontSize: 'var(--fs-cuerpo)', color: 'var(--texto-atenuado-1)' }}>No hay solicitudes esperando informe inicial.</div>}
