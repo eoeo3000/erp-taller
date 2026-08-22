@@ -6,5 +6,6 @@ dist
 erp-backend/uploads/*.pdf
 erp-backend/uploads/*.jpg
 erp-backend/uploads/*.png
+erp-backend/uploads/*.svg
 node_modules/
 .env
