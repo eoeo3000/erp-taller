@@ -399,12 +399,32 @@ exports.solicitudesSinInforme = async (req, res) => {
     const Usuario = getUsuario(req.db);
     const Asignacion = getAsignacion(req.db);
     const Solicitud = getSolicitud(req.db);
+    const OT = getOT(req.db);
     try {
         const usuario = await resolverUsuarioPorToken(Usuario, req.query.token);
         if (!usuario) return res.status(403).json({ error: 'Token inválido o revocado' });
         if (usuario.rol !== 'supervisor') return res.status(403).json({ error: 'Solo para supervisores' });
 
-        const solicitudes = await Solicitud.find({ estado: 'Pendiente' }).sort({ fechaCreacion: 1 }).lean();
+        // Dos orígenes: solicitudes recién llegadas (estado 'Pendiente', sin OT todavía) y
+        // OTs que la oficina ya aprobó/creó pero cuyo informe de evaluación sigue sin
+        // completarse — antes solo se consideraba el primer caso, así que apenas la oficina
+        // aprobaba la solicitud y creaba la OT (estado pasa a 'Tratada'), desaparecía de esta
+        // bandeja aunque la visita de evaluación en terreno siguiera pendiente.
+        const [solicitudesPendientes, otsSinInforme] = await Promise.all([
+            Solicitud.find({ estado: 'Pendiente' }).select('_id').lean(),
+            OT.find({
+                estado: { $nin: ['Rechazada', 'Pagada'] },
+                $or: [{ 'informeEvaluacion.completo': { $ne: true } }, { informeEvaluacion: { $exists: false } }],
+            }).select('_id solicitudId').lean(),
+        ]);
+        const idsCandidatos = [...new Set([
+            ...solicitudesPendientes.map(s => String(s._id)),
+            ...otsSinInforme.map(o => String(o.solicitudId || o._id)),
+        ])];
+
+        const solicitudes = idsCandidatos.length
+            ? await Solicitud.find({ _id: { $in: idsCandidatos } }).sort({ fechaCreacion: 1 }).lean()
+            : [];
         const evaluaciones = solicitudes.length
             ? await Asignacion.find({ tipo: 'evaluacion', solicitudId: { $in: solicitudes.map(s => s._id) } }).select('solicitudId').lean()
             : [];
