@@ -24,11 +24,29 @@ const campoSchema = new mongoose.Schema({
     orden: { type: Number, default: 0 },
 }, { _id: false });
 
+// Enlaza las filas de "Campos"/"Opciones"/"Sugerencias por tipo" de un mismo archivo Excel
+// con este tipo (docs/plan-formulario-adaptativo.md §3.1) — reemplaza a `nombre` como llave
+// de upsert de la importación: si el tipo se retitula, el código no cambia y las hojas
+// relacionadas siguen enlazando al mismo documento.
+const sugerenciaSchema = new mongoose.Schema({
+    lista: { type: String, required: true, trim: true },
+    valor: { type: String, required: true, trim: true },
+}, { _id: false });
+
 const tipoTrabajoSchema = new mongoose.Schema({
+    codigoTipo: { type: String, required: true, trim: true, uppercase: true, unique: true },
     nombre: { type: String, required: true, trim: true },
     sinonimos: { type: [String], default: [] },
     plantillaTexto: { type: String, default: '' },
     campos: { type: [campoSchema], default: [] },
+    // Valores de la lista transversal 'condicionesEntorno' (ver CatalogoTransversal) que no
+    // tiene sentido ofrecer para este tipo — lista de exclusión, no de inclusión: por
+    // defecto el catálogo completo está disponible para todos (plan §3.1).
+    condicionesNoAplicables: { type: [String], default: [] },
+    // Qué valores de qué listas transversales vienen premarcados al elegir este tipo
+    // (plan §3.3.1) — solo tareasSecundarias/materiales/riesgos las usan hoy, pero no se
+    // restringe por schema para no bloquear un catálogo futuro que agregue otra.
+    sugerencias: { type: [sugerenciaSchema], default: [] },
     activo: { type: Boolean, default: true },
 }, { timestamps: true });
 
