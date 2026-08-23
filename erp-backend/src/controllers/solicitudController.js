@@ -1,4 +1,6 @@
 const getSolicitud = require('../models/Solicitud');
+const getOT = require('../models/OT');
+const getAsignacion = require('../models/Asignacion');
 
 async function generarNumeroSolicitud(conn) {
     const Solicitud = getSolicitud(conn);
@@ -103,5 +105,34 @@ exports.actualizarEstado = async (req, res) => {
         res.json(actualizada);
     } catch (error) {
         res.status(400).json({ error: error.message || "Error al actualizar la solicitud" });
+    }
+};
+
+// DELETE — Análogo a otController.eliminarOT, pero en el otro sentido: solo para
+// solicitudes que TODAVÍA no tienen OT (una vez que existe OT, se borra con "Eliminar OT",
+// que además libera la solicitud). Si un Supervisor ya tomó la solicitud desde la PWA
+// Operativa (Asignacion tipo 'evaluacion', ver asignacionController.tomarSolicitud), esa
+// Asignacion se borra en cascada — si no, quedaría huérfana y podía romper "Mis informes"
+// (asignacionController.misInformes intenta reconstruir datos desde una Solicitud inexistente).
+exports.eliminarSolicitud = async (req, res) => {
+    const Solicitud = getSolicitud(req.db);
+    const OT = getOT(req.db);
+    const Asignacion = getAsignacion(req.db);
+    try {
+        const { id } = req.params;
+        const solicitud = await Solicitud.findById(id);
+        if (!solicitud) return res.status(404).json({ error: "Solicitud no encontrada" });
+
+        const otExistente = await OT.findById(id);
+        if (otExistente) {
+            return res.status(409).json({ error: "Esta solicitud ya tiene una OT; elimina la OT en su lugar." });
+        }
+
+        await Asignacion.deleteMany({ solicitudId: id });
+        await Solicitud.findByIdAndDelete(id);
+
+        res.status(200).json({ message: "Solicitud eliminada" });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
     }
 };

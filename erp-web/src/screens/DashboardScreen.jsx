@@ -192,7 +192,7 @@ const valorCelda = (f, key, recursos = []) => {
     return '';
 };
 
-const DashboardScreen = ({ ots = [], solicitudes = [], eliminarOT, actualizarEstadoSolicitud, aprobarYCrearOT, recursos = [], API, cargando, errorCarga, cargarDatos, guardarDisposicionGlobal, eliminarDisposicionGlobal }) => {
+const DashboardScreen = ({ ots = [], solicitudes = [], eliminarOT, eliminarSolicitud, actualizarEstadoSolicitud, aprobarYCrearOT, recursos = [], API, cargando, errorCarga, cargarDatos, guardarDisposicionGlobal, eliminarDisposicionGlobal }) => {
     const navigate = useNavigate();
     const [filtro, setFiltro] = useState('todos');
     const [consulta, setConsulta] = useState('');
@@ -466,8 +466,9 @@ const DashboardScreen = ({ ots = [], solicitudes = [], eliminarOT, actualizarEst
         if (!detalle) return [];
         const { ot, s } = detalle;
         if (!ot) {
-            if (s.estado === 'Rechazada') return [{ label: 'Reabrir', onClick: () => actualizarEstadoSolicitud?.(s._id, 'Pendiente') }];
-            return [{ label: 'Rechazar', onClick: () => { if (window.confirm('¿Rechazar esta solicitud?')) actualizarEstadoSolicitud?.(s._id, 'Rechazada'); } }];
+            const eliminar = { label: 'Eliminar solicitud', onClick: () => { if (window.confirm('¿Eliminar esta solicitud?')) eliminarSolicitud?.(s._id); } };
+            if (s.estado === 'Rechazada') return [{ label: 'Reabrir', onClick: () => actualizarEstadoSolicitud?.(s._id, 'Pendiente') }, eliminar];
+            return [{ label: 'Rechazar', onClick: () => { if (window.confirm('¿Rechazar esta solicitud?')) actualizarEstadoSolicitud?.(s._id, 'Rechazada'); } }, eliminar];
         }
         return [{ label: 'Eliminar OT', onClick: () => { if (window.confirm('¿Eliminar esta OT? La solicitud vuelve a Pendiente.')) eliminarOT?.(ot._id); } }];
     };

@@ -275,6 +275,23 @@ function App() {
       }
     }
   };
+  // Análogo a eliminarOT, pero para solicitudes que todavía no tienen OT — el backend
+  // (solicitudController.eliminarSolicitud) rechaza con 409 si ya existe una OT (en ese
+  // caso corresponde "Eliminar OT" en su lugar) y borra en cascada la Asignacion del
+  // Supervisor si ya había tomado la solicitud para el informe inicial.
+  const eliminarSolicitud = async (id) => {
+    if (!id) return;
+    if (window.confirm("¿Eliminar esta solicitud? Si un supervisor ya la tomó para el informe inicial, esa asignación también se elimina.")) {
+      try {
+        await axios.delete(`${API}/solicitudes/${id}`);
+        await cargarDatos();
+        alert("Solicitud eliminada.");
+      } catch (error) {
+        console.error("❌ ERROR AL ELIMINAR SOLICITUD:", error.response?.data || error.message);
+        alert(error.response?.data?.error || "No se pudo completar la operación.");
+      }
+    }
+  };
   // Shell nuevo (ver docs/rediseno/design_handoff_panel_control/README.md, paso 1):
   // nav lateral colapsable con ancho arrastrable, en vez del top bar. En móvil arranca colapsada.
   useEffect(() => { if (isMobile) setNavOculta(true); }, [isMobile]);
@@ -893,7 +910,7 @@ function App() {
           <Routes>
             <Route path="/reporte" element={<ReporteTerreno ots={ots} actualizarOtGlobal={actualizarOtGlobal} />} />
             <Route path="/" element={<IngresoScreen solicitudes={solicitudes} liberarSolicitudManual={liberarSolicitudManual} crearSolicitudGlobal={crearSolicitudGlobal} actualizarSolicitudGlobal={actualizarSolicitudGlobal} setSolicitudes={setSolicitudes} cargarDatos={cargarDatos} API={API} ots={ots} enviarPortalCliente={enviarPortalCliente} cargando={cargando} errorCarga={errorCarga} guardarDisposicionGlobal={guardarDisposicionGlobal} eliminarDisposicionGlobal={eliminarDisposicionGlobal} />} />
-            <Route path="/dashboard" element={<DashboardScreen solicitudes={solicitudes} ots={ots} eliminarOT={eliminarOT} actualizarEstadoSolicitud={actualizarEstadoSolicitud} aprobarYCrearOT={aprobarYCrearOT} recursos={recursos} API={API} cargando={cargando} errorCarga={errorCarga} cargarDatos={cargarDatos} guardarDisposicionGlobal={guardarDisposicionGlobal} eliminarDisposicionGlobal={eliminarDisposicionGlobal} />} />
+            <Route path="/dashboard" element={<DashboardScreen solicitudes={solicitudes} ots={ots} eliminarOT={eliminarOT} eliminarSolicitud={eliminarSolicitud} actualizarEstadoSolicitud={actualizarEstadoSolicitud} aprobarYCrearOT={aprobarYCrearOT} recursos={recursos} API={API} cargando={cargando} errorCarga={errorCarga} cargarDatos={cargarDatos} guardarDisposicionGlobal={guardarDisposicionGlobal} eliminarDisposicionGlobal={eliminarDisposicionGlobal} />} />
             <Route path="/tratamiento" element={<TratamientoScreen recurso={recursos} puestosDB={puestosDB} componentes={componentes} actualizarOtGlobal={actualizarOtGlobal} editarOtGlobal={editarOtGlobal} cargarDatos={cargarDatos} API={API} recursos={recursos} suministros={suministros} otSeleccionada={otSeleccionada} setOtSeleccionada={setOtSeleccionada} plantillas={plantillas} />} />
             <Route path="/gantt" element={<GanttScreen ots={ots} recursos={recursos} calendarios={calendarios} obtenerHorasParaDia={obtenerHorasParaDia} actualizarOtGlobal={actualizarOtGlobal} cargarDatos={cargarDatos} />} />
             <Route path="/recursos" element={
