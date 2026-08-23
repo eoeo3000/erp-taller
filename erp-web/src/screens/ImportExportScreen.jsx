@@ -79,6 +79,7 @@ export default function ImportExportScreen({ API, cargarDatos }) {
     // ── IMPORTAR ──
     const [resultado, setResultado] = useState(null);
     const [cargando, setCargando] = useState(null);
+    const [descargando, setDescargando] = useState(null);
     const inputRefs = useRef({});
 
     // ── ENTORNO / MODO DEMOSTRACIÓN (§9.2) ──
@@ -240,6 +241,30 @@ export default function ImportExportScreen({ API, cargarDatos }) {
     };
 
     const descargarPlantilla = (id) => window.open(`${API}/import/plantilla/${id}`, '_blank');
+
+    // Descarga lo que ya está cargado para ese módulo (mismo endpoint de exportarBatch,
+    // acotado a un solo módulo) — para poder partir de un archivo real y mejorarlo, en vez
+    // de siempre partir de la plantilla vacía.
+    const descargarActual = async (mod) => {
+        setDescargando(mod.id);
+        try {
+            const r = await fetch(`${API}/import/exportar/batch?modulos=${mod.id}`, { headers: headerEntorno() });
+            if (!r.ok) throw new Error('No se pudo generar el archivo');
+            const blob = await r.blob();
+            const objUrl = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = objUrl;
+            a.download = `${mod.id}_actual.xlsx`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(objUrl);
+        } catch {
+            setResultado({ error: 'No se pudo descargar la información cargada actualmente', modulo: mod.label });
+        } finally {
+            setDescargando(null);
+        }
+    };
 
     const algunoSeleccionado = seleccionados.size > 0;
 
@@ -497,8 +522,11 @@ export default function ImportExportScreen({ API, cargarDatos }) {
                                             );
                                         })}
                                     </div>
-                                    <div style={{ display: 'flex', gap: 6, marginTop: 10 }}>
+                                    <div style={{ display: 'flex', gap: 6, marginTop: 10, flexWrap: 'wrap' }}>
                                         <button onClick={() => descargarPlantilla(mod.id)} style={styles.btnSecundario}>Plantilla</button>
+                                        <button onClick={() => descargarActual(mod)} disabled={descargando === mod.id} style={styles.btnSecundario}>
+                                            {descargando === mod.id ? 'Descargando…' : 'Descargar actual'}
+                                        </button>
                                         <label style={{ ...styles.btnImportar, opacity: cargando === mod.id ? .6 : 1, cursor: cargando === mod.id ? 'wait' : 'pointer' }}>
                                             {cargando === mod.id ? 'Cargando…' : 'Importar'}
                                             <input
