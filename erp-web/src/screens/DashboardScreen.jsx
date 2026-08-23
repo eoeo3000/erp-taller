@@ -61,13 +61,18 @@ const etapaInfo = (ot) => {
     return { idx, label: ETAPAS_VISUAL[idx], rechazada: false };
 };
 
-// Detalle de "a quién le toca actuar" dentro de las dos etapas donde el macro-estado por sí
-// solo no lo dice (ver plan de reordenamiento de estados): Tratada mezcla "esperando al
-// Supervisor" y "esperando al Planificador" bajo el mismo valor de OT.estado; Planificada
-// mezcla "esperando verificar capacidad", "esperando al Cliente" y "rechazada, esperando
-// corrección". El resto de las etapas son de un solo actor, no necesitan este detalle.
-const subEstadoDe = (ot) => {
-    if (!ot) return '—';
+// Detalle de "a quién le toca actuar" dentro de las etapas donde el macro-estado por sí solo
+// no lo dice (ver plan de reordenamiento de estados). Una Solicitud sin OT todavía NO es
+// "Esperando informe" — ese sub-estado es solo para OT ya creadas (Tratada) sin informe, que
+// es exactamente lo que la PWA Operativa le ofrece tomar a un Supervisor (ver
+// asignacionController.solicitudesSinInformeDocs: a propósito, solo cuenta OT en Tratada, no
+// solicitudes crudas). Una Solicitud sin OT está esperando que el Planificador la revise
+// (Aprobar/Rechazar) — el Supervisor ni siquiera puede verla todavía.
+// Tratada mezcla "esperando al Supervisor" y "esperando al Planificador" bajo el mismo valor
+// de OT.estado; Planificada mezcla "esperando verificar capacidad", "esperando al Cliente" y
+// "rechazada, esperando corrección". El resto de las etapas son de un solo actor.
+const subEstadoDe = (ot, s) => {
+    if (!ot) return s?.estado === 'Rechazada' ? '—' : 'Esperando revisión (Planificador)';
     if (ot.estado === 'Tratada') {
         if (ot.informeEvaluacion?.revision?.estado === 'ConObservaciones') return 'Con observaciones (Supervisor)';
         if (!ot.informeEvaluacion?.completo) return 'Esperando informe (Supervisor)';
@@ -178,7 +183,7 @@ const valorCelda = (f, key, recursos = []) => {
     if (key === 'horas') { const h = horasDe(ot); return h ? `${h} h` : '—'; }
     if (key === 'total') return ot?.granTotal ? CLP(ot.granTotal) : '—';
     if (key === 'pago') return etiquetaPago(ot);
-    if (key === 'subEstado') return subEstadoDe(ot);
+    if (key === 'subEstado') return subEstadoDe(ot, s);
     if (key === 'creacion') return fmtFecha(s?.fechaCreacion);
     if (key === 'ejecucion') return fmtFecha(s?.fechaEjecucionSolicitada);
     if (key === 'supervisor') {
