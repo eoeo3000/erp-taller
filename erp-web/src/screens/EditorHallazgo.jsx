@@ -171,12 +171,16 @@ function SegmentoCampo({ segmento, campo, onTocar, onSubirFoto, subiendo }) {
             onClick={() => onTocar(inputFoto.current)}
             style={{
                 display: 'inline-block', padding: '0 1px',
+                minWidth: segmento.pendiente ? 36 : 0,
                 borderBottom: `2px solid ${segmento.pendiente ? t.ambar : t.acento}`,
                 fontWeight: 600, cursor: 'pointer',
                 color: segmento.pendiente ? t.ambar : t.textoPrincipal,
             }}
         >
-            {subiendo ? '…' : segmento.contenido}
+            {/* Pendiente: solo el subrayado hace de espacio en blanco — el "___" de contenido
+                (utils/motorTexto.js, usado también para el texto final guardado) sumado al
+                subrayado se veía como doble línea. */}
+            {subiendo ? '…' : (segmento.pendiente ? ' ' : segmento.contenido)}
             {esFoto && (
                 <input
                     ref={inputFoto}
