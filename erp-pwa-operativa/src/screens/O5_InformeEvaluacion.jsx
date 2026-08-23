@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { obtenerOT, actualizarOT, cerrarAsignacion, obtenerTiposTrabajo, obtenerCondicionesEntorno } from '../api.js';
+import { obtenerOT, actualizarOT, cerrarAsignacion, obtenerTiposTrabajo } from '../api.js';
 import { nuevoHallazgo, guardarHallazgoEnInforme, eliminarHallazgoDeInforme } from '../hallazgos.js';
 import EditorHallazgo from './EditorHallazgo.jsx';
 
@@ -17,7 +17,6 @@ export default function O5InformeEvaluacion({ nav, asignacion }) {
     const [hallazgo, setHallazgo] = useState(nuevoHallazgo());
     const [guardando, setGuardando] = useState(false);
     const [tiposTrabajo, setTiposTrabajo] = useState([]);
-    const [condicionesEntorno, setCondicionesEntorno] = useState([]);
 
     useEffect(() => {
         if (!targetId) return;
@@ -27,7 +26,6 @@ export default function O5InformeEvaluacion({ nav, asignacion }) {
             if (existente) setHallazgo(existente);
         }).catch(() => setOt({})); // primera visita: la OT todavía no existe, se crea al guardar
         obtenerTiposTrabajo().then(setTiposTrabajo).catch(() => {});
-        obtenerCondicionesEntorno().then(setCondicionesEntorno).catch(() => {});
     }, [targetId]);
 
     if (!targetId) {
@@ -67,7 +65,6 @@ export default function O5InformeEvaluacion({ nav, asignacion }) {
                     hallazgo={hallazgo}
                     onCambiar={setHallazgo}
                     tiposTrabajo={tiposTrabajo}
-                    condicionesEntorno={condicionesEntorno}
                 />
             </div>
 

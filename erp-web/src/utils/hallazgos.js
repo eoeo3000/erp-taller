@@ -22,7 +22,6 @@ export function nuevoHallazgo() {
         _id: null,
         tipoTrabajoId: null,
         valores: {},
-        condicionesEntorno: [],
         textoGenerado: '',
         textoDescriptivo: '',
         textoEditadoManualmente: false,

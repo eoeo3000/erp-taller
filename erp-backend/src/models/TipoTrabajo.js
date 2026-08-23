@@ -29,10 +29,6 @@ const tipoTrabajoSchema = new mongoose.Schema({
     sinonimos: { type: [String], default: [] },
     plantillaTexto: { type: String, default: '' },
     campos: { type: [campoSchema], default: [] },
-    // Condiciones del catálogo transversal (CondicionEntorno) que no aplican a este tipo de
-    // trabajo — lista de EXCLUSIÓN, no de inclusión (plan §3.3): por defecto todas las
-    // condiciones están disponibles, y cada tipo solo guarda las que decide sacar.
-    condicionesNoAplicables: [{ type: mongoose.Schema.Types.ObjectId, ref: 'CondicionEntorno' }],
     activo: { type: Boolean, default: true },
 }, { timestamps: true });
 

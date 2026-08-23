@@ -25,7 +25,6 @@ const asignacionRoutes = require('./asignacionRoutes');
 const clienteRoutes = require('./clienteRoutes');
 const uploadRoutes = require('./uploadRoutes');
 const tipoTrabajoRoutes = require('./tipoTrabajoRoutes');
-const condicionEntornoRoutes = require('./condicionEntornoRoutes');
 
 // Definir los prefijos de las URLs
 router.use('/data', dataRoutes);
@@ -50,6 +49,5 @@ router.use('/asignaciones', asignacionRoutes);
 router.use('/clientes', clienteRoutes);
 router.use('/uploads', uploadRoutes);
 router.use('/tipos-trabajo', tipoTrabajoRoutes);
-router.use('/condiciones-entorno', condicionEntornoRoutes);
 
 module.exports = router;

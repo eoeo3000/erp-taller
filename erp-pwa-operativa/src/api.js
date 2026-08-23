@@ -92,13 +92,10 @@ export function obtenerSolicitud(id) {
 }
 
 // Catálogo del formulario adaptativo (Informe de Evaluación) — ver
-// docs/plan-formulario-adaptativo.md. Catálogos chicos, sin token de por medio (mismo
-// criterio que el resto de los catálogos administrativos del sistema).
+// docs/plan-formulario-adaptativo.md. Catálogo chico, sin token de por medio (mismo criterio
+// que el resto de los catálogos administrativos del sistema).
 export function obtenerTiposTrabajo() {
     return pedir('/tipos-trabajo');
-}
-export function obtenerCondicionesEntorno() {
-    return pedir('/condiciones-entorno');
 }
 
 // S4 · Sin informe inicial (solo rol supervisor).
