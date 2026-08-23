@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { miPanel, miSemana } from '../api.js';
+import { miPanel, miSemana, misInformes } from '../api.js';
 import { detectarCruces, agruparPorOtYDia } from '../cruces.js';
 import Cargando from './Cargando.jsx';
 
@@ -10,12 +10,20 @@ const hoyMono = () => new Date().toLocaleDateString('es-CL', { weekday: 'short',
 export default function S1MiPanel({ nav }) {
     const [panel, setPanel] = useState(null);
     const [semana, setSemana] = useState(null);
+    const [informes, setInformes] = useState(null);
     const [error, setError] = useState('');
 
     useEffect(() => {
         miPanel().then(setPanel).catch((e) => setError(e.message));
         miSemana().then(setSemana).catch(() => {});
+        // "Enviados este mes" (S5) quedaba enterrado: había que entrar a "Informes iniciales
+        // míos sin enviar" y encima bajar más allá de los pendientes para verlo — se pide acá
+        // también, como una entrada más de "Por dónde entrar", igual que el resto.
+        misInformes().then(setInformes).catch(() => {});
     }, []);
+
+    const enviados = informes?.enviados || [];
+    const ultimoEnviado = enviados[0] || null;
 
     const grupos = semana ? agruparPorOtYDia(semana.tareasSupervisadas || []) : [];
     const cruces = semana ? detectarCruces(semana.tareasSupervisadas || []) : [];
@@ -73,6 +81,14 @@ export default function S1MiPanel({ nav }) {
                         lineas={['pendientes de completar y enviar']}
                         extra={panel.informesMiosSinEnviar.diasMasAntigua != null ? `${panel.informesMiosSinEnviar.numeroMasAntigua || 'el más antiguo'} lleva ${panel.informesMiosSinEnviar.diasMasAntigua} día(s)` : null}
                         colorExtra="var(--detenido)"
+                        onClick={() => nav.ir('s5')}
+                    />
+                    <Entrada
+                        conteo={enviados.length} borde="var(--listo)" colorConteo="var(--listo)"
+                        titulo="Informes enviados este mes"
+                        lineas={ultimoEnviado ? [ultimoEnviado.descripcion] : ['Aún no envías ninguno este mes']}
+                        extra={ultimoEnviado ? `${ultimoEnviado.numeroSolicitud} · enviado ${fechaMono(ultimoEnviado.fechaEnvio.slice(0, 10))}${ultimoEnviado.numeroOT ? ` · ya es ${ultimoEnviado.numeroOT}` : ''}` : null}
+                        colorExtra="var(--texto-secundario-2)"
                         onClick={() => nav.ir('s5')}
                     />
                     <Entrada
