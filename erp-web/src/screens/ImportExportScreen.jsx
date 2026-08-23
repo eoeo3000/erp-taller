@@ -42,7 +42,7 @@ const EXPORTABLES = [
     { id: 'puestos',     label: 'Puestos / especialidades',  desc: 'nombre, costoHora, categoria' },
     { id: 'ots',         label: 'Órdenes de trabajo',        desc: 'numeroOT, solicitante, estado, granTotal, pago…' },
     { id: 'solicitudes', label: 'Solicitudes',               desc: 'solicitante, empresa, descripcion, estado, fecha' },
-    { id: 'tipos-trabajo', label: 'Catálogo de tipos de trabajo', desc: '3 hojas: tipos, campos, opciones' },
+    { id: 'tipos-trabajo', label: 'Catálogo de tipos de trabajo', desc: '7 hojas: tipos, campos, opciones, listas transversales, sugerencias' },
 ];
 
 const IMPORTABLES = [
@@ -51,10 +51,11 @@ const IMPORTABLES = [
     { id: 'equipos',     label: 'Equipos y herramientas',   columnas: ['nombre *', 'codigo', 'tipo', 'estado', 'precio'] },
     { id: 'puestos',     label: 'Puestos / especialidades', columnas: ['nombre *', 'costoHora', 'categoria'] },
     // Catálogo del formulario adaptativo (Informe de Evaluación) — ver
-    // docs/plan-formulario-adaptativo.md §7. 3 hojas por archivo, no columnas sueltas — la
+    // docs/plan-formulario-adaptativo.md §8. 7 hojas por archivo, no columnas sueltas — la
     // descarga de plantilla es la referencia real, esto es solo para el resumen visual. Las
-    // condiciones de entorno se cargan como un campo más (seleccionMultiple), no aparte.
-    { id: 'tipos-trabajo', label: 'Catálogo de tipos de trabajo', columnas: ['nombre *', 'sinonimos', 'plantillaTexto', 'campos (hoja aparte)', 'opciones (hoja aparte)'] },
+    // listas transversales (condiciones de entorno, riesgos, materiales, etc.) viven en sus
+    // propias hojas, compartidas por casi todos los tipos, no un campo más de cada uno.
+    { id: 'tipos-trabajo', label: 'Catálogo de tipos de trabajo', columnas: ['nombre *', 'sinonimos', 'plantillaTexto', 'campos (hoja aparte)', 'opciones (hoja aparte)', 'listas transversales (hoja aparte)', 'sugerencias por tipo (hoja aparte)'] },
 ];
 
 const ESTADOS_OT = ['Pendiente', 'Tratada', 'Planificada', 'Programada', 'En Ejecución', 'Trabajo Terminado', 'Con Informe', 'Pagada'];

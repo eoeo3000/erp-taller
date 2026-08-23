@@ -4,23 +4,52 @@ import { generarSegmentos } from '../motorTexto.js';
 import { recalcularTexto, deshacerEdicionManual } from '../hallazgos.js';
 import { subirFoto } from '../api.js';
 
-// Formulario adaptativo de un hallazgo — docs/plan-formulario-adaptativo.md §5/§11, rediseño
+// Formulario adaptativo de un hallazgo — docs/plan-formulario-adaptativo.md §5/§6/§11, rediseño
 // "lienzo en blanco": un solo cuadro donde se escribe, sin buscador separado ni lista de
 // campos aparte. Componente CONTROLADO (hallazgo + onCambiar) a propósito: no tiene guardar/
 // cancelar propios — la pantalla que lo usa (O5) es la que manda esos botones abajo, este
-// componente es solo el cuadro y sus fotos. Las condiciones de entorno ya no son un catálogo
-// aparte — son un campo más (tipoDato seleccionMultiple) definido por cada tipo de trabajo en
-// el Excel, así que quedan tejidas en el mismo texto como cualquier otro espacio en blanco.
-export default function EditorHallazgo({ hallazgo, onCambiar, tiposTrabajo }) {
+// componente es solo el cuadro y sus fotos. Condiciones de entorno, tipo de equipo, riesgos,
+// materiales, etc. son listas transversales compartidas por casi todos los tipos (prop
+// `catalogosTransversales`), no un campo propio de cada tipo — se resuelven vía `resolverCampo`.
+
+// Resuelve la clave de un segmento contra los campos propios del tipo elegido; si no está
+// ahí, contra el catálogo transversal. `condicionesNoAplicables` del tipo excluye valores
+// solo para la lista 'condicionesEntorno'.
+function resolverCampo(clave, tipoElegido, catalogoPorClave) {
+    const propio = tipoElegido?.campos.find((c) => c.clave === clave);
+    if (propio) return propio;
+    const catalogo = catalogoPorClave.get(clave);
+    if (!catalogo) return null;
+    const excluidas = clave === 'condicionesEntorno' ? new Set(tipoElegido?.condicionesNoAplicables || []) : null;
+    const valores = excluidas ? catalogo.valores.filter((v) => !excluidas.has(v.valor)) : catalogo.valores;
+    return {
+        clave,
+        etiqueta: catalogo.descripcion || clave,
+        tipoDato: catalogo.seleccion === 'multiple' ? 'seleccionMultiple' : 'seleccionUnica',
+        opciones: valores.map((v) => v.valor),
+        categorias: valores, // {valor, categoria} — solo tareasSecundarias trae categoría real
+    };
+}
+
+export default function EditorHallazgo({ hallazgo, onCambiar, tiposTrabajo, catalogosTransversales = [] }) {
     const [hojaAbierta, setHojaAbierta] = useState(null); // campo completo (clave, tipoDato, opciones, etiqueta)
     const [subiendoFoto, setSubiendoFoto] = useState(false);
 
     const tipoElegido = tiposTrabajo.find((t) => String(t._id) === String(hallazgo.tipoTrabajoId));
+    const catalogoPorClave = new Map(catalogosTransversales.map((c) => [c.clave, c]));
     const sugerencias = !tipoElegido && hallazgo.textoDescriptivo?.trim() ? sugerirTiposTrabajo(hallazgo.textoDescriptivo, tiposTrabajo) : [];
     const segmentos = tipoElegido ? generarSegmentos(tipoElegido.plantillaTexto, hallazgo.valores) : [];
 
     const escribir = (texto) => onCambiar({ ...hallazgo, textoDescriptivo: texto });
-    const elegirTipo = (tipo) => onCambiar(recalcularTexto({ ...hallazgo, tipoTrabajoId: tipo._id, valores: {} }, tipo));
+    // Sugerencias premarcadas (plan §6): tareasSecundarias/materiales/riesgos vienen ya
+    // llenas al elegir el tipo — el supervisor confirma o descarta, no parte de cero.
+    const elegirTipo = (tipo) => {
+        const valoresIniciales = {};
+        for (const s of (tipo.sugerencias || [])) {
+            (valoresIniciales[s.lista] ||= []).push(s.valor);
+        }
+        onCambiar(recalcularTexto({ ...hallazgo, tipoTrabajoId: tipo._id, valores: valoresIniciales }, tipo));
+    };
     const cambiarTipo = () => onCambiar(recalcularTexto({ ...hallazgo, tipoTrabajoId: null, valores: {} }, null));
     const cambiarValor = (clave, valor) => onCambiar(recalcularTexto({ ...hallazgo, valores: { ...hallazgo.valores, [clave]: valor } }, tipoElegido));
     const editarTextoLibre = (nuevoTexto) => onCambiar({ ...hallazgo, textoDescriptivo: nuevoTexto, textoEditadoManualmente: true });
@@ -50,7 +79,7 @@ export default function EditorHallazgo({ hallazgo, onCambiar, tiposTrabajo }) {
     // cámara directo (sin hoja intermedia), el resto abre una hoja inferior (nunca un menú
     // angosto pegado al punto tocado, ver §11).
     const tocarSegmento = (clave, refInputFoto) => {
-        const campo = tipoElegido?.campos.find((c) => c.clave === clave);
+        const campo = resolverCampo(clave, tipoElegido, catalogoPorClave);
         if (!campo) return;
         if (campo.tipoDato === 'foto') { refInputFoto?.click(); return; }
         setHojaAbierta(campo);
@@ -185,6 +214,32 @@ function HojaCampo({ campo, valorActual, onElegir, onCerrar }) {
     const esMultiple = campo.tipoDato === 'seleccionMultiple';
     const esEleccion = campo.tipoDato === 'seleccionUnica' || esMultiple;
     const seleccionados = esMultiple ? (valorActual || []) : (valorActual ? [valorActual] : []);
+
+    // Solo 'tareasSecundarias' trae categoría real (Desmontaje/Traslado/Taller/Montaje/Ajuste
+    // y verificación, plan §6) — se agrupa con subtítulos; el resto (materiales, riesgos,
+    // campos propios de un tipo) se ve como lista plana, igual que siempre.
+    const agrupado = campo.categorias?.some((v) => v.categoria);
+    const grupos = agrupado
+        ? Object.values(campo.categorias.reduce((acc, v) => {
+            const cat = v.categoria || 'Otros';
+            (acc[cat] ||= { categoria: cat, opciones: [] }).opciones.push(v.valor);
+            return acc;
+        }, {}))
+        : [{ categoria: null, opciones: campo.opciones }];
+
+    const OpcionBoton = ({ op }) => {
+        const marcada = seleccionados.includes(op);
+        return (
+            <button
+                onClick={() => onElegir(esMultiple ? (marcada ? seleccionados.filter((x) => x !== op) : [...seleccionados, op]) : op)}
+                className="boton-secundario"
+                style={{ minHeight: 52, textAlign: 'left', paddingLeft: 14, borderColor: marcada ? 'var(--texto-principal)' : 'var(--linea-zona)' }}
+            >
+                <span className="mono" style={{ marginRight: 8 }}>{marcada ? '×' : '·'}</span>{op}
+            </button>
+        );
+    };
+
     return (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.35)', zIndex: 50, display: 'flex', alignItems: 'flex-end' }} onClick={onCerrar}>
             <div onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxHeight: '70vh', overflowY: 'auto', background: '#fff', borderRadius: '8px 8px 0 0', padding: 16 }}>
@@ -192,19 +247,14 @@ function HojaCampo({ campo, valorActual, onElegir, onCerrar }) {
                 {esEleccion ? (
                     <>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                            {campo.opciones.map((op) => {
-                                const marcada = seleccionados.includes(op);
-                                return (
-                                    <button
-                                        key={op}
-                                        onClick={() => onElegir(esMultiple ? (marcada ? seleccionados.filter((x) => x !== op) : [...seleccionados, op]) : op)}
-                                        className="boton-secundario"
-                                        style={{ minHeight: 52, textAlign: 'left', paddingLeft: 14, borderColor: marcada ? 'var(--texto-principal)' : 'var(--linea-zona)' }}
-                                    >
-                                        <span className="mono" style={{ marginRight: 8 }}>{marcada ? '×' : '·'}</span>{op}
-                                    </button>
-                                );
-                            })}
+                            {grupos.map((g) => (
+                                <div key={g.categoria || 'todas'}>
+                                    {g.categoria && <div className="versalita" style={{ margin: '10px 0 4px' }}>{g.categoria}</div>}
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                        {g.opciones.map((op) => <OpcionBoton key={op} op={op} />)}
+                                    </div>
+                                </div>
+                            ))}
                         </div>
                         {esMultiple && <button onClick={onCerrar} className="boton-primario" style={{ marginTop: 12 }}>Listo</button>}
                     </>

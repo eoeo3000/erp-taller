@@ -98,6 +98,13 @@ export function obtenerTiposTrabajo() {
     return pedir('/tipos-trabajo');
 }
 
+// Listas transversales del mismo catálogo (condiciones de entorno, tipo de equipo, riesgos,
+// materiales, etc.) — ver docs/plan-formulario-adaptativo.md §3.3. Compartidas por casi todos
+// los tipos, por eso viven aparte de TipoTrabajo.campos.
+export function obtenerCatalogosTransversales() {
+    return pedir('/catalogos-transversales');
+}
+
 // S4 · Sin informe inicial (solo rol supervisor).
 export function solicitudesSinInforme() {
     const { token } = getSesion();
