@@ -34,26 +34,23 @@ function lunesDeLaSemana(fecha) {
 }
 function aISO(d) { return d.toISOString().slice(0, 10); }
 
-// Solicitudes que todavía necesitan una visita de evaluación: dos orígenes (Solicitud en
-// 'Pendiente', o una OT que la oficina ya aprobó/creó pero cuyo informeEvaluacion sigue sin
-// completarse), menos las que ya tiene tomadas algún supervisor (Asignacion tipo
-// 'evaluacion' existente). ANTES esta lógica estaba duplicada en solicitudesSinInforme (S4,
-// el listado) y en miPanel (S1, solo el conteo) — al agregar acá el caso de la OT ya creada
-// se actualizó el listado pero no el conteo, así que el panel mostraba 0 mientras la
-// bandeja S4 sí mostraba la solicitud (bug real, encontrado por el dueño del negocio). Un
-// solo cálculo compartido para que esto no se vuelva a desincronizar.
+// Solicitudes que todavía necesitan una visita de evaluación. A propósito, un solo origen:
+// una OT ya creada (el Planificador la aprobó desde el Panel de control, o la trató a mano)
+// cuyo informeEvaluacion sigue sin completarse — coincide exactamente con el sub-estado
+// "Esperando informe" que ve el Planificador en el Panel de control. Antes esta función
+// TAMBIÉN incluía cualquier Solicitud cruda en 'Pendiente' sin OT (decisión previa,
+// self-service: el supervisor podía tomarla antes de que el Planificador la revisara) — se
+// saca a pedido explícito del dueño del negocio: el supervisor solo debe ver lo que ya pasó
+// por la aprobación del Planificador, no la bandeja de entrada cruda. Esto además es lo que
+// causaba que el conteo acá no coincidiera con "Esperando informe" del Panel de control.
+// Comparte cálculo entre solicitudesSinInforme (S4, el listado) y miPanel (S1, el conteo)
+// para que ambos se muevan siempre juntos.
 async function solicitudesSinInformeDocs({ Solicitud, OT, Asignacion }) {
-    const [solicitudesPendientes, otsSinInforme] = await Promise.all([
-        Solicitud.find({ estado: 'Pendiente' }).select('_id').lean(),
-        OT.find({
-            estado: { $nin: ['Rechazada', 'Pagada'] },
-            $or: [{ 'informeEvaluacion.completo': { $ne: true } }, { informeEvaluacion: { $exists: false } }],
-        }).select('_id solicitudId').lean(),
-    ]);
-    const idsCandidatos = [...new Set([
-        ...solicitudesPendientes.map(s => String(s._id)),
-        ...otsSinInforme.map(o => String(o.solicitudId || o._id)),
-    ])];
+    const otsSinInforme = await OT.find({
+        estado: 'Tratada',
+        $or: [{ 'informeEvaluacion.completo': { $ne: true } }, { informeEvaluacion: { $exists: false } }],
+    }).select('_id solicitudId').lean();
+    const idsCandidatos = [...new Set(otsSinInforme.map(o => String(o.solicitudId || o._id)))];
     if (!idsCandidatos.length) return [];
 
     const solicitudes = await Solicitud.find({ _id: { $in: idsCandidatos } }).sort({ fechaCreacion: 1 }).lean();
