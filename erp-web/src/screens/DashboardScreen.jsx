@@ -445,11 +445,15 @@ const DashboardScreen = ({ ots = [], solicitudes = [], eliminarOT, actualizarEst
         return [{ label: 'Eliminar OT', onClick: () => { if (window.confirm('¿Eliminar esta OT? La solicitud vuelve a Pendiente.')) eliminarOT?.(ot._id); } }];
     };
 
+    // "Abrir OT" se eliminó de acá: el número de OT de la fila (columna 'ot' y encabezado del
+    // panel de detalle) ya navega directo a Tratamiento al hacer clic — un botón aparte para
+    // lo mismo era redundante. "Aprobar" se mantiene: no tiene equivalente de un clic en la
+    // tabla, porque todavía no existe una OT que abrir.
     const primario = (() => {
         if (!detalle) return null;
         const { ot, s } = detalle;
         if (!ot) return { label: 'Aprobar', onClick: () => aprobarYCrearOT?.(s), nota: 'Aprobar crea la OT de inmediato — queda visible para el supervisor en su app.' };
-        return { label: 'Abrir OT', onClick: () => navigate('/tratamiento', { state: ot }) };
+        return null;
     })();
 
     const encabezadoSeccion = (titulo, key, resumen) => (
@@ -627,6 +631,21 @@ const DashboardScreen = ({ ots = [], solicitudes = [], eliminarOT, actualizarEst
                                     >
                                         <span style={{ width: 3, alignSelf: 'stretch', background: sel === f.id ? t.textoPrincipal : 'transparent' }} />
                                         {columnasVisibles.map(c => {
+                                            // El número de OT navega directo a Tratamiento — reemplaza al botón
+                                            // "Abrir OT" que antes vivía solo en el panel de detalle (mismo destino,
+                                            // un clic menos). stopPropagation: si no, el clic también dispara
+                                            // setSel(f.id) de la fila, cambiando la selección justo antes de navegar.
+                                            if (c.key === 'ot') return (
+                                                <span
+                                                    key={c.key}
+                                                    onClick={(e) => { if (ot) { e.stopPropagation(); navigate('/tratamiento', { state: ot }); } }}
+                                                    style={{
+                                                        ...styles.celdaTexto(c.align === 'right'),
+                                                        fontFamily: t.fontMono, color: ot ? t.acento : t.textoSecundario1,
+                                                        cursor: ot ? 'pointer' : 'default', textDecoration: ot ? 'underline' : 'none',
+                                                    }}
+                                                >{valorCelda(f, c.key, recursos)}</span>
+                                            );
                                             if (c.key === 'cliente') return (
                                                 <span key={c.key} style={{ minWidth: 0, overflow: 'hidden' }}>
                                                     <span style={styles.clientePrincipal}>{empresa}</span>
