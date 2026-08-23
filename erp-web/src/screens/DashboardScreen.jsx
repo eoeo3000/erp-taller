@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 
 // Paso 7 del rediseño (ver docs/rediseno/design_handoff_panel_control/README.md §3-4):
-// catálogo de 13 campos configurable, redimensionado de columnas por drag, densidad de fila
+// catálogo de campos configurable (13 del handoff original + N° de Solicitud, agregado
+// después), redimensionado de columnas por drag, densidad de fila
 // (32/40/52) y variantes guardadas en localStorage. El panel de detalle (paso 2) sigue igual.
 
 // ---- Tokens del handoff (colores/tipografía definitivos, ver README §2) ----
@@ -101,9 +102,10 @@ const notaSlaSinOT = (sinOT) => {
     return `la más antigua: ${Math.floor(max / 24)} d`;
 };
 
-// ---- Catálogo de 13 campos (README §3) ----
+// ---- Catálogo de campos (13 del README §3 + 'solicitud') ----
 const CAMPOS = [
     { key: 'ot', label: 'N° de OT', corto: 'OT', origen: 'ot.numeroOT', w: 76, align: 'left', tipo: 'texto', mono: true },
+    { key: 'solicitud', label: 'N° de Solicitud', corto: 'Solicitud', origen: 'solicitud.numeroSolicitud', w: 90, align: 'left', tipo: 'texto', mono: true },
     { key: 'cliente', label: 'Cliente / faena', corto: 'Cliente / faena', origen: 'solicitud', w: 0, align: 'left', tipo: 'cliente' },
     { key: 'etapa', label: 'Etapa + avance', corto: 'Etapa', origen: 'ot.estado', w: 104, align: 'left', tipo: 'etapa' },
     { key: 'horas', label: 'Horas planificadas', corto: 'Horas', origen: 'ot.tareas', w: 58, align: 'right', tipo: 'texto', mono: true },
@@ -137,6 +139,7 @@ const LS_KEY = 'erpTaller.disposicion.v2';
 const valorCelda = (f, key, recursos = []) => {
     const { ot, solicitud: s } = f;
     if (key === 'ot') return ot?.numeroOT || '—';
+    if (key === 'solicitud') return s?.numeroSolicitud || '—';
     if (key === 'horas') { const h = horasDe(ot); return h ? `${h} h` : '—'; }
     if (key === 'total') return ot?.granTotal ? CLP(ot.granTotal) : '—';
     if (key === 'pago') return etiquetaPago(ot);
