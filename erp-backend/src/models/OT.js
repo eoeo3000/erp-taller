@@ -69,6 +69,17 @@ const OTSchema = new mongoose.Schema({
             tareaVinculadaId: { type: String, default: '' },
             fecha: { type: Date, default: Date.now },
         }],
+        // Revisión del Planificador sobre el informe del Supervisor: informativa, no bloquea
+        // el resto del tratamiento (tareas/equipos/suministros siguen editables igual) — solo
+        // bloquea el cierre de planificación (ver TratamientoScreen, puedeTerminarPlanificacion).
+        // 'ConObservaciones' se muestra al Supervisor en la PWA Operativa (Mis informes) para
+        // que corrija; O5_InformeEvaluacion resetea esto a 'Pendiente' al regrabar.
+        revision: {
+            estado: { type: String, enum: ['Pendiente', 'Aceptado', 'ConObservaciones'], default: 'Pendiente' },
+            comentario: { type: String, default: '' },
+            fecha: { type: Date, default: null },
+            autor: { type: String, default: '' },
+        },
     },
 
     // --- NUEVOS CAMPOS PARA GUARDAR EL TRATAMIENTO ---
@@ -148,6 +159,29 @@ const OTSchema = new mongoose.Schema({
         anulado: { type: Boolean, default: false },
         fechaAnulacion: { type: String, default: '' },
         motivoAnulacion: { type: String, default: '' }
+    },
+
+    // 6. Cotización y programación — respuesta del cliente ('Aprobada'/'Rechazada') dejó de
+    // ser un valor de OT.estado (mezclaba un sub-proceso con el pipeline principal, causaba
+    // el bug de 'Aprobada' compartiendo casillero visual con 'Planificada' en el panel).
+    // El macro-estado se queda en 'Planificada' durante todo este tramo (verificando
+    // capacidad -> cotización enviada -> esperando respuesta) y solo pasa a 'Programada'
+    // cuando el cliente aprueba (otController.responderCotizacionCliente). Un rechazo no
+    // mueve el estado, solo respuestaCliente — la OT queda "esperando corrección" sin salir
+    // de 'Planificada'. Escribir siempre con notación de punto (`cotizacion.campo`) en el
+    // $set, nunca reemplazando el subdocumento completo, para no pisar campos hermanos.
+    cotizacion: {
+        capacidadVerificada: { type: Boolean, default: false },
+        fechaVerificacion: { type: Date, default: null },
+        fechasPropuestas: {
+            inicio: { type: Date, default: null },
+            fin: { type: Date, default: null },
+        },
+        enviada: { type: Boolean, default: false },
+        fechaEnvio: { type: Date, default: null },
+        respuestaCliente: { type: String, enum: ['Pendiente', 'Aprobada', 'Rechazada'], default: 'Pendiente' },
+        fechaRespuesta: { type: Date, default: null },
+        motivoRechazo: { type: String, default: '' },
     },
 
     // --- Metadatos y Asignación ---

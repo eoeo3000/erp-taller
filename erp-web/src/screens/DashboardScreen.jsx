@@ -42,17 +42,21 @@ const fmtFecha = (iso) => {
     return d && !isNaN(d.getTime()) ? d.toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—';
 };
 
-// Las 8 etapas visuales del handoff. 'Aprobada' (cotización aceptada, aún sin programar)
-// comparte casillero visual con 'Planificada'; 'Rechazada' se muestra aparte, en color de alerta.
+// Las 8 etapas visuales del handoff. 'Aprobada'/'Rechazada' ya no son valores de OT.estado
+// (ver models/OT.js, subdocumento cotizacion) — la respuesta del cliente a la cotización es
+// un sub-proceso aparte del pipeline principal. Un rechazo se detecta por
+// cotizacion.respuestaCliente sin sacar a la OT de 'Planificada'.
 const ETAPAS_VISUAL = ['Solicitud', 'Tratamiento', 'Planificada', 'Programada', 'Ejecución', 'Terminado', 'Con informe', 'Pagada'];
 const MAPA_ETAPA = {
-    Tratada: 1, Planificada: 2, Aprobada: 2, Programada: 3,
+    Tratada: 1, Planificada: 2, Programada: 3,
     'En Ejecución': 4, 'Trabajo Terminado': 5, 'Con Informe': 6, Pagada: 7,
 };
 
 const etapaInfo = (ot) => {
     if (!ot) return { idx: 0, label: ETAPAS_VISUAL[0], rechazada: false };
-    if (ot.estado === 'Rechazada') return { idx: 2, label: 'Rechazada', rechazada: true };
+    if (ot.estado === 'Planificada' && ot.cotizacion?.respuestaCliente === 'Rechazada') {
+        return { idx: 2, label: 'Rechazada', rechazada: true };
+    }
     const idx = MAPA_ETAPA[ot.estado] ?? 0;
     return { idx, label: ETAPAS_VISUAL[idx], rechazada: false };
 };

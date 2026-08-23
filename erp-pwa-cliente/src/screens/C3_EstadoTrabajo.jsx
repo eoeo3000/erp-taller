@@ -6,13 +6,17 @@ const ETAPAS_CLIENTE = [
     'En ejecución', 'Trabajo terminado', 'Informe entregado', 'Pagado',
 ];
 const MAPA_ETAPA = {
-    Tratada: 1, Planificada: 2, Aprobada: 2, Programada: 3,
+    Tratada: 1, Planificada: 2, Programada: 3,
     'En Ejecución': 4, 'Trabajo Terminado': 5, 'Con Informe': 6, Pagada: 7,
 };
 
+// 'Aprobada'/'Rechazada' ya no son valores de OT.estado — un rechazo se detecta por
+// cotizacion.respuestaCliente sin sacar a la OT de 'Planificada' (ver erp-backend/src/models/OT.js).
 function etapaInfo(ot) {
     if (!ot) return { idx: 0, label: ETAPAS_CLIENTE[0], rechazada: false };
-    if (ot.estado === 'Rechazada') return { idx: 2, label: 'Presupuesto rechazado', rechazada: true };
+    if (ot.estado === 'Planificada' && ot.cotizacion?.respuestaCliente === 'Rechazada') {
+        return { idx: 2, label: 'Presupuesto rechazado', rechazada: true };
+    }
     const idx = MAPA_ETAPA[ot.estado] ?? 0;
     return { idx, label: ETAPAS_CLIENTE[idx], rechazada: false };
 }
@@ -23,7 +27,7 @@ const fmtCorta = (iso) => iso ? new Date((iso + '').split('T')[0] + 'T00:00:00')
 
 function lineaCliente(ot) {
     if (!ot) return 'Su solicitud está siendo evaluada.';
-    if (ot.estado === 'Rechazada') return 'El presupuesto no fue aceptado.';
+    if (ot.estado === 'Planificada' && ot.cotizacion?.respuestaCliente === 'Rechazada') return 'El presupuesto no fue aceptado.';
     if (ot.estado === 'Programada') {
         const fecha = (ot.tareas || []).map((t) => t.fecha).filter(Boolean).sort()[0];
         return fecha ? `Nuestro equipo llega el ${fmtLarga(fecha)}.` : 'Su trabajo está programado.';

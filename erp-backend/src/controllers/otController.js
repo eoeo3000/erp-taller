@@ -81,8 +81,12 @@ async function aplicarReservaPorCambioEstado(otAnterior, otNueva, conn) {
 
         const esEquipo = (c) => c.tipo === 'Equipo' || c.tipo === 'Herramienta';
 
-        // Cliente aceptó la cotización: reservar herramientas/equipos e insumos comprometidos
-        if (estadoNuevo === 'Aprobada' && estadoAnt !== 'Aprobada') {
+        // Cliente aprobó la cotización y quedó agendada: reservar herramientas/equipos e
+        // insumos comprometidos. Guard específico en la transición Planificada->Programada
+        // (no "cualquier entrada a Programada"): aplicarAccionOT también usa 'Programada'
+        // como destino de posponer/interrumpir desde 'En Ejecución', y un guard más amplio
+        // volvería a reservar equipos que ya están 'En Uso'.
+        if (estadoAnt === 'Planificada' && estadoNuevo === 'Programada') {
             for (const c of componentes) {
                 if (!c.codigo) continue;
                 if (esEquipo(c)) {
@@ -563,34 +567,60 @@ exports.accionMovil = async (req, res) => {
 };
 
 // 11. Respuesta Directa del Cliente (Solo actualización interna)
+// 'Aprobada'/'Rechazada' ya no son valores de OT.estado (ver models/OT.js, subdocumento
+// cotizacion) — son la respuesta del cliente a la cotización, un sub-proceso aparte del
+// pipeline principal. Aprobar es lo único que mueve el macro-estado (Planificada ->
+// Programada, porque para este punto ya se verificó capacidad en Gantt); rechazar deja la
+// OT en 'Planificada' con cotizacion.respuestaCliente='Rechazada' como señal de "esperando
+// corrección del Planificador", sin sacarla de la fase en la que estaba.
 exports.responderCotizacionCliente = async (req, res) => {
     const OT = getOT(req.db);
     try {
         const { id, nuevoEstado } = req.params;
 
-        // 1. Actualizar la OT
-        const otAnterior = await OT.findById(id).lean();
-        const otActualizada = await OT.findByIdAndUpdate(
-            id,
-            { estado: nuevoEstado },
-            { new: true }
-        );
+        if (!['Aprobada', 'Rechazada'].includes(nuevoEstado)) {
+            return res.status(400).send("<h1>Error: respuesta no reconocida.</h1>");
+        }
 
-        if (!otActualizada) {
+        const otAnterior = await OT.findById(id).lean();
+        if (!otAnterior) {
             return res.status(404).send("<h1>Error: Registro no encontrado.</h1>");
         }
 
-        // 2. Sincronizar con la Solicitud original para que el ERP sea consistente
-        const idSolicitud = otActualizada.solicitudId || otActualizada._id;
-        const Solicitud = require('../models/Solicitud')(req.db);
-        await Solicitud.findByIdAndUpdate(idSolicitud, { estado: nuevoEstado });
+        if (nuevoEstado === 'Aprobada' && !otAnterior.supervisorId) {
+            return res.status(409).send(`
+                <div style="font-family: sans-serif; text-align: center; padding: 100px 20px;">
+                    <h1 style="color: #2c3e50;">No pudimos procesar su respuesta</h1>
+                    <p style="font-size: 18px; color: #7f8c8d;">
+                        La orden <b>${otAnterior.numeroOT || ''}</b> todavía no tiene un supervisor asignado en nuestro sistema.
+                        Por favor contáctenos para confirmar la aprobación.
+                    </p>
+                </div>
+            `);
+        }
 
-        // 3. Reserva/liberación de recursos si corresponde (ej. Aceptar -> reserva herramientas e insumos)
+        const cambios = {
+            'cotizacion.respuestaCliente': nuevoEstado,
+            'cotizacion.fechaRespuesta': new Date(),
+        };
+        if (nuevoEstado === 'Aprobada') cambios.estado = 'Programada';
+
+        const otActualizada = await OT.findByIdAndUpdate(id, { $set: cambios }, { new: true });
+
+        // Sincronizar con la Solicitud original: solo la aprobación mueve la fase macro, así
+        // que solo ella se refleja ahí — un rechazo no movió a la OT de 'Planificada'.
+        if (nuevoEstado === 'Aprobada') {
+            const idSolicitud = otActualizada.solicitudId || otActualizada._id;
+            const Solicitud = require('../models/Solicitud')(req.db);
+            await Solicitud.findByIdAndUpdate(idSolicitud, { estado: 'Programada' });
+        }
+
+        // Reserva/liberación de recursos si corresponde (aprobar -> reserva herramientas e insumos)
         await aplicarReservaPorCambioEstado(otAnterior, otActualizada, req.db);
 
-        console.log(`♻️ ERP Actualizado: OT ${otActualizada.numeroOT} ahora está ${nuevoEstado}`);
+        console.log(`♻️ ERP Actualizado: OT ${otActualizada.numeroOT} — cliente respondió ${nuevoEstado}`);
 
-        // 3. Respuesta visual simple para el cliente
+        // Respuesta visual simple para el cliente
         res.send(`
             <div style="font-family: sans-serif; text-align: center; padding: 100px 20px;">
                 <div style="font-size: 50px;">✔️</div>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 
 // Paso 6 del rediseño (ver docs/rediseno/design_handoff_panel_control/README.md §8):
 // una sola grilla continua OT → tareas → capacidad (mismo grid-template-columns en las tres),
@@ -46,6 +46,7 @@ const colorEstadoOT = (estado) => {
 
 const GanttScreen = ({ recursos = [], ots = [], calendarios = [], obtenerHorasParaDia, actualizarOtGlobal, cargarDatos }) => {
     const navigate = useNavigate();
+    const location = useLocation();
 
     // Días con al menos una tarea asignada, para poder navegar semanas hacia atrás/adelante.
     const diasConTareas = [];
@@ -109,9 +110,14 @@ const GanttScreen = ({ recursos = [], ots = [], calendarios = [], obtenerHorasPa
     const esSupervisor = (r) => /supervisor/i.test(r.puesto || ''); // mismo criterio que otController.antecedentes
     const LIMITE_ASIGNACIONES = (r) => (r.senior ? 6 : 5); // confirmado con el usuario
 
-    // Preselecciona la primera OT visible para que el panel no arranque vacío.
+    // Preselecciona la OT recibida por navegación (ej. desde el aviso "Requiere programar
+    // la OT" de la pestaña Cotización de Tratamiento, ver location.state._volverAOT) — si no
+    // vino ninguna, cae en la primera OT visible para que el panel no arranque vacío.
     useEffect(() => {
-        if (!otSel && ots.length > 0) setOtSel(ots[0]);
+        if (otSel) return;
+        const idDestino = location.state?._volverAOT;
+        const preseleccion = idDestino && ots.find(o => String(o._id) === String(idDestino));
+        setOtSel(preseleccion || ots[0] || null);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [ots]);
 
@@ -152,28 +158,50 @@ const GanttScreen = ({ recursos = [], ots = [], calendarios = [], obtenerHorasPa
         });
     };
 
-    const toggleProgramada = async (ot) => {
+    // Fechas que se le van a proponer al cliente en la cotización: derivadas de las tareas ya
+    // cargadas en Tratamiento (no hay UI de edición de fechas acá, no hace falta — Gantt es
+    // solo el punto donde se verifica que esas fechas son viables antes de cotizar).
+    const fechasPropuestasDe = (ot) => {
+        const fechas = (ot.tareas || []).map(tt => tt.fecha).filter(Boolean).sort();
+        return fechas.length ? { inicio: fechas[0], fin: fechas[fechas.length - 1] } : null;
+    };
+
+    // Este botón dejó de fijar 'Programada' directamente (eso ahora lo hace el cliente al
+    // aprobar la cotización, ver otController.responderCotizacionCliente) — acá solo se
+    // verifica capacidad y se registran las fechas propuestas, gate obligatorio antes de
+    // poder enviar la cotización desde Tratamiento (cotizacion.capacidadVerificada).
+    const confirmarCapacidad = async (ot, { forzar = false } = {}) => {
         setOtSel(ot);
-        if (ot.estado === 'Programada') {
-            await actualizarOtGlobal(ot._id, { estado: 'Planificada' });
-            if (cargarDatos) cargarDatos();
-            setConfirmando(false);
-            return;
-        }
         const conflictos = verificarDisponibilidad(ot);
-        if (conflictos.length > 0) setConfirmando(true);
-        else {
-            const resultado = await actualizarOtGlobal(ot._id, { estado: 'Programada' });
-            if (!resultado?.exito) { alert(resultado?.error || 'No se pudo programar la OT.'); return; }
-            if (cargarDatos) cargarDatos();
+        if (conflictos.length > 0 && !forzar) { setConfirmando(true); return; }
+
+        const fechasPropuestas = fechasPropuestasDe(ot);
+        const resultado = await actualizarOtGlobal(ot._id, {
+            'cotizacion.capacidadVerificada': true,
+            'cotizacion.fechaVerificacion': new Date().toISOString(),
+            ...(fechasPropuestas ? {
+                'cotizacion.fechasPropuestas.inicio': fechasPropuestas.inicio,
+                'cotizacion.fechasPropuestas.fin': fechasPropuestas.fin,
+            } : {}),
+        });
+        setConfirmando(false);
+        if (!resultado?.exito) { alert(resultado?.error || 'No se pudo confirmar la capacidad.'); return; }
+        if (cargarDatos) cargarDatos();
+
+        // Si vino desde el aviso "Requiere programar la OT" de Tratamiento, vuelve directo a
+        // la pestaña Cotización con la OT ya actualizada.
+        if (location.state?._volverATab) {
+            navigate('/tratamiento', { state: { ...resultado.otActualizada, _tabDestino: location.state._volverATab } });
         }
     };
 
-    const confirmarProgramacion = async () => {
-        if (!otSel) return;
-        const resultado = await actualizarOtGlobal(otSel._id, { estado: 'Programada' });
-        setConfirmando(false);
-        if (!resultado?.exito) { alert(resultado?.error || 'No se pudo programar la OT.'); return; }
+    // Escape hatch operativo: no hay forma en la UI de volver una OT de 'Programada' a
+    // 'Planificada' ahora que ese paso lo dispara la aprobación del cliente — por si el
+    // cliente cancela verbalmente después de haber aprobado.
+    const revertirAPlanificada = async (ot) => {
+        if (!window.confirm('¿Revertir esta OT a Planificada? Se perderá el estado Programada.')) return;
+        const resultado = await actualizarOtGlobal(ot._id, { estado: 'Planificada' });
+        if (!resultado?.exito) { alert(resultado?.error || 'No se pudo revertir la OT.'); return; }
         if (cargarDatos) cargarDatos();
     };
 
@@ -226,11 +254,11 @@ const GanttScreen = ({ recursos = [], ots = [], calendarios = [], obtenerHorasPa
                         {ots.map(ot => {
                             const estaEjecutado = ESTADOS_EJECUTADOS.includes(ot.estado);
                             const puedeProgramar = ['Planificada', 'Programada'].includes(ot.estado);
-                            const estaProgramada = ot.estado === 'Programada';
+                            const capacidadVerificada = !!ot.cotizacion?.capacidadVerificada;
                             const fechasTareas = (ot.tareas || []).filter(tt => tt.fecha).map(tt => tt.fecha).sort();
                             const fmtFecha = iso => iso ? new Date(iso + 'T00:00:00').toLocaleDateString('es-CL', { day: '2-digit', month: 'short' }) : '—';
                             const enSemana = diasSemana.some(d => fechasTareas.includes(d));
-                            const accionLabel = !puedeProgramar ? 'No disponible' : estaProgramada ? 'Desprogramar' : 'Programar';
+                            const accionLabel = !puedeProgramar ? 'No disponible' : capacidadVerificada ? 'Reconfirmar capacidad' : 'Confirmar capacidad y fechas';
                             const horasSemana = (ot.tareas || []).filter(tt => diasSemana.includes(tt.fecha)).reduce((a, tt) => a + (Number(tt.duracion) || 0), 0);
                             return (
                                 <React.Fragment key={ot._id}>
@@ -246,7 +274,7 @@ const GanttScreen = ({ recursos = [], ots = [], calendarios = [], obtenerHorasPa
                                         <span style={styles.celda}>
                                             {estaEjecutado ? null : (
                                                 <button
-                                                    onClick={(e) => { e.stopPropagation(); if (puedeProgramar) toggleProgramada(ot); }}
+                                                    onClick={(e) => { e.stopPropagation(); if (puedeProgramar) confirmarCapacidad(ot); }}
                                                     disabled={!puedeProgramar}
                                                     title={puedeProgramar ? '' : 'La OT debe estar Planificada primero'}
                                                     style={{ ...styles.btnAccionFila, ...(puedeProgramar ? {} : { opacity: .5, cursor: 'not-allowed' }) }}
@@ -473,9 +501,9 @@ const GanttScreen = ({ recursos = [], ots = [], calendarios = [], obtenerHorasPa
                                     ))}
                                     {confirmando && (
                                         <div style={{ marginTop: 10, padding: '8px 10px', background: '#fff', borderLeft: `2px solid ${t.rojo}` }}>
-                                            <div style={{ fontSize: 11.5, color: t.textoSecundario1, lineHeight: 1.5, marginBottom: 8 }}>Programar dejará responsables sobre su capacidad. ¿Continuar?</div>
+                                            <div style={{ fontSize: 11.5, color: t.textoSecundario1, lineHeight: 1.5, marginBottom: 8 }}>Confirmar dejará responsables sobre su capacidad. ¿Continuar?</div>
                                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
-                                                <button onClick={confirmarProgramacion} style={{ height: 26, background: t.rojo, border: `1px solid ${t.rojo}`, color: '#fff', fontSize: 11, fontWeight: 700, cursor: 'pointer', borderRadius: 2 }}>Programar igual</button>
+                                                <button onClick={() => otSel && confirmarCapacidad(otSel, { forzar: true })} style={{ height: 26, background: t.rojo, border: `1px solid ${t.rojo}`, color: '#fff', fontSize: 11, fontWeight: 700, cursor: 'pointer', borderRadius: 2 }}>Confirmar igual</button>
                                                 <button onClick={() => setConfirmando(false)} style={styles.btnSecundario}>Cancelar</button>
                                             </div>
                                         </div>
@@ -484,8 +512,16 @@ const GanttScreen = ({ recursos = [], ots = [], calendarios = [], obtenerHorasPa
 
                                 <div style={{ padding: '11px 16px 14px' }}>
                                     <div style={styles.tituloSub}>Acciones</div>
+                                    <button
+                                        onClick={() => ['Planificada', 'Programada'].includes(otSel.estado) && confirmarCapacidad(otSel)}
+                                        disabled={!['Planificada', 'Programada'].includes(otSel.estado)}
+                                        style={{ ...styles.btnSecundario, width: '100%', marginBottom: 6, opacity: ['Planificada', 'Programada'].includes(otSel.estado) ? 1 : .5 }}
+                                    >{otSel.cotizacion?.capacidadVerificada ? 'Reconfirmar capacidad y fechas' : 'Confirmar capacidad y fechas'}</button>
+                                    {otSel.estado === 'Programada' && (
+                                        <button onClick={() => revertirAPlanificada(otSel)} style={{ ...styles.btnSecundario, width: '100%', marginBottom: 6, color: t.rojo }}>Revertir a Planificada</button>
+                                    )}
                                     <button onClick={() => navigate('/tratamiento', { state: otSel })} style={{ ...styles.btnSecundario, width: '100%' }}>Abrir tratamiento</button>
-                                    <div style={{ fontSize: 10.5, color: t.textoAtenuado3, marginTop: 8, lineHeight: 1.5 }}>Solo las OT en estado Planificada o Programada se pueden programar; las cerradas quedan en gris.</div>
+                                    <div style={{ fontSize: 10.5, color: t.textoAtenuado3, marginTop: 8, lineHeight: 1.5 }}>La capacidad se puede confirmar en OT Planificada o Programada; el cliente es quien deja la OT en Programada al aprobar la cotización.</div>
                                 </div>
                             </>
                         )}

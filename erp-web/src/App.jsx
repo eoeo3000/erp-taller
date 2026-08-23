@@ -823,7 +823,7 @@ function App() {
 
   // Contadores reales del nav (nada de placeholders) — ver §1 del handoff.
   const solicitudesSinOT = solicitudes.filter(s => !ots.find(o => String(o.solicitudId) === String(s._id))).length;
-  const otsProgramables = ots.filter(o => o.estado === 'Planificada' || o.estado === 'Aprobada' || o.estado === 'Programada').length;
+  const otsProgramables = ots.filter(o => o.estado === 'Planificada' || o.estado === 'Programada').length;
   const horaSync = ultimaSync ? ultimaSync.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' }) : '—';
 
   const navOperacion = [

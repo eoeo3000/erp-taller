@@ -66,7 +66,7 @@ router.post('/enviar-cotizacion', async (req, res) => {
                     </div>
 
                     <p style="font-size: 13px; color: #7f8c8d; margin-top: 40px; text-align: center; font-style: italic;">
-                        Al hacer clic en "Aceptar", la orden se marcará automáticamente para ejecución en nuestro sistema de suministros.
+                        Al hacer clic en "Aceptar", la orden quedará programada en nuestro sistema con las fechas indicadas; la ejecución en terreno se coordinará según ese cronograma.
                     </p>
                 </div>
             `,

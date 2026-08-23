@@ -528,7 +528,7 @@ exports.misInformes = async (req, res) => {
             if (a.estado === 'completada') {
                 if (new Date(a.updatedAt) >= inicioMes) {
                     const desenlace = (ot && !['Pendiente', 'Tratada'].includes(ot.estado)) ? 'Cotizada' : 'En oficina';
-                    enviados.push({ ...base, numeroOT: ot?.numeroOT || null, fechaEnvio: a.updatedAt, desenlace });
+                    enviados.push({ ...base, numeroOT: ot?.numeroOT || null, fechaEnvio: a.updatedAt, desenlace, revision: ot?.informeEvaluacion?.revision || null });
                 }
             } else {
                 pendientes.push({ ...base, hallazgos: hallazgosRegistrados(ot?.informeEvaluacion), diasDesdeVisita: diasDesde(a.fechaPlanificada) });
