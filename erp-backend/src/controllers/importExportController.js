@@ -8,6 +8,7 @@ const getPuesto = require('../models/puesto');
 const getOT = require('../models/OT');
 const getSolicitud = require('../models/Solicitud');
 const getTipoTrabajo = require('../models/TipoTrabajo');
+const getCatalogoTransversal = require('../models/CatalogoTransversal');
 const TIPOS_DATO_CAMPO = getTipoTrabajo.TIPOS_DATO_CAMPO;
 
 // ── HELPERS ───────────────────────────────────────────────────────────────────
@@ -44,25 +45,51 @@ function slugCodigo(nombre) {
         .replace(/^_+|_+$/g, '');
 }
 
-function construirWorkbookCatalogo(tipos) {
+// Índice de listas (docs/plan-formulario-adaptativo.md §3.3) — prácticamente estático: son
+// las 9 listas transversales que trae hoy el catálogo real. Vive como constante (no en Mongo)
+// porque describe la FORMA del catálogo (qué claves son transversales y si son de selección
+// única o múltiple), no datos propios de una lista — eso sí vive en CatalogoTransversal.
+const INDICE_LISTAS = [
+    { clave: 'condicionesEntorno', seleccion: 'múltiple', universal: 'Sí', descripcion: 'Condiciones del entorno donde se ejecuta el trabajo' },
+    { clave: 'tipoEquipo', seleccion: 'única', universal: 'Sí', descripcion: 'Equipo sobre el que se interviene' },
+    { clave: 'trabajosPrevios', seleccion: 'múltiple', universal: 'Sí', descripcion: 'Lo que hay que hacer antes de empezar' },
+    { clave: 'tareasSecundarias', seleccion: 'múltiple', universal: 'Sí', descripcion: 'Tareas que arrastra la tarea principal. Pre-sugeridas por tipo' },
+    { clave: 'materiales', seleccion: 'múltiple', universal: 'Sí', descripcion: 'Materiales y consumibles requeridos. Pre-sugeridos por tipo' },
+    { clave: 'tareasHabilitadoras', seleccion: 'múltiple', universal: 'Sí', descripcion: 'Recursos y permisos que habilitan la ejecución' },
+    { clave: 'riesgos', seleccion: 'múltiple', universal: 'Sí', descripcion: 'Riesgos que el supervisor debe identificar. Pre-sugeridos por tipo' },
+    { clave: 'obrasCiviles', seleccion: 'única', universal: 'NO', descripcion: 'Solo en los tipos donde aplica. Ver hoja Sugerencias por tipo' },
+    { clave: 'trabajosCierre', seleccion: 'múltiple', universal: 'Sí', descripcion: 'Lo que cierra formalmente el trabajo' },
+];
+const CLAVES_TRANSVERSALES = new Set(INDICE_LISTAS.map(l => l.clave));
+
+// Una sugerencia premarcada cuyo valor no matchea ningún valor real del catálogo transversal
+// de esa lista, y viene entre paréntesis, es la convención "esto aplica pero se elige en
+// terreno, no hay valor premarcado sensato" (ver plan §0) — no un dato roto. Se reconoce por
+// patrón y se descarta sin reportar error de fila.
+function esMarcadorDeAplicabilidad(valor) {
+    return /^\(.*\)$/.test(normStr(valor));
+}
+
+function construirWorkbookCatalogo(tipos, catalogosTransversales = []) {
     const wb = XLSX.utils.book_new();
-    agregarHojasCatalogo(wb, tipos);
+    agregarHojasCatalogo(wb, tipos, catalogosTransversales);
     return wb;
 }
 
-// Separado de construirWorkbookCatalogo para poder sumar las 3 hojas del catálogo a un
+// Separado de construirWorkbookCatalogo para poder sumar las 7 hojas del catálogo a un
 // workbook YA existente (exportarBatch, cuando "tipos-trabajo" se selecciona junto a otros
 // módulos) en vez de generar siempre un archivo aparte.
-function agregarHojasCatalogo(wb, tipos) {
-    const filasTipos = [], filasCampos = [], filasOpciones = [];
+function agregarHojasCatalogo(wb, tipos, catalogosTransversales = []) {
+    const filasTipos = [], filasCampos = [], filasOpciones = [], filasSugerencias = [];
 
     for (const t of tipos) {
-        const codigoTipo = slugCodigo(t.nombre);
+        const codigoTipo = t.codigoTipo || slugCodigo(t.nombre);
         filasTipos.push({
             codigoTipo,
             nombre: t.nombre,
             sinonimos: (t.sinonimos || []).join(', '),
             plantillaTexto: t.plantillaTexto || '',
+            condicionesNoAplicables: (t.condicionesNoAplicables || []).join(', '),
         });
         for (const c of (t.campos || [])) {
             filasCampos.push({
@@ -73,11 +100,26 @@ function agregarHojasCatalogo(wb, tipos) {
                 filasOpciones.push({ codigoTipo, clave: c.clave, opcion: op });
             }
         }
+        for (const s of (t.sugerencias || [])) {
+            filasSugerencias.push({ codigoTipo, lista: s.lista, valor: s.valor, porDefecto: 'Sí' });
+        }
     }
 
+    const filasIndice = INDICE_LISTAS;
+    const filasTransversales = [];
+    for (const cat of catalogosTransversales) {
+        for (const v of (cat.valores || [])) {
+            filasTransversales.push({ lista: cat.clave, valor: v.valor, categoria: v.categoria || '' });
+        }
+    }
+
+    agregarHoja(wb, [{ 'Catálogo de tipos de trabajo — Informes de Evaluación': 'Ver docs/plan-formulario-adaptativo.md para la explicación completa del modelo.' }], 'Instrucciones');
     agregarHoja(wb, filasTipos, 'Tipos de trabajo');
     agregarHoja(wb, filasCampos, 'Campos');
     agregarHoja(wb, filasOpciones, 'Opciones');
+    agregarHoja(wb, filasTransversales, 'Catálogos transversales');
+    agregarHoja(wb, filasSugerencias, 'Sugerencias por tipo');
+    agregarHoja(wb, filasIndice, 'Índice de listas');
     return wb;
 }
 
@@ -226,22 +268,70 @@ exports.importarPuestos = async (req, res) => {
     }
 };
 
-// Catálogo de tipos de trabajo — 3 hojas por archivo (ver
-// docs/plan-formulario-adaptativo.md §7): "Tipos de trabajo", "Campos" y "Opciones", unidas
-// por una columna `codigoTipo` de texto libre que la persona que arma el Excel define ella
-// misma — no es un id de Mongo. Las condiciones de entorno de cada tipo (si aplica) se cargan
-// como un campo más de tipoDato seleccionMultiple, igual que cualquier otro campo — no hay un
-// catálogo transversal aparte.
+// Catálogo de tipos de trabajo — 7 hojas por archivo (ver
+// docs/plan-formulario-adaptativo.md §8): "Índice de listas", "Catálogos transversales",
+// "Tipos de trabajo", "Campos", "Opciones" y "Sugerencias por tipo" (más "Instrucciones", de
+// solo lectura, que no se procesa). Todas unidas por `codigoTipo`, columna de texto libre que
+// la persona que arma el Excel define ella misma — no es un id de Mongo. Las 9 listas
+// transversales (condicionesEntorno, tipoEquipo, ...) ya NO son un campo más de cada tipo —
+// viven en CatalogoTransversal, compartidas entre todos los tipos que las referencian en su
+// plantillaTexto (ver plan §3.3).
 exports.importarTiposTrabajo = async (req, res) => {
     const TipoTrabajo = getTipoTrabajo(req.db);
+    const CatalogoTransversal = getCatalogoTransversal(req.db);
     try {
         const wb = XLSX.read(req.file.buffer, { type: 'buffer' });
+        const filasIndice = parsearHoja(wb, 'Índice de listas');
+        const filasTransversales = parsearHoja(wb, 'Catálogos transversales');
         const filasTipos = parsearHoja(wb, 'Tipos de trabajo');
         const filasCampos = parsearHoja(wb, 'Campos');
         const filasOpciones = parsearHoja(wb, 'Opciones');
+        const filasSugerencias = parsearHoja(wb, 'Sugerencias por tipo');
         const errores = [];
 
-        // 1) Campos agrupados por codigoTipo + clave (Hoja 2).
+        // 1) Índice de listas — de dónde salen las claves transversales válidas. Si el archivo
+        // no trae esta hoja (compatibilidad con un archivo más simple, sin catálogos
+        // transversales), se usan las 9 conocidas hoy como respaldo.
+        const clavesTransversales = filasIndice.length
+            ? new Set(filasIndice.map(f => normStr(f.clave)).filter(Boolean))
+            : CLAVES_TRANSVERSALES;
+
+        // 2) Catálogos transversales, agrupados por lista, y upsert inmediato — las hojas
+        // siguientes ya los necesitan cargados para validar contra ellos.
+        const valoresPorLista = new Map(); // lista -> Set(valor)
+        const catalogosPorLista = new Map(); // lista -> [{valor, categoria}]
+        for (const f of filasTransversales) {
+            const lista = normStr(f.lista);
+            const valor = normStr(f.valor);
+            if (!lista || !valor) continue;
+            if (!clavesTransversales.has(lista)) { errores.push({ fila: 0, motivo: `lista desconocida "${lista}" en Catálogos transversales (fila con valor "${valor}")` }); continue; }
+            if (!catalogosPorLista.has(lista)) { catalogosPorLista.set(lista, []); valoresPorLista.set(lista, new Set()); }
+            catalogosPorLista.get(lista).push({ valor, categoria: normStr(f.categoria) });
+            valoresPorLista.get(lista).add(valor);
+        }
+        const catalogosInsertados = [];
+        for (const [lista, valores] of catalogosPorLista) {
+            const meta = filasIndice.find(f => normStr(f.clave) === lista);
+            try {
+                await CatalogoTransversal.findOneAndUpdate(
+                    { clave: lista },
+                    {
+                        clave: lista,
+                        descripcion: normStr(meta?.descripcion),
+                        seleccion: normStr(meta?.seleccion).includes('múltipl') || normStr(meta?.seleccion).includes('multipl') ? 'multiple' : 'unica',
+                        valores,
+                    },
+                    { upsert: true, new: true, runValidators: true }
+                );
+                catalogosInsertados.push(lista);
+            } catch (e) {
+                errores.push({ fila: 0, motivo: `catálogo transversal "${lista}": ${e.message}` });
+            }
+        }
+
+        // 3) Campos agrupados por codigoTipo + clave (Hoja "Campos") — solo campos propios de
+        // cada tipo, nunca una clave transversal (si alguien la declara ahí por error, no hay
+        // forma de saberlo desde acá; el motor de texto la resuelve igual en tiempo real).
         const camposPorTipo = new Map(); // codigoTipo -> Map(clave -> campo)
         for (const f of filasCampos) {
             const codigoTipo = normStr(f.codigoTipo);
@@ -259,7 +349,7 @@ exports.importarTiposTrabajo = async (req, res) => {
             });
         }
 
-        // 2) Opciones anexadas a su campo (Hoja 3).
+        // 4) Opciones anexadas a su campo (Hoja "Opciones").
         for (const f of filasOpciones) {
             const codigoTipo = normStr(f.codigoTipo);
             const clave = normStr(f.clave);
@@ -269,21 +359,59 @@ exports.importarTiposTrabajo = async (req, res) => {
             if (campo) campo.opciones.push(opcion);
         }
 
-        // 3) Tipos de trabajo (Hoja 1) — upsert final por nombre, igual criterio que Puesto/Suministro.
+        // 5) Sugerencias premarcadas por tipo (Hoja "Sugerencias por tipo") — valida que la
+        // lista y el valor existan; el marcador especial de aplicabilidad (ver
+        // esMarcadorDeAplicabilidad, plan §0) se descarta en silencio, no es un error.
+        const sugerenciasPorTipo = new Map(); // codigoTipo -> [{lista, valor}]
+        for (let i = 0; i < filasSugerencias.length; i++) {
+            const f = filasSugerencias[i];
+            const codigoTipo = normStr(f.codigoTipo);
+            const lista = normStr(f.lista);
+            const valor = normStr(f.valor);
+            if (!codigoTipo || !lista || !valor) continue;
+            if (!clavesTransversales.has(lista)) { errores.push({ fila: i + 2, motivo: `Sugerencias por tipo: lista desconocida "${lista}"` }); continue; }
+            if (!valoresPorLista.get(lista)?.has(valor)) {
+                if (esMarcadorDeAplicabilidad(valor)) continue; // convención conocida, no un error
+                errores.push({ fila: i + 2, motivo: `Sugerencias por tipo: "${valor}" no existe en la lista "${lista}"` });
+                continue;
+            }
+            if (!sugerenciasPorTipo.has(codigoTipo)) sugerenciasPorTipo.set(codigoTipo, []);
+            sugerenciasPorTipo.get(codigoTipo).push({ lista, valor });
+        }
+
+        // 6) Tipos de trabajo (Hoja "Tipos de trabajo") — upsert final. Se matchea por
+        // codigoTipo O por nombre: cubre tanto el caso normal (ya tiene codigoTipo de una
+        // importación anterior con este mismo formato) como el de un catálogo cargado con el
+        // importador anterior (3 hojas, sin codigoTipo) — para no duplicar esos tipos, se
+        // actualiza el documento existente en vez de crear uno nuevo al lado.
         const insertados = [];
         for (let i = 0; i < filasTipos.length; i++) {
             const f = filasTipos[i];
             const nombre = normStr(f.nombre);
             if (!nombre) { errores.push({ fila: i + 2, motivo: 'nombre vacío' }); continue; }
 
-            const codigoTipo = normStr(f.codigoTipo);
+            const codigoTipo = (normStr(f.codigoTipo) || slugCodigo(nombre)).toUpperCase();
             const camposMapa = camposPorTipo.get(codigoTipo);
             const campos = camposMapa ? [...camposMapa.values()].sort((a, b) => a.orden - b.orden) : [];
 
+            const condicionesEntornoValidas = valoresPorLista.get('condicionesEntorno') || new Set();
+            const condicionesNoAplicables = normLista(f.condicionesNoAplicables).filter(v => {
+                if (condicionesEntornoValidas.has(v)) return true;
+                errores.push({ fila: i + 2, motivo: `condición no aplicable "${v}" no existe en la lista condicionesEntorno` });
+                return false;
+            });
+
             try {
                 await TipoTrabajo.findOneAndUpdate(
-                    { nombre },
-                    { nombre, sinonimos: normLista(f.sinonimos), plantillaTexto: normStr(f.plantillaTexto), campos },
+                    { $or: [{ codigoTipo }, { nombre }] },
+                    {
+                        codigoTipo, nombre,
+                        sinonimos: normLista(f.sinonimos),
+                        plantillaTexto: normStr(f.plantillaTexto),
+                        campos,
+                        condicionesNoAplicables,
+                        sugerencias: sugerenciasPorTipo.get(codigoTipo) || [],
+                    },
                     { upsert: true, new: true, runValidators: true }
                 );
                 insertados.push(nombre);
@@ -292,7 +420,7 @@ exports.importarTiposTrabajo = async (req, res) => {
             }
         }
 
-        res.json({ total: filasTipos.length, insertados: insertados.length, errores });
+        res.json({ total: filasTipos.length, insertados: insertados.length, catalogosTransversales: catalogosInsertados.length, errores });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
@@ -410,9 +538,13 @@ exports.exportarSolicitudes = async (req, res) => {
 
 exports.exportarTiposTrabajo = async (req, res) => {
     const TipoTrabajo = getTipoTrabajo(req.db);
+    const CatalogoTransversal = getCatalogoTransversal(req.db);
     try {
-        const tipos = await TipoTrabajo.find().lean();
-        const wb = construirWorkbookCatalogo(tipos);
+        const [tipos, catalogosTransversales] = await Promise.all([
+            TipoTrabajo.find().lean(),
+            CatalogoTransversal.find().lean(),
+        ]);
+        const wb = construirWorkbookCatalogo(tipos, catalogosTransversales);
         const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
         res.setHeader('Content-Disposition', 'attachment; filename="catalogo_tipos_trabajo.xlsx"');
         res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
@@ -438,29 +570,32 @@ exports.plantillaPuestos = (_req, res) => {
     const filas = [{ nombre: 'Electricista', costoHora: 8000, categoria: 'Técnico' }];
     enviarExcel(res, filas, 'Puestos', 'plantilla_puestos.xlsx');
 };
-// Ejemplo lleno de "Cambio de línea" (mismo del plan §7) — más útil como punto de partida
-// que una fila vacía, dado que el catálogo tiene 3 hojas relacionadas entre sí. Las
-// condiciones de entorno son un campo más (seleccionMultiple), no un catálogo aparte.
+// Ejemplo lleno de "Cambio de línea" (docs/plan-formulario-adaptativo.md §8) — más útil como
+// punto de partida que una fila vacía, dado que el catálogo tiene 7 hojas relacionadas entre
+// sí. Las condiciones de entorno y el resto de listas transversales ya NO son un campo más de
+// este tipo — se referencian directo en la plantilla de texto y se resuelven contra la hoja
+// "Catálogos transversales".
 exports.plantillaTiposTrabajo = (_req, res) => {
     const tipoEjemplo = [{
+        codigoTipo: 'CAMBIO_DE_LINEA',
         nombre: 'Cambio de línea',
         sinonimos: ['cañería', 'tubería', 'línea de proceso'],
-        plantillaTexto: 'Cambio de línea de {diametro} {material}, {trazado}, transporta {fluido}, en {planta}, condiciones: {condicionesEntorno}',
+        plantillaTexto: 'Cambio de línea de {diametro} {material}, {trazado}, transporta {fluido}, en {planta}. Condiciones de terreno: {condicionesEntorno}.',
+        condicionesNoAplicables: ['Energizado'],
         campos: [
             { clave: 'diametro', etiqueta: 'Diámetro', tipoDato: 'seleccionUnica', obligatorio: true, orden: 1, opciones: ['2 pulgadas', '4 pulgadas', '6 pulgadas'] },
             { clave: 'material', etiqueta: 'Material', tipoDato: 'seleccionUnica', obligatorio: true, orden: 2, opciones: ['inoxidable', 'carbono', 'PVC'] },
             { clave: 'trazado', etiqueta: 'Trazado', tipoDato: 'seleccionUnica', obligatorio: false, orden: 3, opciones: ['línea recta', 'con codos'] },
             { clave: 'fluido', etiqueta: 'Fluido que transporta', tipoDato: 'seleccionUnica', obligatorio: true, orden: 4, opciones: ['agua', 'ácido', 'vapor'] },
             { clave: 'planta', etiqueta: 'Área o planta', tipoDato: 'texto', obligatorio: true, orden: 5, opciones: [] },
-            { clave: 'equipoReferencial', etiqueta: 'Equipo referencial', tipoDato: 'texto', obligatorio: false, orden: 6, opciones: [] },
-            { clave: 'fechaTentativa', etiqueta: 'Fecha de ejecución tentativa', tipoDato: 'fecha', obligatorio: false, orden: 7, opciones: [] },
-            { clave: 'duracionTentativa', etiqueta: 'Duración tentativa', tipoDato: 'numero', obligatorio: false, orden: 8, opciones: [] },
-            { clave: 'fotoActual', etiqueta: 'Foto referencial del estado actual', tipoDato: 'foto', obligatorio: false, orden: 9, opciones: [] },
-            { clave: 'fotoEsperada', etiqueta: 'Foto de lo esperado', tipoDato: 'foto', obligatorio: false, orden: 10, opciones: [] },
-            { clave: 'condicionesEntorno', etiqueta: 'Condiciones de entorno', tipoDato: 'seleccionMultiple', obligatorio: false, orden: 11, opciones: ['Energizado', 'Ambiente ácido', 'A la intemperie', 'Excavación', 'Apertura de línea', 'Bloqueo de línea'] },
         ],
+        sugerencias: [],
     }];
-    const wb = construirWorkbookCatalogo(tipoEjemplo);
+    const catalogoEjemplo = [{
+        clave: 'condicionesEntorno',
+        valores: ['Energizado', 'Ambiente ácido', 'A la intemperie', 'Excavación', 'Apertura de línea', 'Bloqueo de línea'].map(valor => ({ valor, categoria: '' })),
+    }];
+    const wb = construirWorkbookCatalogo(tipoEjemplo, catalogoEjemplo);
     const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
     res.setHeader('Content-Disposition', 'attachment; filename="plantilla_tipos_trabajo.xlsx"');
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
@@ -528,8 +663,12 @@ exports.exportarBatch = async (req, res) => {
         }
         if (lista.includes('tipos-trabajo')) {
             const TipoTrabajo = getTipoTrabajo(req.db);
-            const tipos = await TipoTrabajo.find().lean();
-            agregarHojasCatalogo(wb, tipos);
+            const CatalogoTransversal = getCatalogoTransversal(req.db);
+            const [tipos, catalogosTransversales] = await Promise.all([
+                TipoTrabajo.find().lean(),
+                CatalogoTransversal.find().lean(),
+            ]);
+            agregarHojasCatalogo(wb, tipos, catalogosTransversales);
         }
 
         if (!wb.SheetNames.length) return res.status(400).json({ error: 'No se generaron datos' });

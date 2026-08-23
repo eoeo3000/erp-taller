@@ -3,7 +3,17 @@
 Documento de planificación, sin código. Cubre solo el Informe de Evaluación (Gap 1 de
 [funcionalidades-v2.md](funcionalidades-v2.md)) — quedan fuera de esta fase los Informes de
 Ejecución, el formulario de solicitud del cliente, y cualquier generación automática del
-catálogo con IA (ver §13 para la ruta de extensión futura).
+catálogo con IA (ver §14 para la ruta de extensión futura).
+
+**Segunda versión de este documento.** La primera versión ya se implementó parcialmente
+(catálogo `TipoTrabajo` plano, motor de sugerencia, motor de texto, "hallazgo como lienzo en
+blanco" en la PWA). Este documento incorpora un catálogo nuevo, mucho más rico, entregado por
+el dueño del negocio (`plantilla_tipos_trabajo.xlsx`, 30 tipos de trabajo, 7 hojas), que cambia
+el modelo de una lista plana a un modelo de dos niveles: campos propios de cada tipo +
+catálogos transversales compartidos por casi todos + sugerencias premarcadas por tipo. Todo lo
+que ya se construyó en la primera fase se conserva (motor de texto, motor de sugerencia, fotos,
+"lienzo en blanco", caso no cubierto) — lo que se agrega es la capa de catálogos transversales
+y sugerencias, que hoy no existe.
 
 Convención de este documento: cuando algo ya existe y se verificó leyendo el código, se dice
 en presente y se cita el archivo. Cuando se propone algo nuevo, se dice en futuro/condicional.
@@ -11,668 +21,643 @@ Las ambigüedades quedan marcadas como **Requiere confirmación**.
 
 ---
 
+## 0. Resultado de la verificación de integridad del Excel
+
+Antes de diseñar nada, se verificó programáticamente el archivo entregado
+(`plantilla_tipos_trabajo.xlsx`, la versión más reciente de varias que había en Descargas —
+confirmado por fecha de modificación y por ser la única con las 7 hojas descritas). Resumen:
+
+| Verificación | Resultado |
+|---|---|
+| `codigoTipo` duplicado en "Tipos de trabajo" | Ninguno — 30 códigos únicos |
+| Marcador `{clave}` de una `plantillaTexto` sin campo propio ni clave transversal que lo resuelva | Ninguno — los 30 tipos resuelven el 100% de sus marcadores |
+| `codigoTipo` en "Campos" que no existe en "Tipos de trabajo" | Ninguno |
+| Campo `seleccionUnica` sin ninguna fila en "Opciones" | Ninguno |
+| Fila en "Opciones" que no corresponde a un campo `seleccionUnica` declarado | Ninguna |
+| `codigoTipo` en "Opciones" que no existe en "Tipos de trabajo" | Ninguno |
+| Valor de "Sugerencias por tipo" que no existe en "Catálogos transversales" | **6 casos — ver hallazgo abajo** |
+| `codigoTipo` en "Sugerencias por tipo" que no existe en "Tipos de trabajo" | Ninguno |
+| `lista` usada en "Sugerencias por tipo" o "Catálogos transversales" que no está en "Índice de listas" | Ninguna |
+| Valores de `condicionesNoAplicables` que no pertenecen a la lista `condicionesEntorno` | Ninguno — los 19 tipos que declaran alguna, todas válidas |
+| Filas con `codigoTipo`/`clave`/`lista`/`valor` vacíos | Ninguna |
+
+**El archivo está sano.** El único hallazgo real es el siguiente:
+
+**Hallazgo — 6 filas de "Sugerencias por tipo" no son un valor de catálogo, son un marcador
+especial.** Para los 6 tipos que incluyen `{obrasCiviles}` en su plantilla (`CAMBIO_DE_BOMBA`,
+`CAMBIO_DE_MOTOR`, `CAMBIO_REDUCTOR`, `FABRICACION_SOPORTE`, `REPARACION_ESTANQUE`,
+`OBRAS_CIVILES_BASE`), la hoja trae una fila con `lista=obrasCiviles`,
+`valor="(aplica — seleccionar en terreno)"`, `porDefecto=No`. Ese texto entre paréntesis no es
+ninguna de las 10 opciones reales de la lista `obrasCiviles` en "Catálogos transversales" (que
+son "No requiere", "Reparación de base de bomba", "Nueva fundación", etc.) — es, a todas luces,
+una nota del autor del Excel para señalar "este tipo usa esta lista, pero no hay un valor
+premarcado sensato, se elige en terreno", no un dato de catálogo real.
+
+Da la casualidad de que esta señal ya es redundante con otra cosa que el archivo ya dice: los 6
+tipos que necesitan `obrasCiviles` son exactamente los mismos 6 cuya `plantillaTexto` incluye el
+marcador `{obrasCiviles}` (verificado por conteo — ver §0 tabla, fila de marcadores). Es decir,
+la plantilla de texto **ya es** la fuente de verdad de qué tipos usan qué lista transversal,
+premarcada o no. La fila de "Sugerencias por tipo" con ese texto entre paréntesis no aporta
+información nueva, solo la repite de una forma que no encaja en el modelo de datos (un valor de
+catálogo real).
+
+**Propuesta (marcada como Requiere confirmación en §Supuestos): al importar, estas 6 filas no
+se guardan como una sugerencia premarcada** — se reconocen por patrón (valor entre paréntesis
+que no matchea ningún valor real de esa lista) y se descartan silenciosamente, sin reportarlas
+como error de fila. La aplicabilidad de `obrasCiviles` para esos 6 tipos queda determinada
+enteramente por la presencia del marcador `{obrasCiviles}` en su `plantillaTexto` (ver §3.3 y
+§5). Alternativa, si no se confirma la anterior: importar la fila igual pero jamás mostrarla
+como sugerencia (mismo resultado práctico, más código de caso especial). Cualquiera de las dos
+es consistente con el resto del diseño de abajo.
+
+---
+
 ## 1. Diagnóstico del Informe de Evaluación actual
 
-El Informe de Evaluación **ya existe**, pero como dos implementaciones separadas y con
-alcance distinto — un hallazgo importante para lo que sigue, porque el formulario adaptativo
-tendría que vivir principalmente en la que hoy es más pobre.
+El Informe de Evaluación **ya existe**, con la primera fase del formulario adaptativo ya
+construida, pero de forma desigual entre escritorio y teléfono — un hallazgo importante,
+porque cambia dónde tiene que enfocarse el trabajo de esta fase.
 
-**En el escritorio** (`erp-web/src/screens/TratamientoScreen.jsx`), es la pestaña **"0 ·
-Informe Inicial"**, la primera del flujo de Tratamiento, y bloquea el acceso a "1 · Tareas" y
-las pestañas siguientes hasta marcarse `completo` (con la excepción de OTs que ya traían
-contenido de antes de que existiera esta pestaña, para no exigirles completarlo en
-retroactivo). Captura:
+**En la PWA Operativa** (`erp-pwa-operativa/src/screens/O5_InformeEvaluacion.jsx`), el informe
+**ya es** el formulario adaptativo: no hay wizard de pasos (se eliminó en la iteración
+anterior), la pantalla completa es un solo hallazgo — un cuadro de texto en blanco
+(`EditorHallazgo.jsx`) que sugiere tipos de trabajo mientras se escribe, y una vez elegido un
+tipo, muestra la plantilla de texto con sus espacios en blanco tocables, más fotos. Botones
+"Volver" / "Guardar y salir", sin lista de hallazgos ni botón "+ Agregar hallazgo" (decisión
+explícita: **un informe captura un solo hallazgo**, no varios — el modelo de datos
+(`OT.informeEvaluacion.hallazgos[]`) sigue siendo un arreglo por si se decide revertir esto más
+adelante, pero la pantalla de hoy solo lee/escribe la posición `[0]`).
 
-- Cuatro campos cualitativos de texto libre: fecha, responsable, condiciones del sitio,
-  riesgos, metodología, recursos observados.
-- Fotos del sitio (arreglo simple de URLs).
-- **Tareas, componentes y logística estructurados** — los mismos tres sub-esquemas que ya
-  usa `Plantilla` (descripción/puesto/duración; código/descripción/cantidad/precio/tipo;
-  descripción/cantidad/unidad/precio) — con un botón "Aplicar a la OT" que los copia a los
-  arreglos reales de la OT, exactamente como ya funciona "Aplicar Plantilla" hoy.
+**En escritorio** (`erp-web/src/screens/TratamientoScreen.jsx`, pestaña "0 · Informe Inicial"),
+la pantalla es **de solo lectura**: muestra el estado (completo/pendiente), la cuenta de
+hallazgos registrados (y cuántos quedaron como "caso no cubierto"), y una vez completo, las
+listas de tareas/componentes/logística que el informe generó, con un botón "Aplicar a la OT →".
+El texto en pantalla lo dice explícitamente: *"El detalle del informe (condiciones del sitio,
+riesgos, hallazgos y fotos) se completa desde la aplicación del supervisor en terreno."*
 
-**En la PWA Operativa** (`erp-pwa-operativa/src/screens/O5_InformeEvaluacion.jsx`), es un
-asistente de 4 pasos que captura **solo** los cuatro campos cualitativos (condiciones del
-sitio, riesgos — con una lista de riesgos comunes seleccionables más "otro riesgo" en texto
-libre —, metodología, recursos observados) más fotos. **No captura tareas, componentes ni
-logística** — esa parte del modelo existe en `OT.informeEvaluacion` pero la pantalla móvil no
-la usa en absoluto. En terreno, hoy solo se puede levantar la mitad cualitativa del informe.
+**Hallazgo real, no documentado hasta ahora**: existe un archivo
+`erp-web/src/screens/EditorHallazgo.jsx`, construido en paralelo al de la PWA con la misma
+lógica (mismo `motorTexto`/`motorSugerencia`/`hallazgos.js` duplicados, mismo diseño de
+segmentos tocables), pero **no se usa en ningún lado** — no hay ningún `import` de ese archivo
+en el resto de `erp-web/src` (confirmado por búsqueda). Es código construido pero nunca
+conectado a `TratamientoScreen`. Esto contradice una decisión que la primera versión de este
+documento daba por confirmada (§10 de la versión anterior: *"los hallazgos se pueden editar
+desde escritorio"*) — la intención existía y el componente se construyó, pero la integración a
+`TratamientoScreen` nunca se hizo. Se marca en §Supuestos como una decisión que hay que retomar:
+¿se conecta ahora ese componente ya construido, o se confirma que el Informe de Evaluación debe
+seguir siendo exclusivo de terreno y ese archivo se da de baja?
 
-**Consecuencia para este proyecto**: el formulario adaptativo (búsqueda por palabras clave,
-campos dinámicos, texto generado) tiene sentido principalmente como una forma más rápida y
-completa de llenar la parte de texto libre — hoy "condiciones del sitio" o el campo donde el
-supervisor describiría "cambié la cañería de 4 pulgadas" son cuadros de texto en blanco.
-
-**Decisión confirmada: cada hallazgo se "encasilla" directamente en una tarea.** A diferencia
-de lo que este documento asumía en su primera versión, el formulario adaptativo **sí** alimenta
-`informeEvaluacion.tareas[]` — un hallazgo no es un dato aparte que coexiste con las tareas, es
-la forma nueva y más rica de generar cada tarea. El mecanismo exacto queda detallado en §3.4 y
-§10.1: cada hallazgo mantiene sincronizada una tarea propia (descripción = texto generado,
-duración tentativa si el tipo de trabajo la define), y esa tarea sigue el mismo camino que ya
-existe hoy ("Aplicar a la OT") sin cambios en ese último paso.
+**Consecuencia para este proyecto**: el catálogo nuevo (30 tipos, campos propios + listas
+transversales + sugerencias premarcadas) se apoya sobre una base que ya funciona
+(motor de sugerencia, motor de texto, fotos, caso no cubierto) — el trabajo de esta fase es
+extender esa base para soportar el modelo de dos niveles, no construir el formulario adaptativo
+desde cero.
 
 ---
 
 ## 2. Decisión sobre reutilizar o no el modelo `Plantilla`
 
-**Decisión: no se reutiliza ni se extiende `Plantilla`. Se crea un modelo nuevo.**
+**Se mantiene la decisión de la primera versión: no se reutiliza ni se extiende `Plantilla`.**
 
-`Plantilla` (`erp-backend/src/models/Plantilla.js`) es un **paquete de trabajo ya armado**:
-un conjunto concreto de tareas, componentes y logística que el Planificador aplica de una vez
-a una OT ("este tipo de trabajo típicamente lleva estas 5 tareas y estos 3 materiales"). Es
-una entidad plana, sin campos parametrizables ni opciones por campo — se usa tal cual está
-guardada.
-
-Lo que pide este proyecto es distinto en su naturaleza: no es "qué conjunto de tareas
-insertar", es "qué preguntas hacerle al supervisor sobre lo que está viendo, y cómo convertir
-sus respuestas en una frase". Cada tipo de trabajo del catálogo nuevo necesita: una lista de
-campos propios (no siempre los mismos: "cambio de línea" pide diámetro y material, otro tipo
-de trabajo podría pedir otra cosa), opciones válidas por campo, sinónimos para que la búsqueda
-lo encuentre, y una plantilla de **texto**, no de tareas. Ninguno de esos cuatro conceptos
-existe en `Plantilla` hoy, y agregarlos ahí mezclaría dos responsabilidades que hoy están sanas
-por estar separadas: "qué tareas insertar" (uso ya establecido de `Plantilla`, con sus propios
-consumidores en `TratamientoScreen`) y "cómo redactar una observación de terreno" (lo nuevo).
-
-Se propone un modelo separado, aquí llamado **`TipoTrabajo`** (nombre de trabajo, no de
-colección — el nombre final de la colección es una decisión de implementación menor). Ver
-§3.
-
-**Extensión futura señalada, no implementada ahora**: una vez elegido un `TipoTrabajo` y
-llenados sus campos, podría sugerirse opcionalmente una `Plantilla` relacionada (si existiera
-un vínculo entre ambos catálogos) para acelerar además el armado de tareas/componentes. No se
-diseña ni se implementa en esta fase — se deja anotado como posibilidad, igual de barata de
-agregar después precisamente porque los dos modelos quedan desacoplados ahora.
+`Plantilla` (`erp-backend/src/models/Plantilla.js`) es un paquete de tareas/componentes/
+logística ya armado, sin campos parametrizables — se aplica tal cual. `TipoTrabajo` (existente,
+`erp-backend/src/models/TipoTrabajo.js`) es un esquema de preguntas para describir una
+observación de terreno y generar texto. Los dos catálogos nuevos que agrega esta versión
+(catálogos transversales, sugerencias premarcadas) son una extensión natural de `TipoTrabajo`,
+no un motivo para acercarlo a `Plantilla` — siguen siendo "qué preguntar y qué texto producir",
+nunca "qué tareas insertar". La razón de fondo no cambió respecto a la primera versión de este
+documento.
 
 ---
 
-## 3. Modelo de datos
+## 3. Modelo de datos Mongoose propuesto
 
-Tres piezas de datos distintas, coherente con las "tres piezas separadas" de arquitectura del
-encargo: el catálogo (configuración), el motor de texto (lógica, sin estado propio) y el
-motor de sugerencia (lógica, sin estado propio). Acá se detalla solo lo que sí es dato.
+Tres piezas nuevas o extendidas: `TipoTrabajo` (extendido), `CatalogoTransversal` (nueva
+colección), y el `hallazgo` capturado dentro de `OT.informeEvaluacion` (sin cambios de forma,
+solo de contenido — ver §3.4).
 
-### 3.1 Catálogo: `TipoTrabajo`
-
-Colección nueva, uno por cada tipo de trabajo del catálogo ("Cambio de línea", y los que se
-agreguen después).
+### 3.1 `TipoTrabajo` — extendido
 
 ```
 TipoTrabajo
-  nombre            String (requerido) — "Cambio de línea"
-  sinonimos         [String] — palabras o frases alternativas para que la búsqueda lo
-                    encuentre ("cañería", "tubería", "línea de proceso")
-  plantillaTexto    String — la plantilla con marcadores:
-                    "Cambio de línea de {diametro} {material}, {trazado}, transporta
-                     {fluido}, en {planta}"
-  campos            [ver 3.2] — los campos propios de este tipo, en el orden en que
-                    deben mostrarse
-  condicionesNoAplicables  [ObjectId ref CondicionEntorno] — condiciones del catálogo
-                    transversal (§3.3) que no tiene sentido ofrecer para este tipo de
-                    trabajo (ver justificación en 3.3)
-  activo            Boolean, default true — para retirar un tipo del catálogo sin borrar
-                    el historial de informes que ya lo usaron
+  codigoTipo         String (requerido, único) — "CAMBIO_DE_BOMBA". NUEVO.
+  nombre             String (requerido) — "Cambio de bomba"
+  sinonimos          [String]
+  plantillaTexto     String — con marcadores {clave}, tal como ya existe
+  campos             [ver 3.2] — SOLO los campos propios de este tipo (ya no incluye
+                     condiciones de entorno ni ninguna lista transversal — eso ahora se
+                     resuelve aparte, ver 3.3)
+  condicionesNoAplicables  [String] — NUEVO (reemplaza a la versión de la primera fase de
+                     este documento, que proponía una colección `CondicionEntorno` aparte;
+                     esa colección nunca se implementó, así que no hay migración de datos que
+                     resolver). Valores de la lista transversal `condicionesEntorno` que no
+                     tiene sentido ofrecer para este tipo — igual criterio que la primera
+                     versión: lista de exclusión, no de inclusión, sobre un catálogo que por
+                     defecto ofrece todo a todos.
+  sugerencias        [ver 3.3.1] — NUEVO. Qué valores de qué listas transversales vienen
+                     premarcados para este tipo.
+  activo             Boolean, default true
 ```
 
-### 3.2 Campos de un `TipoTrabajo` (sub-documento embebido, no colección aparte)
+**Por qué `codigoTipo` como llave nueva, reemplazando a `nombre`**: hoy el importador hace
+upsert por `nombre` (`importarTiposTrabajo`, `erp-backend/src/controllers/
+importExportController.js`). El Excel nuevo ya trae su propio código corto y estable
+(`CAMBIO_DE_BOMBA`) pensado exactamente para enlazar filas entre hojas — conviene usarlo
+también como llave de upsert en Mongo, no solo como columna de enlace dentro del archivo, por
+dos razones: (a) si algún día se retitula un tipo ("Cambio de bomba" → "Reemplazo de bomba"),
+el código no cambia y la reimportación sigue actualizando el mismo documento en vez de crear
+uno duplicado; (b) las "Sugerencias por tipo" y las condiciones no aplicables se escriben
+contra `codigoTipo`, así que tenerlo como campo propio (no derivado con `slugCodigo(nombre)`
+como hace el importador de hoy) evita que un cambio de nombre rompa esos enlaces la próxima vez
+que se reimporte. **Migración**: el catálogo real hoy en producción está vacío o con datos de
+prueba (no hay indicio de catálogo real cargado en producción a la fecha de este documento) —
+no se anticipa migración de datos, pero se deja como advertencia para quien implemente.
+
+### 3.2 Campos de un `TipoTrabajo` — sin cambios de forma
+
+Se mantiene igual que la primera versión de este documento: `clave`, `etiqueta`, `tipoDato`
+(`texto | numero | seleccionUnica | seleccionMultiple | fecha | foto`), `opciones`,
+`obligatorio`, `orden`. El catálogo nuevo no usa `seleccionMultiple` a nivel de campo propio en
+ninguno de sus 30 tipos (las selecciones múltiples de este archivo son todas transversales,
+ver 3.3) pero se conserva el valor en el enum por si algún tipo de trabajo futuro necesita un
+campo propio de selección múltiple que no tenga sentido compartir con otros tipos.
+
+**Siete campos comunes**: el archivo repite, idénticos, siete campos en los 30 tipos —
+`planta` (texto), `equipoReferencial` (texto), `estandarTorque` (texto), `fechaTentativa`
+(fecha), `duracionTentativa` (numero — el mismo que ya lee `hallazgos.js`,
+`guardarHallazgoEnInforme`, para la duración de la tarea vinculada), `fotoActual` (foto),
+`fotoEsperada` (foto). No requieren ningún concepto nuevo de modelo — son campos propios
+repetidos 30 veces en la hoja "Campos", exactamente como ya funciona hoy. Se deja anotado como
+mejora de conveniencia de autoría, no de modelo: una futura hoja "Campos comunes" en el Excel
+evitaría repetir esas 210 filas (30 tipos × 7 campos) a mano — no se implementa en esta fase.
+
+### 3.3 `CatalogoTransversal` — colección nueva
+
+Reemplaza y generaliza a `CondicionEntorno`, que la primera versión de este documento proponía
+como colección aparte y que **nunca llegó a implementarse** (se verificó: no existe
+`erp-backend/src/models/CondicionEntorno.js` ni rastro de ella en el código actual, así que no
+hay que migrar nada). El catálogo nuevo trae 9 listas transversales, no solo condiciones de
+entorno: `condicionesEntorno`, `tipoEquipo`, `trabajosPrevios`, `tareasSecundarias`,
+`materiales`, `tareasHabilitadoras`, `riesgos`, `obrasCiviles`, `trabajosCierre` — comunes a
+casi todos los tipos de trabajo, no propias de ninguno.
 
 ```
-Campo
-  clave             String — el nombre que aparece entre llaves en la plantilla de texto
-                    ("diametro", "material", "planta"); debe ser único dentro del mismo
-                    TipoTrabajo
-  etiqueta          String — lo que ve el supervisor ("Diámetro", "Material")
-  tipoDato          enum: texto | numero | seleccionUnica | seleccionMultiple | fecha | foto
-  opciones          [String] — solo aplica a seleccionUnica/seleccionMultiple ("4 pulgadas",
-                    "6 pulgadas", "8 pulgadas" / "inoxidable", "carbono", "PVC")
-  obligatorio       Boolean — si falta, la plantilla de texto deja ese marcador visualmente
-                    incompleto (ver §5) pero no bloquea guardar el informe completo
-  orden             Number — posición en el formulario
+CatalogoTransversal
+  clave        String (requerido, único) — "condicionesEntorno", "riesgos", etc. — es el
+               mismo nombre que aparece como marcador {clave} en las plantillas de texto
+  descripcion  String — para quien administra el catálogo, no se muestra al supervisor
+  seleccion    enum: unica | multiple
+  valores      [ { valor: String, categoria: String } ] — embebido, mismo criterio que
+               `campos` dentro de TipoTrabajo: siempre se lee junto con su lista completa,
+               nunca un valor suelto. `categoria` solo la usa hoy la lista
+               `tareasSecundarias` (agrupa en Desmontaje/Traslado/Taller/Montaje/Ajuste y
+               verificación, ver §6) — vacía para el resto.
 ```
 
-**Por qué embebido y no colección propia**: los campos no se reutilizan entre tipos de
-trabajo distintos (el campo "diámetro" de "Cambio de línea" no es el mismo objeto que un
-eventual "diámetro" de otro tipo, aunque se llamen igual) y siempre se leen junto con su
-`TipoTrabajo` completo, nunca sueltos — el mismo criterio que ya sigue el proyecto con los
-sub-esquemas de `Plantilla` (`tareas`, `componentes`, `logistica`), que tampoco son
-colecciones aparte.
+**Por qué una colección nueva y no una extensión de `TipoTrabajo.campos`**: estos valores son
+literalmente los mismos para 29 o 30 de los 30 tipos de trabajo (todos menos, cuando
+corresponde, `obrasCiviles`) — repetirlos como `campo.opciones` dentro de cada `TipoTrabajo`
+significaría guardar y mantener sincronizadas 30 copias de la misma lista de 16 condiciones de
+entorno. Es exactamente el mismo argumento que ya usaba la primera versión de este documento
+para `CondicionEntorno` (§3.3 de esa versión), solo que ahora aplica a 9 listas, no a 1. La
+columna `universal` de "Índice de listas" (Sí para 8 de las 9, No solo para `obrasCiviles`) es
+información para quien arma el catálogo ("vas a usar esta lista en casi todos los tipos que
+crees"), **no** una regla que el motor de texto tenga que aplicar en tiempo de ejecución — la
+aplicabilidad real de una lista para un tipo dado queda determinada enteramente por si su
+marcador `{clave}` aparece en la `plantillaTexto` de ese tipo (confirmado en la verificación de
+§0: los 6 tipos con `{obrasCiviles}` son exactamente los 6 con alguna fila de "obras civiles"
+pensada para ellos, ningún otro tipo la necesita). Esto simplifica el motor: no hace falta que
+sepa qué lista es "universal", solo tiene que fijarse en qué marcadores trae la plantilla de
+cada tipo — igual que ya hace hoy con los campos propios.
 
-### 3.3 Condiciones del entorno — catálogo transversal, no por tipo de trabajo
-
-**Evaluación pedida**: la lista de ejemplo (pretil de ácido, polución, inundado, ambiente
-ácido, a la intemperie, excavación, pretil, apertura de línea, bloqueo de línea, energizado,
-alineación) describe el **lugar y las circunstancias de la faena**, no algo propio de
-"cambiar una línea" en particular. Un "cambio de línea" y, por ejemplo, una reparación de
-motor pueden darse igual de bien en un ambiente ácido o a la intemperie. Son transversales.
-
-**Decisión**: catálogo propio, plano, **no anidado dentro de `TipoTrabajo`**:
-
-```
-CondicionEntorno
-  nombre    String (requerido) — "Ambiente ácido"
-  activo    Boolean, default true
-```
-
-Cada hallazgo capturado (ver 3.4) guarda una lista de condiciones seleccionadas de este
-catálogo único, sin importar qué `TipoTrabajo` se haya elegido. Esto evita repetir la misma
-lista de 11 condiciones dentro de cada tipo de trabajo del catálogo — y si mañana se agrega un
-tipo de trabajo número 40, las condiciones de entorno ya existen, no hay que volver a
-cargarlas.
-
-**Decisión confirmada: sí se puede marcar una condición como "no aplica" para cierto tipo de
-trabajo.** Se modela como una lista de exclusión, no de inclusión: por defecto todas las
-condiciones del catálogo transversal están disponibles para todos los tipos de trabajo (así el
-catálogo de condiciones no hay que volver a asociarlo tipo por tipo), y cada `TipoTrabajo`
-guarda solo las que decide **excluir** (`condicionesNoAplicables`, §3.1) — una lista casi
-siempre corta, más cómoda de mantener que tener que marcar manualmente qué condiciones sí
-aplican en cada uno de los tipos de trabajo del catálogo. En la pantalla/formulario, al elegir
-un tipo de trabajo, la lista de condiciones de entorno que se ofrece es el catálogo completo
-menos las excluidas por ese tipo.
-
-### 3.4 Dato capturado: `hallazgos[]` dentro de `OT.informeEvaluacion`
-
-Una visita de evaluación puede levantar más de una observación (dos tramos de cañería
-distintos, un motor y una línea). Se agrega un arreglo nuevo al esquema ya existente de
-`OT.informeEvaluacion` — **aditivo**, no reemplaza nada de lo que ya hay ahí (`condicionesSitio`,
-`riesgos`, `metodologia`, `recursosObservados`, `tareas`, `componentes`, `logistica` siguen
-existiendo tal cual):
+### 3.3.1 Sugerencias premarcadas — embebidas en `TipoTrabajo`, no colección aparte
 
 ```
-OT.informeEvaluacion.hallazgos[]
-  tipoTrabajoId          ObjectId ref TipoTrabajo, opcional — vacío si el supervisor nunca
-                         eligió un tipo del catálogo (ver "caso no cubierto", §9)
-  valores                Objeto libre clave -> valor, una entrada por cada campo.clave del
-                         TipoTrabajo elegido (o vacío si no hay tipo elegido)
-  condicionesEntorno     [ObjectId ref CondicionEntorno]
-  textoGenerado          String — lo que produce el motor de texto a partir de la plantilla
-                         y los valores; se recalcula solo mientras textoEditadoManualmente
-                         sea false (ver §5, y la función de deshacer más abajo)
-  textoDescriptivo       String — el texto final vigente (igual a textoGenerado mientras no
-                         se edite a mano; distinto una vez editado)
-  textoEditadoManualmente Boolean, default false — ver §5
-  fotos                  [String] — URLs de archivo, nunca base64 (ver §6)
-  casoNoCubierto         Boolean, default false — ver §9
-  tareaVinculadaId       String — id del sub-documento de `informeEvaluacion.tareas[]` que
-                         este hallazgo mantiene sincronizado (ver 3.4.1)
-  fecha                  Date, default ahora
+TipoTrabajo.sugerencias   [ { lista: String, valor: String } ]
 ```
 
-**Por qué embebido en la OT y no colección propia**: mismo criterio que ya usa el resto de
-`informeEvaluacion` y que `Plantilla`/`OT.tareas` — es información que solo tiene sentido
-leída junto con la OT a la que pertenece, no se consulta suelta desde ningún otro lugar del
-sistema salvo el listado de "casos no cubiertos" (§9), que puede recorrer todas las OT
-igualmente bien con una consulta filtrando por el campo anidado.
+Cada entrada dice "para este tipo de trabajo, este valor de esta lista transversal viene
+premarcado". Se guarda embebido en el propio `TipoTrabajo` (mismo criterio que `campos`: se lee
+siempre junto con el tipo elegido, nunca suelto) en vez de en una colección de relación aparte
+— es una lista corta por tipo (entre 20 y 50 entradas según el tipo, según la hoja real) y
+siempre se consulta completa al elegir un tipo de trabajo.
 
-### 3.4.1 Sincronización hallazgo → tarea
+**Simplificación respecto a la columna `porDefecto` del Excel**: en los datos reales
+entregados, `porDefecto` es `Sí` en el 100% de las 790 filas reales (las 6 restantes son el
+marcador especial de §0, no un valor real). No hay ningún caso en el archivo de "sugerencia
+mostrada pero no premarcada". Por eso el modelo de arriba no guarda ese booleano: la sola
+presencia de una entrada en `sugerencias[]` ya significa "premarcado". **Requiere
+confirmación**: si en el futuro se necesita distinguir "premarcado" de "sugerido pero no
+premarcado" (por ejemplo, una lista de materiales frecuentes que se muestran como acceso rápido
+pero empiezan destildados), habría que reintroducir el booleano — no se hace ahora porque el
+archivo actual no lo necesita y agregar un campo que ningún dato usa hoy sería sobre-diseño.
 
-**Decisión confirmada**: cada hallazgo mantiene sincronizada una fila propia en
-`informeEvaluacion.tareas[]` (el mismo arreglo que ya existe y que el botón "Aplicar a la OT"
-ya copia a `OT.tareas[]`, sin cambios en ese último paso):
+Solo tres listas tienen sugerencias en el archivo real: `tareasSecundarias`, `materiales`,
+`riesgos` — nunca `condicionesEntorno`, `tipoEquipo`, `trabajosPrevios`, `tareasHabilitadoras`
+ni `trabajosCierre` (verificado: cero filas de esas cinco listas en toda la hoja "Sugerencias
+por tipo"). Tiene sentido con la naturaleza de cada lista: las tres que sí se premarcan
+describen "lo que esta tarea principal típicamente arrastra" (§ Instrucciones del propio
+archivo); las otras cinco son más situacionales (qué encontró el supervisor en terreno, qué
+tipo de equipo es, qué había que hacer antes) y no tiene sentido asumirlas de antemano.
 
-- Al crear un hallazgo, se agrega una tarea nueva con `descripcion = textoDescriptivo` y
-  `duracion` tomada de `valores.duracionTentativa` si el tipo de trabajo elegido define un
-  campo con esa clave (como en el ejemplo de "Cambio de línea", §7) — o `0` si no hay ese dato.
-  El `_id` de esa tarea queda guardado en `hallazgo.tareaVinculadaId`.
-- Mientras el hallazgo no se edite manualmente en su texto (§5), cualquier cambio en los
-  campos que cambie `textoDescriptivo` actualiza también la `descripcion` de su tarea
-  vinculada.
-- **Eliminar un hallazgo elimina también su tarea vinculada** (no quedan tareas huérfanas sin
-  hallazgo de origen). Fecha, hora, operario y puesto de la tarea se siguen completando aparte,
-  igual que hoy — el hallazgo nunca los toca, solo la descripción y, cuando aplica, la
-  duración tentativa.
-- Una tarea agregada directamente en el editor de tareas de siempre (sin pasar por un
-  hallazgo) simplemente no tiene `tareaVinculadaId` — convive sin problema con las que sí vienen
-  de un hallazgo; no todas las tareas del informe tienen por qué nacer de un hallazgo.
+### 3.4 Dato capturado: `hallazgo` — sin cambios de esquema, cambia solo cómo se llena
 
-**Requiere confirmación**: qué pasa si alguien edita directamente la `descripcion` de una
-tarea vinculada desde el editor de tareas de siempre (no desde el hallazgo) — este documento
-no resuelve si esa edición manual debe "ganarle" a la sincronización automática del hallazgo
-(dejando de sincronizarse desde ahí, similar a como una edición manual del texto corta la
-sincronización en §5) o si debe sobrescribirse la próxima vez que el hallazgo cambie. Se marca
-como un detalle a resolver en la fase de implementación, no como una decisión de modelo de
-datos — cualquiera de las dos opciones usa el mismo esquema de arriba.
+El esquema ya existente en `OT.informeEvaluacion.hallazgos[]` (`tipoTrabajoId`, `valores`,
+`textoGenerado`, `textoDescriptivo`, `textoEditadoManualmente`, `fotos`, `casoNoCubierto`,
+`tareaVinculadaId`, `fecha`) **no necesita ningún campo nuevo**. La razón es que `valores` ya es
+un objeto libre `clave -> valor` (`Schema.Types.Mixed`), y el motor de texto
+(`generarSegmentos`/`generarTexto`) ya resuelve cualquier `{clave}` de la plantilla contra
+`valores[clave]` sin que le importe si esa clave es un campo propio del tipo o una lista
+transversal — así que una selección de `condicionesEntorno` se guarda como
+`valores.condicionesEntorno = ['Energizado', 'A la intemperie']`, exactamente en el mismo
+objeto y de la misma forma que `valores.diametro = '4 pulgadas'`. Cero cambios en
+`erp-backend/src/models/OT.js`, cero cambios en `motorTexto.js`.
+
+Lo que sí cambia es **quién resuelve qué es cada `clave`** cuando el supervisor toca un espacio
+en blanco del texto — hoy `EditorHallazgo.jsx` solo busca esa clave entre
+`tipoElegido.campos` (`tocarSegmento`, línea ~53: `tipoElegido?.campos.find(c => c.clave ===
+clave)`); si la clave no está ahí, hoy no pasa nada al tocarla — es, en los hechos, el punto
+exacto donde el catálogo nuevo rompería si se cargara tal cual sobre el código de hoy, porque
+markers como `{condicionesEntorno}` o `{riesgos}` no son campos propios de ningún tipo en el
+archivo nuevo. La extensión necesaria se detalla en §5.
 
 ---
 
 ## 4. Motor de sugerencia por palabras clave
 
-**Objetivo**: instantáneo (sin esperar al servidor mientras se escribe) y sin dependencias
-externas nuevas — nada de librerías de búsqueda difusa ni servicios de terceros.
+**Sin cambios respecto a la primera versión.** `motorSugerencia.js`
+(`erp-pwa-operativa/src/motorSugerencia.js`, duplicado en `erp-web/src/utils/`) ya implementa
+exactamente lo que pedía la primera versión de este documento: normalización sin tildes,
+tokenización por palabra completa, puntaje mayor para coincidencia en nombre/sinónimos que en
+opciones de campo, orden por puntaje descendente con empate alfabético, tope de 5 sugerencias,
+sin sugerencias si no hay coincidencias.
 
-**Cómo funciona**: el catálogo completo de `TipoTrabajo` (con sus nombres y sinónimos) se trae
-una sola vez al abrir el informe — es un catálogo chico (decenas a un par de cientos de
-entradas, no miles), del mismo orden de magnitud que `Puestos` o `Plantillas`, que el sistema
-ya maneja hoy completos en memoria sin problema.
-
-1. **Normalización**: tanto el texto que escribe el supervisor como el nombre/sinónimos de
-   cada tipo de trabajo se pasan a minúscula y sin tildes, y se separan en palabras sueltas
-   (tokens).
-2. **Puntaje por coincidencia**: por cada tipo de trabajo, se cuenta cuántas palabras del
-   texto escrito aparecen entre sus palabras de nombre+sinónimos **y también entre las
-   opciones de sus campos** (decisión confirmada: sí se busca ahí también — así, escribir
-   "inoxidable" sugiere "Cambio de línea" porque "inoxidable" es una opción del campo material
-   de ese tipo, aunque la palabra no esté en su nombre ni en sus sinónimos). Una coincidencia
-   en nombre/sinónimos vale más que una coincidencia dentro de una opción de campo (el nombre
-   del tipo de trabajo es la señal más directa; una opción de campo es un indicio más indirecto
-   y varios tipos de trabajo distintos podrían compartir la misma opción, por ejemplo
-   "inoxidable" en más de un tipo). Coincidencia de palabra completa vale más que una
-   coincidencia parcial, para que "línea" no dispare cualquier tipo de trabajo que contenga
-   esas letras en otra palabra.
-3. **Orden de resultados**: de mayor a menor puntaje; empate se resuelve alfabéticamente.
-4. **Umbral**: se muestran hasta 5 sugerencias con puntaje mayor a cero. Se corta ahí para no
-   saturar la pantalla en un teléfono.
-5. **Sin coincidencias**: si ninguna palabra escrita coincide con ningún tipo de trabajo del
-   catálogo, no se muestra lista de sugerencias — se invita a seguir en texto libre
-   directamente (ver §9, ahí se marca automáticamente como caso no cubierto si se guarda así).
-
-Este cálculo puede vivir enteramente en el navegador/teléfono, sobre el catálogo ya
-descargado — no necesita ida y vuelta al servidor mientras el supervisor escribe, que es lo
-que hace que se sienta instantáneo incluso con mala señal en terreno.
+**No se propone que el motor busque también dentro de las listas transversales o de las
+sugerencias premarcadas** (por ejemplo, que escribir "empaquetadura" sugiera "Cambio de bomba"
+porque "Empaquetadura" es uno de sus materiales premarcados). Motivo: las listas transversales
+son compartidas por casi todos los tipos — "Empaquetadura" es una sugerencia premarcada de
+varios tipos a la vez, así que buscar ahí generaría coincidencias parejas entre muchos tipos sin
+poder distinguir cuál es el correcto, degradando la precisión del buscador en vez de mejorarla.
+Las opciones de campos propios (el caso que sí busca hoy) no tienen este problema porque son
+específicas de cada tipo. **Requiere confirmación** si de todos modos se quiere probar esto en
+el futuro — no se recomienda para esta fase.
 
 ---
 
 ## 5. Motor de texto adaptativo
 
-Un único renderizador, sin variantes por tipo de trabajo — lee la plantilla de texto del
-`TipoTrabajo` elegido y los valores ya capturados, y hace dos cosas: producir el texto final
-completo, y producir la misma información dividida en **segmentos** para que la pantalla
-pueda pintar cada valor de forma distinta al texto fijo.
+El parseo de la plantilla y la generación de texto (`generarSegmentos`/`generarTexto` en
+`motorTexto.js`) **no cambian** — ya separan la plantilla en segmentos de texto fijo y
+segmentos de valor por `{clave}`, sin que les importe de dónde viene esa clave. El cambio real
+es en la pantalla (`EditorHallazgo.jsx`, ambas copias), en el punto donde un segmento de valor
+se toca para llenarlo:
 
-**Parseo de la plantilla**: la plantilla ("Cambio de línea de {diametro} {material},
-{trazado}, transporta {fluido}, en {planta}") se recorre una sola vez identificando los
-tramos entre marcadores `{clave}` como texto literal, y cada `{clave}` como un segmento de
-valor que debe resolverse contra `valores[clave]`.
+**Extensión necesaria — resolver una clave contra dos fuentes, no una.** Hoy `tocarSegmento`
+busca la clave solo entre `tipoElegido.campos`. Se extiende para que, si no la encuentra ahí,
+la busque en el catálogo transversal ya cargado (`CatalogoTransversal`, por `clave`) y arme un
+"campo virtual" con la misma forma que ya espera `HojaCampo`/`MenuSelector` (el selector que ya
+existe): `{ clave, etiqueta: catalogo.descripcion, tipoDato: catalogo.seleccion === 'multiple'
+? 'seleccionMultiple' : 'seleccionUnica', opciones: catalogo.valores.map(v => v.valor) }`. Con
+eso, **el selector no cambia** — sigue siendo la misma hoja inferior con casillas de toque que
+ya existe hoy para campos propios, ahora alimentada también por catálogos transversales. Esto
+es un cambio localizado (una función de una pantalla, duplicada en dos archivos) que no toca el
+motor de texto ni el modelo de datos del hallazgo.
 
-**Renderizado de valores interactivos**: cada segmento de valor se reemplaza por el valor ya
-capturado si existe, o por un marcador visual de "pendiente" si el campo todavía no se llenó
-(por ejemplo, subrayado vacío) — sin bloquear la vista previa por campos incompletos, para que
-el supervisor vea cómo va quedando el texto a medida que completa el formulario, no solo al
-final. La pantalla pinta cada segmento de valor de forma distinguible del texto fijo (por
-ejemplo, con un fondo o subrayado propio — la decisión visual exacta es de diseño, no de este
-documento) y lo hace tocable: tocar un segmento de valor abre el mismo selector que ese campo
-tiene en el formulario (lista de opciones, o el teclado si es texto/número), y al elegir, el
-texto se vuelve a generar con el nuevo valor en su lugar — sin que el supervisor tenga que ir
-a buscar el campo en el formulario de más arriba.
+**Exclusión de `condicionesNoAplicables`**: cuando la clave resuelta es `condicionesEntorno`, el
+"campo virtual" arma sus `opciones` con `catalogo.valores` **menos** las que
+`tipoElegido.condicionesNoAplicables` excluye para ese tipo — mismo mecanismo de lista de
+exclusión que ya proponía la primera versión de este documento, aplicado ahora sobre el catálogo
+transversal en vez de sobre una colección `CondicionEntorno` aparte.
 
-**Edición manual del texto**: el supervisor puede tocar el texto y escribir libremente
-(agregar una frase que los campos no cubren, corregir redacción). En el momento en que edita
-el texto de forma libre (no a través de tocar un segmento de valor y elegir una opción), se
-marca `textoEditadoManualmente = true` para ese hallazgo y **desde ahí en adelante el texto
-deja de regenerarse automáticamente cuando cambian los campos** — los segmentos de valor
-interactivos también dejan de resaltarse, porque una vez que el supervisor edita libremente ya
-no hay forma confiable de saber qué parte del texto sigue representando cuál campo. Es una
-decisión deliberada de simplicidad: intentar mantener sincronizados un texto editado a mano y
-un conjunto de campos estructurados es una fuente conocida de errores sutiles (el texto dice
-una cosa, el campo guarda otra) — se prefiere que la persona elija un modo u otro para ese
-hallazgo puntual, no los dos a la vez. Los valores de los campos capturados **no se pierden**
-al activarse `textoEditadoManualmente` — quedan guardados igual en `valores`, solo que el texto
-ya no se recalcula desde ellos.
-
-**Decisión confirmada — función "Deshacer edición"**: se agrega un botón que descarta lo
-escrito a mano y vuelve a generar el texto desde `plantillaTexto` + `valores` (que nunca se
-pierden mientras el hallazgo exista), volviendo `textoEditadoManualmente` a `false` y
-reactivando los segmentos interactivos. Aparece solo cuando `textoEditadoManualmente` es
-`true` — mientras el texto sigue generado por plantilla, no hay nada que deshacer.
-
-**Decisión confirmada — eliminar un hallazgo**: cualquier hallazgo se puede eliminar por
-completo desde la misma pantalla donde se creó (mobile o escritorio, ver §10). Al eliminarlo,
-se elimina también su tarea vinculada (§3.4.1) — no es una eliminación parcial de un lado
-solamente.
-
----
-
-## 6. Manejo de fotos — cumpliendo el requisito crítico
-
-**Regla, sin excepción**: toda foto de un hallazgo se comprime en el cliente antes de subir y
-se guarda como archivo real en disco, nunca como texto base64 dentro del documento de la OT.
-El proyecto ya tiene exactamente este patrón funcionando para otro flujo — `subirFoto` /
-`subirDataURL` en `erp-pwa-operativa/src/api.js`, más el endpoint `POST /api/uploads/foto`
-(`erp-backend/src/routes/uploadRoutes.js`) — construido después de un incidente real idéntico
-en espíritu al que describe `docs/bugs-conocidos.md`: una sola foto guardada como base64
-dentro del documento de una OT hacía que **cualquier** consulta que trajera esa OT completa
-(no solo la pantalla del informe) tardara varios segundos, medido directamente contra la base
-de datos.
-
-**Para este proyecto**: `fotos` en cada hallazgo (§3.4) es un arreglo de URLs, del mismo tipo
-que ya produce `subirFoto`. No se propone ningún mecanismo nuevo de subida — se reutiliza el
-que ya existe, tal cual, en el mismo punto donde hoy el supervisor agrega fotos en la PWA
-(`agregarFotoSitio` de `O5_InformeEvaluacion.jsx` ya sigue este patrón para las fotos generales
-del informe; los hallazgos usan el mismo mecanismo para sus propias fotos).
-
-**Fotos referencial y "de lo esperado"**: la lista de campos de ejemplo para "Cambio de línea"
-incluye dos campos de tipo foto ("foto referencial del estado actual", "foto de lo esperado").
-Se modelan como dos `campo` más de `tipoDato: foto` dentro del `TipoTrabajo` — cada uno guarda
-una URL (no un arreglo, a diferencia de `hallazgo.fotos` que sí es un arreglo para fotos
-libres/adicionales). Mismo mecanismo de subida, mismo requisito: nunca base64.
+**Requisito del motor de texto, explícito en el propio Excel (hoja Instrucciones) y ya
+implementado**: toda oración cuyo marcador quede sin valor debe omitirse completa, no dejar
+"Materiales y consumibles: ." colgando. **Esto ya funciona hoy** en el nivel de segmento
+individual — `generarSegmentos` reemplaza un valor vacío por el marcador de "pendiente" (ver
+`erp-pwa-operativa/src/motorTexto.js`, `MARCADOR_PENDIENTE`), y la pantalla ya lo pinta como un
+espacio en blanco tocable, no como texto suelto. **Pero el requisito tal como lo pide el
+archivo nuevo es más fuerte**: pide omitir la **oración completa** ("Materiales y consumibles: X.")
+cuando su valor está vacío, no solo dejar el hueco marcado dentro de la oración — eso es
+distinto de lo que hace el motor hoy, que muestra la oración igual con el hueco pendiente
+resaltado (para que el supervisor vea que falta llenarlo). **Contradicción real entre este
+Excel y el diseño ya construido**, y se marca así en vez de resolverse unilateralmente: el
+diseño actual privilegia que el supervisor **vea** qué le falta completar mientras llena el
+formulario (un hueco pendiente visible invita a llenarlo); el requisito del Excel privilegia que
+el **texto final guardado** nunca muestre una oración a medio llenar. Ambos objetivos son
+razonables y no son necesariamente incompatibles si se aplican en momentos distintos:
+**Propuesta**: mientras el supervisor está completando el hallazgo (texto interactivo en
+pantalla), se sigue mostrando cada hueco pendiente resaltado, como hoy — eso ayuda a completar.
+Recién al generar el `textoDescriptivo` final que se guarda (y que se muestra de vuelta en
+`TratamientoScreen`, se imprime en el PDF, etc.), el motor de texto aplicaría una segunda pasada
+que elimina cualquier oración completa que todavía contenga un marcador pendiente. Esto sí es un
+cambio a `motorTexto.js` (una función nueva, ejecutada solo al construir el texto final, no
+sobre la vista previa en vivo). **Requiere confirmación**: cómo se define el límite de una
+"oración" para efectos de esta omisión — el punto seguido (`.`) es la señal más simple y ya es
+consistente con el propio patrón de la plantilla ("...en {planta}. Equipo intervenido:
+{tipoEquipo} {equipoReferencial}. Condiciones de terreno: {condicionesEntorno}. ..."), pero
+convendría confirmarlo antes de implementar por si alguna plantilla futura usa punto seguido
+dentro de una abreviatura o número.
 
 ---
 
-## 7. Estructura del Excel para importar/exportar el catálogo
+## 6. Presentación de sugerencias premarcadas al supervisor
 
-Carga vía Importar/Exportar como vía principal de esta fase — no hay generación automática
-dentro de la aplicación (eso es responsabilidad de una eventual fase de IA, fuera de alcance,
-ver §13).
+Sección nueva, sin equivalente en la primera versión de este documento — no existía esta capa
+de sugerencias premarcadas hasta el catálogo nuevo.
 
-Un `TipoTrabajo` tiene una relación uno-a-muchos con sus campos, y cada campo tiene una
-relación uno-a-muchos con sus opciones — no cabe cómodo en una sola hoja plana sin repetir
-muchísimas celdas o inventar una sintaxis de "opciones separadas por punto y coma" difícil de
-editar a mano. Se proponen **tres hojas**, unidas por una columna de código de tipo de trabajo
-en común (no un ObjectId de Mongo, que no es algo cómodo de escribir a mano en Excel — un
-código de texto corto, legible, que la persona que arma el Excel define ella misma):
+**Cuándo aparecen**: al elegir un tipo de trabajo (`elegirTipo` en `EditorHallazgo.jsx`), además
+de limpiar `valores` como hoy, se precargan de una vez `valores.tareasSecundarias`,
+`valores.materiales` y `valores.riesgos` (las únicas tres listas con sugerencias, ver §3.3.1)
+con los valores que `tipoElegido.sugerencias` marca para ese `codigoTipo` — el texto generado
+ya aparece con esas tres oraciones llenas desde el primer instante, no en blanco. El supervisor
+no parte de una lista vacía: confirma o descarta lo que ya viene marcado (tal como pide la hoja
+Instrucciones del propio Excel).
 
-### Hoja 1 — "Tipos de trabajo"
+**Cómo se editan**: al tocar el espacio en blanco de `tareasSecundarias` (o `materiales`, o
+`riesgos`) se abre la misma hoja inferior de selección múltiple que ya existe (`HojaCampo` en
+PWA, `MenuSelector` en escritorio), con las opciones premarcadas ya con su casilla marcada — el
+supervisor puede destildar lo que no aplica a este caso puntual, y marcar cualquier otra opción
+de la lista completa que sí aplique pero no venía sugerida. No hay ninguna interfaz "premarcado"
+separada de la interfaz "elegir manualmente" — es la misma hoja, solo que empieza con algunas
+casillas ya marcadas en vez de todas vacías.
 
-Una fila por tipo de trabajo.
+**Agrupación por categoría — solo para `tareasSecundarias`**: esta es la única de las 9 listas
+que trae `categoria` en "Catálogos transversales" (Desmontaje, Traslado, Taller, Montaje, Ajuste
+y verificación). La hoja inferior de esta lista específica se presenta agrupada, con un
+subtítulo por categoría entre los grupos de casillas (mismo patrón visual que ya usa el resto de
+la PWA para separar secciones dentro de una lista larga), en vez de una lista plana de las ~43
+opciones — importa para que una lista larga siga siendo escaneable rápido en el teléfono.
+`materiales` y `riesgos` no tienen categoría en el archivo (columna vacía) y se presentan como
+lista plana, igual que hoy.
 
-| codigoTipo | nombre | sinonimos | plantillaTexto | condicionesNoAplicables |
-|---|---|---|---|---|
-| CAMBIO_LINEA | Cambio de línea | cañería, tubería, línea de proceso | Cambio de línea de {diametro} {material}, {trazado}, transporta {fluido}, en {planta} | Energizado |
-
-- `codigoTipo`: identificador corto en mayúsculas, sin espacios (igual criterio que ya usa el
-  proyecto para `codigo` de `Suministro`/`EquiposHerramientas`) — es la clave que las otras dos
-  hojas usan para decir "este campo/esta opción es de este tipo de trabajo".
-- `condicionesNoAplicables`: opcional, una celda con los nombres de condiciones de entorno
-  (Hoja 4) que no tiene sentido ofrecer para este tipo de trabajo, separados por coma — vacío
-  significa que las 11 condiciones del catálogo transversal quedan todas disponibles (ver
-  §3.3).
-- `sinonimos`: una sola celda, palabras separadas por coma — más cómodo de escribir a mano que
-  una hoja aparte solo para sinónimos, y la cantidad de sinónimos por tipo es pequeña (unas
-  pocas palabras, no una lista larga).
-- `plantillaTexto`: el texto con los marcadores `{clave}` tal cual se van a definir en la Hoja
-  2 — se arma mirando ambas hojas a la vez, por eso importa que las claves coincidan
-  exactamente entre las dos.
-
-### Hoja 2 — "Campos"
-
-Una fila por campo de cada tipo de trabajo (varias filas por cada fila de la Hoja 1).
-
-| codigoTipo | clave | etiqueta | tipoDato | obligatorio | orden |
-|---|---|---|---|---|---|
-| CAMBIO_LINEA | diametro | Diámetro | seleccionUnica | Sí | 1 |
-| CAMBIO_LINEA | material | Material | seleccionUnica | Sí | 2 |
-| CAMBIO_LINEA | trazado | Trazado | seleccionUnica | No | 3 |
-| CAMBIO_LINEA | fluido | Fluido que transporta | seleccionUnica | Sí | 4 |
-| CAMBIO_LINEA | planta | Área o planta | texto | Sí | 5 |
-| CAMBIO_LINEA | equipoReferencial | Equipo referencial | texto | No | 6 |
-| CAMBIO_LINEA | fechaTentativa | Fecha de ejecución tentativa | fecha | No | 7 |
-| CAMBIO_LINEA | duracionTentativa | Duración tentativa | numero | No | 8 |
-| CAMBIO_LINEA | fotoActual | Foto referencial del estado actual | foto | No | 9 |
-| CAMBIO_LINEA | fotoEsperada | Foto de lo esperado | foto | No | 10 |
-
-`tipoDato` es texto libre en la celda, pero solo se aceptan los seis valores del §3.2 — el
-importador rechaza (con el mismo reporte de fila+error que ya usa el resto de importaciones
-del sistema, ver `resultado.errores` en `ImportExportScreen.jsx`) cualquier fila con un
-`tipoDato` no reconocido.
-
-### Hoja 3 — "Opciones"
-
-Una fila por cada opción válida de cada campo de tipo `seleccionUnica`/`seleccionMultiple`
-(no aplica a campos de texto/número/fecha/foto, que no tienen opciones fijas).
-
-| codigoTipo | clave | opcion |
-|---|---|---|
-| CAMBIO_LINEA | diametro | 2 pulgadas |
-| CAMBIO_LINEA | diametro | 4 pulgadas |
-| CAMBIO_LINEA | diametro | 6 pulgadas |
-| CAMBIO_LINEA | material | inoxidable |
-| CAMBIO_LINEA | material | carbono |
-| CAMBIO_LINEA | material | PVC |
-| CAMBIO_LINEA | trazado | línea recta |
-| CAMBIO_LINEA | trazado | con codos |
-| CAMBIO_LINEA | fluido | agua |
-| CAMBIO_LINEA | fluido | ácido |
-| CAMBIO_LINEA | fluido | vapor |
-
-**Por qué tres hojas y no una por conveniencia de llenado**: quien arma el catálogo fuera del
-sistema piensa naturalmente "estos son mis tipos de trabajo" (hoja 1), "estos son los campos de
-cada uno" (hoja 2, unas pocas filas repetibles por copiar/pegar) y "estas son las opciones de
-cada campo" (hoja 3, la más larga, pero la más mecánica de llenar — es la típica lista donde
-Excel permite pegar una columna larga sin pensar en estructura). Separarlas así evita celdas
-gigantes con listas incrustadas y facilita el copiar/pegar masivo en la hoja 3, que es la que
-más crece.
-
-**Hoja 4 — "Condiciones de entorno"** (referenciada desde la columna `condicionesNoAplicables`
-de la Hoja 1), una fila por condición, para cargar el catálogo del §3.3 con el mismo
-mecanismo:
-
-| nombre |
-|---|
-| Pretil de ácido |
-| Polución |
-| Inundado |
-| Ambiente ácido |
-| A la intemperie |
-| Excavación |
-| Apertura de línea |
-| Bloqueo de línea |
-| Energizado |
-| Alineación |
-
-**Comportamiento de importación** (mismo patrón que el resto del sistema, `importExportController.js`):
-si `codigoTipo` ya existe, se actualiza (upsert) — igual que hoy `Suministro`/`Puesto` por
-`codigo`/`nombre`; nunca crea duplicados por reimportar el mismo archivo corregido. Filas con
-error (por ejemplo, una fila de Hoja 2 que referencia un `codigoTipo` que no existe en Hoja 1,
-o un `tipoDato` no reconocido) se omiten y se listan en el reporte, sin detener el resto de la
-importación — mismo comportamiento que ya tienen todos los módulos actuales.
-
-**Exportación**: mismo criterio — un archivo con las tres (o cuatro, si se incluyen
-condiciones de entorno) hojas, generado desde el catálogo actual, que sirve tanto para respaldo
-como para partir de una base ya cargada al armar el próximo lote de tipos de trabajo nuevos.
+**Requiere confirmación**: si conviene mostrar, dentro de la hoja de selección, alguna marca
+visual de "esto venía sugerido" en las opciones que el supervisor destildó (para que quede claro
+que fue una decisión activa de descartarla, no un olvido) — es un detalle de diseño visual, no
+de modelo de datos, que puede resolverse en la fase de implementación sin impacto en lo de
+arriba.
 
 ---
 
-## 8. Pantalla de administración del catálogo
+## 7. Manejo de fotos
 
-Complementaria a la carga masiva — para ediciones puntuales sin tener que rearmar y resubir un
-Excel completo por, por ejemplo, agregar una sola opción nueva a un campo existente.
+**Sin cambios — ya cumple el requisito no negociable.** `subirFoto`/`subirDataURL`
+(`erp-pwa-operativa/src/api.js`) ya comprime en el cliente (máx. 1200px, JPEG calidad 0.75,
+`comprimirABlob`) antes de subir, y el backend (`POST /api/uploads/foto`, mismo patrón que ya
+usa `S3_Trabajo.jsx` y `O4_ReporteTerreno.jsx`) guarda el archivo real y devuelve una URL —
+`EditorHallazgo.jsx` (ambas copias) ya usa exactamente este mecanismo para las fotos del
+hallazgo y para los dos campos comunes de tipo foto (`fotoActual`, `fotoEsperada`). Nunca se
+guarda base64 en el documento de la OT.
 
-**Decisión confirmada: vive dentro de `ImportExportScreen.jsx`**, no en `RecursosScreen.jsx`
-como se había propuesto en la primera versión de este documento — junto a los bloques que ya
-existen ahí (Entorno de trabajo, Uso de disco, Juego de demostración, Exportar, Importar). Tiene
-sentido de todos modos: el catálogo se alimenta principalmente por Excel (§7), así que la
-edición puntual queda al lado de donde ya se hace la carga masiva, no en una pantalla aparte
-que la persona tendría que ir a buscar. Se agrega como un bloque nuevo de esa misma pantalla,
-con el mismo estilo visual que los bloques ya existentes (`styles.bloque` en el archivo actual).
-
-Contenido del bloque:
-
-- Lista de tipos de trabajo del catálogo (nombre, cantidad de campos, activo/inactivo).
-- Formulario de edición de un tipo: nombre, sinónimos, plantilla de texto, condiciones de
-  entorno no aplicables (§3.3), y una lista editable de sus campos (agregar/quitar campo, y
-  por cada campo de tipo selección, agregar/quitar opciones) — un formulario anidado, del
-  mismo orden de complejidad que ya maneja `TratamientoScreen` para editar tareas/componentes
-  de un informe.
-- Una sub-sección separada para el catálogo de condiciones de entorno (lista simple, sin
-  campos ni opciones anidadas — es solo nombre + activo).
-- La lista de **casos no cubiertos** (ver §9) vive aquí también, como su propia sub-sección,
-  para que quien administra el catálogo tenga en un solo lugar tanto el catálogo como la señal
-  de qué le falta cubrir.
-
-**Decisión confirmada: sin control de acceso diferenciado.** Consistente con que el resto del
-sistema no tiene modelo de permisos (Contradicción 1 de `funcionalidades-v2.md`), cualquiera
-con acceso a `ImportExportScreen` puede editar el catálogo — sin un rol especial de
-"administrador de catálogo".
+Este patrón se construyó, en efecto, después de un incidente real de rendimiento: una foto sin
+comprimir guardada como texto base64 dentro de un documento `Solicitud` en MongoDB inflaba
+`/api/data` a más de 5 MB de payload y ~56 segundos de respuesta, corregido comprimiendo y
+guardando como archivo en disco (`docs/bugs-conocidos.md`, sección "Rendimiento", nota de
+contexto). Un incidente equivalente, ya corregido con el mismo patrón, existe también para las
+fotos de reporte de terreno (`docs/estrategia-movil.md`, línea ~169, y el comentario de
+`O4_ReporteTerreno.jsx`). El catálogo nuevo no introduce ningún caso de foto que no siga ya este
+patrón — nada que hacer en esta fase más allá de mantenerlo.
 
 ---
 
-## 9. Registro de casos no cubiertos
+## 8. Importación del catálogo desde `ImportExportScreen` (y su exportación)
 
-**Cuándo se marca**: un hallazgo queda `casoNoCubierto = true` en cualquiera de estos dos
-casos, sin que el supervisor tenga que marcarlo a mano ni el sistema lo bloquee:
+### 8.1 Las siete hojas y el orden en que se leen
 
-1. El supervisor escribió texto y guardó el hallazgo **sin haber elegido ningún tipo de
-   trabajo del catálogo** (`tipoTrabajoId` queda vacío) — típicamente porque el motor de
-   sugerencia no encontró coincidencias, o porque el supervisor decidió no usar ninguna de las
-   sugeridas.
-2. El supervisor eligió un tipo de trabajo del catálogo, pero **editó el texto generado a
-   mano** (`textoEditadoManualmente = true`, ver §5) — señal de que la plantilla no alcanzó a
-   describir del todo lo que vio, aunque el tipo elegido fuera el correcto.
+El importador de hoy (`importarTiposTrabajo`, `erp-backend/src/controllers/
+importExportController.js`) lee 3 hojas ("Tipos de trabajo", "Campos", "Opciones"). Se extiende
+a 7, leídas en este orden (cada hoja posterior puede necesitar validar contra las ya leídas):
 
-En ambos casos, el informe **se guarda igual, completo, sin ningún bloqueo** — el requisito es
-explícito: "sin bloqueo en terreno, sin automatismo". La marca es puramente informativa para
-quien administra el catálogo.
+1. **Índice de listas** — se lee primero porque define qué claves son transversales
+   (`condicionesEntorno`, `tipoEquipo`, ... 9 en total) y si cada una es de selección única o
+   múltiple. Sin esto, no se puede distinguir un marcador transversal de un campo propio al
+   validar las hojas siguientes.
+2. **Catálogos transversales** — upsert de cada `CatalogoTransversal` por `clave` (agrupando
+   las filas de esta hoja, que vienen una por valor). Cada fila valida que su `lista` exista en
+   "Índice de listas" (error de fila si no).
+3. **Tipos de trabajo** — igual que hoy, una fila por `codigoTipo`. Nuevo: valida que cada
+   valor de `condicionesNoAplicables` (separados por coma) exista dentro de los valores ya
+   cargados de la lista `condicionesEntorno` en el paso anterior.
+4. **Campos** — igual que hoy: agrupados por `codigoTipo`, validando que ese `codigoTipo` exista
+   en la hoja anterior.
+5. **Opciones** — igual que hoy: agrupadas por `codigoTipo`+`clave` sobre los campos ya
+   armados en el paso anterior.
+6. **Sugerencias por tipo** — nueva: por cada fila, valida que `codigoTipo` exista (hoja 3),
+   que `lista` exista (hoja 1) y que `valor` exista dentro del catálogo transversal ya cargado
+   de esa lista (hoja 2) — **salvo el caso especial de §0** (valor entre paréntesis para
+   `obrasCiviles`, que se descarta sin reportar error, pendiente de confirmación). Se acumula
+   en un mapa `codigoTipo -> [{lista, valor}]` para adjuntar a cada `TipoTrabajo` en el paso
+   final.
+7. **Escritura final de "Tipos de trabajo"**: recién acá se hace el upsert de cada
+   `TipoTrabajo` por `codigoTipo`, con sus `campos` (paso 4), `condicionesNoAplicables` (paso 3)
+   y `sugerencias` (paso 6) ya armados en memoria — mismo motivo que ya documentaba la primera
+   versión de este documento para "Opciones": los datos de las hojas relacionadas se arman en
+   memoria antes de tocar la base, para no hacer un upsert incompleto que haya que corregir con
+   un segundo update.
 
-**Dónde se revisa**: en la sub-sección de "Casos no cubiertos" de la pantalla de
-administración del catálogo (§8), un listado con: OT/número, fecha, el texto que escribió el
-supervisor (o el texto final si eligió un tipo y lo editó), y si tenía o no un tipo de trabajo
-asociado. Quien administra el catálogo lee esos casos y decide si conviene agregar un tipo de
-trabajo nuevo, una opción nueva a un campo existente, o un sinónimo nuevo — la decisión y la
-carga siguen siendo manuales, vía la misma pantalla de administración o vía un nuevo lote de
-Excel.
+**Qué se reporta cuando una fila falla**: mismo patrón que ya usa todo el resto del sistema —
+`{ fila, motivo }` acumulado en `errores[]`, sin detener el resto de la importación
+(`resultado.errores` en `ImportExportScreen.jsx`, ya renderiza esto para cualquier módulo). Las
+validaciones cruzadas nuevas (condición no aplicable inexistente, sugerencia con lista/valor
+inexistente) usan el mismo mecanismo — un error de fila más, no una clase de error distinta.
 
-**Sin automatismo real, para que quede explícito**: el sistema no intenta adivinar a qué tipo
-de trabajo podría corresponder un caso no cubierto, no propone sinónimos nuevos, no agrupa
-casos similares entre sí. Es una lista plana para lectura humana. Cualquier inteligencia sobre
-esos datos es exactamente lo que se deja para la extensión futura de IA (§13).
+**Comportamiento de upsert**: igual que hoy — si `codigoTipo` ya existe, se actualiza
+completo (incluye reemplazar `campos`, `condicionesNoAplicables` y `sugerencias` con lo que
+traiga el archivo nuevo, no una fusión parcial) — mismo criterio de "reimportar reemplaza" que
+ya usa el ciclo editar-en-Excel-y-recargar para el resto de catálogos del sistema.
+
+### 8.2 Exportación — para que el ciclo editar-y-recargar funcione
+
+`exportarTiposTrabajo`/`plantillaTiposTrabajo` (mismo archivo) se extienden para producir las 7
+hojas a partir del catálogo actual — no solo las 3 de hoy. Mismo criterio que ya usa
+`agregarHojasCatalogo`: recorrer los `TipoTrabajo` ya guardados y expandir sus `campos`,
+`condicionesNoAplicables` y `sugerencias` de vuelta a filas planas, más las dos hojas que hoy no
+tienen contraparte de escritura ("Índice de listas", que es prácticamente estático — 9 filas
+fijas — y "Catálogos transversales", que se arma recorriendo las `CatalogoTransversal`
+existentes). El botón "Descargar actual" que ya existe en `ImportExportScreen.jsx` (agregado en
+esta misma sesión de trabajo, reutiliza `exportarBatch`) ya sirve para esto sin cambios propios
+— basta con que el `exportarBatch`/`exportarTiposTrabajo` que consume produzca las 7 hojas.
+
+**Requiere confirmación**: si la plantilla de ejemplo que hoy genera `plantillaTiposTrabajo`
+(un solo tipo, "Cambio de línea", con condiciones de entorno como campo propio — diseño de la
+primera versión, ya obsoleto frente a este documento) se reemplaza por un ejemplo con el modelo
+nuevo (un tipo con campos propios + referencias a alguna lista transversal + alguna sugerencia
+premarcada), o si directamente se ofrece como plantilla el catálogo real de 30 tipos ya cargado
+(recomendado: es más útil como punto de partida real que un ejemplo sintético, y ya existe
+literalmente en el archivo que motivó este documento).
 
 ---
 
-## 10. Impacto en pantallas existentes
+## 9. Pantalla de administración del catálogo
+
+**Estado real, verificado**: la API ya tiene CRUD completo (`GET/POST/PUT/DELETE
+/api/tipos-trabajo`, `tipoTrabajoController.js`) desde la primera fase, pero **ninguna pantalla
+de la aplicación lo usa** para crear/editar/eliminar — la única forma real de tocar el catálogo
+hoy es la importación por Excel. Lo único que sí está construido y en uso dentro de
+`ImportExportScreen.jsx` es la lista de "Casos no cubiertos" (§10) y, para el catálogo en
+general, únicamente los tres botones estándar (Plantilla / Descargar actual / Importar) — no
+hay ninguna pantalla de edición puntual todavía, a pesar de que la primera versión de este
+documento (§8) ya la daba por decidida.
+
+**Se mantiene la decisión de ubicación**: si se construye, vive dentro de `ImportExportScreen.jsx`,
+junto a los bloques ya existentes, no en `RecursosScreen.jsx` — mismo razonamiento que la
+primera versión (el catálogo se alimenta principalmente por Excel, la edición puntual queda al
+lado de esa misma carga).
+
+**Alcance ampliado respecto a la primera versión**: con catálogos transversales de por medio,
+"editar un tipo de trabajo" ahora también implica, potencialmente, tocar sus
+`condicionesNoAplicables` (elegir de la lista `condicionesEntorno` ya cargada) y sus
+`sugerencias` (marcar/desmarcar valores premarcados de `tareasSecundarias`/`materiales`/
+`riesgos`) — un formulario de edición puntual más rico que el propuesto en la primera versión.
+Los 9 `CatalogoTransversal` en sí (agregar un valor nuevo a `riesgos`, por ejemplo) también
+necesitarían su propia sub-sección de edición simple (lista de valores por clave, agregar/
+quitar), igual de simple que ya proponía la primera versión para `CondicionEntorno`.
+
+**Requiere confirmación**: dado que ya pasó una fase entera sin que esta pantalla se
+construyera (a pesar de estar "decidida"), vale la pena confirmar si de verdad se necesita antes
+de construirla, o si mientras el catálogo se mantenga en el orden de 30-50 tipos, el ciclo
+completo por Excel (exportar lo actual, editar en la planilla, reimportar — ya soportado por
+completo, ver §8) es suficiente en la práctica y esta pantalla puede seguir esperando. Se deja
+diseñada por completitud del documento, no como compromiso de que se construya en esta fase.
+
+---
+
+## 10. Registro de casos no cubiertos
+
+**Ya implementado, sin cambios necesarios.** `GET /api/tipos-trabajo/casos-no-cubiertos`
+(`tipoTrabajoController.casosNoCubiertos`) recorre las OT buscando hallazgos con
+`casoNoCubierto: true`, y `ImportExportScreen.jsx` ya tiene la sección "Casos no cubiertos" que
+lo consume y lo muestra (OT, fecha, si tenía tipo elegido, el texto). El criterio de marcado
+(sin tipo elegido, o tipo elegido pero texto editado a mano) tampoco cambia con el catálogo
+nuevo — sigue siendo una señal puramente informativa, sin bloqueo, exactamente como documentaba
+la primera versión de este documento.
+
+Lo único que cambiaría en la práctica es el volumen: con un catálogo de 30 tipos reales en vez
+de 1-3 de prueba, se espera que la proporción de casos no cubiertos baje considerablemente una
+vez cargado — es la validación de campo de que el catálogo nuevo efectivamente cubre más
+situaciones reales, no un cambio de diseño.
+
+---
+
+## 11. Impacto en pantallas existentes
 
 | Pantalla | Cambio |
 |---|---|
-| `O5_InformeEvaluacion.jsx` (PWA Operativa) | Uso principal del formulario adaptativo — nueva sección/paso para agregar hallazgos: buscador con sugerencias, formulario de campos dinámico según el tipo elegido, vista previa de texto interactiva, fotos por hallazgo. Los 4 pasos cualitativos existentes (condiciones del sitio, riesgos, metodología, recursos observados) **no se tocan** — siguen como narrativa general de la visita, independiente de los hallazgos puntuales. |
-| `TratamientoScreen.jsx` (escritorio, pestaña "0 · Informe Inicial") | Se agrega una sección **editable** (no solo de lectura — ver decisión abajo) con la misma lista de hallazgos que ya capturó el supervisor: buscador, campos dinámicos y texto interactivo, igual que en el teléfono — el Planificador puede agregar, corregir o eliminar un hallazgo desde el escritorio, no solo verlo. La sección de tareas/componentes/logística estructurados ya existente **no cambia** en esta fase, más allá de que las tareas que nacen de un hallazgo (§3.4.1) ahora también pueden aparecer ahí. |
-| `ImportExportScreen.jsx` | Nuevo módulo en las listas de Exportar e Importar ("Catálogo de tipos de trabajo", plantilla de 3-4 hojas, §7), más el bloque de administración puntual del catálogo (§8) y la lista de casos no cubiertos (§9), todo en la misma pantalla. |
-| `erp-backend` | Modelos nuevos `TipoTrabajo` y `CondicionEntorno`; extensión de `OT.informeEvaluacion` con `hallazgos[]` y de `tareas[]` con `tareaVinculadaId`/su contraparte; rutas de catálogo (CRUD), importación/exportación del catálogo, y consulta de casos no cubiertos. |
-
-**Decisión confirmada: los hallazgos se pueden editar desde escritorio.** Se descarta la idea
-de que `TratamientoScreen` solo muestre los hallazgos en modo lectura — el mismo componente de
-formulario adaptativo (buscador + campos + texto interactivo) se reutiliza en escritorio y en
-la PWA, ya que la lógica (motores de §4 y §5) no depende de la pantalla donde corre. El
-Planificador puede así completar en oficina un hallazgo que el supervisor dejó a medias, o
-corregir uno antes de aplicar el informe a la OT.
+| `EditorHallazgo.jsx` (ambas copias, PWA y escritorio) | Extensión de `tocarSegmento` para resolver una clave contra `CatalogoTransversal` cuando no es un campo propio (§5); precarga de sugerencias premarcadas al elegir tipo (§6); agrupación por categoría para `tareasSecundarias` (§6). El resto (lienzo en blanco, buscador, edición manual, deshacer, fotos) no cambia. |
+| `O5_InformeEvaluacion.jsx` (PWA) | Sin cambios propios — ya monta `EditorHallazgo` tal cual; se beneficia automáticamente de la extensión de arriba. |
+| `TratamientoScreen.jsx` (escritorio, "0 · Informe Inicial") | Sin cambios en esta fase — sigue de solo lectura. Ver §1 y §Supuestos sobre si se conecta `erp-web/src/screens/EditorHallazgo.jsx` (hoy sin uso) o se da de baja. |
+| `ImportExportScreen.jsx` | El importador/exportador de "Catálogo de tipos de trabajo" pasa de 3 a 7 hojas (§8); sin cambios en su UI de botones (Plantilla/Descargar actual/Importar ya sirven tal cual). Si se decide construir §9, se agrega el bloque de administración nuevo. |
+| `erp-backend` | `TipoTrabajo` extendido (`codigoTipo`, `condicionesNoAplicables`, `sugerencias`); colección nueva `CatalogoTransversal`; `importExportController.js` extendido a 7 hojas; sin cambios en `OT.js` (§3.4). |
 
 ---
 
-## 11. Consideraciones de uso táctil
+## 12. Consideraciones de uso táctil
 
-El supervisor usa esto en terreno, en un teléfono, muchas veces con guantes o sol directo
-sobre la pantalla (mismas condiciones físicas ya documentadas en `estrategia-movil.md` para el
-resto de la PWA Operativa) — el texto con valores interactivos es la parte más delicada de
-construir bien, porque mezcla lectura de texto corrido con objetivos táctiles precisos.
+Se mantienen las de la primera versión de este documento, con una corrección de cita: el
+objetivo táctil mínimo documentado para la PWA Operativa es **44×44px**
+(`docs/estrategia-movil.md`, línea ~122: *"un objetivo táctil mínimo de 44×44px en cualquier
+control interactivo"*) — la primera versión de este documento citaba 48px de un documento de
+diseño (`design_handoff_pwa_movil`) que no se pudo verificar en esta revisión; se usa el valor
+confirmado en `estrategia-movil.md`.
 
-- **Cada segmento de valor es un objetivo táctil generoso**, no un enlace de texto plano: se
-  pinta como un pequeño bloque con relleno propio (padding), no solo una palabra subrayada —
-  el ancho lo da el propio texto, pero el alto debe acercarse al objetivo táctil mínimo que ya
-  usa el resto de la PWA (48 px, ver `docs/rediseno/design_handoff_pwa_movil`), no el alto de
-  una línea de texto normal.
-- **El selector se abre como hoja inferior, no como un menú flotante pequeño** junto al texto
-  tocado — mismo patrón que ya usa esta misma PWA para elegir una semana en S2 (input nativo
-  de fecha) o para agendar una visita en S4 (hoja inferior). Un menú angosto pegado al punto
-  exacto donde se tocó es difícil de acertar con el dedo y peor con guantes.
-- **El buscador de tipos de trabajo usa el teclado nativo del teléfono**, sin autocompletado
-  agresivo que tape la lista de sugerencias — las sugerencias aparecen debajo del campo de
-  texto, en una lista de filas altas (mismo alto de fila que ya usa el resto de la PWA para
-  listas táctiles), no como una grilla compacta.
-- **Los campos de selección múltiple (condiciones de entorno) son casillas de toque, no un
-  `<select multiple>` nativo** — los `<select multiple>` son notoriamente difíciles de usar en
-  móvil; se prefieren filas con casilla, mismo patrón ya usado en O5 para la lista de riesgos
-  comunes.
-- **La vista previa del texto se actualiza sin recargar la pantalla ni perder la posición de
-  scroll** — importante porque el supervisor puede estar completando varios hallazgos uno
-  tras otro; perder el lugar en la pantalla cada vez que cambia un campo sería una fricción
-  real en el uso repetido.
+Lo nuevo de este documento (listas transversales con sugerencias premarcadas, agrupación por
+categoría) no agrega ninguna consideración táctil distinta a las ya documentadas — sigue siendo
+la misma hoja inferior con casillas de toque de siempre (§6), solo que a veces ya viene con
+algunas marcadas. La agrupación por categoría de `tareasSecundarias` es, en términos de
+interacción táctil, un subtítulo más dentro de la misma lista de casillas — no un componente
+nuevo.
 
 ---
 
-## 12. Fases de implementación
+## 13. Fases de implementación
 
-Cada fase entrega algo usable o verificable por sí sola, sin depender de que la fase siguiente
-ya exista.
+Dado que buena parte de la Fase A/B/D de la primera versión ya está construida (catálogo
+`TipoTrabajo` básico, motor de sugerencia, motor de texto, "lienzo en blanco" en PWA, fotos,
+casos no cubiertos), las fases de esta versión son más chicas y se enfocan en lo que agrega el
+catálogo nuevo.
 
-**Fase A — Modelo de datos y carga del catálogo.** `TipoTrabajo`, `CondicionEntorno`,
-extensión de `OT.informeEvaluacion` con `hallazgos[]`. Endpoints de importación/exportación de
-catálogo (§7) y un endpoint de solo lectura para listar el catálogo. **Entregable
-verificable**: se puede cargar un catálogo real vía Excel y confirmarlo consultando la API
-directamente, sin ninguna pantalla nueva todavía.
+**Fase A' — Modelo de datos y carga del catálogo nuevo.** Extender `TipoTrabajo`
+(`codigoTipo`, `condicionesNoAplicables`, `sugerencias`), crear `CatalogoTransversal`, extender
+el importador/exportador a 7 hojas (§8). **Entregable verificable**: importar
+`plantilla_tipos_trabajo.xlsx` tal cual (los 30 tipos reales) y confirmar contra la API que
+quedaron los 30 `TipoTrabajo`, las 9 `CatalogoTransversal` con sus valores, y las sugerencias
+correctas por tipo.
 
-**Fase B — Motor de sugerencia y motor de texto (lógica pura).** Las dos piezas de lógica de
-§4 y §5, construidas y probables con datos de ejemplo sin estar conectadas a ninguna pantalla
-todavía — son funciones sin estado que reciben catálogo + texto/valores y devuelven resultado,
-así que se pueden verificar con casos de prueba concretos antes de tocar ninguna interfaz.
-**Entregable verificable**: dado un catálogo de ejemplo y una entrada de texto, el motor
-devuelve las sugerencias esperadas; dado un tipo de trabajo y valores parciales, el motor
-devuelve el texto con los segmentos correctos.
+**Fase B' — Extensión del motor de texto en pantalla.** Resolver claves contra
+`CatalogoTransversal` además de contra campos propios (§5); precarga de sugerencias premarcadas
+(§6); agrupación por categoría de `tareasSecundarias`; la segunda pasada de "omitir oración
+completa sin valor" al generar el texto final (§5, pendiente de confirmación sobre el criterio
+exacto). **Entregable verificable**: elegir "Cambio de bomba" contra el catálogo real
+importado en la Fase A' y ver el texto completo con sugerencias premarcadas ya llenas, listas
+en blanco tocables para lo que falta, y ninguna oración colgando en el texto final guardado.
 
-**Fase C — Bloque de administración del catálogo (`ImportExportScreen`).** CRUD de tipos de
-trabajo (incluidas sus condiciones no aplicables) y condiciones de entorno, más la lista de
-casos no cubiertos (todavía vacía, porque nadie ha generado hallazgos aún). **Entregable
-verificable**: el catálogo se puede gestionar sin tocar Excel ni la base de datos directamente.
+**Fase C' (opcional, ver §9) — Pantalla de administración.** Solo si se confirma que hace
+falta más allá del ciclo por Excel. Sin entregable obligatorio de esta fase.
 
-**Fase D — Formulario adaptativo, como componente compartido.** El flujo completo — buscar,
-elegir tipo, llenar campos, ver el texto interactivo, deshacer una edición manual, eliminar un
-hallazgo, agregar fotos — construido de forma que ambas pantallas de la Fase E lo reutilicen
-sin duplicar lógica (solo cambia el envoltorio visual táctil vs. escritorio, ver §11).
-**Entregable verificable**: un hallazgo real se puede levantar de principio a fin contra datos
-de prueba, antes de decidir en qué pantalla se monta primero.
+**Fase D' — Decisión sobre `TratamientoScreen`.** Resolver la pregunta de §1/§Supuestos:
+conectar `erp-web/src/screens/EditorHallazgo.jsx` (ya construido, hoy sin uso) a la pestaña "0 ·
+Informe Inicial", o confirmar que el informe sigue siendo exclusivo de terreno y dar de baja ese
+archivo. No depende de A'/B' para decidirse, aunque si la respuesta es "conectarlo", sí depende
+de que A'/B' ya estén hechas (para que el componente de escritorio también entienda catálogos
+transversales).
 
-**Fase E — Integración en las dos pantallas de uso.** `O5_InformeEvaluacion` (PWA Operativa) y
-la pestaña "0 · Informe Inicial" de `TratamientoScreen` (escritorio) montan el mismo
-componente de la Fase D, cada una con su propio flujo de guardado. **Entregable verificable**:
-un hallazgo creado en el teléfono se ve y se puede seguir editando desde el escritorio, y
-viceversa.
-
-Orden sugerido: A y B pueden avanzar en paralelo (una es datos, la otra es lógica pura sobre
-datos de ejemplo). C depende de A. D depende de A y B. E depende de A, B y D.
+Orden sugerido: A' primero (es la base de datos). B' depende de A'. C' y D' son independientes
+entre sí y pueden ir en paralelo con B' una vez A' esté lista, aunque ambas son decisiones
+pendientes de confirmación antes de construirse (§9 y §1).
 
 ---
 
-## 13. Ruta de extensión futura (breve, no implementada en esta fase)
+## 14. Ruta de extensión futura (breve, no implementada en esta fase)
 
-- **Informes de Ejecución**: el mismo catálogo de `TipoTrabajo`, el mismo motor de texto y el
-  mismo motor de sugerencia podrían reutilizarse para describir **lo que efectivamente se
-  hizo**, no solo lo observado en la evaluación — probablemente con una plantilla de texto
-  distinta por tipo de trabajo para la etapa de ejecución ("Se cambió línea de {diametro}
-  {material}..." en pasado, con datos reales en vez de tentativos), reutilizando el mismo
-  `TipoTrabajo` como catálogo base. No se diseña el detalle acá.
-- **Formulario de solicitud del cliente**: una versión reducida y de cara pública del mismo
-  buscador (sin campos técnicos que el cliente no sabría llenar) podría ayudar a que la
-  solicitud inicial ya venga con algo más de estructura que un texto libre, mejorando de paso
-  la calidad de lo que el Planificador recibe antes incluso de la visita. Requeriría decidir
-  qué subconjunto de campos tiene sentido exponer a alguien externo al taller.
-- **Asistencia con IA para completar el catálogo**: el registro de casos no cubiertos (§9) es,
-  sin quererlo, el insumo ideal para esto — con suficientes casos acumulados, un modelo de
-  lenguaje podría sugerir tipos de trabajo nuevos, sinónimos adicionales, u opciones de campo
-  que la persona a cargo del catálogo no había pensado. No se integra ninguna llamada a IA en
-  esta fase; el diseño de arriba no depende de que esto exista y no se ve afectado si nunca se
-  construye.
+Sin cambios respecto a la primera versión de este documento:
+
+- **Informes de Ejecución**: mismo catálogo, mismo motor de texto y de sugerencia, reutilizados
+  para describir lo que efectivamente se hizo (no solo lo observado), probablemente con una
+  `plantillaTexto` distinta por tipo para la etapa de ejecución.
+- **Formulario de solicitud del cliente**: una versión reducida y pública del mismo buscador,
+  sin campos técnicos.
+- **Asistencia con IA para completar el catálogo**: el registro de casos no cubiertos (§10) es
+  el insumo natural para esto — no se integra ninguna llamada a IA en esta fase.
 
 ---
 
 ## Supuestos, contradicciones y preguntas pendientes
 
-**Actualización**: las seis preguntas de la primera versión de este documento ya se
-resolvieron y quedan reflejadas en el cuerpo del documento. Se listan aquí solo como registro
-de qué se decidió y dónde:
+**Heredadas de la primera versión, aún abiertas:**
 
-1. **Tareas**: sí — cada hallazgo mantiene sincronizada una tarea propia en
-   `informeEvaluacion.tareas[]` (§3.4.1).
-2. **Condiciones "no aplica"**: sí — cada `TipoTrabajo` puede excluir condiciones del catálogo
-   transversal (§3.1, §3.3).
-3. **Búsqueda en opciones de campos**: sí — el motor de sugerencia también busca ahí, con
-   menor peso que nombre/sinónimos (§4).
-4. **Deshacer / eliminar**: ambas — botón "Deshacer edición" que vuelve al texto generado por
-   plantilla, y eliminación completa de un hallazgo (junto con su tarea vinculada) (§5).
-5. **Dónde vive la administración del catálogo**: dentro de `ImportExportScreen`, no en
-   `RecursosScreen` (§8).
-6. **Permisos sobre el catálogo**: ninguno diferenciado — cualquiera con acceso a la pantalla
-   puede editarlo (§8).
-7. **Hallazgos editables desde escritorio**: sí — el mismo componente de formulario adaptativo
-   se monta tanto en la PWA como en `TratamientoScreen` (§10).
+1. Si una tarea vinculada a un hallazgo se edita directamente desde el editor de tareas de
+   siempre (no desde el hallazgo), ¿esa edición corta la sincronización desde ese punto en
+   adelante, o se sobrescribe la próxima vez que el hallazgo cambie? (§3.4.1 de la primera
+   versión — sigue sin resolverse, es un detalle de comportamiento, no de modelo).
 
-**Contradicción/tensión detectada, no resuelta**: `funcionalidades-v2.md` (Gap 1) describe el
-Informe de Evaluación como algo que **bloquea** el avance a la pestaña de Tareas hasta estar
-`completo` — eso ya está implementado así hoy en `TratamientoScreen`. Este documento, en
-cambio, es explícito en que un hallazgo con caso no cubierto **nunca bloquea nada** en
-terreno. Ambas cosas pueden convivir sin contradicción real (una es "el informe en su
-conjunto debe marcarse completo para poder avanzar", la otra es "un hallazgo individual dentro
-del informe puede quedar con texto libre sin tipo de trabajo asociado y aun así el informe
-completo se guarda") — pero vale la pena dejarlo dicho explícitamente para que no se
-interprete como que se está aflojando el bloqueo ya decidido para Gap 1.
+**Nuevas de esta versión:**
 
-**Pregunta pendiente nueva** (surgida al resolver la pregunta 1 de la ronda anterior — ver
-§3.4.1): si una tarea vinculada a un hallazgo se edita directamente desde el editor de tareas
-de siempre (no desde el hallazgo), ¿esa edición manual debe cortar la sincronización desde ese
-punto en adelante (igual criterio que la edición manual del texto en §5), o debe
-sobrescribirse la próxima vez que el hallazgo cambie? Es un detalle de comportamiento, no de
-modelo de datos — ambas opciones usan el mismo esquema ya definido.
+2. **§0 — las 6 filas de "Sugerencias por tipo" con el valor entre paréntesis para
+   `obrasCiviles`**: ¿se descartan silenciosamente al importar (propuesta de este documento,
+   por ser redundantes con la presencia del marcador en la plantilla), o se importan igual y
+   simplemente nunca se muestran como sugerencia? Cualquiera de las dos es compatible con el
+   resto del diseño.
+3. **§1 — `erp-web/src/screens/EditorHallazgo.jsx` existe pero no se usa.** ¿Se conecta a
+   `TratamientoScreen` (retomando la decisión de la primera versión de este documento, que daba
+   esto por confirmado pero nunca se implementó), o se confirma que el Informe de Evaluación
+   sigue siendo exclusivo de terreno y ese archivo se da de baja? Es la pregunta abierta de
+   mayor impacto de este documento — cambia si hace falta trabajo en escritorio en esta fase o
+   no.
+4. **§5 — contradicción real entre el requisito del Excel ("toda oración sin valor se omite
+   completa") y el diseño ya construido** (que muestra el hueco pendiente resaltado dentro de
+   la oración, sin omitirla, mientras se completa el formulario). Propuesta de este documento:
+   aplicar la omisión completa solo al generar el texto final guardado, no en la vista previa
+   interactiva — pendiente de confirmar, junto con el criterio exacto para detectar el límite
+   de una oración (¿el punto seguido basta?).
+5. **§3.3.1 — el booleano `porDefecto`** no se modela porque el archivo real nunca lo usa en
+   `No` para un valor real (solo para el marcador especial de la pregunta 2). Si se anticipa
+   necesitarlo pronto (sugerencias mostradas pero no premarcadas), conviene decidirlo ahora
+   antes de implementar el modelo de datos, no después.
+6. **§8.2 — la plantilla de ejemplo para descargar** (`plantillaTiposTrabajo`): ¿se actualiza a
+   un ejemplo con el modelo de dos niveles, o se reemplaza directamente por el catálogo real de
+   30 tipos como plantilla de partida?
+7. **§9 — si vale la pena construir la pantalla de administración puntual**, dado que ya pasó
+   una fase entera sin que se hiciera y el ciclo por Excel parece estar cubriendo la necesidad
+   real hasta ahora.
+
+**Sin contradicciones nuevas detectadas** respecto a `funcionalidades-v2.md` más allá de la ya
+documentada en la primera versión (el bloqueo de "0 · Informe Inicial" hasta estar completo, que
+convive sin problema con que un hallazgo individual pueda quedar como caso no cubierto).
