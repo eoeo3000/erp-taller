@@ -170,10 +170,9 @@ function SegmentoCampo({ segmento, campo, onTocar, onSubirFoto, subiendo }) {
         <span
             onClick={() => onTocar(inputFoto.current)}
             style={{
-                display: 'inline-block', padding: '2px 7px', margin: '1px', minHeight: 24,
-                background: segmento.pendiente ? '#fff' : t.superficie,
-                border: `1.5px solid ${segmento.pendiente ? t.ambar : t.acento}`,
-                borderRadius: 2, fontWeight: 600, cursor: 'pointer',
+                display: 'inline-block', padding: '0 1px',
+                borderBottom: `2px solid ${segmento.pendiente ? t.ambar : t.acento}`,
+                fontWeight: 600, cursor: 'pointer',
                 color: segmento.pendiente ? t.ambar : t.textoPrincipal,
             }}
         >
