@@ -13,6 +13,7 @@ import S3Trabajo from './screens/S3_Trabajo.jsx';
 import S4SinInformeInicial from './screens/S4_SinInformeInicial.jsx';
 import S5MisInformes from './screens/S5_MisInformes.jsx';
 import S6Ejecutadas from './screens/S6_Ejecutadas.jsx';
+import S7InformesPendientes from './screens/S7_InformesPendientes.jsx';
 
 export default function App() {
     const [pila, setPila] = useState([{ pantalla: 'cargando' }]);
@@ -94,6 +95,8 @@ export default function App() {
             return <S5MisInformes nav={nav} />;
         case 's6':
             return <S6Ejecutadas nav={nav} />;
+        case 's7':
+            return <S7InformesPendientes nav={nav} />;
         default:
             return null;
     }
