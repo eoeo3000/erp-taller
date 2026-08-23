@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 
@@ -134,6 +134,15 @@ const normalizarLayout = (l) => {
 };
 const LS_KEY = 'erpTaller.disposicion.v2';
 
+// Reordena solo las columnas VISIBLES según `ordenVisibleNuevo` (arreglo de keys en el orden
+// deseado), dejando las ocultas ancladas donde ya estaban dentro de `columnas` — así arrastrar
+// una columna visible no reordena a ciegas las que están ocultas en el medio.
+const reordenarVisibles = (columnas, ordenVisibleNuevo) => {
+    const porClave = Object.fromEntries(columnas.map(c => [c.key, c]));
+    let i = 0;
+    return columnas.map(c => c.visible ? porClave[ordenVisibleNuevo[i++]] : c);
+};
+
 // Valor de una columna 'texto' para una fila. 'margen' y 'oc' honestamente no tienen dato real
 // disponible hoy sin fabricarlo o sin un fetch por fila (ver nota en el resumen entregado al usuario).
 const valorCelda = (f, key, recursos = []) => {
@@ -223,6 +232,42 @@ const DashboardScreen = ({ ots = [], solicitudes = [], eliminarOT, actualizarEst
             setActiva('');
         };
         const soltar = () => { window.removeEventListener('pointermove', mover); window.removeEventListener('pointerup', soltar); };
+        window.addEventListener('pointermove', mover);
+        window.addEventListener('pointerup', soltar);
+    };
+
+    // Arrastrar el encabezado completo (no la manija de ancho, ver arrastrarColumna) reordena
+    // la columna en vivo: se compara la posición del puntero contra el centro de cada
+    // encabezado visible y se reordena en cuanto el puntero cruza al de al lado — mismo
+    // patrón de "arrastrar para reordenar" de cualquier tabla, antes solo existía la flecha
+    // "‹" del menú de columnas (mueve de a una, siempre a la izquierda).
+    const headerRefs = useRef({});
+    const [colArrastrada, setColArrastrada] = useState(null);
+    const arrastrarOrdenColumna = (key) => (e) => {
+        if (key === 'cliente') return; // columna fija, no se reordena
+        e.preventDefault();
+        setColArrastrada(key);
+        const mover = (ev) => {
+            const claves = columnasVisibles.map(c => c.key);
+            let nuevoIdx = 0;
+            for (const k of claves) {
+                const el = headerRefs.current[k];
+                if (el && ev.clientX > el.getBoundingClientRect().left + el.getBoundingClientRect().width / 2) nuevoIdx++;
+            }
+            nuevoIdx = Math.min(nuevoIdx, claves.length - 1);
+            const idxActual = claves.indexOf(key);
+            if (nuevoIdx !== idxActual) {
+                const nuevasClaves = claves.slice();
+                nuevasClaves.splice(idxActual, 1);
+                nuevasClaves.splice(nuevoIdx, 0, key);
+                setColumnas(reordenarVisibles(layout.columnas, nuevasClaves));
+            }
+        };
+        const soltar = () => {
+            setColArrastrada(null);
+            window.removeEventListener('pointermove', mover);
+            window.removeEventListener('pointerup', soltar);
+        };
         window.addEventListener('pointermove', mover);
         window.addEventListener('pointerup', soltar);
     };
@@ -537,7 +582,16 @@ const DashboardScreen = ({ ots = [], solicitudes = [], eliminarOT, actualizarEst
                             <div style={{ ...styles.encabezadoFila, gridTemplateColumns: GRID }}>
                                 <span />
                                 {columnasVisibles.map(c => (
-                                    <span key={c.key} style={{ position: 'relative', minWidth: 0, textAlign: c.align, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                    <span
+                                        key={c.key}
+                                        ref={(el) => { headerRefs.current[c.key] = el; }}
+                                        onPointerDown={arrastrarOrdenColumna(c.key)}
+                                        title={c.key === 'cliente' ? undefined : 'Arrastra para reordenar'}
+                                        style={{
+                                            position: 'relative', minWidth: 0, textAlign: c.align, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                                            cursor: c.key === 'cliente' ? 'default' : 'grab', opacity: colArrastrada === c.key ? 0.4 : 1,
+                                        }}
+                                    >
                                         {c.corto}
                                         {c.key !== 'cliente' && (
                                             <span onPointerDown={arrastrarColumna(c.key)} title="Arrastra para ajustar el ancho" style={styles.resizeHandle} />

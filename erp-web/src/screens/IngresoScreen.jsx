@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 
@@ -104,6 +104,14 @@ const normalizarLayoutIngreso = (l) => {
 };
 const LS_KEY_INGRESO = 'erpTaller.disposicion.ingreso.v1';
 
+// Reordena solo las columnas VISIBLES según `ordenVisibleNuevo` (arreglo de keys en el orden
+// deseado), dejando las ocultas ancladas donde ya estaban dentro de `columnas`.
+const reordenarVisiblesIngreso = (columnas, ordenVisibleNuevo) => {
+    const porClave = Object.fromEntries(columnas.map(c => [c.key, c]));
+    let i = 0;
+    return columnas.map(c => c.visible ? porClave[ordenVisibleNuevo[i++]] : c);
+};
+
 // Valor de una columna 'texto' para una fila — 'empresa', 'estado' y 'adjunto' se pintan aparte
 // (llevan color/subtexto/enlace, ver el render de la fila) porque no son texto plano.
 const valorCeldaIngreso = (fila, key) => {
@@ -194,6 +202,39 @@ const IngresoScreen = ({ solicitudes = [], liberarSolicitudManual, cargarDatos, 
             setVarianteActiva('');
         };
         const soltar = () => { window.removeEventListener('pointermove', mover); window.removeEventListener('pointerup', soltar); };
+        window.addEventListener('pointermove', mover);
+        window.addEventListener('pointerup', soltar);
+    };
+
+    // Arrastrar el encabezado completo (no la manija de ancho) reordena en vivo — ver el mismo
+    // patrón en DashboardScreen.jsx.
+    const headerRefs = useRef({});
+    const [colArrastrada, setColArrastrada] = useState(null);
+    const arrastrarOrdenColumnaTabla = (key) => (e) => {
+        if (key === 'empresa') return; // columna fija, no se reordena
+        e.preventDefault();
+        setColArrastrada(key);
+        const mover = (ev) => {
+            const claves = columnasVisiblesTabla.map(c => c.key);
+            let nuevoIdx = 0;
+            for (const k of claves) {
+                const el = headerRefs.current[k];
+                if (el && ev.clientX > el.getBoundingClientRect().left + el.getBoundingClientRect().width / 2) nuevoIdx++;
+            }
+            nuevoIdx = Math.min(nuevoIdx, claves.length - 1);
+            const idxActual = claves.indexOf(key);
+            if (nuevoIdx !== idxActual) {
+                const nuevasClaves = claves.slice();
+                nuevasClaves.splice(idxActual, 1);
+                nuevasClaves.splice(nuevoIdx, 0, key);
+                setColumnasTabla(reordenarVisiblesIngreso(layoutTabla.columnas, nuevasClaves));
+            }
+        };
+        const soltar = () => {
+            setColArrastrada(null);
+            window.removeEventListener('pointermove', mover);
+            window.removeEventListener('pointerup', soltar);
+        };
         window.addEventListener('pointermove', mover);
         window.addEventListener('pointerup', soltar);
     };
@@ -524,7 +565,16 @@ const IngresoScreen = ({ solicitudes = [], liberarSolicitudManual, cargarDatos, 
                         <div style={{ minWidth: TABLA_MIN_W }}>
                             <div style={{ ...styles.encabezadoFila, gridTemplateColumns: GRID }}>
                                 {columnasVisiblesTabla.map(c => (
-                                    <span key={c.key} style={{ position: 'relative', minWidth: 0, textAlign: c.align, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                    <span
+                                        key={c.key}
+                                        ref={(el) => { headerRefs.current[c.key] = el; }}
+                                        onPointerDown={arrastrarOrdenColumnaTabla(c.key)}
+                                        title={c.key === 'empresa' ? undefined : 'Arrastra para reordenar'}
+                                        style={{
+                                            position: 'relative', minWidth: 0, textAlign: c.align, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                                            cursor: c.key === 'empresa' ? 'default' : 'grab', opacity: colArrastrada === c.key ? 0.4 : 1,
+                                        }}
+                                    >
                                         {c.corto}
                                         {c.key !== 'empresa' && (
                                             <span onPointerDown={arrastrarColumnaTabla(c.key)} title="Arrastra para ajustar el ancho" style={styles.resizeHandle} />
