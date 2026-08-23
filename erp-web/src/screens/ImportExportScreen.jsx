@@ -42,7 +42,7 @@ const EXPORTABLES = [
     { id: 'puestos',     label: 'Puestos / especialidades',  desc: 'nombre, costoHora, categoria' },
     { id: 'ots',         label: 'Órdenes de trabajo',        desc: 'numeroOT, solicitante, estado, granTotal, pago…' },
     { id: 'solicitudes', label: 'Solicitudes',               desc: 'solicitante, empresa, descripcion, estado, fecha' },
-    { id: 'tipos-trabajo', label: 'Catálogo de tipos de trabajo', desc: '4 hojas: tipos, campos, opciones, condiciones de entorno' },
+    { id: 'tipos-trabajo', label: 'Catálogo de tipos de trabajo', desc: '3 hojas: tipos, campos, opciones' },
 ];
 
 const IMPORTABLES = [
@@ -51,8 +51,9 @@ const IMPORTABLES = [
     { id: 'equipos',     label: 'Equipos y herramientas',   columnas: ['nombre *', 'codigo', 'tipo', 'estado', 'precio'] },
     { id: 'puestos',     label: 'Puestos / especialidades', columnas: ['nombre *', 'costoHora', 'categoria'] },
     // Catálogo del formulario adaptativo (Informe de Evaluación) — ver
-    // docs/plan-formulario-adaptativo.md §7. 4 hojas por archivo, no columnas sueltas — la
-    // descarga de plantilla es la referencia real, esto es solo para el resumen visual.
+    // docs/plan-formulario-adaptativo.md §7. 3 hojas por archivo, no columnas sueltas — la
+    // descarga de plantilla es la referencia real, esto es solo para el resumen visual. Las
+    // condiciones de entorno se cargan como un campo más (seleccionMultiple), no aparte.
     { id: 'tipos-trabajo', label: 'Catálogo de tipos de trabajo', columnas: ['nombre *', 'sinonimos', 'plantillaTexto', 'campos (hoja aparte)', 'opciones (hoja aparte)'] },
 ];
 
@@ -116,84 +117,20 @@ export default function ImportExportScreen({ API, cargarDatos }) {
     }, [API]);
     useEffect(() => { cargarUsoDisco(); }, [cargarUsoDisco]);
 
-    // ── CATÁLOGO DE TIPOS DE TRABAJO (formulario adaptativo, Informe de Evaluación) ──
+    // ── CASOS NO CUBIERTOS (catálogo de tipos de trabajo, formulario adaptativo) ──
     // Se consulta acá mismo (no vía App.jsx/polling global) — mismo criterio que el resto de
-    // esta pantalla (uso de disco, estado del entorno demo): administración bajo demanda, no
-    // parte del refresco automático de /api/data (ver CLAUDE.md, "Sincronización de datos").
-    const [tiposTrabajo, setTiposTrabajo] = useState([]);
-    const [condicionesEntorno, setCondicionesEntorno] = useState([]);
+    // esta pantalla (uso de disco, estado del entorno demo): bajo demanda, no parte del
+    // refresco automático de /api/data. El catálogo en sí ya no se edita en pantalla — solo
+    // por Excel (Importar/Exportar de arriba), igual que el resto de los catálogos.
     const [casosNoCubiertos, setCasosNoCubiertos] = useState([]);
-    const [tipoEnEdicion, setTipoEnEdicion] = useState(null); // null = lista; {} = nuevo; objeto = editando
-    const [condicionEnEdicion, setCondicionEnEdicion] = useState(null);
-    const [guardandoCatalogo, setGuardandoCatalogo] = useState(false);
 
-    const cargarCatalogo = useCallback(async () => {
+    const cargarCasosNoCubiertos = useCallback(async () => {
         try {
-            const [rTipos, rCond, rCasos] = await Promise.all([
-                fetch(`${API}/tipos-trabajo`, { headers: headerEntorno() }),
-                fetch(`${API}/condiciones-entorno`, { headers: headerEntorno() }),
-                fetch(`${API}/tipos-trabajo/casos-no-cubiertos`, { headers: headerEntorno() }),
-            ]);
-            setTiposTrabajo(await rTipos.json());
-            setCondicionesEntorno(await rCond.json());
-            setCasosNoCubiertos(await rCasos.json());
+            const r = await fetch(`${API}/tipos-trabajo/casos-no-cubiertos`, { headers: headerEntorno() });
+            setCasosNoCubiertos(await r.json());
         } catch { /* no crítico */ }
     }, [API]);
-    useEffect(() => { cargarCatalogo(); }, [cargarCatalogo]);
-
-    const guardarTipoTrabajo = async (tipo) => {
-        setGuardandoCatalogo(true);
-        try {
-            const esNuevo = !tipo._id;
-            const r = await fetch(`${API}/tipos-trabajo${esNuevo ? '' : `/${tipo._id}`}`, {
-                method: esNuevo ? 'POST' : 'PUT',
-                headers: { 'Content-Type': 'application/json', ...headerEntorno() },
-                body: JSON.stringify(tipo),
-            });
-            if (!r.ok) throw new Error((await r.json()).mensaje || 'Error al guardar');
-            setTipoEnEdicion(null);
-            await cargarCatalogo();
-            if (cargarDatos) cargarDatos();
-        } catch (e) {
-            setResultado({ error: e.message, modulo: 'Catálogo de tipos de trabajo' });
-        } finally {
-            setGuardandoCatalogo(false);
-        }
-    };
-
-    const eliminarTipoTrabajo = async (id) => {
-        if (!window.confirm('¿Eliminar este tipo de trabajo del catálogo?')) return;
-        await fetch(`${API}/tipos-trabajo/${id}`, { method: 'DELETE', headers: headerEntorno() });
-        await cargarCatalogo();
-        if (cargarDatos) cargarDatos();
-    };
-
-    const guardarCondicion = async (condicion) => {
-        setGuardandoCatalogo(true);
-        try {
-            const esNueva = !condicion._id;
-            const r = await fetch(`${API}/condiciones-entorno${esNueva ? '' : `/${condicion._id}`}`, {
-                method: esNueva ? 'POST' : 'PUT',
-                headers: { 'Content-Type': 'application/json', ...headerEntorno() },
-                body: JSON.stringify(condicion),
-            });
-            if (!r.ok) throw new Error((await r.json()).mensaje || 'Error al guardar');
-            setCondicionEnEdicion(null);
-            await cargarCatalogo();
-            if (cargarDatos) cargarDatos();
-        } catch (e) {
-            setResultado({ error: e.message, modulo: 'Condiciones de entorno' });
-        } finally {
-            setGuardandoCatalogo(false);
-        }
-    };
-
-    const eliminarCondicion = async (id) => {
-        if (!window.confirm('¿Eliminar esta condición de entorno?')) return;
-        await fetch(`${API}/condiciones-entorno/${id}`, { method: 'DELETE', headers: headerEntorno() });
-        await cargarCatalogo();
-        if (cargarDatos) cargarDatos();
-    };
+    useEffect(() => { cargarCasosNoCubiertos(); }, [cargarCasosNoCubiertos]);
 
     const cambiarEntorno = (valor) => {
         if (valor === entorno) return;
@@ -583,77 +520,6 @@ export default function ImportExportScreen({ API, cargarDatos }) {
                         </div>
                     </section>
 
-                    {/* ── CATÁLOGO DE TIPOS DE TRABAJO (formulario adaptativo) ── */}
-                    <section style={styles.bloque}>
-                        <div style={styles.bloqueHeader}>
-                            <span style={styles.tituloSub}>Catálogo de tipos de trabajo</span>
-                            <span onClick={() => setTipoEnEdicion({ nombre: '', sinonimos: [], plantillaTexto: '', activo: true, condicionesNoAplicables: [], campos: [] })} style={styles.linkAccion}>+ Nuevo tipo</span>
-                        </div>
-                        <div style={styles.notaBloque}>Complementario a la carga masiva de arriba — para ediciones puntuales. Ver plantilla_tipos_trabajo.xlsx para la carga completa.</div>
-
-                        {!tipoEnEdicion ? (
-                            <div>
-                                {tiposTrabajo.length === 0 && <div style={{ fontSize: 11.5, color: t.textoAtenuado2, padding: '8px 0' }}>Catálogo vacío — carga un Excel arriba o crea uno nuevo.</div>}
-                                {tiposTrabajo.map(tipo => (
-                                    <div key={tipo._id} style={styles.filaSeleccion}>
-                                        <span style={{ fontSize: 12.5, fontWeight: 600, width: 200, flex: 'none', opacity: tipo.activo ? 1 : .5 }}>{tipo.nombre}{!tipo.activo ? ' (inactivo)' : ''}</span>
-                                        <span style={{ fontSize: 11, color: t.textoAtenuado3 }}>{(tipo.campos || []).length} campo{(tipo.campos || []).length === 1 ? '' : 's'}</span>
-                                        <span style={{ marginLeft: 'auto', display: 'flex', gap: 10 }}>
-                                            <span onClick={() => setTipoEnEdicion(tipo)} style={styles.linkAccion}>Editar</span>
-                                            <span onClick={() => eliminarTipoTrabajo(tipo._id)} style={{ ...styles.linkAccion, color: t.rojo }}>Eliminar</span>
-                                        </span>
-                                    </div>
-                                ))}
-                            </div>
-                        ) : (
-                            <FormularioTipoTrabajo
-                                tipo={tipoEnEdicion}
-                                condicionesEntorno={condicionesEntorno}
-                                guardando={guardandoCatalogo}
-                                onCambiar={setTipoEnEdicion}
-                                onGuardar={() => guardarTipoTrabajo(tipoEnEdicion)}
-                                onCancelar={() => setTipoEnEdicion(null)}
-                            />
-                        )}
-                    </section>
-
-                    {/* ── CONDICIONES DE ENTORNO (catálogo transversal) ── */}
-                    <section style={styles.bloque}>
-                        <div style={styles.bloqueHeader}>
-                            <span style={styles.tituloSub}>Condiciones de entorno</span>
-                            <span onClick={() => setCondicionEnEdicion({ nombre: '', activo: true })} style={styles.linkAccion}>+ Nueva</span>
-                        </div>
-                        <div style={styles.notaBloque}>Catálogo único, transversal a todos los tipos de trabajo — cada tipo puede excluir las que no le apliquen desde su propio formulario de edición.</div>
-
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                            {condicionesEntorno.map(c => (
-                                <span key={c._id} style={{ ...styles.badge, background: c.activo ? '#f0efeb' : '#faf3f3', color: c.activo ? t.textoSecundario3 : t.textoDeshabilitado, display: 'flex', alignItems: 'center', gap: 6 }}>
-                                    {c.nombre}
-                                    <span onClick={() => setCondicionEnEdicion(c)} style={{ cursor: 'pointer', color: t.acento }}>editar</span>
-                                    <span onClick={() => eliminarCondicion(c._id)} style={{ cursor: 'pointer', color: t.rojo }}>×</span>
-                                </span>
-                            ))}
-                        </div>
-
-                        {condicionEnEdicion && (
-                            <div style={styles.filtroOT}>
-                                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                                    <input
-                                        value={condicionEnEdicion.nombre}
-                                        onChange={e => setCondicionEnEdicion(c => ({ ...c, nombre: e.target.value }))}
-                                        placeholder="Nombre de la condición"
-                                        style={{ ...styles.inputPlano, flex: 1 }}
-                                    />
-                                    <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11.5 }}>
-                                        <input type="checkbox" checked={condicionEnEdicion.activo} onChange={e => setCondicionEnEdicion(c => ({ ...c, activo: e.target.checked }))} /> Activa
-                                    </label>
-                                    <button onClick={() => guardarCondicion(condicionEnEdicion)} disabled={!condicionEnEdicion.nombre.trim() || guardandoCatalogo} style={styles.btnSecundario}>Guardar</button>
-                                    <span onClick={() => setCondicionEnEdicion(null)} style={{ ...styles.linkAccion, cursor: 'pointer' }}>Cancelar</span>
-                                </div>
-                            </div>
-                        )}
-                    </section>
-
                     {/* ── CASOS NO CUBIERTOS (plan §9) ── */}
                     <section style={styles.bloque}>
                         <div style={styles.bloqueHeader}>
@@ -677,128 +543,6 @@ export default function ImportExportScreen({ API, cargarDatos }) {
                             </div>
                         )}
                     </section>
-                </div>
-            </div>
-        </div>
-    );
-}
-
-const TIPOS_DATO_CAMPO = [
-    { valor: 'texto', label: 'Texto' },
-    { valor: 'numero', label: 'Número' },
-    { valor: 'seleccionUnica', label: 'Selección única' },
-    { valor: 'seleccionMultiple', label: 'Selección múltiple' },
-    { valor: 'fecha', label: 'Fecha' },
-    { valor: 'foto', label: 'Foto' },
-];
-const TIENE_OPCIONES = new Set(['seleccionUnica', 'seleccionMultiple']);
-
-// Formulario de edición de un TipoTrabajo del catálogo — plan §8. Campos y sus opciones se
-// editan como listas simples (agregar/quitar fila), consistente con cómo ya se editan
-// sinónimos/opciones en el resto de este documento (texto separado por coma), sin un editor
-// anidado más elaborado.
-function FormularioTipoTrabajo({ tipo, condicionesEntorno, guardando, onCambiar, onGuardar, onCancelar }) {
-    const set = (campo, valor) => onCambiar({ ...tipo, [campo]: valor });
-
-    const agregarCampo = () => set('campos', [...(tipo.campos || []), { clave: '', etiqueta: '', tipoDato: 'texto', opciones: [], obligatorio: false, orden: (tipo.campos || []).length + 1 }]);
-    const actualizarCampo = (idx, cambios) => set('campos', tipo.campos.map((c, i) => (i === idx ? { ...c, ...cambios } : c)));
-    const quitarCampo = (idx) => set('campos', tipo.campos.filter((_, i) => i !== idx));
-
-    const toggleCondicionNoAplicable = (id) => {
-        const actual = tipo.condicionesNoAplicables || [];
-        const yaExcluida = actual.includes(id);
-        set('condicionesNoAplicables', yaExcluida ? actual.filter(x => x !== id) : [...actual, id]);
-    };
-
-    return (
-        <div style={styles.filtroOT}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                <label style={styles.campoLabel}>
-                    <span style={styles.etiqueta}>Nombre</span>
-                    <input value={tipo.nombre} onChange={e => set('nombre', e.target.value)} placeholder="Cambio de línea" style={styles.inputPlano} />
-                </label>
-                <label style={styles.campoLabel}>
-                    <span style={styles.etiqueta}>Sinónimos (separados por coma)</span>
-                    <input
-                        value={(tipo.sinonimos || []).join(', ')}
-                        onChange={e => set('sinonimos', e.target.value.split(',').map(s => s.trim()).filter(Boolean))}
-                        placeholder="cañería, tubería, línea de proceso"
-                        style={styles.inputPlano}
-                    />
-                </label>
-                <label style={styles.campoLabel}>
-                    <span style={styles.etiqueta}>Plantilla de texto (usa {'{clave}'} para cada campo)</span>
-                    <textarea
-                        value={tipo.plantillaTexto}
-                        onChange={e => set('plantillaTexto', e.target.value)}
-                        placeholder="Cambio de línea de {diametro} {material}, {trazado}, transporta {fluido}, en {planta}"
-                        style={{ ...styles.inputPlano, height: 56, resize: 'vertical', fontFamily: t.fontMono }}
-                    />
-                </label>
-
-                <div>
-                    <span style={styles.etiqueta}>Condiciones de entorno no aplicables a este tipo</span>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
-                        {condicionesEntorno.length === 0 && <span style={{ fontSize: 11, color: t.textoAtenuado2 }}>Sin condiciones cargadas todavía.</span>}
-                        {condicionesEntorno.map(c => {
-                            const excluida = (tipo.condicionesNoAplicables || []).includes(c._id);
-                            return (
-                                <span
-                                    key={c._id}
-                                    onClick={() => toggleCondicionNoAplicable(c._id)}
-                                    style={{ ...styles.badge, cursor: 'pointer', background: excluida ? '#faf3f3' : '#f0efeb', color: excluida ? t.rojo : t.textoSecundario3, textDecoration: excluida ? 'line-through' : 'none' }}
-                                    title={excluida ? 'No aplica a este tipo — clic para volver a incluirla' : 'Aplica — clic para excluirla'}
-                                >
-                                    {c.nombre}
-                                </span>
-                            );
-                        })}
-                    </div>
-                </div>
-
-                <div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                        <span style={styles.etiqueta}>Campos</span>
-                        <span onClick={agregarCampo} style={styles.linkAccion}>+ Agregar campo</span>
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 6 }}>
-                        {(tipo.campos || []).map((campo, idx) => (
-                            <div key={idx} style={{ border: `1px solid ${t.bordeZona}`, borderRadius: 2, padding: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
-                                <div style={{ display: 'flex', gap: 6 }}>
-                                    <input value={campo.clave} onChange={e => actualizarCampo(idx, { clave: e.target.value })} placeholder="clave (diametro)" style={{ ...styles.inputPlano, flex: 1, fontFamily: t.fontMono }} />
-                                    <input value={campo.etiqueta} onChange={e => actualizarCampo(idx, { etiqueta: e.target.value })} placeholder="Etiqueta (Diámetro)" style={{ ...styles.inputPlano, flex: 1 }} />
-                                    <select value={campo.tipoDato} onChange={e => actualizarCampo(idx, { tipoDato: e.target.value })} style={{ ...styles.inputPlano, width: 140 }}>
-                                        {TIPOS_DATO_CAMPO.map(o => <option key={o.valor} value={o.valor}>{o.label}</option>)}
-                                    </select>
-                                    <input type="number" value={campo.orden} onChange={e => actualizarCampo(idx, { orden: parseInt(e.target.value, 10) || 0 })} style={{ ...styles.inputPlano, width: 54 }} title="Orden" />
-                                    <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11 }}>
-                                        <input type="checkbox" checked={campo.obligatorio} onChange={e => actualizarCampo(idx, { obligatorio: e.target.checked })} /> Oblig.
-                                    </label>
-                                    <span onClick={() => quitarCampo(idx)} style={{ ...styles.linkAccion, color: t.rojo }}>Quitar</span>
-                                </div>
-                                {TIENE_OPCIONES.has(campo.tipoDato) && (
-                                    <input
-                                        value={(campo.opciones || []).join(', ')}
-                                        onChange={e => actualizarCampo(idx, { opciones: e.target.value.split(',').map(s => s.trim()).filter(Boolean) })}
-                                        placeholder="Opciones separadas por coma: 2 pulgadas, 4 pulgadas, 6 pulgadas"
-                                        style={{ ...styles.inputPlano, width: '100%' }}
-                                    />
-                                )}
-                            </div>
-                        ))}
-                        {(tipo.campos || []).length === 0 && <span style={{ fontSize: 11, color: t.textoAtenuado2 }}>Sin campos todavía.</span>}
-                    </div>
-                </div>
-
-                <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11.5 }}>
-                    <input type="checkbox" checked={tipo.activo} onChange={e => set('activo', e.target.checked)} /> Activo
-                </label>
-
-                <div style={{ display: 'flex', gap: 8 }}>
-                    <button onClick={onGuardar} disabled={!tipo.nombre?.trim() || guardando} style={tipo.nombre?.trim() ? styles.btnPrimario : styles.btnInerte}>
-                        {guardando ? 'Guardando…' : 'Guardar'}
-                    </button>
-                    <button onClick={onCancelar} style={styles.btnSecundario}>Cancelar</button>
                 </div>
             </div>
         </div>

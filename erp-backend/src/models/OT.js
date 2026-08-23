@@ -61,7 +61,6 @@ const OTSchema = new mongoose.Schema({
         hallazgos: [{
             tipoTrabajoId: { type: mongoose.Schema.Types.ObjectId, ref: 'TipoTrabajo', default: null },
             valores: { type: mongoose.Schema.Types.Mixed, default: {} },
-            condicionesEntorno: [{ type: mongoose.Schema.Types.ObjectId, ref: 'CondicionEntorno' }],
             textoGenerado: { type: String, default: '' },
             textoDescriptivo: { type: String, default: '' },
             textoEditadoManualmente: { type: Boolean, default: false },

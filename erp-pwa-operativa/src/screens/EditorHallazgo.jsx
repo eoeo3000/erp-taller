@@ -8,16 +8,16 @@ import { subirFoto } from '../api.js';
 // "lienzo en blanco": un solo cuadro donde se escribe, sin buscador separado ni lista de
 // campos aparte. Componente CONTROLADO (hallazgo + onCambiar) a propósito: no tiene guardar/
 // cancelar propios — la pantalla que lo usa (O5) es la que manda esos botones abajo, este
-// componente es solo el cuadro y sus fotos/condiciones.
-export default function EditorHallazgo({ hallazgo, onCambiar, tiposTrabajo, condicionesEntorno }) {
+// componente es solo el cuadro y sus fotos. Las condiciones de entorno ya no son un catálogo
+// aparte — son un campo más (tipoDato seleccionMultiple) definido por cada tipo de trabajo en
+// el Excel, así que quedan tejidas en el mismo texto como cualquier otro espacio en blanco.
+export default function EditorHallazgo({ hallazgo, onCambiar, tiposTrabajo }) {
     const [hojaAbierta, setHojaAbierta] = useState(null); // campo completo (clave, tipoDato, opciones, etiqueta)
-    const [condicionesAbiertas, setCondicionesAbiertas] = useState(false);
     const [subiendoFoto, setSubiendoFoto] = useState(false);
 
     const tipoElegido = tiposTrabajo.find((t) => String(t._id) === String(hallazgo.tipoTrabajoId));
     const sugerencias = !tipoElegido && hallazgo.textoDescriptivo?.trim() ? sugerirTiposTrabajo(hallazgo.textoDescriptivo, tiposTrabajo) : [];
     const segmentos = tipoElegido ? generarSegmentos(tipoElegido.plantillaTexto, hallazgo.valores) : [];
-    const condicionesDisponibles = condicionesEntorno.filter((c) => !(tipoElegido?.condicionesNoAplicables || []).includes(c._id));
 
     const escribir = (texto) => onCambiar({ ...hallazgo, textoDescriptivo: texto });
     const elegirTipo = (tipo) => onCambiar(recalcularTexto({ ...hallazgo, tipoTrabajoId: tipo._id, valores: {} }, tipo));
@@ -25,11 +25,6 @@ export default function EditorHallazgo({ hallazgo, onCambiar, tiposTrabajo, cond
     const cambiarValor = (clave, valor) => onCambiar(recalcularTexto({ ...hallazgo, valores: { ...hallazgo.valores, [clave]: valor } }, tipoElegido));
     const editarTextoLibre = (nuevoTexto) => onCambiar({ ...hallazgo, textoDescriptivo: nuevoTexto, textoEditadoManualmente: true });
     const onDeshacer = () => onCambiar(deshacerEdicionManual(hallazgo));
-
-    const toggleCondicion = (id) => {
-        const actual = hallazgo.condicionesEntorno || [];
-        onCambiar({ ...hallazgo, condicionesEntorno: actual.includes(id) ? actual.filter((x) => x !== id) : [...actual, id] });
-    };
 
     const agregarFotoLibre = async (archivo) => {
         setSubiendoFoto(true);
@@ -121,24 +116,6 @@ export default function EditorHallazgo({ hallazgo, onCambiar, tiposTrabajo, cond
                             Editar el texto libremente
                         </button>
                     )}
-
-                    {condicionesDisponibles.length > 0 && (
-                        <button
-                            onClick={() => setCondicionesAbiertas(true)}
-                            className="boton-secundario"
-                            style={{ minHeight: 52, textAlign: 'left', paddingLeft: 14, paddingRight: 14, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}
-                        >
-                            <span style={{ minWidth: 0 }}>
-                                <span className="versalita" style={{ display: 'block', fontSize: 11 }}>Condiciones de entorno</span>
-                                <span style={{ display: 'block', fontSize: 14, marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                    {(hallazgo.condicionesEntorno || []).length
-                                        ? condicionesDisponibles.filter((c) => hallazgo.condicionesEntorno.includes(c._id)).map((c) => c.nombre).join(', ')
-                                        : 'Ninguna'}
-                                </span>
-                            </span>
-                            <span className="mono" style={{ fontSize: 18, color: 'var(--deshabilitado-1)', flex: 'none' }}>›</span>
-                        </button>
-                    )}
                 </>
             )}
 
@@ -164,40 +141,6 @@ export default function EditorHallazgo({ hallazgo, onCambiar, tiposTrabajo, cond
                     onCerrar={() => setHojaAbierta(null)}
                 />
             )}
-
-            {condicionesAbiertas && (
-                <HojaCondiciones
-                    condiciones={condicionesDisponibles}
-                    seleccionadas={hallazgo.condicionesEntorno || []}
-                    onToggle={toggleCondicion}
-                    onCerrar={() => setCondicionesAbiertas(false)}
-                />
-            )}
-        </div>
-    );
-}
-
-// Misma hoja inferior que HojaCampo para "seleccionMultiple", pero sobre el catálogo
-// transversal de condiciones (id/nombre) en vez de las opciones de un campo — antes esto se
-// mostraba siempre abierto como una lista de botones, ocupando más de la mitad de la
-// pantalla; ahora es una sola fila resumen que abre esto al tocarla.
-function HojaCondiciones({ condiciones, seleccionadas, onToggle, onCerrar }) {
-    return (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.35)', zIndex: 50, display: 'flex', alignItems: 'flex-end' }} onClick={onCerrar}>
-            <div onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxHeight: '70vh', overflowY: 'auto', background: '#fff', borderRadius: '8px 8px 0 0', padding: 16 }}>
-                <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 10 }}>Condiciones de entorno</div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                    {condiciones.map((c) => {
-                        const marcada = seleccionadas.includes(c._id);
-                        return (
-                            <button key={c._id} onClick={() => onToggle(c._id)} className="boton-secundario" style={{ minHeight: 52, textAlign: 'left', paddingLeft: 14, borderColor: marcada ? 'var(--texto-principal)' : 'var(--linea-zona)' }}>
-                                <span className="mono" style={{ marginRight: 8 }}>{marcada ? '×' : '·'}</span>{c.nombre}
-                            </button>
-                        );
-                    })}
-                </div>
-                <button onClick={onCerrar} className="boton-primario" style={{ marginTop: 12, width: '100%' }}>Listo</button>
-            </div>
         </div>
     );
 }
