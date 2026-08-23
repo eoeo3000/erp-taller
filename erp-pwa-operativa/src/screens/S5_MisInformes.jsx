@@ -36,17 +36,36 @@ export default function S5MisInformes({ nav }) {
             <div style={{ flex: 1, overflowY: 'auto' }}>
                 {enviados.length > 0 ? (
                     <div style={{ background: 'var(--superficie)', borderTop: '1px solid var(--linea-fina)', borderBottom: '1px solid var(--linea-fina)' }}>
-                        {enviados.map((e, i) => (
-                            <div key={e._id} style={{ display: 'flex', alignItems: 'center', gap: 12, minHeight: 56, padding: '11px 18px', borderBottom: i === enviados.length - 1 ? 'none' : '1px solid var(--linea-fina)' }}>
-                                <span style={{ flex: 1, minWidth: 0 }}>
-                                    <span style={{ display: 'block', fontSize: 15 }}>{e.descripcion}</span>
-                                    <span style={{ display: 'block', marginTop: 2, fontSize: 13, color: 'var(--texto-atenuado-1)' }}>
-                                        {e.numeroSolicitud} · enviado {fechaCorta(e.fechaEnvio.slice(0, 10))}{e.numeroOT ? ` · ya es ${e.numeroOT}` : ''}
-                                    </span>
-                                </span>
-                                <span style={{ flex: 'none', fontSize: 12, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: e.desenlace === 'Cotizada' ? 'var(--listo)' : 'var(--texto-atenuado-1)' }}>{e.desenlace}</span>
-                            </div>
-                        ))}
+                        {enviados.map((e, i) => {
+                            const conObservaciones = e.revision?.estado === 'ConObservaciones';
+                            return (
+                                <div key={e._id} style={{ padding: '11px 18px', borderBottom: i === enviados.length - 1 ? 'none' : '1px solid var(--linea-fina)' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, minHeight: 56 }}>
+                                        <span style={{ flex: 1, minWidth: 0 }}>
+                                            <span style={{ display: 'block', fontSize: 15 }}>{e.descripcion}</span>
+                                            <span style={{ display: 'block', marginTop: 2, fontSize: 13, color: 'var(--texto-atenuado-1)' }}>
+                                                {e.numeroSolicitud} · enviado {fechaCorta(e.fechaEnvio.slice(0, 10))}{e.numeroOT ? ` · ya es ${e.numeroOT}` : ''}
+                                            </span>
+                                        </span>
+                                        <span style={{ flex: 'none', fontSize: 12, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: conObservaciones ? 'var(--detenido)' : e.desenlace === 'Cotizada' ? 'var(--listo)' : 'var(--texto-atenuado-1)' }}>
+                                            {conObservaciones ? 'Tiene observaciones' : e.desenlace}
+                                        </span>
+                                    </div>
+                                    {conObservaciones && (
+                                        <div style={{ marginTop: 8 }}>
+                                            {e.revision?.comentario && (
+                                                <div style={{ fontSize: 13, color: 'var(--texto-secundario-2)', marginBottom: 8 }}>{e.revision.comentario}</div>
+                                            )}
+                                            <button
+                                                onClick={() => nav.ir('o5', { asignacion: { _id: e._id, solicitudId: e.solicitudId } })}
+                                                className="boton-primario"
+                                                style={{ height: 48 }}
+                                            >Corregir informe</button>
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })}
                     </div>
                 ) : (
                     <div style={{ padding: 24, fontSize: 'var(--fs-cuerpo)', color: 'var(--texto-atenuado-1)' }}>Todavía no envías ningún informe este mes.</div>

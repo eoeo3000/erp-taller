@@ -43,12 +43,17 @@ const CLP = n => '$ ' + Math.round(n || 0).toLocaleString('es-CL');
 
 const ETAPAS_VISUAL = ['Solicitud', 'Tratamiento', 'Planificada', 'Programada', 'Ejecución', 'Terminado', 'Con informe', 'Pagada'];
 const MAPA_ETAPA = {
-    Tratada: 1, Planificada: 2, Aprobada: 2, Programada: 3,
+    Tratada: 1, Planificada: 2, Programada: 3,
     'En Ejecución': 4, 'Trabajo Terminado': 5, 'Con Informe': 6, Pagada: 7,
 };
-const etapaInfo = (estado) => {
+// 'Aprobada'/'Rechazada' ya no son valores de OT.estado (ver models/OT.js, cotizacion) —
+// un rechazo se detecta por cotizacion.respuestaCliente sin sacar a la OT de 'Planificada'.
+const etapaInfo = (ot) => {
+    const estado = ot?.estado;
     if (!estado) return { idx: 0, label: ETAPAS_VISUAL[0], rechazada: false };
-    if (estado === 'Rechazada') return { idx: 2, label: 'Rechazada', rechazada: true };
+    if (estado === 'Planificada' && ot?.cotizacion?.respuestaCliente === 'Rechazada') {
+        return { idx: 2, label: 'Rechazada', rechazada: true };
+    }
     const idx = MAPA_ETAPA[estado] ?? 0;
     return { idx, label: ETAPAS_VISUAL[idx], rechazada: false };
 };
@@ -57,6 +62,7 @@ const informeEvaluacionVacio = {
     fecha: '', responsable: '', condicionesSitio: '', recursosObservados: '',
     riesgos: '', metodologia: '', fotos: [], completo: false,
     tareas: [], componentes: [], logistica: [], hallazgos: [],
+    revision: { estado: 'Pendiente', comentario: '', fecha: null, autor: '' },
 };
 
 // Grillas fijas de cada tabla editable (README §6). Las de materiales/suministros suman una
@@ -267,7 +273,7 @@ function construirIndiceCarpeta({ otSeleccionada, tareas, componentes }) {
             resumen: 'Alcance comprometido y cómo se ejecutó cada tarea.', pags: Math.max(1, Math.ceil(tareas.length / 4)) },
         { k: 'recursos', label: 'Recursos asignados', activo: tareas.length > 0 || componentes.length > 0,
             detalle: 'Personal, equipos y materiales', resumen: 'Personal, horas hombre, equipos y materiales consumidos.', pags: 1 },
-        { k: 'cotizacion', label: 'Cotización aprobada', activo: ['Aprobada', 'Programada', 'En Ejecución', 'Trabajo Terminado', 'Con Informe', 'Pagada'].includes(otSeleccionada.estado),
+        { k: 'cotizacion', label: 'Cotización aprobada', activo: ['Programada', 'En Ejecución', 'Trabajo Terminado', 'Con Informe', 'Pagada'].includes(otSeleccionada.estado),
             detalle: `${otSeleccionada.numeroOT || 'Sin OT'} · ${otSeleccionada.estado}`, resumen: 'Desglose comercial y condiciones aceptadas por el cliente.', pags: 1 },
         { k: 'ejecucion', label: 'Informes de ejecución', activo: reportes.length > 0,
             detalle: `${reportes.length} informes de terreno · ${fotosReportes} fotos`, resumen: 'Avance por jornada, desviaciones y respaldo fotográfico.', pags: Math.max(1, Math.ceil(reportes.length / 2)) },
@@ -354,7 +360,9 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
     const yaTeniaContenidoPrevio = (datosRecibidos?.tareas?.length > 0) || (datosRecibidos?.componentes?.length > 0) || (datosRecibidos?.logistica?.length > 0);
     // Antecedentes es el destino por defecto al abrir una OT desde cualquier entrada
     // (panel de control, ingreso de solicitudes, programación) — ver CORRECCIONES pestaña Antecedentes.
-    const [tabActiva, setTabActiva] = useState('antecedentes');
+    // _tabDestino: cuando se vuelve desde Gantt tras "Confirmar capacidad y fechas" (aviso
+    // "Requiere programar la OT" de la pestaña Cotización), abre directo en esa pestaña.
+    const [tabActiva, setTabActiva] = useState(datosRecibidos?._tabDestino || 'antecedentes');
     const [otSeleccionada, setOtSeleccionada] = useState(datosRecibidos || {});
     const [tareas, setTareas] = useState([]);
     const [componentes, setComponentes] = useState([]);
@@ -421,7 +429,7 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
             ...datosRecibidos,
             solicitudId: datosRecibidos.solicitudId || datosRecibidos._id,
             numeroOT: otSeleccionada.numeroOT || datosRecibidos.numeroOT,
-            estado: estadoForzado || (['Pendiente', 'Tratada', 'Planificada', 'Aprobada', 'Rechazada', 'Programada', 'En Ejecución', 'Trabajo Terminado', 'Con Informe', 'Pagada'].includes(otSeleccionada?.estado) ? otSeleccionada.estado : 'Tratada'),
+            estado: estadoForzado || (['Pendiente', 'Tratada', 'Planificada', 'Programada', 'En Ejecución', 'Trabajo Terminado', 'Con Informe', 'Pagada'].includes(otSeleccionada?.estado) ? otSeleccionada.estado : 'Tratada'),
             tareas,
             componentes: limpiarIds(componentes),
             logistica: (logistica || []).map(l => ({
@@ -988,11 +996,30 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
         } catch (e) { alert('Error al actualizar: ' + e.message); }
     };
 
+    // Revisión del Planificador sobre el informe del Supervisor: informativa, no bloquea
+    // tareas/equipos/suministros (siguen editables aunque quede "Con observaciones") — solo
+    // bloquea el botón "Terminar planificación" (ver puedeTerminarPlanificacion). No hay
+    // sistema de login para el staff interno (ver CLAUDE.md, mismo gap que asignadaPor en
+    // OT.js), así que 'autor' queda sin poblar en vez de inventar un nombre.
+    const guardarRevisionInforme = async () => {
+        const estado = informeEvaluacion.revision?.estado;
+        if (estado !== 'Aceptado' && estado !== 'ConObservaciones') return;
+        const resultado = await actualizarOtGlobal(otSeleccionada._id, {
+            'informeEvaluacion.revision.estado': estado,
+            'informeEvaluacion.revision.comentario': informeEvaluacion.revision?.comentario || '',
+            'informeEvaluacion.revision.fecha': new Date().toISOString(),
+        });
+        if (!resultado?.exito) alert(resultado?.error || 'No se pudo guardar la revisión del informe.');
+    };
+
     if (!datosRecibidos) return <div style={{ padding: '50px', fontFamily: t.fontUi }}>No hay datos.</div>;
 
-    const info = etapaInfo(otSeleccionada?.estado);
+    const info = etapaInfo(otSeleccionada);
     const puedeEjecucion = ['Programada', 'En Ejecución', 'Trabajo Terminado', 'Con Informe', 'Pagada'].includes(otSeleccionada.estado);
     const habilitadoTabs14 = informeEvaluacion.completo || yaTeniaContenidoPrevio;
+    // "Terminar planificación" (no las pestañas 1-4, que quedan libres) es lo único que
+    // bloquea una observación abierta sobre el informe inicial.
+    const puedeTerminarPlanificacion = informeEvaluacion.revision?.estado !== 'ConObservaciones';
 
     return (
         <div style={styles.raiz}>
@@ -1084,6 +1111,40 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                                             : ''}
                                     </span>
                                 </div>
+                            </div>
+
+                            <div style={{ ...styles.campoLabel, marginBottom: 16 }}>
+                                <span style={styles.etiqueta}>Revisión del Planificador</span>
+                                {!informeEvaluacion.completo ? (
+                                    <span style={{ fontSize: 11.5, color: t.textoAtenuado3 }}>Disponible cuando el supervisor entregue el informe.</span>
+                                ) : (
+                                    <>
+                                        <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+                                            <button
+                                                onClick={() => setInformeEvaluacion(prev => ({ ...prev, revision: { ...prev.revision, estado: 'Aceptado' } }))}
+                                                style={informeEvaluacion.revision?.estado === 'Aceptado' ? styles.btnAccion : styles.btnSecundario}
+                                            >Aceptado</button>
+                                            <button
+                                                onClick={() => setInformeEvaluacion(prev => ({ ...prev, revision: { ...prev.revision, estado: 'ConObservaciones' } }))}
+                                                style={informeEvaluacion.revision?.estado === 'ConObservaciones' ? { ...styles.btnAccion, background: t.rojo, borderColor: t.rojo } : styles.btnSecundario}
+                                            >Con observaciones</button>
+                                        </div>
+                                        {informeEvaluacion.revision?.estado === 'ConObservaciones' && (
+                                            <textarea
+                                                value={informeEvaluacion.revision?.comentario || ''}
+                                                onChange={e => setInformeEvaluacion(prev => ({ ...prev, revision: { ...prev.revision, comentario: e.target.value } }))}
+                                                placeholder="Qué le falta o hay que corregir…"
+                                                style={{ ...styles.inputPlano, width: '100%', minHeight: 60, marginTop: 8, resize: 'vertical' }}
+                                            />
+                                        )}
+                                        <button onClick={guardarRevisionInforme} style={{ ...styles.btnAccion, marginTop: 8 }}>Guardar revisión</button>
+                                        {informeEvaluacion.revision?.fecha && (
+                                            <div style={{ fontSize: 10.5, color: t.textoAtenuado3, marginTop: 6 }}>
+                                                Última revisión: {new Date(informeEvaluacion.revision.fecha).toLocaleDateString('es-CL')}
+                                            </div>
+                                        )}
+                                    </>
+                                )}
                             </div>
 
                             <div style={{ ...styles.campoLabel, marginBottom: 16 }}>
@@ -1358,7 +1419,12 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                             </div>
                             <div style={{ ...styles.continuarWrap, justifyContent: 'space-between' }}>
                                 <span style={{ fontSize: 11.5, color: t.verde, fontWeight: 600 }}>Tareas, equipos y suministros definidos</span>
-                                <button onClick={() => guardarPlanificacion('Planificada')} style={styles.btnPrimario}>Terminar planificación</button>
+                                <button
+                                    onClick={() => guardarPlanificacion('Planificada')}
+                                    disabled={!puedeTerminarPlanificacion}
+                                    title={puedeTerminarPlanificacion ? '' : 'El informe inicial tiene observaciones sin resolver'}
+                                    style={{ ...styles.btnPrimario, opacity: puedeTerminarPlanificacion ? 1 : .5 }}
+                                >Terminar planificación</button>
                             </div>
                         </div>
                     )}
@@ -1366,6 +1432,15 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                     {/* 4 · COTIZACIÓN */}
                     {tabActiva === 'cotizacion' && (
                         <div style={{ padding: 16, display: 'flex', gap: 16, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+                        {!otSeleccionada.cotizacion?.capacidadVerificada && (
+                            <div style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, padding: '10px 14px', background: '#fbeceb', border: `1px solid ${t.rojo}`, borderRadius: 2 }}>
+                                <span style={{ fontSize: 12, color: t.textoPrincipal }}>Requiere programar la OT: falta verificar capacidad y fijar las fechas antes de poder enviar la cotización.</span>
+                                <button
+                                    onClick={() => navigate('/gantt', { state: { _volverAOT: otSeleccionada._id, _volverATab: 'cotizacion' } })}
+                                    style={{ ...styles.btnPrimario, flex: 'none' }}
+                                >Ir a Programación</button>
+                            </div>
+                        )}
                         <div style={{ maxWidth: 620, flex: '1 1 480px' }}>
                             <div style={styles.tituloSub}>Cotización técnica y comercial</div>
                             {[
@@ -1448,7 +1523,9 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                             <button onClick={() => generarPDF(seccionesPdf)} style={{ ...styles.btnPrimario, width: '100%', marginTop: 11 }}>Descargar PDF</button>
                             <button
                                 onClick={() => { setEmailsEnvio([datosRecibidos?.correo || '']); setIsModalEnvioOpen(true); }}
-                                style={{ ...styles.btnSecundario, width: '100%', marginTop: 6 }}
+                                disabled={!otSeleccionada.cotizacion?.capacidadVerificada}
+                                title={otSeleccionada.cotizacion?.capacidadVerificada ? '' : 'Verifica la capacidad en Programación antes de enviar'}
+                                style={{ ...styles.btnSecundario, width: '100%', marginTop: 6, opacity: otSeleccionada.cotizacion?.capacidadVerificada ? 1 : .5 }}
                             >Enviar cotización por correo</button>
                             <div style={{ fontSize: 10.5, color: t.textoAtenuado3, marginTop: 9, lineHeight: 1.5 }}>Las cotizaciones ya emitidas se siguen viendo con su formato original.</div>
                         </div>
@@ -1743,6 +1820,10 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                                             tareas,
                                         });
                                         if (respuesta.data.ok) {
+                                            await actualizarOtGlobal(otSeleccionada._id, {
+                                                'cotizacion.enviada': true,
+                                                'cotizacion.fechaEnvio': new Date().toISOString(),
+                                            });
                                             alert(`Cotización enviada. Programado del ${minFecha.toLocaleDateString('es-CL')} al ${maxFecha.toLocaleDateString('es-CL')}`);
                                             setIsModalEnvioOpen(false);
                                             navigate('/dashboard');

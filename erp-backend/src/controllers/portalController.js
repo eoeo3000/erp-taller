@@ -85,6 +85,10 @@ function otPublica(ot) {
             subtotal: l.subtotal
         })),
         pago: ot.pago ? { estado: ot.pago.estado } : null,
+        // Solo respuestaCliente — es lo único que C2/C3 necesitan para distinguir "presupuesto
+        // rechazado" de "en preparación" ahora que ese dato salió de OT.estado (ver models/OT.js).
+        // El resto de cotizacion (fechas propuestas, verificación de capacidad) es interno.
+        cotizacion: ot.cotizacion ? { respuestaCliente: ot.cotizacion.respuestaCliente } : null,
         descripcionGeneral: ot.descripcionGeneral
     };
 }

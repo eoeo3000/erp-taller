@@ -46,9 +46,12 @@ export default function O5InformeEvaluacion({ nav, asignacion }) {
     const terminarInforme = async () => {
         setGuardando(true);
         const informeBase = { hallazgos: [], tareas: [], fotos: [], ...ot.informeEvaluacion };
+        // Regrabar (ej. corrigiendo un informe "Con observaciones") vuelve la revisión a
+        // 'Pendiente' — el Planificador tiene que volver a mirarlo, ver S5_MisInformes.jsx.
+        const revisionReseteada = { estado: 'Pendiente', comentario: '', fecha: null, autor: '' };
         const nuevo = hallazgo.textoDescriptivo?.trim()
-            ? { ...guardarHallazgoEnInforme(informeBase, hallazgo), completo: true }
-            : { ...(hallazgo._id ? eliminarHallazgoDeInforme(informeBase, hallazgo._id) : informeBase), completo: true };
+            ? { ...guardarHallazgoEnInforme(informeBase, hallazgo), completo: true, revision: revisionReseteada }
+            : { ...(hallazgo._id ? eliminarHallazgoDeInforme(informeBase, hallazgo._id) : informeBase), completo: true, revision: revisionReseteada };
         try {
             await actualizarOT(targetId, { informeEvaluacion: nuevo });
             if (asignacion?._id) await cerrarAsignacion(asignacion._id).catch(() => {});

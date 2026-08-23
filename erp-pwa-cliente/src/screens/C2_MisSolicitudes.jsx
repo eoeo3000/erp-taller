@@ -6,11 +6,15 @@ const fmt = (iso) => iso ? new Date((iso + '').split('T')[0] + 'T00:00:00').toLo
 
 const COLOR = { activo: 'var(--en-curso)', pago: 'var(--atencion)', cerrado: 'var(--listo)', rechazado: 'var(--detenido)', neutro: 'var(--deshabilitado-1)' };
 
+// 'Aprobada'/'Rechazada' ya no son valores de OT.estado — un rechazo se detecta por
+// cotizacion.respuestaCliente sin sacar a la OT de 'Planificada' (ver erp-backend/src/models/OT.js).
 function clasificar(t) {
     const ot = t.ot;
     if (!ot) return { grupo: 'en_curso', color: COLOR.activo, linea: 'En evaluación' };
-    if (ot.estado === 'Rechazada') return { grupo: 'cerradas', color: COLOR.rechazado, linea: 'Presupuesto no aceptado' };
-    if (['Tratada', 'Planificada', 'Aprobada'].includes(ot.estado)) return { grupo: 'en_curso', color: COLOR.activo, linea: 'Presupuesto en preparación' };
+    if (ot.estado === 'Planificada' && ot.cotizacion?.respuestaCliente === 'Rechazada') {
+        return { grupo: 'cerradas', color: COLOR.rechazado, linea: 'Presupuesto no aceptado' };
+    }
+    if (['Tratada', 'Planificada'].includes(ot.estado)) return { grupo: 'en_curso', color: COLOR.activo, linea: 'Presupuesto en preparación' };
     if (ot.estado === 'Programada') {
         const fecha = (ot.tareas || []).map((tt) => tt.fecha).filter(Boolean).sort()[0];
         return { grupo: 'en_curso', color: COLOR.activo, linea: fecha ? `Llegamos el ${fmt(fecha)}` : 'Programado' };
