@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { obtenerOT, actualizarOT, cerrarAsignacion, obtenerTiposTrabajo } from '../api.js';
+import { obtenerOT, actualizarOT, cerrarAsignacion, obtenerTiposTrabajo, obtenerCatalogosTransversales } from '../api.js';
 import { nuevoHallazgo, guardarHallazgoEnInforme, eliminarHallazgoDeInforme } from '../hallazgos.js';
 import EditorHallazgo from './EditorHallazgo.jsx';
 
@@ -17,6 +17,7 @@ export default function O5InformeEvaluacion({ nav, asignacion }) {
     const [hallazgo, setHallazgo] = useState(nuevoHallazgo());
     const [guardando, setGuardando] = useState(false);
     const [tiposTrabajo, setTiposTrabajo] = useState([]);
+    const [catalogosTransversales, setCatalogosTransversales] = useState([]);
 
     useEffect(() => {
         if (!targetId) return;
@@ -26,6 +27,7 @@ export default function O5InformeEvaluacion({ nav, asignacion }) {
             if (existente) setHallazgo(existente);
         }).catch(() => setOt({})); // primera visita: la OT todavía no existe, se crea al guardar
         obtenerTiposTrabajo().then(setTiposTrabajo).catch(() => {});
+        obtenerCatalogosTransversales().then(setCatalogosTransversales).catch(() => {});
     }, [targetId]);
 
     if (!targetId) {
@@ -65,6 +67,7 @@ export default function O5InformeEvaluacion({ nav, asignacion }) {
                     hallazgo={hallazgo}
                     onCambiar={setHallazgo}
                     tiposTrabajo={tiposTrabajo}
+                    catalogosTransversales={catalogosTransversales}
                 />
             </div>
 

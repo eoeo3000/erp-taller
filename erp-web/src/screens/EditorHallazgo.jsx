@@ -4,17 +4,36 @@ import { generarSegmentos } from '../utils/motorTexto.js';
 import { recalcularTexto, deshacerEdicionManual } from '../utils/hallazgos.js';
 import { subirFoto } from '../utils/fotos.js';
 
-// Versión de escritorio del formulario adaptativo — docs/plan-formulario-adaptativo.md §5/§10,
+// Versión de escritorio del formulario adaptativo — docs/plan-formulario-adaptativo.md §5/§6/§10,
 // rediseño "lienzo en blanco": un solo cuadro donde se escribe, sin buscador separado ni lista
 // de campos aparte (misma lógica que erp-pwa-operativa/src/screens/EditorHallazgo.jsx — solo
 // cambia el envoltorio visual: menú centrado en vez de hoja inferior, ver §11). Componente
 // CONTROLADO (hallazgo + onCambiar), sin guardar/cancelar propios — quien lo use manda esos
-// botones. Las condiciones de entorno ya no son un catálogo aparte — son un campo más
-// (tipoDato seleccionMultiple) definido por cada tipo de trabajo en el Excel, así que quedan
-// tejidas en el mismo texto como cualquier otro espacio en blanco. Nota: hoy ninguna pantalla
-// lo monta (TratamientoScreen pasó a resumen de solo lectura); se mantiene actualizado por si
-// se reactiva. Paleta duplicada de los tokens `t` de TratamientoScreen.jsx — evita un import
+// botones. Condiciones de entorno, tipo de equipo, riesgos, materiales, etc. son listas
+// transversales compartidas por casi todos los tipos (prop `catalogosTransversales`), no un
+// campo propio de cada tipo — se resuelven vía `resolverCampo`. Nota: hoy ninguna pantalla lo
+// monta (TratamientoScreen pasó a resumen de solo lectura); se mantiene actualizado por si se
+// reactiva. Paleta duplicada de los tokens `t` de TratamientoScreen.jsx — evita un import
 // circular (TratamientoScreen ya importa este componente si se reactiva).
+
+// Resuelve la clave de un segmento contra los campos propios del tipo elegido; si no está
+// ahí, contra el catálogo transversal. `condicionesNoAplicables` del tipo excluye valores
+// solo para la lista 'condicionesEntorno'.
+function resolverCampo(clave, tipoElegido, catalogoPorClave) {
+    const propio = tipoElegido?.campos.find((c) => c.clave === clave);
+    if (propio) return propio;
+    const catalogo = catalogoPorClave.get(clave);
+    if (!catalogo) return null;
+    const excluidas = clave === 'condicionesEntorno' ? new Set(tipoElegido?.condicionesNoAplicables || []) : null;
+    const valores = excluidas ? catalogo.valores.filter((v) => !excluidas.has(v.valor)) : catalogo.valores;
+    return {
+        clave,
+        etiqueta: catalogo.descripcion || clave,
+        tipoDato: catalogo.seleccion === 'multiple' ? 'seleccionMultiple' : 'seleccionUnica',
+        opciones: valores.map((v) => v.valor),
+        categorias: valores, // {valor, categoria} — solo tareasSecundarias trae categoría real
+    };
+}
 const t = {
     superficie: '#ffffff', fondo: '#f6f5f2',
     textoPrincipal: '#1a1a18', textoSecundario2: '#4a4a44',
@@ -27,16 +46,25 @@ const estiloInput = { width: '100%', padding: '8px 10px', fontSize: 13, border: 
 const estiloBotonSecundario = { padding: '7px 12px', fontSize: 12.5, fontWeight: 600, border: `1px solid ${t.bordeZona}`, background: '#fff', color: t.textoPrincipal, borderRadius: 2, cursor: 'pointer' };
 const estiloBotonPrimario = { padding: '8px 16px', fontSize: 12.5, fontWeight: 700, border: 'none', background: t.textoPrincipal, color: '#fff', borderRadius: 2, cursor: 'pointer' };
 
-export default function EditorHallazgo({ hallazgo, onCambiar, tiposTrabajo, apiBase }) {
+export default function EditorHallazgo({ hallazgo, onCambiar, tiposTrabajo, apiBase, catalogosTransversales = [] }) {
     const [menuAbierto, setMenuAbierto] = useState(null); // campo completo (clave, tipoDato, opciones, etiqueta)
     const [subiendoFoto, setSubiendoFoto] = useState(false);
 
     const tipoElegido = tiposTrabajo.find((tp) => String(tp._id) === String(hallazgo.tipoTrabajoId));
+    const catalogoPorClave = new Map(catalogosTransversales.map((c) => [c.clave, c]));
     const sugerencias = !tipoElegido && hallazgo.textoDescriptivo?.trim() ? sugerirTiposTrabajo(hallazgo.textoDescriptivo, tiposTrabajo) : [];
     const segmentos = tipoElegido ? generarSegmentos(tipoElegido.plantillaTexto, hallazgo.valores) : [];
 
     const escribir = (texto) => onCambiar({ ...hallazgo, textoDescriptivo: texto });
-    const elegirTipo = (tipo) => onCambiar(recalcularTexto({ ...hallazgo, tipoTrabajoId: tipo._id, valores: {} }, tipo));
+    // Sugerencias premarcadas (plan §6): tareasSecundarias/materiales/riesgos vienen ya
+    // llenas al elegir el tipo — quien completa el informe confirma o descarta, no parte de cero.
+    const elegirTipo = (tipo) => {
+        const valoresIniciales = {};
+        for (const s of (tipo.sugerencias || [])) {
+            (valoresIniciales[s.lista] ||= []).push(s.valor);
+        }
+        onCambiar(recalcularTexto({ ...hallazgo, tipoTrabajoId: tipo._id, valores: valoresIniciales }, tipo));
+    };
     const cambiarTipo = () => onCambiar(recalcularTexto({ ...hallazgo, tipoTrabajoId: null, valores: {} }, null));
     const cambiarValor = (clave, valor) => onCambiar(recalcularTexto({ ...hallazgo, valores: { ...hallazgo.valores, [clave]: valor } }, tipoElegido));
     const editarTextoLibre = (nuevoTexto) => onCambiar({ ...hallazgo, textoDescriptivo: nuevoTexto, textoEditadoManualmente: true });
@@ -65,7 +93,7 @@ export default function EditorHallazgo({ hallazgo, onCambiar, tiposTrabajo, apiB
     // Cada espacio en blanco se llena tocándolo, sea cual sea su tipo de dato — "foto" abre el
     // selector de archivo directo (sin menú intermedio), el resto abre MenuSelector.
     const tocarSegmento = (clave, refInputFoto) => {
-        const campo = tipoElegido?.campos.find((c) => c.clave === clave);
+        const campo = resolverCampo(clave, tipoElegido, catalogoPorClave);
         if (!campo) return;
         if (campo.tipoDato === 'foto') { refInputFoto?.click(); return; }
         setMenuAbierto(campo);
@@ -199,6 +227,30 @@ function MenuSelector({ campo, valorActual, onElegir, onCerrar }) {
     const esMultiple = campo.tipoDato === 'seleccionMultiple';
     const esEleccion = campo.tipoDato === 'seleccionUnica' || esMultiple;
     const seleccionados = esMultiple ? (valorActual || []) : (valorActual ? [valorActual] : []);
+
+    // Solo 'tareasSecundarias' trae categoría real (Desmontaje/Traslado/Taller/Montaje/Ajuste
+    // y verificación, plan §6) — se agrupa con subtítulos; el resto se ve como lista plana.
+    const agrupado = campo.categorias?.some((v) => v.categoria);
+    const grupos = agrupado
+        ? Object.values(campo.categorias.reduce((acc, v) => {
+            const cat = v.categoria || 'Otros';
+            (acc[cat] ||= { categoria: cat, opciones: [] }).opciones.push(v.valor);
+            return acc;
+        }, {}))
+        : [{ categoria: null, opciones: campo.opciones }];
+
+    const OpcionBoton = ({ op }) => {
+        const marcada = seleccionados.includes(op);
+        return (
+            <button
+                onClick={() => onElegir(esMultiple ? (marcada ? seleccionados.filter((x) => x !== op) : [...seleccionados, op]) : op)}
+                style={{ ...estiloBotonSecundario, textAlign: 'left', borderColor: marcada ? t.textoPrincipal : t.bordeZona }}
+            >
+                {marcada ? '× ' : '· '}{op}
+            </button>
+        );
+    };
+
     return (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.35)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={onCerrar}>
             <div onClick={(e) => e.stopPropagation()} style={{ width: 320, maxHeight: '70vh', overflowY: 'auto', background: '#fff', borderRadius: 3, padding: 14 }}>
@@ -206,18 +258,14 @@ function MenuSelector({ campo, valorActual, onElegir, onCerrar }) {
                 {esEleccion ? (
                     <>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-                            {campo.opciones.map((op) => {
-                                const marcada = seleccionados.includes(op);
-                                return (
-                                    <button
-                                        key={op}
-                                        onClick={() => onElegir(esMultiple ? (marcada ? seleccionados.filter((x) => x !== op) : [...seleccionados, op]) : op)}
-                                        style={{ ...estiloBotonSecundario, textAlign: 'left', borderColor: marcada ? t.textoPrincipal : t.bordeZona }}
-                                    >
-                                        {marcada ? '× ' : '· '}{op}
-                                    </button>
-                                );
-                            })}
+                            {grupos.map((g) => (
+                                <div key={g.categoria || 'todas'}>
+                                    {g.categoria && <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.04em', textTransform: 'uppercase', color: t.textoAtenuado2, margin: '8px 0 4px' }}>{g.categoria}</div>}
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                                        {g.opciones.map((op) => <OpcionBoton key={op} op={op} />)}
+                                    </div>
+                                </div>
+                            ))}
                         </div>
                         {esMultiple && <button onClick={onCerrar} style={{ ...estiloBotonPrimario, marginTop: 10, width: '100%' }}>Listo</button>}
                     </>
