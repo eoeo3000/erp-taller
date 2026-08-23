@@ -81,7 +81,7 @@ export default function S1MiPanel({ nav }) {
                         lineas={['pendientes de completar y enviar']}
                         extra={panel.informesMiosSinEnviar.diasMasAntigua != null ? `${panel.informesMiosSinEnviar.numeroMasAntigua || 'el más antiguo'} lleva ${panel.informesMiosSinEnviar.diasMasAntigua} día(s)` : null}
                         colorExtra="var(--detenido)"
-                        onClick={() => nav.ir('s5')}
+                        onClick={() => nav.ir('s7')}
                     />
                     <Entrada
                         conteo={enviados.length} borde="var(--listo)" colorConteo="var(--listo)"
