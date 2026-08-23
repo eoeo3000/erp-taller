@@ -49,6 +49,19 @@ async function siguienteNumeroOT(OT) {
     return `OT-2026-${(maximo + 1).toString().padStart(4, '0')}`;
 }
 
+// El numeroOT usa el mismo correlativo que ya trae la Solicitud (SOL-2026-0009 ->
+// OT-2026-0009) en vez de un contador propio — antes cada uno llevaba su cuenta aparte, y
+// como no toda Solicitud se convierte en OT (algunas se rechazan antes), los números se
+// desalineaban: una OT con número más bajo que el de su propia Solicitud, o viceversa,
+// confuso al buscar "la OT 0009" pensando en el número de la solicitud. Como cada OT
+// reutiliza el _id de su Solicitud (relación uno a uno), el correlativo de la Solicitud
+// nunca choca entre dos OT distintas. Si por algún motivo la Solicitud no tiene
+// numeroSolicitud (no debería pasar, se genera solo al crearla), cae al correlativo propio
+// de OT como respaldo, para no dejar la conversión sin número.
+function numeroOTDesdeSolicitud(numeroSolicitud) {
+    return numeroSolicitud ? numeroSolicitud.replace(/^SOL-/, 'OT-') : null;
+}
+
 // --- Reserva/liberación de recursos por cambio de estado de la OT (ver docs/funcionalidades-v2.md, Gap 4) ---
 // Nota: hoy OT.componentes solo guarda 'codigo' como copia de texto (sin referencia real al catálogo),
 // así que el cruce con EquiposHerramientas/Suministro se hace por codigo — decisión documentada en el
@@ -156,9 +169,16 @@ exports.convertirOT = async (req, res) => {
         const data = req.body;
         const idSolicitud = data._id || data.solicitudId;
 
-        // Generación de número con guiones
+        // Generación de número con guiones — mismo correlativo que la Solicitud (ver
+        // numeroOTDesdeSolicitud).
         if (!data.numeroOT) {
-            data.numeroOT = await siguienteNumeroOT(OT);
+            let numeroSolicitud = data.numeroSolicitud;
+            if (!numeroSolicitud) {
+                const Solicitud = require('../models/Solicitud')(req.db);
+                const sol = await Solicitud.findById(idSolicitud).select('numeroSolicitud').lean();
+                numeroSolicitud = sol?.numeroSolicitud;
+            }
+            data.numeroOT = numeroOTDesdeSolicitud(numeroSolicitud) || await siguienteNumeroOT(OT);
         }
 
         const { _id, ...updateData } = data;
@@ -317,7 +337,7 @@ exports.asignarSupervisor = async (req, res) => {
                 ...sol.toObject(),
                 _id: sol._id,
                 solicitudId: sol._id,
-                numeroOT: await siguienteNumeroOT(OT),
+                numeroOT: numeroOTDesdeSolicitud(sol.numeroSolicitud) || await siguienteNumeroOT(OT),
                 estado: 'Tratada',
             });
         }
@@ -451,7 +471,7 @@ exports.actualizarOT = async (req, res) => {
                     ...datosCuerpo,
                     _id: solicitud._id,
                     solicitudId: solicitud._id,
-                    numeroOT: await siguienteNumeroOT(OT),
+                    numeroOT: numeroOTDesdeSolicitud(solicitud.numeroSolicitud) || await siguienteNumeroOT(OT),
                     estado: 'Tratada'
                 });
 
