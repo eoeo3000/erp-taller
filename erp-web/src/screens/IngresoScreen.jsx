@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import axios from 'axios';
 
 // Paso 3 del rediseño (ver docs/rediseno/design_handoff_panel_control/README.md §5):
 // formulario de 452px fijo + tabla de solicitudes con filtros en barra (se elimina el dropdown
@@ -66,8 +67,59 @@ const FORM_VACIO = {
     descripcion: '', origen: 'WhatsApp', fechaEjecucionSolicitada: '', plazoEjecucionSugerido: '', adjuntos: '',
 };
 
-const GRID = '34px minmax(150px,1.4fr) minmax(120px,1fr) 104px 96px 84px 132px 150px';
-const TABLA_MIN_W = 34 + 150 + 120 + 104 + 96 + 84 + 132 + 150 + 10 * 8 + 32;
+// Tabla de columnas configurable — mismo patrón y mismo backend de variantes que
+// DashboardScreen.jsx (docs/rediseno/design_handoff_panel_control/README.md §4, "Paso 9":
+// variantes globales guardadas en /api/disposiciones), acá con `pantalla: 'ingreso-solicitudes'`
+// en vez de 'panel-control' — son dos catálogos de columnas distintos (esta tabla es una fila
+// por Solicitud; Panel de control es una fila por Solicitud+OT combinadas), así que cada
+// pantalla guarda sus propias variantes, pero bajo el mismo nombre si se usa el mismo en
+// ambas — es la forma más simple de que "una variante" sirva para las dos tablas sin forzar
+// un único esquema de columnas que no tiene sentido compartir (los campos no son los mismos).
+const CAMPOS_INGRESO = [
+    { key: 'numero', label: 'N° de Solicitud', corto: 'N°', origen: 'solicitud.numeroSolicitud', w: 84, align: 'left', mono: true },
+    { key: 'ot', label: 'N° de OT', corto: 'OT', origen: 'ot.numeroOT', w: 84, align: 'left', mono: true },
+    { key: 'empresa', label: 'Empresa', corto: 'Empresa', origen: 'solicitud.empresaSolicitante', w: 0, align: 'left' },
+    { key: 'solicitante', label: 'Solicitante', corto: 'Solicitante', origen: 'solicitud.solicitante', w: 150, align: 'left' },
+    { key: 'estado', label: 'Estado + SLA', corto: 'Estado', origen: 'solicitud.estado / ot.estado', w: 110, align: 'left' },
+    { key: 'origen', label: 'Canal de origen', corto: 'Origen', origen: 'solicitud.origen', w: 90, align: 'left' },
+    { key: 'ingresada', label: 'Fecha de ingreso', corto: 'Ingresada', origen: 'solicitud.fechaCreacion', w: 84, align: 'right', mono: true },
+    { key: 'ejecucion', label: 'Fecha de ejecución', corto: 'Ejecución', origen: 'solicitud.fechaEjecucionSolicitada', w: 84, align: 'right', mono: true },
+    { key: 'plazo', label: 'Plazo sugerido', corto: 'Plazo', origen: 'solicitud.plazoEjecucionSugerido', w: 120, align: 'left' },
+    { key: 'direccion', label: 'Dirección', corto: 'Dirección', origen: 'solicitud.direccion', w: 170, align: 'left' },
+    { key: 'correo', label: 'Correo', corto: 'Correo', origen: 'solicitud.correo', w: 160, align: 'left' },
+    { key: 'telefono', label: 'Teléfono', corto: 'Teléfono', origen: 'solicitud.numero', w: 106, align: 'left', mono: true },
+    { key: 'adjunto', label: 'Adjunto', corto: 'Adjunto', origen: 'solicitud.adjuntos', w: 90, align: 'left' },
+];
+const campoIngreso = (key) => CAMPOS_INGRESO.find(c => c.key === key);
+const VISIBLES_BASE_INGRESO = ['numero', 'empresa', 'solicitante', 'estado', 'origen', 'ingresada', 'adjunto'];
+const ANCHO_ACCIONES = 160;
+const BASE_LAYOUT_INGRESO = { rowH: 36, columnas: CAMPOS_INGRESO.map(c => ({ key: c.key, w: c.w, visible: VISIBLES_BASE_INGRESO.includes(c.key) })) };
+const clonarLayoutIngreso = (l) => ({ ...l, columnas: l.columnas.map(c => ({ ...c })) });
+const normalizarLayoutIngreso = (l) => {
+    const dadas = (l && l.columnas) || [];
+    const columnas = dadas.filter(c => campoIngreso(c.key)).map(c => ({ key: c.key, w: c.w || campoIngreso(c.key).w, visible: !!c.visible }));
+    CAMPOS_INGRESO.forEach(c => { if (!columnas.find(x => x.key === c.key)) columnas.push({ key: c.key, w: c.w, visible: false }); });
+    const emp = columnas.find(c => c.key === 'empresa'); if (emp) emp.visible = true;
+    return { rowH: (l && l.rowH) || BASE_LAYOUT_INGRESO.rowH, columnas };
+};
+const LS_KEY_INGRESO = 'erpTaller.disposicion.ingreso.v1';
+
+// Valor de una columna 'texto' para una fila — 'empresa', 'estado' y 'adjunto' se pintan aparte
+// (llevan color/subtexto/enlace, ver el render de la fila) porque no son texto plano.
+const valorCeldaIngreso = (fila, key) => {
+    const { s, otEncontrada } = fila;
+    if (key === 'numero') return s.numeroSolicitud || '—';
+    if (key === 'ot') return otEncontrada?.numeroOT || '—';
+    if (key === 'solicitante') return s.solicitante || '—';
+    if (key === 'origen') return s.origen || '—';
+    if (key === 'ingresada') return fmtFecha(s.fechaCreacion || s.fechaHoraSolicitud);
+    if (key === 'ejecucion') return fmtFecha(s.fechaEjecucionSolicitada);
+    if (key === 'plazo') return s.plazoEjecucionSugerido || '—';
+    if (key === 'direccion') return s.direccion || '—';
+    if (key === 'correo') return s.correo || '—';
+    if (key === 'telefono') return s.numero || '—';
+    return '';
+};
 
 function FilaVista({ etiqueta, valor }) {
     return (
@@ -79,13 +131,94 @@ function FilaVista({ etiqueta, valor }) {
 }
 
 // Recibimos 'solicitudes' como prop desde App.jsx para actualización automática
-const IngresoScreen = ({ solicitudes = [], liberarSolicitudManual, cargarDatos, API, crearSolicitudGlobal, actualizarSolicitudGlobal, ots = [], enviarPortalCliente, cargando, errorCarga }) => {
+const IngresoScreen = ({ solicitudes = [], liberarSolicitudManual, cargarDatos, API, crearSolicitudGlobal, actualizarSolicitudGlobal, ots = [], enviarPortalCliente, cargando, errorCarga, guardarDisposicionGlobal, eliminarDisposicionGlobal }) => {
     const navigate = useNavigate();
     const [form, setForm] = useState(FORM_VACIO);
     const [archivo, setArchivo] = useState(null);
     const [aviso, setAviso] = useState(null); // { texto, tono: 'error' | 'ok' }
     const [filtroEstado, setFiltroEstado] = useState('');
     const [filtroTexto, setFiltroTexto] = useState('');
+
+    // ---- Disposición de la tabla: columnas, orden, ancho, variantes (ver CAMPOS_INGRESO) ----
+    const [layoutTabla, setLayoutTablaState] = useState(() => clonarLayoutIngreso(BASE_LAYOUT_INGRESO));
+    const [variantesTabla, setVariantesTabla] = useState([]);
+    const [varianteActiva, setVarianteActiva] = useState('');
+    const [guardandoVariante, setGuardandoVariante] = useState(false);
+    const [nombreNuevaVariante, setNombreNuevaVariante] = useState('');
+    const [menuColumnas, setMenuColumnas] = useState(false);
+    const [errorVariantes, setErrorVariantes] = useState(null);
+
+    const cargarVariantesTabla = () => {
+        axios.get(`${API}/disposiciones`, { params: { pantalla: 'ingreso-solicitudes' } })
+            .then(({ data }) => { setVariantesTabla(data.map(v => ({ id: v._id, nombre: v.nombre, layout: normalizarLayoutIngreso(v.layout) }))); setErrorVariantes(null); })
+            .catch(() => setErrorVariantes('No se pudieron cargar las variantes guardadas.'));
+    };
+
+    useEffect(() => {
+        try {
+            const raw = localStorage.getItem(LS_KEY_INGRESO);
+            if (raw) {
+                const p = JSON.parse(raw);
+                if (p.layout) setLayoutTablaState(normalizarLayoutIngreso(p.layout));
+                setVarianteActiva(p.activa || '');
+            }
+        } catch { /* localStorage corrupto o inaccesible: se ignora, queda el layout base */ }
+        cargarVariantesTabla();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+    useEffect(() => {
+        try { localStorage.setItem(LS_KEY_INGRESO, JSON.stringify({ layout: layoutTabla, activa: varianteActiva })); } catch { /* cuota llena o modo privado: no persiste, no rompe la UI */ }
+    }, [layoutTabla, varianteActiva]);
+
+    const setColumnasTabla = (columnas) => { setLayoutTablaState(prev => ({ ...prev, columnas })); setVarianteActiva(''); };
+    const toggleColTabla = (key) => {
+        if (key === 'empresa') return;
+        const actual = layoutTabla.columnas.find(c => c.key === key);
+        setColumnasTabla(layoutTabla.columnas.map(c => c.key === key ? { ...c, visible: !actual.visible } : c));
+    };
+    const moverColTabla = (key, delta) => {
+        const cols = layoutTabla.columnas.slice();
+        const i = cols.findIndex(c => c.key === key);
+        const j = i + delta;
+        if (i < 0 || j < 0 || j >= cols.length) return;
+        [cols[i], cols[j]] = [cols[j], cols[i]];
+        setColumnasTabla(cols);
+    };
+    const arrastrarColumnaTabla = (key) => (e) => {
+        e.preventDefault(); e.stopPropagation();
+        const x0 = e.clientX;
+        const w0 = layoutTabla.columnas.find(c => c.key === key).w;
+        const mover = (ev) => {
+            const w = Math.min(260, Math.max(50, Math.round(w0 + (ev.clientX - x0))));
+            setLayoutTablaState(prev => ({ ...prev, columnas: prev.columnas.map(c => c.key === key ? { ...c, w } : c) }));
+            setVarianteActiva('');
+        };
+        const soltar = () => { window.removeEventListener('pointermove', mover); window.removeEventListener('pointerup', soltar); };
+        window.addEventListener('pointermove', mover);
+        window.addEventListener('pointerup', soltar);
+    };
+    const setRowHTabla = (h) => { setLayoutTablaState(prev => ({ ...prev, rowH: h })); setVarianteActiva(''); };
+    const guardarVarianteTabla = async () => {
+        const nombre = (nombreNuevaVariante || '').trim() || `Variante ${variantesTabla.length + 1}`;
+        const resultado = await guardarDisposicionGlobal?.({ nombre, pantalla: 'ingreso-solicitudes', layout: clonarLayoutIngreso(layoutTabla) });
+        if (!resultado?.exito) { setErrorVariantes('No se pudo guardar la variante.'); return; }
+        cargarVariantesTabla();
+        setVarianteActiva(nombre);
+        setGuardandoVariante(false);
+        setNombreNuevaVariante('');
+    };
+    const aplicarVarianteTabla = (v) => { setLayoutTablaState(normalizarLayoutIngreso(v.layout)); setVarianteActiva(v.nombre); };
+    const eliminarVarianteTabla = async (v) => {
+        const ok = await eliminarDisposicionGlobal?.(v.id);
+        if (!ok) { setErrorVariantes('No se pudo eliminar la variante.'); return; }
+        setVariantesTabla(prev => prev.filter(x => x.nombre !== v.nombre));
+        if (varianteActiva === v.nombre) setVarianteActiva('');
+    };
+    const restablecerTabla = () => { setLayoutTablaState(clonarLayoutIngreso(BASE_LAYOUT_INGRESO)); setVarianteActiva(''); };
+
+    const columnasVisiblesTabla = layoutTabla.columnas.filter(c => c.visible).map(c => ({ ...campoIngreso(c.key), ...c }));
+    const GRID = columnasVisiblesTabla.map(c => c.key === 'empresa' ? 'minmax(150px,1.4fr)' : `${c.w}px`).join(' ') + ` ${ANCHO_ACCIONES}px`;
+    const TABLA_MIN_W = 150 + columnasVisiblesTabla.filter(c => c.key !== 'empresa').reduce((s, c) => s + c.w, 0) + ANCHO_ACCIONES + 10 * (columnasVisiblesTabla.length + 1) + 32;
     // Doble clic en una fila abre primero una vista de solo lectura (con la foto visible,
     // si tiene) — antes entraba directo a edición y no había forma de ver el adjunto sin
     // editar. "Editar" desde ahí pasa al mismo formulario de siempre.
@@ -317,6 +450,58 @@ const IngresoScreen = ({ solicitudes = [], liberarSolicitudManual, cargarDatos, 
 
                 {/* Tabla */}
                 <section style={styles.tablaSeccion}>
+                    {/* Barra de Disposición — mismo patrón que Panel de control */}
+                    <div style={styles.dispBarra}>
+                        <span style={styles.dispEtiqueta}>Disposición</span>
+                        <button onClick={() => setMenuColumnas(v => !v)} style={styles.btnDisp}>Columnas ({columnasVisiblesTabla.length}/{CAMPOS_INGRESO.length})</button>
+                        <div style={{ display: 'flex', gap: 2 }}>
+                            {[{ h: 32, label: 'Compacta' }, { h: 36, label: 'Normal' }, { h: 48, label: 'Cómoda' }].map(d => (
+                                <button key={d.h} onClick={() => setRowHTabla(d.h)} style={styles.btnDisp}>{layoutTabla.rowH === d.h ? '▪ ' : ''}{d.label}</button>
+                            ))}
+                        </div>
+                        <span style={styles.dispDivisor} />
+                        <div style={{ display: 'flex', gap: 3, minWidth: 0, flexWrap: 'wrap' }}>
+                            {errorVariantes && <span style={{ fontSize: 11, color: t.pagoPendiente, whiteSpace: 'nowrap' }}>{errorVariantes}</span>}
+                            {!errorVariantes && variantesTabla.length === 0 && <span style={{ fontSize: 11, color: t.textoAtenuado3, whiteSpace: 'nowrap' }}>Sin variantes guardadas</span>}
+                            {variantesTabla.map(v => (
+                                <span key={v.nombre} onClick={() => aplicarVarianteTabla(v)} style={styles.chipVariante}>
+                                    <span>{varianteActiva === v.nombre ? '▪ ' : ''}{v.nombre}</span>
+                                    <span onClick={(e) => { e.stopPropagation(); eliminarVarianteTabla(v); }} title="Eliminar variante" style={styles.xChip}>×</span>
+                                </span>
+                            ))}
+                        </div>
+                        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6, flex: 'none' }}>
+                            <span style={styles.dispMedidas}>{columnasVisiblesTabla.length} col · fila {layoutTabla.rowH}px</span>
+                            {guardandoVariante && (
+                                <input value={nombreNuevaVariante} onChange={e => setNombreNuevaVariante(e.target.value)} placeholder="Nombre de la variante" style={styles.inputVariante} />
+                            )}
+                            {guardandoVariante && <button onClick={guardarVarianteTabla} style={styles.btnConfirmarVariante}>Confirmar</button>}
+                            <button onClick={() => setGuardandoVariante(v => !v)} style={styles.btnDisp}>Guardar variante</button>
+                            <button onClick={restablecerTabla} style={styles.btnRestablecer}>Restablecer</button>
+                        </div>
+
+                        {menuColumnas && (
+                            <div style={styles.menuColumnas}>
+                                <div style={styles.menuColumnasHeader}>
+                                    <span style={{ fontSize: 9.5, letterSpacing: '.11em', textTransform: 'uppercase', color: t.textoAtenuado2 }}>Campos de la tabla</span>
+                                    <span onClick={() => setMenuColumnas(false)} style={styles.xModal}>×</span>
+                                </div>
+                                {layoutTabla.columnas.map(c => {
+                                    const meta = campoIngreso(c.key);
+                                    return (
+                                        <div key={c.key} onClick={() => toggleColTabla(c.key)} style={styles.filaMenuColumnas}>
+                                            <span style={{ fontFamily: t.fontMono, fontSize: 11, color: c.visible ? t.textoPrincipal : t.textoDeshabilitado }}>{c.visible ? '×' : '·'}</span>
+                                            <span style={{ fontSize: 11.5, color: c.visible ? t.textoPrincipal : t.textoDeshabilitado, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{meta.label}{c.key === 'empresa' ? ' (fija)' : ''}</span>
+                                            <span style={{ fontSize: 10, color: t.textoDeshabilitado, fontFamily: t.fontMono }}>{meta.origen}</span>
+                                            <span onClick={(e) => { e.stopPropagation(); moverColTabla(c.key, -1); }} title="Mover a la izquierda" style={{ fontFamily: t.fontMono, fontSize: 11, color: t.textoDeshabilitado, padding: '0 4px' }}>‹</span>
+                                        </div>
+                                    );
+                                })}
+                                <div style={{ padding: '8px 11px', fontSize: 10.5, color: t.textoAtenuado3, lineHeight: 1.5 }}>Se guarda dentro de la variante junto con anchos y densidad.</div>
+                            </div>
+                        )}
+                    </div>
+
                     <div style={styles.barraFiltros}>
                         <span style={styles.etiquetaBarra}>Solicitudes ingresadas</span>
                         <input
@@ -337,16 +522,24 @@ const IngresoScreen = ({ solicitudes = [], liberarSolicitudManual, cargarDatos, 
 
                     <div style={styles.scrollTabla}>
                         <div style={{ minWidth: TABLA_MIN_W }}>
-                            <div style={styles.encabezadoFila}>
-                                <span>N°</span><span>Empresa</span><span>Solicitante</span><span>Estado</span>
-                                <span>Origen</span><span style={{ textAlign: 'right' }}>Ingresada</span><span>Adjunto</span><span />
+                            <div style={{ ...styles.encabezadoFila, gridTemplateColumns: GRID }}>
+                                {columnasVisiblesTabla.map(c => (
+                                    <span key={c.key} style={{ position: 'relative', minWidth: 0, textAlign: c.align, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                        {c.corto}
+                                        {c.key !== 'empresa' && (
+                                            <span onPointerDown={arrastrarColumnaTabla(c.key)} title="Arrastra para ajustar el ancho" style={styles.resizeHandle} />
+                                        )}
+                                    </span>
+                                ))}
+                                <span />
                             </div>
 
                             {cargando && Array.from({ length: 6 }).map((_, i) => (
-                                <div key={`esqueleto-${i}`} style={styles.fila}>
-                                    {Array.from({ length: 8 }).map((__, j) => (
-                                        <span key={j}><span style={{ display: 'block', height: 9, borderRadius: 2, background: t.hoverFila, width: j === 1 ? '75%' : '90%' }} /></span>
+                                <div key={`esqueleto-${i}`} style={{ ...styles.fila, gridTemplateColumns: GRID, height: layoutTabla.rowH }}>
+                                    {columnasVisiblesTabla.map(c => (
+                                        <span key={c.key}><span style={{ display: 'block', height: 9, borderRadius: 2, background: t.hoverFila, width: c.key === 'empresa' ? '75%' : '90%' }} /></span>
                                     ))}
+                                    <span />
                                 </div>
                             ))}
 
@@ -355,32 +548,54 @@ const IngresoScreen = ({ solicitudes = [], liberarSolicitudManual, cargarDatos, 
                                 const estadoFinal = otEncontrada ? otEncontrada.estado : s.estado;
                                 const yaTieneOT = !!otEncontrada || ['Tratada', 'Planificada', 'Programada', 'En Ejecución', 'Trabajo Terminado', 'Con Informe', 'Pagada'].includes(estadoFinal);
                                 const sla = calcularSLA(s, otEncontrada);
+                                const fila = { s, otEncontrada };
 
                                 return (
                                     <div
-                                        key={s._id || index} style={{ ...styles.fila, background: (editandoId === s._id || viendoId === s._id) ? t.hoverFila : undefined, cursor: 'pointer' }}
+                                        key={s._id || index} style={{ ...styles.fila, gridTemplateColumns: GRID, height: layoutTabla.rowH, background: (editandoId === s._id || viendoId === s._id) ? t.hoverFila : undefined, cursor: 'pointer' }}
                                         onDoubleClick={() => verSolicitud(s)}
                                         title="Doble clic para ver los datos de esta solicitud"
                                     >
-                                        <span style={styles.celdaMono} title="Número de solicitud — junto al teléfono, es lo que el cliente usa para entrar al Portal">{s.numeroSolicitud || String(index + 1).padStart(2, '0')}</span>
-                                        <span style={styles.celdaEmpresa}>{s.empresaSolicitante || '—'}</span>
-                                        <span style={{ minWidth: 0 }}>
-                                            <span style={styles.celdaTexto}>{s.solicitante || '—'}</span>
-                                            {s.numero && <span style={{ display: 'block', fontFamily: t.fontMono, fontSize: '10px', color: t.textoAtenuado2 }}>{s.numero}</span>}
-                                        </span>
-                                        <span style={{ minWidth: 0 }}>
-                                            <span style={{ ...styles.celdaEstado, color: colorEstado(estadoFinal, yaTieneOT) }}>{estadoFinal || 'Pendiente'}</span>
-                                            {sla && <span style={{ display: 'block', fontFamily: t.fontMono, fontSize: '10px', color: sla.color }}>SLA {sla.texto}</span>}
-                                        </span>
-                                        <span style={styles.celdaAtenuada}>{s.origen || '—'}</span>
-                                        <span style={styles.celdaFecha}>{fmtFecha(s.fechaCreacion || s.fechaHoraSolicitud)}</span>
-                                        <span style={{ ...styles.celdaAtenuada, color: s.adjuntos ? t.acento : t.textoDeshabilitado }}>
-                                            {s.adjuntos ? (
-                                                <a href={`${API.replace('/api', '')}${s.adjuntos}`} target="_blank" rel="noopener noreferrer" style={{ color: t.acento }}>
-                                                    Ver archivo
-                                                </a>
-                                            ) : '—'}
-                                        </span>
+                                        {columnasVisiblesTabla.map(c => {
+                                            if (c.key === 'empresa') return (
+                                                <span key={c.key} style={styles.celdaEmpresa}>{s.empresaSolicitante || '—'}</span>
+                                            );
+                                            if (c.key === 'numero') return (
+                                                <span key={c.key} style={styles.celdaMono} title="Número de solicitud — junto al teléfono, es lo que el cliente usa para entrar al Portal">{s.numeroSolicitud || String(index + 1).padStart(2, '0')}</span>
+                                            );
+                                            if (c.key === 'solicitante') return (
+                                                <span key={c.key} style={{ minWidth: 0 }}>
+                                                    <span style={styles.celdaTexto}>{s.solicitante || '—'}</span>
+                                                    {s.numero && <span style={{ display: 'block', fontFamily: t.fontMono, fontSize: '10px', color: t.textoAtenuado2 }}>{s.numero}</span>}
+                                                </span>
+                                            );
+                                            if (c.key === 'estado') return (
+                                                <span key={c.key} style={{ minWidth: 0 }}>
+                                                    <span style={{ ...styles.celdaEstado, color: colorEstado(estadoFinal, yaTieneOT) }}>{estadoFinal || 'Pendiente'}</span>
+                                                    {sla && <span style={{ display: 'block', fontFamily: t.fontMono, fontSize: '10px', color: sla.color }}>SLA {sla.texto}</span>}
+                                                </span>
+                                            );
+                                            if (c.key === 'adjunto') return (
+                                                <span key={c.key} style={{ ...styles.celdaAtenuada, color: s.adjuntos ? t.acento : t.textoDeshabilitado }}>
+                                                    {s.adjuntos ? (
+                                                        <a href={`${API.replace('/api', '')}${s.adjuntos}`} target="_blank" rel="noopener noreferrer" style={{ color: t.acento }}>
+                                                            Ver archivo
+                                                        </a>
+                                                    ) : '—'}
+                                                </span>
+                                            );
+                                            const val = valorCeldaIngreso(fila, c.key);
+                                            return (
+                                                <span
+                                                    key={c.key}
+                                                    style={{
+                                                        ...styles.celdaTextoAlineada(c.align === 'right'),
+                                                        fontFamily: c.mono ? t.fontMono : t.fontUi,
+                                                        color: t.textoSecundario1,
+                                                    }}
+                                                >{val}</span>
+                                            );
+                                        })}
                                         <span style={{ display: 'flex', gap: 4 }}>
                                             <button
                                                 onClick={() => navigate('/tratamiento', { state: { ...(otEncontrada || s), solicitudId: s._id } })}
@@ -440,19 +655,42 @@ const styles = {
     btnFiltro: { height: '23px', padding: '0 8px', background: 'transparent', border: '1px solid transparent', fontSize: '11px', color: '#57564f', cursor: 'pointer', borderRadius: '2px', whiteSpace: 'nowrap', fontFamily: t.fontUi },
     resumenBarra: { marginLeft: 'auto', flex: 'none', fontFamily: t.fontMono, fontSize: '11px', color: t.textoAtenuado3, whiteSpace: 'nowrap' },
 
+    dispBarra: {
+        flex: 'none', position: 'relative', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '4px 8px',
+        padding: '5px 16px', background: t.encabezadoTabla, borderBottom: `1px solid ${t.hairlineBloque}`,
+    },
+    dispEtiqueta: { fontSize: 9.5, letterSpacing: '.11em', textTransform: 'uppercase', color: t.textoAtenuado2, flex: 'none' },
+    btnDisp: { height: 20, padding: '0 9px', background: t.superficie, border: `1px solid ${t.bordeZona}`, fontSize: 11, fontWeight: 600, color: '#262622', cursor: 'pointer', borderRadius: 2, whiteSpace: 'nowrap', flex: 'none', fontFamily: t.fontUi },
+    dispDivisor: { width: 1, height: 16, background: 'rgba(0,0,0,.14)', flex: 'none' },
+    chipVariante: { display: 'inline-flex', alignItems: 'center', gap: 5, height: 20, padding: '0 4px 0 8px', background: t.superficie, border: `1px solid ${t.bordeZona}`, fontSize: 11, color: '#262622', cursor: 'pointer', borderRadius: 2, whiteSpace: 'nowrap' },
+    xChip: { padding: '0 3px', color: t.textoDeshabilitado, fontFamily: t.fontMono },
+    dispMedidas: { fontFamily: t.fontMono, fontSize: 10.5, color: t.textoAtenuado3, whiteSpace: 'nowrap' },
+    inputVariante: { width: 150, height: 20, padding: '0 7px', border: `1px solid ${t.bordeZona}`, fontSize: 11, outline: 'none', borderRadius: 2, fontFamily: t.fontUi },
+    btnConfirmarVariante: { height: 20, padding: '0 9px', background: t.acento, border: `1px solid ${t.acento}`, color: '#fff', fontSize: 11, fontWeight: 600, cursor: 'pointer', borderRadius: 2, whiteSpace: 'nowrap', fontFamily: t.fontUi },
+    btnRestablecer: { height: 20, padding: '0 9px', background: 'transparent', border: '1px solid transparent', fontSize: 11, color: t.textoAtenuado2, cursor: 'pointer', borderRadius: 2, whiteSpace: 'nowrap', fontFamily: t.fontUi },
+    menuColumnas: {
+        position: 'absolute', top: 28, left: 96, zIndex: 20, width: 296, maxHeight: 340, overflow: 'auto',
+        background: t.superficie, border: `1px solid ${t.bordeZona}`, boxShadow: '0 8px 24px rgba(0,0,0,.14)', borderRadius: 2,
+    },
+    menuColumnasHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 11px', borderBottom: `1px solid ${t.hairlineBloque}` },
+    filaMenuColumnas: { display: 'grid', gridTemplateColumns: '16px 1fr auto auto', alignItems: 'center', gap: 8, padding: '5px 11px', cursor: 'pointer', borderBottom: `1px solid ${t.hairlineFila}` },
+    xModal: { fontFamily: t.fontMono, fontSize: 12, color: t.textoDeshabilitado, cursor: 'pointer', padding: '0 2px' },
+    resizeHandle: { position: 'absolute', top: -6, right: -8, width: 9, height: 26, cursor: 'col-resize', background: 'rgba(0,0,0,.10)' },
+
     scrollTabla: { flex: 1, minHeight: 0, minWidth: 0, overflow: 'auto', background: t.superficie },
     encabezadoFila: {
-        position: 'sticky', top: 0, zIndex: 2, display: 'grid', gridTemplateColumns: GRID, gap: '10px', alignItems: 'center',
+        position: 'sticky', top: 0, zIndex: 2, display: 'grid', gap: '10px', alignItems: 'center',
         height: '26px', padding: '0 16px', background: t.encabezadoTabla, borderBottom: `1px solid ${t.bordeZona}`,
         fontSize: '9.5px', letterSpacing: '.1em', textTransform: 'uppercase', color: t.textoAtenuado1, fontWeight: 700,
     },
-    fila: { display: 'grid', gridTemplateColumns: GRID, gap: '10px', alignItems: 'center', height: '36px', padding: '0 16px', borderBottom: `1px solid ${t.hairlineFila}` },
+    fila: { display: 'grid', gap: '10px', alignItems: 'center', padding: '0 16px', borderBottom: `1px solid ${t.hairlineFila}` },
     celdaMono: { fontFamily: t.fontMono, fontSize: '11px', color: t.textoDeshabilitado },
     celdaEmpresa: { minWidth: 0, fontSize: '12.5px', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
     celdaTexto: { minWidth: 0, fontSize: '11.5px', color: t.textoSecundario1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
     celdaEstado: { display: 'block', fontSize: '11px', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
     celdaAtenuada: { minWidth: 0, fontSize: '11px', color: t.textoAtenuado1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
     celdaFecha: { fontFamily: t.fontMono, fontSize: '11px', color: '#57564f', textAlign: 'right' },
+    celdaTextoAlineada: (derecha) => ({ minWidth: 0, overflow: 'hidden', textAlign: derecha ? 'right' : 'left', fontSize: '11px', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }),
     btnFilaPrincipal: { height: '23px', padding: '0 8px', background: t.superficie, border: `1px solid ${t.bordeZona}`, fontSize: '11px', fontWeight: 600, color: '#262622', cursor: 'pointer', borderRadius: '2px', whiteSpace: 'nowrap', fontFamily: t.fontUi },
     btnFilaSecundario: { height: '23px', padding: '0 8px', background: 'transparent', border: `1px solid ${t.bordeZona}`, fontSize: '11px', color: '#57564f', cursor: 'pointer', borderRadius: '2px', whiteSpace: 'nowrap', fontFamily: t.fontUi },
     sinResultados: { padding: '40px 16px', textAlign: 'center', fontSize: '14px', color: t.textoAtenuado3 },
