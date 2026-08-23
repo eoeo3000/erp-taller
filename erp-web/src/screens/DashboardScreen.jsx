@@ -61,6 +61,27 @@ const etapaInfo = (ot) => {
     return { idx, label: ETAPAS_VISUAL[idx], rechazada: false };
 };
 
+// Detalle de "a quién le toca actuar" dentro de las dos etapas donde el macro-estado por sí
+// solo no lo dice (ver plan de reordenamiento de estados): Tratada mezcla "esperando al
+// Supervisor" y "esperando al Planificador" bajo el mismo valor de OT.estado; Planificada
+// mezcla "esperando verificar capacidad", "esperando al Cliente" y "rechazada, esperando
+// corrección". El resto de las etapas son de un solo actor, no necesitan este detalle.
+const subEstadoDe = (ot) => {
+    if (!ot) return '—';
+    if (ot.estado === 'Tratada') {
+        if (ot.informeEvaluacion?.revision?.estado === 'ConObservaciones') return 'Con observaciones (Supervisor)';
+        if (!ot.informeEvaluacion?.completo) return 'Esperando informe (Supervisor)';
+        return 'En tratamiento (Planificador)';
+    }
+    if (ot.estado === 'Planificada') {
+        if (ot.cotizacion?.respuestaCliente === 'Rechazada') return 'Rechazada, esperando corrección (Planificador)';
+        if (!ot.cotizacion?.capacidadVerificada) return 'Esperando verificar capacidad (Planificador)';
+        if (!ot.cotizacion?.enviada) return 'Lista para enviar cotización (Planificador)';
+        return 'Esperando aprobación (Cliente)';
+    }
+    return '—';
+};
+
 const colorEtapa = ({ idx, rechazada }, tieneOt) => {
     if (rechazada) return t.pagoPendiente;
     if (!tieneOt) return t.textoDeshabilitado;
@@ -112,6 +133,7 @@ const CAMPOS = [
     { key: 'solicitud', label: 'N° de Solicitud', corto: 'Solicitud', origen: 'solicitud.numeroSolicitud', w: 90, align: 'left', tipo: 'texto', mono: true },
     { key: 'cliente', label: 'Cliente / faena', corto: 'Cliente / faena', origen: 'solicitud', w: 0, align: 'left', tipo: 'cliente' },
     { key: 'etapa', label: 'Etapa + avance', corto: 'Etapa', origen: 'ot.estado', w: 104, align: 'left', tipo: 'etapa' },
+    { key: 'subEstado', label: 'Sub-estado · a quién le toca', corto: 'Sub-estado', origen: 'ot', w: 210, align: 'left', tipo: 'texto' },
     { key: 'horas', label: 'Horas planificadas', corto: 'Horas', origen: 'ot.tareas', w: 58, align: 'right', tipo: 'texto', mono: true },
     { key: 'total', label: 'Total neto', corto: 'Total', origen: 'ot.granTotal', w: 92, align: 'right', tipo: 'texto', mono: true },
     { key: 'pago', label: 'Estado de pago', corto: 'Pago', origen: 'ot.pago', w: 80, align: 'right', tipo: 'texto' },
@@ -156,6 +178,7 @@ const valorCelda = (f, key, recursos = []) => {
     if (key === 'horas') { const h = horasDe(ot); return h ? `${h} h` : '—'; }
     if (key === 'total') return ot?.granTotal ? CLP(ot.granTotal) : '—';
     if (key === 'pago') return etiquetaPago(ot);
+    if (key === 'subEstado') return subEstadoDe(ot);
     if (key === 'creacion') return fmtFecha(s?.fechaCreacion);
     if (key === 'ejecucion') return fmtFecha(s?.fechaEjecucionSolicitada);
     if (key === 'supervisor') {
