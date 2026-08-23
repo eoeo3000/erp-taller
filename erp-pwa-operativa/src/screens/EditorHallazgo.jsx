@@ -155,10 +155,9 @@ function SegmentoCampo({ segmento, campo, onTocar, onSubirFoto, subiendo }) {
         <span
             onClick={() => onTocar(inputFoto.current)}
             style={{
-                display: 'inline-block', padding: '4px 8px', margin: '2px 1px', minHeight: 32,
-                background: segmento.pendiente ? '#fff' : 'var(--superficie)',
-                border: `1.5px solid ${segmento.pendiente ? 'var(--atencion)' : 'var(--en-curso)'}`,
-                borderRadius: 'var(--radio)', fontWeight: 600, cursor: 'pointer',
+                display: 'inline-block', padding: '0 2px',
+                borderBottom: `2px solid ${segmento.pendiente ? 'var(--atencion)' : 'var(--en-curso)'}`,
+                fontWeight: 600, cursor: 'pointer',
                 color: segmento.pendiente ? 'var(--atencion)' : 'var(--texto-principal)',
             }}
         >
