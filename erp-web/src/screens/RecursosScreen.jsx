@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { notificar, confirmar } from '../utils/notificar';
 
 // Paso 5 del rediseño (ver docs/rediseno/design_handoff_panel_control/README.md §7):
 // 5 tabs (Personal · Equipos y herramientas · Suministros directos · Calendarios · Plantillas),
@@ -151,14 +152,14 @@ const RecursosScreen = ({
         const editandoId = calSeleccionado !== 'nuevo' ? calSeleccionado : null;
         const exito = await guardarCalendarioGlobal(nuevoCal, editandoId);
         if (exito) { setCalSeleccionado(null); setNuevoCal(estadoInicialCalendario); }
-        else alert('Error al guardar en el servidor');
+        else notificar.error('Error al guardar en el servidor');
     };
 
     const guardarIntegrante = async () => {
-        if (!formIntegrante.nombre) { alert('El nombre es obligatorio'); return; }
+        if (!formIntegrante.nombre) { notificar.advertencia('El nombre es obligatorio'); return; }
         if (formIntegrante._id) {
             const r = await actualizarRecurso(formIntegrante._id, formIntegrante);
-            if (!r.success) { alert('Hubo un error al guardar los cambios.'); return; }
+            if (!r.success) { notificar.error('Hubo un error al guardar los cambios.'); return; }
         } else {
             await crearRecurso(formIntegrante);
         }
@@ -166,7 +167,7 @@ const RecursosScreen = ({
     };
 
     const guardarPlantilla = async () => {
-        if (!formPlantilla.nombre.trim()) { alert('El nombre es obligatorio'); return; }
+        if (!formPlantilla.nombre.trim()) { notificar.advertencia('El nombre es obligatorio'); return; }
         if (plantillaEditando) await actualizarPlantilla(plantillaEditando, formPlantilla);
         else await crearPlantilla(formPlantilla);
         setModalPlantilla(false);
@@ -235,7 +236,7 @@ const RecursosScreen = ({
                                                 <span style={{ width: 188, flex: 'none', padding: '5px 10px', background: t.superficie, position: 'sticky', left: 0, zIndex: 2, borderRight: `1px solid ${t.bordeZona}` }}>
                                                     <span style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 4 }}>
                                                         <span onClick={() => setFormIntegrante({ _id: r._id, nombre: r.nombre, puesto: r.puesto || '', calendarioId: r.calendarioId || '', fechaInicioCiclo: r.fechaInicioCiclo ? r.fechaInicioCiclo.split('T')[0] : '', email: r.email || '', telefono: r.telefono || '' })} style={{ display: 'block', fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', cursor: 'pointer' }}>{r.nombre}</span>
-                                                        <span onClick={() => { if (window.confirm(`¿Eliminar a ${r.nombre}?`)) eliminarRecurso(r._id); }} style={styles.xFila}>×</span>
+                                                        <span onClick={async () => { if (await confirmar(`¿Eliminar a ${r.nombre}?`)) eliminarRecurso(r._id); }} style={styles.xFila}>×</span>
                                                     </span>
                                                     <span style={{ display: 'flex', gap: 6, fontSize: 10.5, whiteSpace: 'nowrap', overflow: 'hidden' }}>
                                                         <span style={{ color: t.textoAtenuado3, flex: 'none' }}>{r.puesto || 'Sin cargo'}</span>
@@ -322,7 +323,7 @@ const RecursosScreen = ({
                                         <select className="campo-ed" style={{ ...styles.inputCelda, textAlign: 'right', color: colorEstado, fontWeight: 600 }} value={item.estado} onChange={e => actualizarEquipo(item._id, { estado: e.target.value })}>
                                             {['Disponible', 'Reservado', 'En Uso', 'Mantenimiento', 'Reparación'].map(e => <option key={e}>{e}</option>)}
                                         </select>
-                                        <span onClick={() => { if (window.confirm('¿Eliminar este activo?')) eliminarEquipo(item._id); }} style={styles.xFila}>×</span>
+                                        <span onClick={async () => { if (await confirmar('¿Eliminar este activo?')) eliminarEquipo(item._id); }} style={styles.xFila}>×</span>
                                     </div>
                                 );
                             })}
@@ -352,7 +353,7 @@ const RecursosScreen = ({
                                         <button onClick={() => ajustarStockRapido(item, -1)} title="Retirar stock" style={styles.btnMini}>−</button>
                                         <button onClick={() => abrirHistorial(item)} title="Historial" style={styles.btnMini}>H</button>
                                     </span>
-                                    <span onClick={() => { if (window.confirm('¿Eliminar este suministro?')) eliminarSuministro(item._id); }} style={styles.xFila}>×</span>
+                                    <span onClick={async () => { if (await confirmar('¿Eliminar este suministro?')) eliminarSuministro(item._id); }} style={styles.xFila}>×</span>
                                 </div>
                             ))}
                             <div style={{ padding: '8px 16px' }}>
@@ -415,7 +416,7 @@ const RecursosScreen = ({
                                     <span style={{ fontSize: 11.5, color: t.textoAtenuado1 }}>{p.categoria}</span>
                                     <span style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
                                         <span style={{ fontFamily: t.fontMono, fontSize: 11, color: t.textoSecundario2 }}>{p.tareas?.length || 0} tareas · {p.componentes?.length || 0} equipos · {p.logistica?.length || 0} suministros</span>
-                                        <span onClick={(e) => { e.stopPropagation(); if (window.confirm(`¿Eliminar "${p.nombre}"?`)) eliminarPlantilla(p._id); }} style={styles.xFila}>×</span>
+                                        <span onClick={async (e) => { e.stopPropagation(); if (await confirmar(`¿Eliminar "${p.nombre}"?`)) eliminarPlantilla(p._id); }} style={styles.xFila}>×</span>
                                     </span>
                                 </div>
                             ))}
@@ -495,7 +496,7 @@ const RecursosScreen = ({
                                     <button onClick={() => setCalSeleccionado(null)} style={styles.btnSecundario}>Cerrar</button>
                                 </div>
                                 {calSeleccionado !== 'nuevo' && (
-                                    <button onClick={() => { if (window.confirm('¿Eliminar este calendario?')) { eliminarCalendarioMaestro(calSeleccionado); setCalSeleccionado(null); } }} style={{ ...styles.btnSecundario, width: '100%', marginTop: 6, color: t.rojo }}>Eliminar calendario</button>
+                                    <button onClick={async () => { if (await confirmar('¿Eliminar este calendario?')) { eliminarCalendarioMaestro(calSeleccionado); setCalSeleccionado(null); } }} style={{ ...styles.btnSecundario, width: '100%', marginTop: 6, color: t.rojo }}>Eliminar calendario</button>
                                 )}
                             </div>
                         )}

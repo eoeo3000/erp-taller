@@ -5,6 +5,7 @@ import useIsMobile from '../hooks/useIsMobile';
 import autoTable from 'jspdf-autotable';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
+import { notificar, confirmar } from '../utils/notificar';
 
 // Paso 4 del rediseño (ver docs/rediseno/design_handoff_panel_control/README.md §6):
 // pipeline + 7 tabs (se agrega "0 · Informe Inicial", que no estaba en el mock, ver resumen
@@ -443,7 +444,7 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
         try {
             const respuesta = await actualizarOtGlobal(datosRecibidos._id, dataCompleta);
             if (respuesta && respuesta.exito) {
-                alert("Planificación guardada.");
+                notificar.exito("Planificación guardada.");
                 if (respuesta.otActualizada) {
                     setOtSeleccionada(respuesta.otActualizada);
                     if (respuesta.otActualizada.logistica?.length > 0) setLogistica(respuesta.otActualizada.logistica);
@@ -867,37 +868,37 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
         if (otSeleccionada) setOtSeleccionada({ ...otSeleccionada, logistica: nuevaLog });
     };
 
-    const aplicarPlantilla = (plantilla) => {
-        const confirmar = tareas.length > 0 || componentes.length > 0
-            ? window.confirm(`¿Aplicar la hoja de ruta "${plantilla.nombre}"? Se agregarán sus tareas y materiales a los existentes.`)
+    const aplicarPlantilla = async (plantilla) => {
+        const debeAplicar = tareas.length > 0 || componentes.length > 0
+            ? await confirmar(`¿Aplicar la hoja de ruta "${plantilla.nombre}"? Se agregarán sus tareas y materiales a los existentes.`, { danger: false })
             : true;
-        if (!confirmar) return;
+        if (!debeAplicar) return;
         const tareasNuevas = (plantilla.tareas || []).map(tt => ({ descripcion: tt.descripcion || '', puesto: tt.puesto || '', duracion: tt.duracion || 0, fecha: '', hora: '', operarioId: [], operarioNombre: [] }));
         setTareas(prev => [...prev, ...tareasNuevas]);
         setComponentes(prev => [...prev, ...(plantilla.componentes || [])]);
         setLogistica(prev => [...prev, ...(plantilla.logistica || [])]);
         setModalPlantilla(false);
         setPlantillaPreview(null);
-        alert(`Hoja de ruta "${plantilla.nombre}" aplicada. Ahora asigna fechas, horarios y responsables a las tareas.`);
+        notificar.exito(`Hoja de ruta "${plantilla.nombre}" aplicada. Ahora asigna fechas, horarios y responsables a las tareas.`);
     };
 
     const aplicarInformeAOT = () => {
         const { tareas: tInforme = [], componentes: cInforme = [], logistica: lInforme = [] } = informeEvaluacion;
         if (!tInforme.length && !cInforme.length && !lInforme.length) {
-            alert('El informe no tiene tareas, equipos ni suministros cargados para aplicar.');
+            notificar.advertencia('El informe no tiene tareas, equipos ni suministros cargados para aplicar.');
             return;
         }
         const tareasNuevas = tInforme.map(tt => ({ descripcion: tt.descripcion || '', puesto: tt.puesto || '', duracion: tt.duracion || 0, fecha: '', hora: '', operarioId: [], operarioNombre: [] }));
         setTareas(prev => [...prev, ...tareasNuevas]);
         setComponentes(prev => [...prev, ...cInforme]);
         setLogistica(prev => [...prev, ...lInforme]);
-        alert('Informe aplicado a la OT. Ahora asigna fechas, horarios y responsables en la pestaña Tareas.');
+        notificar.exito('Informe aplicado a la OT. Ahora asigna fechas, horarios y responsables en la pestaña Tareas.');
         setTabActiva('tareas');
     };
 
     const irATab = (tab) => {
         if (['tareas', 'componentes', 'Logistica', 'cotizacion'].includes(tab) && !informeEvaluacion.completo && !yaTeniaContenidoPrevio) {
-            alert('Completa y marca como terminado el Informe Inicial antes de continuar.');
+            notificar.advertencia('Completa y marca como terminado el Informe Inicial antes de continuar.');
             setTabActiva('informe');
             return;
         }
@@ -919,10 +920,10 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
             setOtSeleccionada(prev => ({ ...prev, reportes: reportesActualizados }));
             setReporteEditIdx(null);
             if (cargarDatos) cargarDatos();
-        } catch (e) { alert('Error al guardar: ' + e.message); }
+        } catch (e) { notificar.error('Error al guardar: ' + e.message); }
     };
     const anularReporte = async (idx) => {
-        if (!window.confirm('¿Anular este reporte?')) return;
+        if (!(await confirmar('¿Anular este reporte?'))) return;
         const id = otSeleccionada._id;
         const reportesActualizados = otSeleccionada.reportes.map((r, i) => i === idx ? { ...r, anulado: true } : r);
         const todosAnulados = reportesActualizados.every(r => r.anulado);
@@ -931,7 +932,7 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
             await axios.put(`${API}/ots/${id}`, { reportes: reportesActualizados, estado: nuevoEstado });
             setOtSeleccionada(prev => ({ ...prev, reportes: reportesActualizados, estado: nuevoEstado }));
             if (cargarDatos) cargarDatos();
-        } catch (e) { alert('Error al anular: ' + e.message); }
+        } catch (e) { notificar.error('Error al anular: ' + e.message); }
     };
     const restaurarReporte = async (idx) => {
         const id = otSeleccionada._id;
@@ -941,13 +942,13 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
             await axios.put(`${API}/ots/${id}`, { reportes: reportesActualizados, estado: nuevoEstado });
             setOtSeleccionada(prev => ({ ...prev, reportes: reportesActualizados, estado: nuevoEstado }));
             if (cargarDatos) cargarDatos();
-        } catch (e) { alert('Error al restaurar: ' + e.message); }
+        } catch (e) { notificar.error('Error al restaurar: ' + e.message); }
     };
 
     const guardarPago = async () => {
         try {
             const id = otSeleccionada?._id || datosRecibidos?._id;
-            if (!id) return alert('Sin OT seleccionada');
+            if (!id) return notificar.advertencia('Sin OT seleccionada');
             const estadoActual = otSeleccionada?.estado || datosRecibidos?.estado || 'Con Informe';
             const nuevoEstadoOT = pago.estado === 'Pagado' ? 'Pagada' : estadoActual;
             const pagoAGuardar = { ...pago, anulado: false, fechaAnulacion: '', motivoAnulacion: '' };
@@ -955,8 +956,8 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
             setOtSeleccionada(prev => ({ ...prev, pago: pagoAGuardar, estado: nuevoEstadoOT }));
             setPago(data.pago || pagoAGuardar);
             if (cargarDatos) cargarDatos();
-            alert('Información de pago guardada');
-        } catch (e) { alert('Error al guardar pago: ' + e.message); }
+            notificar.exito('Información de pago guardada');
+        } catch (e) { notificar.error('Error al guardar pago: ' + e.message); }
     };
     const anularPago = async () => {
         const motivo = window.prompt('Motivo de anulación (opcional):') ?? '';
@@ -970,10 +971,10 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
             setOtSeleccionada(prev => ({ ...prev, pago: pagoAnulado, estado: nuevoEstadoOT }));
             setPago(pagoAnulado);
             if (cargarDatos) cargarDatos();
-        } catch (e) { alert('Error al anular pago: ' + e.message); }
+        } catch (e) { notificar.error('Error al anular pago: ' + e.message); }
     };
     const restaurarPago = async () => {
-        if (!window.confirm('¿Restaurar el pago y volver al estado "Pagada"?')) return;
+        if (!(await confirmar('¿Restaurar el pago y volver al estado "Pagada"?', { danger: false }))) return;
         try {
             const id = otSeleccionada?._id || datosRecibidos?._id;
             if (!id) return;
@@ -983,7 +984,7 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
             setOtSeleccionada(prev => ({ ...prev, pago: pagoRestaurado, estado: nuevoEstadoOT }));
             setPago(pagoRestaurado);
             if (cargarDatos) cargarDatos();
-        } catch (e) { alert('Error al restaurar pago: ' + e.message); }
+        } catch (e) { notificar.error('Error al restaurar pago: ' + e.message); }
     };
     const recargarOT = async () => {
         try {
@@ -993,7 +994,7 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
             setOtSeleccionada(data);
             if (data.informeEvaluacion) setInformeEvaluacion({ ...informeEvaluacionVacio, ...data.informeEvaluacion });
             if (cargarDatos) await cargarDatos();
-        } catch (e) { alert('Error al actualizar: ' + e.message); }
+        } catch (e) { notificar.error('Error al actualizar: ' + e.message); }
     };
 
     // Revisión del Planificador sobre el informe del Supervisor: informativa, no bloquea
@@ -1009,7 +1010,7 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
             'informeEvaluacion.revision.comentario': informeEvaluacion.revision?.comentario || '',
             'informeEvaluacion.revision.fecha': new Date().toISOString(),
         });
-        if (!resultado?.exito) alert(resultado?.error || 'No se pudo guardar la revisión del informe.');
+        if (!resultado?.exito) notificar.error(resultado?.error || 'No se pudo guardar la revisión del informe.');
     };
 
     if (!datosRecibidos) return <div style={{ padding: '50px', fontFamily: t.fontUi }}>No hay datos.</div>;
@@ -1804,7 +1805,7 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                                 onClick={async () => {
                                     try {
                                         const fechasRaw = tareas.map(tt => tt.fecha).filter(Boolean);
-                                        if (fechasRaw.length === 0) { alert("No hay fechas programadas en las tareas."); return; }
+                                        if (fechasRaw.length === 0) { notificar.advertencia("No hay fechas programadas en las tareas."); return; }
                                         const objetosFecha = fechasRaw.map(f => new Date(f + 'T00:00:00'));
                                         const minFecha = new Date(Math.min(...objetosFecha));
                                         const maxFecha = new Date(Math.max(...objetosFecha));
@@ -1824,13 +1825,13 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                                                 'cotizacion.enviada': true,
                                                 'cotizacion.fechaEnvio': new Date().toISOString(),
                                             });
-                                            alert(`Cotización enviada. Programado del ${minFecha.toLocaleDateString('es-CL')} al ${maxFecha.toLocaleDateString('es-CL')}`);
+                                            notificar.exito(`Cotización enviada. Programado del ${minFecha.toLocaleDateString('es-CL')} al ${maxFecha.toLocaleDateString('es-CL')}`);
                                             setIsModalEnvioOpen(false);
                                             navigate('/dashboard');
                                         }
                                     } catch (error) {
                                         console.error("Error en el envío:", error);
-                                        alert("Error al enviar la cotización. Revisa la consola.");
+                                        notificar.error("Error al enviar la cotización. Revisa la consola.");
                                     }
                                 }}
                                 style={styles.btnPrimario}

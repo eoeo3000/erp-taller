@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import axios from 'axios';
 import { headerEntorno } from '../utils/entorno';
+import { notificar, confirmar } from '../utils/notificar';
 
 // Módulo Clientes (base para la mejora v3 #2, "Emisión de acceso cliente"): antes de esto
 // no existía ninguna colección de empresas/contactos, solo texto libre repetido en cada
@@ -38,7 +39,7 @@ export default function ClientesScreen({ API }) {
         setPoblando(true);
         try {
             const { data } = await axios.post(`${API}/clientes/poblar-desde-solicitudes`, {}, { headers: headerEntorno() });
-            alert(`${data.empresasCreadas} empresas creadas, ${data.empresasActualizadas} actualizadas.`);
+            notificar.exito(`${data.empresasCreadas} empresas creadas, ${data.empresasActualizadas} actualizadas.`);
             cargar();
         } finally {
             setPoblando(false);
@@ -117,8 +118,8 @@ function FichaCliente({ cliente, API, onCambio }) {
         setNuevo({ nombre: '', correo: '', telefono: '', cargo: '' });
     };
 
-    const eliminarContacto = (idx) => {
-        if (!window.confirm('¿Quitar este contacto?')) return;
+    const eliminarContacto = async (idx) => {
+        if (!(await confirmar('¿Quitar este contacto?'))) return;
         guardarContactos(contactos.filter((_, i) => i !== idx));
     };
 

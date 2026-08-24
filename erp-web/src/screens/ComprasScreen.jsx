@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useLocation } from 'react-router-dom';
 import axios from 'axios';
+import { notificar, confirmar } from '../utils/notificar';
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
@@ -62,7 +63,7 @@ export default function ComprasScreen({ ots = [], suministros = [] }) {
 
     // --- Proveedores: acciones ---
     const guardarProveedor = async () => {
-        if (!formProveedor.nombre) return alert('El nombre es obligatorio');
+        if (!formProveedor.nombre) return notificar.advertencia('El nombre es obligatorio');
         try {
             if (editandoProveedorId) {
                 await axios.put(`${API}/proveedores/${editandoProveedorId}`, formProveedor);
@@ -74,7 +75,7 @@ export default function ComprasScreen({ ots = [], suministros = [] }) {
             setEditandoProveedorId(null);
             cargarProveedores();
         } catch (err) {
-            alert(err.response?.data?.error || 'Error al guardar el proveedor');
+            notificar.error(err.response?.data?.error || 'Error al guardar el proveedor');
         }
     };
 
@@ -85,12 +86,12 @@ export default function ComprasScreen({ ots = [], suministros = [] }) {
     };
 
     const eliminarProveedor = async (id) => {
-        if (!window.confirm('¿Eliminar este proveedor?')) return;
+        if (!(await confirmar('¿Eliminar este proveedor?'))) return;
         try {
             await axios.delete(`${API}/proveedores/${id}`);
             cargarProveedores();
         } catch (err) {
-            alert(err.response?.data?.error || 'Error al eliminar');
+            notificar.error(err.response?.data?.error || 'Error al eliminar');
         }
     };
 
@@ -116,35 +117,35 @@ export default function ComprasScreen({ ots = [], suministros = [] }) {
     const totalFormOC = formOC.items.reduce((sum, it) => sum + (Number(it.cantidad) || 0) * (Number(it.precioUnitario) || 0), 0);
 
     const guardarOC = async () => {
-        if (!formOC.proveedorId || !formOC.otId) return alert('Selecciona proveedor y OT');
-        if (formOC.items.length === 0) return alert('Agrega al menos un ítem');
+        if (!formOC.proveedorId || !formOC.otId) return notificar.advertencia('Selecciona proveedor y OT');
+        if (formOC.items.length === 0) return notificar.advertencia('Agrega al menos un ítem');
         try {
             await axios.post(`${API}/ordenes-compra`, formOC);
             setModalOC(false);
             setFormOC({ proveedorId: '', otId: '', items: [] });
             cargarOrdenes();
         } catch (err) {
-            alert(err.response?.data?.error || 'Error al crear la orden de compra');
+            notificar.error(err.response?.data?.error || 'Error al crear la orden de compra');
         }
     };
 
     const enviarOC = async (oc) => {
         try {
             await axios.post(`${API}/ordenes-compra/${oc._id}/enviar`);
-            alert('✅ Orden de compra enviada al proveedor');
+            notificar.exito('Orden de compra enviada al proveedor');
         } catch (err) {
-            alert(err.response?.data?.error || 'Error al enviar');
+            notificar.error(err.response?.data?.error || 'Error al enviar');
         }
     };
 
     const recibirOC = async (oc) => {
-        if (!window.confirm(`¿Confirmar recepción de ${oc.numeroOC}? Esto sumará el stock de cada ítem.`)) return;
+        if (!(await confirmar(`¿Confirmar recepción de ${oc.numeroOC}? Esto sumará el stock de cada ítem.`, { danger: false }))) return;
         try {
             await axios.post(`${API}/ordenes-compra/${oc._id}/recibir`);
             cargarOrdenes();
-            alert('✅ Recepción registrada, stock actualizado');
+            notificar.exito('Recepción registrada, stock actualizado');
         } catch (err) {
-            alert(err.response?.data?.error || 'Error al recibir');
+            notificar.error(err.response?.data?.error || 'Error al recibir');
         }
     };
 
@@ -153,17 +154,17 @@ export default function ComprasScreen({ ots = [], suministros = [] }) {
             await axios.put(`${API}/ordenes-compra/${oc._id}`, { estado: 'Pagada' });
             cargarOrdenes();
         } catch (err) {
-            alert(err.response?.data?.error || 'Error al actualizar');
+            notificar.error(err.response?.data?.error || 'Error al actualizar');
         }
     };
 
     const eliminarOC = async (oc) => {
-        if (!window.confirm(`¿Eliminar la orden de compra ${oc.numeroOC}?`)) return;
+        if (!(await confirmar(`¿Eliminar la orden de compra ${oc.numeroOC}?`))) return;
         try {
             await axios.delete(`${API}/ordenes-compra/${oc._id}`);
             cargarOrdenes();
         } catch (err) {
-            alert(err.response?.data?.error || 'Error al eliminar');
+            notificar.error(err.response?.data?.error || 'Error al eliminar');
         }
     };
 

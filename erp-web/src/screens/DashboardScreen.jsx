@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import { confirmar } from '../utils/notificar';
 
 // Paso 7 del rediseño (ver docs/rediseno/design_handoff_panel_control/README.md §3-4):
 // catálogo de campos configurable (13 del handoff original + N° de Solicitud, agregado
@@ -471,11 +472,11 @@ const DashboardScreen = ({ ots = [], solicitudes = [], eliminarOT, eliminarSolic
         if (!detalle) return [];
         const { ot, s } = detalle;
         if (!ot) {
-            const eliminar = { label: 'Eliminar solicitud', onClick: () => { if (window.confirm('¿Eliminar esta solicitud?')) eliminarSolicitud?.(s._id); } };
+            const eliminar = { label: 'Eliminar solicitud', onClick: async () => { if (await confirmar('¿Eliminar esta solicitud?')) eliminarSolicitud?.(s._id); } };
             if (s.estado === 'Rechazada') return [{ label: 'Reabrir', onClick: () => actualizarEstadoSolicitud?.(s._id, 'Pendiente') }, eliminar];
-            return [{ label: 'Rechazar', onClick: () => { if (window.confirm('¿Rechazar esta solicitud?')) actualizarEstadoSolicitud?.(s._id, 'Rechazada'); } }, eliminar];
+            return [{ label: 'Rechazar', onClick: async () => { if (await confirmar('¿Rechazar esta solicitud?')) actualizarEstadoSolicitud?.(s._id, 'Rechazada'); } }, eliminar];
         }
-        return [{ label: 'Eliminar OT', onClick: () => { if (window.confirm('¿Eliminar esta OT? La solicitud vuelve a Pendiente.')) eliminarOT?.(ot._id); } }];
+        return [{ label: 'Eliminar OT', onClick: async () => { if (await confirmar('¿Eliminar esta OT? La solicitud vuelve a Pendiente.')) eliminarOT?.(ot._id); } }];
     };
 
     // "Abrir OT" se eliminó de acá: el número de OT de la fila (columna 'ot' y encabezado del

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { notificar } from '../utils/notificar';
 
 const ReporteTerreno = ({ ots, actualizarOtGlobal }) => {
     const [ot, setOt] = useState(null);
@@ -54,7 +55,7 @@ const ReporteTerreno = ({ ots, actualizarOtGlobal }) => {
             }
             if (!ot.tareas || !Array.isArray(ot.tareas)) {
                 console.error("❌ Error: 'ot.tareas' no es un array válido.", ot.tareas);
-                alert("Error: No se encontraron tareas en esta OT.");
+                notificar.error("Error: No se encontraron tareas en esta OT.");
                 return;
             }
 
@@ -74,7 +75,7 @@ const ReporteTerreno = ({ ots, actualizarOtGlobal }) => {
             console.log("📝 Hitos generados:", nuevosHitos.length);
 
             if (nuevosHitos.length === 0) {
-                alert("⚠️ No hay comentarios ni fotos para enviar.");
+                notificar.advertencia("No hay comentarios ni fotos para enviar.");
                 return;
             }
 
@@ -95,7 +96,7 @@ const ReporteTerreno = ({ ots, actualizarOtGlobal }) => {
             if (resultado && resultado.exito) {
                 console.log("✅ ÉXITO: Reporte guardado en la DB.");
                 setOt(resultado.otActualizada);
-                alert("✅ Reporte guardado correctamente.");
+                notificar.exito("Reporte guardado correctamente.");
             } else {
                 console.error("❌ FALLO: El servidor no confirmó el guardado.");
             }

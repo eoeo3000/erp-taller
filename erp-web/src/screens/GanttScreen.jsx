@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { notificar, confirmar } from '../utils/notificar';
 
 // Paso 6 del rediseño (ver docs/rediseno/design_handoff_panel_control/README.md §8):
 // una sola grilla continua OT → tareas → capacidad (mismo grid-template-columns en las tres),
@@ -185,7 +186,7 @@ const GanttScreen = ({ recursos = [], ots = [], calendarios = [], obtenerHorasPa
             } : {}),
         });
         setConfirmando(false);
-        if (!resultado?.exito) { alert(resultado?.error || 'No se pudo confirmar la capacidad.'); return; }
+        if (!resultado?.exito) { notificar.error(resultado?.error || 'No se pudo confirmar la capacidad.'); return; }
         if (cargarDatos) cargarDatos();
 
         // Si vino desde el aviso "Requiere programar la OT" de Tratamiento, vuelve directo a
@@ -199,9 +200,9 @@ const GanttScreen = ({ recursos = [], ots = [], calendarios = [], obtenerHorasPa
     // 'Planificada' ahora que ese paso lo dispara la aprobación del cliente — por si el
     // cliente cancela verbalmente después de haber aprobado.
     const revertirAPlanificada = async (ot) => {
-        if (!window.confirm('¿Revertir esta OT a Planificada? Se perderá el estado Programada.')) return;
+        if (!(await confirmar('¿Revertir esta OT a Planificada? Se perderá el estado Programada.'))) return;
         const resultado = await actualizarOtGlobal(ot._id, { estado: 'Planificada' });
-        if (!resultado?.exito) { alert(resultado?.error || 'No se pudo revertir la OT.'); return; }
+        if (!resultado?.exito) { notificar.error(resultado?.error || 'No se pudo revertir la OT.'); return; }
         if (cargarDatos) cargarDatos();
     };
 

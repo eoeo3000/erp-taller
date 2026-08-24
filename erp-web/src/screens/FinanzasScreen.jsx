@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
+import { notificar, confirmar } from '../utils/notificar';
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
@@ -51,18 +52,18 @@ export default function FinanzasScreen({ recursos = [] }) {
 
     // ── REGISTRO ASISTENCIA ───────────────────────────────────
     const registrarAsistencia = async () => {
-        if (!formPago.recursoId || !formPago.fecha) return alert('Selecciona recurso y fecha');
+        if (!formPago.recursoId || !formPago.fecha) return notificar.advertencia('Selecciona recurso y fecha');
         try {
             await axios.post(`${API}/finanzas/registros-pago`, formPago);
             setFormPago(f => ({ ...f, recursoId: '', notas: '' }));
             cargarRegistros();
         } catch (err) {
-            alert(err.response?.data?.error || 'Error al registrar');
+            notificar.error(err.response?.data?.error || 'Error al registrar');
         }
     };
 
     const eliminarRegistro = async (id) => {
-        if (!confirm('¿Eliminar este registro?')) return;
+        if (!(await confirmar('¿Eliminar este registro?'))) return;
         await axios.delete(`${API}/finanzas/registros-pago/${id}`);
         cargarRegistros();
     };
