@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { headerEntorno } from '../utils/entorno';
+import { notificar, confirmar } from '../utils/notificar';
 
 const CLP = n => (Number(n) || 0).toLocaleString('es-CL');
 const hoy = () => new Date().toISOString().slice(0, 10);
@@ -96,10 +97,10 @@ export default function ContabilidadScreen({ API }) {
         finally { setSaving(false); }
     };
     const eliminarCuenta = async (id) => {
-        if (!window.confirm('¿Eliminar esta cuenta?')) return;
+        if (!(await confirmar('¿Eliminar esta cuenta?'))) return;
         const r = await fetch(`${API}/contabilidad/cuentas/${id}`, { method: 'DELETE', headers: headerEntorno() });
         const d = await r.json();
-        if (!r.ok) return alert(d.error);
+        if (!r.ok) return notificar.error(d.error);
         fetchCuentas();
     };
 
@@ -151,7 +152,7 @@ export default function ContabilidadScreen({ API }) {
             body: JSON.stringify({ motivo: motivoAnulacion })
         });
         const d = await r.json();
-        if (!r.ok) return alert(d.error);
+        if (!r.ok) return notificar.error(d.error);
         setModalAnular(null);
         setMotivoAnulacion('');
         fetchAsientos();

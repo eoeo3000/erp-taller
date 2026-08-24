@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import axios from 'axios';
 import { headerEntorno } from '../utils/entorno';
+import { confirmar } from '../utils/notificar';
 
 // Mejora v3 #2 — "Bodega de tokens". Administración de accesos: tokens Cliente
 // (SesionPortal, emitidos desde acá) y Operativo (Usuario, emitidos desde la ficha de
@@ -84,7 +85,7 @@ function TokensActivos({ API }) {
         const rutas = tok.tipo === 'cliente'
             ? { revocar: 'revocar', regenerar: 'regenerar', reenviar: 'reenviar', reactivar: 'reactivar' }
             : { revocar: 'revocar', regenerar: 'reemitir-token', reenviar: 'reemitir-token', reactivar: 'reactivar' };
-        if (tipoAccion === 'revocar' && !window.confirm(`¿Revocar el acceso de ${tok.nombre}?`)) return;
+        if (tipoAccion === 'revocar' && !(await confirmar(`¿Revocar el acceso de ${tok.nombre}?`))) return;
         setAviso(null);
         setProcesando(tok._id);
         try {

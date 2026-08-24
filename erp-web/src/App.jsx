@@ -47,6 +47,8 @@ import BodegaTokensScreen from './screens/BodegaTokensScreen';
 import TableroSupervisoresScreen from './screens/TableroSupervisoresScreen';
 import useIsMobile from './hooks/useIsMobile';
 import { headerEntorno, obtenerEntorno, fijarEntorno } from './utils/entorno';
+import { notificar, confirmar } from './utils/notificar';
+import NotificacionesHost from './components/NotificacionesHost';
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 function App() {
@@ -188,7 +190,7 @@ function App() {
       return true;
     } catch (error) {
       console.error("❌ Error en el Backend:", error.response?.data);
-      alert("Error al crear recurso");
+      notificar.error("Error al crear recurso");
       return false;
     }
   };
@@ -257,7 +259,7 @@ function App() {
   const eliminarOT = async (id) => {
     if (!id || id === 'null') return;
 
-    if (window.confirm("¿Deseas eliminar esta OT? (La solicitud volverá a estar pendiente)")) {
+    if (await confirmar("¿Deseas eliminar esta OT? (La solicitud volverá a estar pendiente)")) {
       try {
 
         // 1. Solo una petición: El backend hace el resto del trabajo sucio
@@ -267,11 +269,11 @@ function App() {
         // 2. Refrescamos la UI con los nuevos estados
         await cargarDatos();
 
-        alert("OT eliminada y solicitud liberada automáticamente.");
+        notificar.exito("OT eliminada y solicitud liberada automáticamente.");
 
       } catch (error) {
         console.error("❌ ERROR AL ELIMINAR:", error.response?.data || error.message);
-        alert("No se pudo completar la operación.");
+        notificar.error("No se pudo completar la operación.");
       }
     }
   };
@@ -281,14 +283,14 @@ function App() {
   // Supervisor si ya había tomado la solicitud para el informe inicial.
   const eliminarSolicitud = async (id) => {
     if (!id) return;
-    if (window.confirm("¿Eliminar esta solicitud? Si un supervisor ya la tomó para el informe inicial, esa asignación también se elimina.")) {
+    if (await confirmar("¿Eliminar esta solicitud? Si un supervisor ya la tomó para el informe inicial, esa asignación también se elimina.")) {
       try {
         await axios.delete(`${API}/solicitudes/${id}`);
         await cargarDatos();
-        alert("Solicitud eliminada.");
+        notificar.exito("Solicitud eliminada.");
       } catch (error) {
         console.error("❌ ERROR AL ELIMINAR SOLICITUD:", error.response?.data || error.message);
-        alert(error.response?.data?.error || "No se pudo completar la operación.");
+        notificar.error(error.response?.data?.error || "No se pudo completar la operación.");
       }
     }
   };
@@ -365,7 +367,7 @@ function App() {
     try {
       await axios.put(`${API}/solicitudes/${solicitudId}`, { estado: 'Pendiente' });
       await cargarDatos();
-      alert("Estado reseteado a Pendiente");
+      notificar.exito("Estado reseteado a Pendiente");
     } catch (error) {
       console.error("Error al liberar:", error);
     }
@@ -391,7 +393,7 @@ function App() {
       await cargarDatos();
     } catch (error) {
       console.error("Error al aprobar y crear la OT:", error);
-      alert('No se pudo aprobar la solicitud: ' + (error.response?.data?.error || error.message));
+      notificar.error('No se pudo aprobar la solicitud: ' + (error.response?.data?.error || error.message));
     }
   };
   const editarOtGlobal = async (id, otActualizada) => {
@@ -491,11 +493,11 @@ function App() {
       }
     } catch (error) {
       console.error("❌ Error al eliminar:", error);
-      alert("No se pudo eliminar el recurso");
+      notificar.error("No se pudo eliminar el recurso");
     }
   };
   const eliminarCalendarioMaestro = async (id) => {
-    if (!window.confirm("¿Estás seguro de eliminar este turno? Los operarios asignados quedarán 'Sin Turno'.")) return;
+    if (!(await confirmar("¿Estás seguro de eliminar este turno? Los operarios asignados quedarán 'Sin Turno'."))) return;
 
     try {
       // Asegúrate de que la URL sea la de calendarios, no recursos
@@ -514,7 +516,7 @@ function App() {
       }
     } catch (error) {
       console.error("❌ Error al eliminar calendario:", error);
-      alert("No se pudo eliminar el calendario");
+      notificar.error("No se pudo eliminar el calendario");
     }
   };
   const asignarCalendarioGlobal = async (recursoId, calendarioId) => {
@@ -599,7 +601,7 @@ function App() {
     }
   };
   const eliminarEquipo = async (id) => {
-    if (!window.confirm("¿Eliminar este equipo?")) return;
+    if (!(await confirmar("¿Eliminar este equipo?"))) return;
     try {
       await axios.delete(`${API}/equipos/${id}`);
       setComponentes(prev => prev.filter(e => e._id !== id));
@@ -646,7 +648,7 @@ function App() {
       // 🚩 Log detallado para ver exactamente qué rechazó el servidor
       const mensajeServidor = error.response?.data?.error || error.message;
       console.error("❌ Error al crear suministro:", mensajeServidor);
-      alert(`No se pudo crear: ${mensajeServidor}`);
+      notificar.error(`No se pudo crear: ${mensajeServidor}`);
       return false;
     }
   };
@@ -660,7 +662,7 @@ function App() {
       }
     } catch (error) {
       console.error("❌ Error al eliminar suministro:", error);
-      alert("No se pudo eliminar el registro");
+      notificar.error("No se pudo eliminar el registro");
     }
   };
   const actualizarSuministro = async (id, datosActualizados) => {
@@ -695,7 +697,7 @@ function App() {
       }
     } catch (error) {
       console.error("❌ Error al ajustar stock:", error.response?.data || error.message);
-      alert(error.response?.data?.error || 'No se pudo ajustar el stock');
+      notificar.error(error.response?.data?.error || 'No se pudo ajustar el stock');
       return false;
     }
   };
@@ -730,14 +732,14 @@ function App() {
       } else {
         // 🚩 Esto te dirá en la consola si el error es por "Duplicado" o "Validación"
         console.error("Respuesta de error del servidor:", resultado);
-        alert(`Error: ${resultado.mensaje || 'No se pudo crear el puesto'}`);
+        notificar.error(`Error: ${resultado.mensaje || 'No se pudo crear el puesto'}`);
       }
     } catch (error) {
       console.error("Error de red/conexión:", error);
     }
   };
   const eliminarPuesto = async (id) => {
-    if (!confirm("¿Seguro que deseas eliminar este puesto?")) return;
+    if (!(await confirmar("¿Seguro que deseas eliminar este puesto?"))) return;
     try {
       const response = await fetch(`${API}/puestos/${id}`, { method: 'DELETE', headers: headerEntorno() });
       if (response.ok) {
@@ -805,7 +807,7 @@ function App() {
     if (!solicitud) return;
     const telefono = (solicitud.numero || '').replace(/\D/g, '');
     if (!telefono) {
-      alert('Esta solicitud no tiene un número de contacto registrado.');
+      notificar.advertencia('Esta solicitud no tiene un número de contacto registrado.');
       return;
     }
 
@@ -861,6 +863,7 @@ function App() {
   return (
     <Router>
       <div style={styles.raiz}>
+        <NotificacionesHost />
         <NavPortalGuard>
           {!navOculta && (
             <>

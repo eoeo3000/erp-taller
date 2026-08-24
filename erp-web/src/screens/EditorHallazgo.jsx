@@ -3,6 +3,7 @@ import { sugerirTiposTrabajo } from '../utils/motorSugerencia.js';
 import { generarSegmentos } from '../utils/motorTexto.js';
 import { recalcularTexto, deshacerEdicionManual } from '../utils/hallazgos.js';
 import { subirFoto } from '../utils/fotos.js';
+import { notificar } from '../utils/notificar';
 
 // Versión de escritorio del formulario adaptativo — docs/plan-formulario-adaptativo.md §5/§6/§10,
 // rediseño "lienzo en blanco": un solo cuadro donde se escribe, sin buscador separado ni lista
@@ -76,7 +77,7 @@ export default function EditorHallazgo({ hallazgo, onCambiar, tiposTrabajo, apiB
             const url = await subirFoto(archivo, apiBase);
             onCambiar({ ...hallazgo, fotos: [...(hallazgo.fotos || []), url] });
         } catch {
-            alert('No se pudo subir la foto — intenta de nuevo.');
+            notificar.error('No se pudo subir la foto — intenta de nuevo.');
         } finally { setSubiendoFoto(false); }
     };
 
@@ -86,7 +87,7 @@ export default function EditorHallazgo({ hallazgo, onCambiar, tiposTrabajo, apiB
             const url = await subirFoto(archivo, apiBase);
             cambiarValor(clave, url);
         } catch {
-            alert('No se pudo subir la foto — intenta de nuevo.');
+            notificar.error('No se pudo subir la foto — intenta de nuevo.');
         } finally { setSubiendoFoto(false); }
     };
 
