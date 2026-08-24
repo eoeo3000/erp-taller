@@ -103,7 +103,6 @@ const GanttScreen = ({ recursos = [], ots = [], calendarios = [], obtenerHorasPa
     const diasSemana = semanaActual?.dias || [];
 
     const [otSel, setOtSel] = useState(null);
-    const [confirmando, setConfirmando] = useState(false);
     const [asideOculta, setAsideOculta] = useState(false);
     // Mejora v3 #3 — "Por operario" es exactamente lo que ya existía (sin cambios); "Por OT"
     // y "Por supervisor" son vistas nuevas, agregadas por OT/persona en vez de por tarea.
@@ -171,10 +170,17 @@ const GanttScreen = ({ recursos = [], ots = [], calendarios = [], obtenerHorasPa
     // aprobar la cotización, ver otController.responderCotizacionCliente) — acá solo se
     // verifica capacidad y se registran las fechas propuestas, gate obligatorio antes de
     // poder enviar la cotización desde Tratamiento (cotizacion.capacidadVerificada).
-    const confirmarCapacidad = async (ot, { forzar = false } = {}) => {
+    // El aviso de sobredemanda usa el modal global de confirmar() (no un panel dentro del
+    // aside): un panel lateral se puede quedar colapsado o fuera de foco y el clic parecía
+    // "no hacer nada" — el modal siempre es visible sin importar el estado del aside.
+    const confirmarCapacidad = async (ot) => {
         setOtSel(ot);
         const conflictos = verificarDisponibilidad(ot);
-        if (conflictos.length > 0 && !forzar) { setConfirmando(true); return; }
+        if (conflictos.length > 0) {
+            const detalle = conflictos.map(c => `${c.nombre} el ${c.fecha} (+${c.deficit}h sobre su capacidad)`).join('; ');
+            const continuar = await confirmar(`Esto deja responsables sobre su capacidad: ${detalle}. ¿Confirmar igual?`);
+            if (!continuar) return;
+        }
 
         const fechasPropuestas = fechasPropuestasDe(ot);
         const resultado = await actualizarOtGlobal(ot._id, {
@@ -185,7 +191,6 @@ const GanttScreen = ({ recursos = [], ots = [], calendarios = [], obtenerHorasPa
                 'cotizacion.fechasPropuestas.fin': fechasPropuestas.fin,
             } : {}),
         });
-        setConfirmando(false);
         if (!resultado?.exito) { notificar.error(resultado?.error || 'No se pudo confirmar la capacidad.'); return; }
         if (cargarDatos) cargarDatos();
 
@@ -263,7 +268,7 @@ const GanttScreen = ({ recursos = [], ots = [], calendarios = [], obtenerHorasPa
                             const horasSemana = (ot.tareas || []).filter(tt => diasSemana.includes(tt.fecha)).reduce((a, tt) => a + (Number(tt.duracion) || 0), 0);
                             return (
                                 <React.Fragment key={ot._id}>
-                                    <div style={{ ...styles.filaOT, background: otSel?._id === ot._id ? '#f0efeb' : enSemana ? t.fondoMain : t.superficie }} onClick={() => { setOtSel(ot); setConfirmando(false); }}>
+                                    <div style={{ ...styles.filaOT, background: otSel?._id === ot._id ? '#f0efeb' : enSemana ? t.fondoMain : t.superficie }} onClick={() => setOtSel(ot)}>
                                         <span style={{ ...styles.celda, borderLeft: `2px solid ${otSel?._id === ot._id ? '#1c1d1b' : 'transparent'}` }}>
                                             <span onClick={(e) => { e.stopPropagation(); navigate('/tratamiento', { state: ot }); }} style={{ fontFamily: t.fontMono, fontSize: 11, fontWeight: 600, color: t.acento, cursor: 'pointer' }}>{ot.numeroOT || 'S/N'}</span>
                                         </span>
@@ -385,7 +390,7 @@ const GanttScreen = ({ recursos = [], ots = [], calendarios = [], obtenerHorasPa
                             const horasSemana = (ot.tareas || []).filter(tt => diasSemana.includes(tt.fecha)).reduce((a, tt) => a + (Number(tt.duracion) || 0), 0);
                             const fmtFecha = iso => iso ? new Date(iso + 'T00:00:00').toLocaleDateString('es-CL', { day: '2-digit', month: 'short' }) : '—';
                             return (
-                                <div key={ot._id} style={{ ...styles.filaOT, background: otSel?._id === ot._id ? '#f0efeb' : enSemana ? t.fondoMain : t.superficie }} onClick={() => { setOtSel(ot); setConfirmando(false); }}>
+                                <div key={ot._id} style={{ ...styles.filaOT, background: otSel?._id === ot._id ? '#f0efeb' : enSemana ? t.fondoMain : t.superficie }} onClick={() => setOtSel(ot)}>
                                     <span style={{ ...styles.celda, borderLeft: `2px solid ${otSel?._id === ot._id ? '#1c1d1b' : 'transparent'}` }}>
                                         <span onClick={(e) => { e.stopPropagation(); navigate('/tratamiento', { state: ot }); }} style={{ fontFamily: t.fontMono, fontSize: 11, fontWeight: 600, color: t.acento, cursor: 'pointer' }}>{ot.numeroOT || 'S/N'}</span>
                                     </span>
@@ -500,15 +505,6 @@ const GanttScreen = ({ recursos = [], ots = [], calendarios = [], obtenerHorasPa
                                             </div>
                                         </div>
                                     ))}
-                                    {confirmando && (
-                                        <div style={{ marginTop: 10, padding: '8px 10px', background: '#fff', borderLeft: `2px solid ${t.rojo}` }}>
-                                            <div style={{ fontSize: 11.5, color: t.textoSecundario1, lineHeight: 1.5, marginBottom: 8 }}>Confirmar dejará responsables sobre su capacidad. ¿Continuar?</div>
-                                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
-                                                <button onClick={() => otSel && confirmarCapacidad(otSel, { forzar: true })} style={{ height: 26, background: t.rojo, border: `1px solid ${t.rojo}`, color: '#fff', fontSize: 11, fontWeight: 700, cursor: 'pointer', borderRadius: 2 }}>Confirmar igual</button>
-                                                <button onClick={() => setConfirmando(false)} style={styles.btnSecundario}>Cancelar</button>
-                                            </div>
-                                        </div>
-                                    )}
                                 </div>
 
                                 <div style={{ padding: '11px 16px 14px' }}>
