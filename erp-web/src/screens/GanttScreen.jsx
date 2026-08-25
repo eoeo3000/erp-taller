@@ -175,6 +175,10 @@ const GanttScreen = ({ recursos = [], ots = [], calendarios = [], obtenerHorasPa
     // "no hacer nada" — el modal siempre es visible sin importar el estado del aside.
     const confirmarCapacidad = async (ot) => {
         setOtSel(ot);
+        if (!(ot.tareas || []).some(tt => tt.fecha)) {
+            notificar.advertencia('Esta OT no tiene tareas con fecha — agrégalas en Tratamiento antes de verificar capacidad.');
+            return;
+        }
         const conflictos = verificarDisponibilidad(ot);
         if (conflictos.length > 0) {
             const detalle = conflictos.map(c => `${c.nombre} el ${c.fecha} (+${c.deficit}h sobre su capacidad)`).join('; ');
@@ -259,12 +263,22 @@ const GanttScreen = ({ recursos = [], ots = [], calendarios = [], obtenerHorasPa
                         {modoVista === 'todo' && <div style={styles.filaSeccion}>Por operario</div>}
                         {ots.map(ot => {
                             const estaEjecutado = ESTADOS_EJECUTADOS.includes(ot.estado);
-                            const puedeProgramar = ['Planificada', 'Programada'].includes(ot.estado);
+                            const estadoValido = ['Planificada', 'Programada'].includes(ot.estado);
+                            // Sin tareas con fecha no hay nada que verificar: verificarDisponibilidad
+                            // y fechasPropuestasDe recorren tareas con fecha, así que una OT sin
+                            // ninguna "confirmaría" trivialmente sin chequear nada real.
+                            const tieneTareasConFecha = (ot.tareas || []).some(tt => tt.fecha);
+                            const puedeProgramar = estadoValido && tieneTareasConFecha;
                             const capacidadVerificada = !!ot.cotizacion?.capacidadVerificada;
                             const fechasTareas = (ot.tareas || []).filter(tt => tt.fecha).map(tt => tt.fecha).sort();
                             const fmtFecha = iso => iso ? new Date(iso + 'T00:00:00').toLocaleDateString('es-CL', { day: '2-digit', month: 'short' }) : '—';
                             const enSemana = diasSemana.some(d => fechasTareas.includes(d));
                             const accionLabel = !puedeProgramar ? 'No disponible' : capacidadVerificada ? 'Reconfirmar capacidad' : 'Confirmar capacidad y fechas';
+                            const tituloAccion = !estadoValido
+                                ? 'La OT debe estar Planificada primero'
+                                : !tieneTareasConFecha
+                                    ? 'Agrega tareas con fecha en Tratamiento antes de verificar capacidad'
+                                    : '';
                             const horasSemana = (ot.tareas || []).filter(tt => diasSemana.includes(tt.fecha)).reduce((a, tt) => a + (Number(tt.duracion) || 0), 0);
                             return (
                                 <React.Fragment key={ot._id}>
@@ -282,7 +296,7 @@ const GanttScreen = ({ recursos = [], ots = [], calendarios = [], obtenerHorasPa
                                                 <button
                                                     onClick={(e) => { e.stopPropagation(); if (puedeProgramar) confirmarCapacidad(ot); }}
                                                     disabled={!puedeProgramar}
-                                                    title={puedeProgramar ? '' : 'La OT debe estar Planificada primero'}
+                                                    title={tituloAccion}
                                                     style={{ ...styles.btnAccionFila, ...(puedeProgramar ? {} : { opacity: .5, cursor: 'not-allowed' }) }}
                                                 >{accionLabel}</button>
                                             )}
@@ -509,16 +523,29 @@ const GanttScreen = ({ recursos = [], ots = [], calendarios = [], obtenerHorasPa
 
                                 <div style={{ padding: '11px 16px 14px' }}>
                                     <div style={styles.tituloSub}>Acciones</div>
-                                    <button
-                                        onClick={() => ['Planificada', 'Programada'].includes(otSel.estado) && confirmarCapacidad(otSel)}
-                                        disabled={!['Planificada', 'Programada'].includes(otSel.estado)}
-                                        style={{ ...styles.btnSecundario, width: '100%', marginBottom: 6, opacity: ['Planificada', 'Programada'].includes(otSel.estado) ? 1 : .5 }}
-                                    >{otSel.cotizacion?.capacidadVerificada ? 'Reconfirmar capacidad y fechas' : 'Confirmar capacidad y fechas'}</button>
+                                    {(() => {
+                                        const estadoValidoSel = ['Planificada', 'Programada'].includes(otSel.estado);
+                                        const tieneTareasConFechaSel = (otSel.tareas || []).some(tt => tt.fecha);
+                                        const puedeSel = estadoValidoSel && tieneTareasConFechaSel;
+                                        const tituloSel = !estadoValidoSel
+                                            ? 'La OT debe estar Planificada primero'
+                                            : !tieneTareasConFechaSel
+                                                ? 'Agrega tareas con fecha en Tratamiento antes de verificar capacidad'
+                                                : '';
+                                        return (
+                                            <button
+                                                onClick={() => puedeSel && confirmarCapacidad(otSel)}
+                                                disabled={!puedeSel}
+                                                title={tituloSel}
+                                                style={{ ...styles.btnSecundario, width: '100%', marginBottom: 6, opacity: puedeSel ? 1 : .5 }}
+                                            >{otSel.cotizacion?.capacidadVerificada ? 'Reconfirmar capacidad y fechas' : 'Confirmar capacidad y fechas'}</button>
+                                        );
+                                    })()}
                                     {otSel.estado === 'Programada' && (
                                         <button onClick={() => revertirAPlanificada(otSel)} style={{ ...styles.btnSecundario, width: '100%', marginBottom: 6, color: t.rojo }}>Revertir a Planificada</button>
                                     )}
                                     <button onClick={() => navigate('/tratamiento', { state: otSel })} style={{ ...styles.btnSecundario, width: '100%' }}>Abrir tratamiento</button>
-                                    <div style={{ fontSize: 10.5, color: t.textoAtenuado3, marginTop: 8, lineHeight: 1.5 }}>La capacidad se puede confirmar en OT Planificada o Programada; el cliente es quien deja la OT en Programada al aprobar la cotización.</div>
+                                    <div style={{ fontSize: 10.5, color: t.textoAtenuado3, marginTop: 8, lineHeight: 1.5 }}>La capacidad se puede confirmar en OT Planificada o Programada con al menos una tarea con fecha; el cliente es quien deja la OT en Programada al aprobar la cotización.</div>
                                 </div>
                             </>
                         )}
