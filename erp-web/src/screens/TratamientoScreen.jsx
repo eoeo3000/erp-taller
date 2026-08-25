@@ -69,6 +69,13 @@ const informeEvaluacionVacio = {
 // Grillas fijas de cada tabla editable (README §6). Las de materiales/suministros suman una
 // columna de disponibilidad/OC que el mock no contemplaba (ver Gap 2b/2c, funcionalidades-v2.md).
 const GRID_TAREAS = 'minmax(200px,1fr) 160px 118px 132px 52px 68px 62px 84px 96px 40px';
+// Ancho mínimo real de una fila de GRID_TAREAS (suma de columnas fijas + mínimo de la 1ra +
+// gaps + padding lateral). Un div display:grid en flujo normal no crece más allá del ancho
+// disponible solo porque sus tracks lo exijan — el excedente queda como "ink overflow"
+// (se puede scrollear porque el ancestro overflow-x:auto lo mide, pero el fondo de color de
+// la propia fila no llega a pintarlo). Fijar minWidth explícito en header y filas es lo que
+// hace que el fondo sí cubra todo el ancho scrolleable.
+const GRID_TAREAS_MIN_W = 200 + 160 + 118 + 132 + 52 + 68 + 62 + 84 + 96 + 40 + 9 * 8 + 32;
 
 // Mejora "Metodología por tarea": la fila edita solo la primera línea de desarrollo; el
 // resto del texto (parágrafos siguientes, escritos desde el panel expandido) se conserva.
@@ -1209,16 +1216,13 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                     {/* 1 · TAREAS */}
                     {tabActiva === 'tareas' && (
                         <div style={{ padding: '0 0 16px' }}>
-                            {/* Contenedor propio con scroll horizontal: en pantallas angostas GRID_TAREAS
-                                (min ~1000px) no cabe, y sin esto las últimas columnas quedaban inalcanzables
-                                (ver docs/bugs-conocidos.md B3) — el scroll vertical de .contenido no bastaba
-                                porque la barra horizontal quedaba fuera de la vista hasta bajar del todo. */}
-                            <div style={{ overflowX: 'auto' }}>
-                            {/* position:'static' pisa el sticky compartido de tablaHeader: dentro de este
-                                contenedor con scroll horizontal propio ya no cumplía función (no hay scroll
-                                vertical interno) y el navegador pintaba el fondo gris solo hasta el ancho
-                                que tenía antes de scrollear, dejando blancas las columnas de la derecha. */}
-                            <div style={{ ...styles.tablaHeader(GRID_TAREAS), position: 'static' }}>
+                            {/* En pantallas angostas GRID_TAREAS (min ~1100px) no cabe: sin minWidth el
+                                div display:grid no crece más allá del ancho disponible aunque sus columnas
+                                lo exijan (el excedente queda como "ink overflow", scrolleable vía .contenido
+                                pero sin fondo pintado detrás) — ver docs/bugs-conocidos.md B3 y
+                                GRID_TAREAS_MIN_W más arriba. El scroll horizontal lo sigue manejando
+                                .contenido (mismo panel que el vertical), no un contenedor propio. */}
+                            <div style={{ ...styles.tablaHeader(GRID_TAREAS), minWidth: GRID_TAREAS_MIN_W }}>
                                 <span>Descripción</span><span>Desarrollo / metodología</span><span>Puesto</span><span>Responsable</span>
                                 <span style={{ textAlign: 'right' }}>Hrs</span><span style={{ textAlign: 'right' }}>Fecha</span>
                                 <span style={{ textAlign: 'right' }}>Hora</span><span style={{ textAlign: 'right' }}>$/hora</span>
@@ -1233,7 +1237,7 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                                 const tieneDesarrollo = !!(tt.desarrollo || '').trim();
                                 return (
                                     <div key={idKey}>
-                                    <div style={styles.tablaFila(GRID_TAREAS)}>
+                                    <div style={{ ...styles.tablaFila(GRID_TAREAS), minWidth: GRID_TAREAS_MIN_W }}>
                                         <input className="campo-ed" style={styles.inputCelda} value={tt.descripcion} onChange={e => actualizarTarea(idx, 'descripcion', e.target.value)} />
                                         <input
                                             className="campo-ed" style={styles.inputCelda}
@@ -1312,7 +1316,6 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                                     </div>
                                 );
                             })}
-                            </div>
                             <div style={{ padding: '8px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
                                 <button onClick={agregarTarea} style={styles.btnAgregar}>Agregar tarea</button>
                                 {tareas.length > 0 && (
