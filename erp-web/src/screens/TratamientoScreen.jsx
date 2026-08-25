@@ -1214,7 +1214,11 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                                 (ver docs/bugs-conocidos.md B3) — el scroll vertical de .contenido no bastaba
                                 porque la barra horizontal quedaba fuera de la vista hasta bajar del todo. */}
                             <div style={{ overflowX: 'auto' }}>
-                            <div style={styles.tablaHeader(GRID_TAREAS)}>
+                            {/* position:'static' pisa el sticky compartido de tablaHeader: dentro de este
+                                contenedor con scroll horizontal propio ya no cumplía función (no hay scroll
+                                vertical interno) y el navegador pintaba el fondo gris solo hasta el ancho
+                                que tenía antes de scrollear, dejando blancas las columnas de la derecha. */}
+                            <div style={{ ...styles.tablaHeader(GRID_TAREAS), position: 'static' }}>
                                 <span>Descripción</span><span>Desarrollo / metodología</span><span>Puesto</span><span>Responsable</span>
                                 <span style={{ textAlign: 'right' }}>Hrs</span><span style={{ textAlign: 'right' }}>Fecha</span>
                                 <span style={{ textAlign: 'right' }}>Hora</span><span style={{ textAlign: 'right' }}>$/hora</span>
