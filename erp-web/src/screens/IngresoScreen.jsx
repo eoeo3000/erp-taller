@@ -271,6 +271,13 @@ const IngresoScreen = ({ solicitudes = [], liberarSolicitudManual, cargarDatos, 
     const verSolicitud = (s) => { setViendoId(s._id); setEditandoId(null); };
     const cerrarVista = () => setViendoId(null);
 
+    // Una vez que la solicitud "pasó a evaluación" (se aprobó y se creó la OT, ver
+    // aprobarYCrearOT en App.jsx, que marca 'Aprobada' antes de crear la OT y luego el
+    // backend la deja 'Tratada') editar aquí ya no sirve: el levantamiento se hace desde
+    // Tratamiento y esta copia queda desincronizada. Solo se puede seguir editando mientras
+    // sigue 'Pendiente' o si fue 'Rechazada' (para corregir y volver a enviar).
+    const puedeEditarSolicitud = (s) => s && (s.estado === 'Pendiente' || s.estado === 'Rechazada');
+
     const editarSolicitud = (s) => {
         setForm({
             solicitante: s.solicitante || '', empresaSolicitante: s.empresaSolicitante || '',
@@ -403,7 +410,12 @@ const IngresoScreen = ({ solicitudes = [], liberarSolicitudManual, cargarDatos, 
                                 )}
                             </div>
                             <div style={{ display: 'flex', gap: 6, marginTop: 16 }}>
-                                <button onClick={() => editarSolicitud(solicitudVista)} style={styles.btnPrimario}>Editar</button>
+                                <button
+                                    onClick={() => editarSolicitud(solicitudVista)}
+                                    disabled={!puedeEditarSolicitud(solicitudVista)}
+                                    title={puedeEditarSolicitud(solicitudVista) ? '' : 'Ya pasó a evaluación (se generó una OT): edita desde Tratamiento.'}
+                                    style={{ ...styles.btnPrimario, opacity: puedeEditarSolicitud(solicitudVista) ? 1 : .5, cursor: puedeEditarSolicitud(solicitudVista) ? 'pointer' : 'not-allowed' }}
+                                >Editar</button>
                                 <button onClick={cerrarVista} style={styles.btnSecundario}>Cerrar</button>
                             </div>
                         </div>
