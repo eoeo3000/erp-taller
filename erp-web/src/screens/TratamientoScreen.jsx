@@ -1209,7 +1209,16 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                     {/* 1 · TAREAS */}
                     {tabActiva === 'tareas' && (
                         <div style={{ padding: '0 0 16px' }}>
-                            <div style={styles.tablaHeader(GRID_TAREAS)}>
+                            {/* Contenedor propio con scroll horizontal: en pantallas angostas GRID_TAREAS
+                                (min ~1000px) no cabe, y sin esto las últimas columnas quedaban inalcanzables
+                                (ver docs/bugs-conocidos.md B3) — el scroll vertical de .contenido no bastaba
+                                porque la barra horizontal quedaba fuera de la vista hasta bajar del todo. */}
+                            <div style={{ overflowX: 'auto' }}>
+                            {/* position:'static' pisa el sticky compartido de tablaHeader: dentro de este
+                                contenedor con scroll horizontal propio ya no cumplía función (no hay scroll
+                                vertical interno) y el navegador pintaba el fondo gris solo hasta el ancho
+                                que tenía antes de scrollear, dejando blancas las columnas de la derecha. */}
+                            <div style={{ ...styles.tablaHeader(GRID_TAREAS), position: 'static' }}>
                                 <span>Descripción</span><span>Desarrollo / metodología</span><span>Puesto</span><span>Responsable</span>
                                 <span style={{ textAlign: 'right' }}>Hrs</span><span style={{ textAlign: 'right' }}>Fecha</span>
                                 <span style={{ textAlign: 'right' }}>Hora</span><span style={{ textAlign: 'right' }}>$/hora</span>
@@ -1303,6 +1312,7 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                                     </div>
                                 );
                             })}
+                            </div>
                             <div style={{ padding: '8px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
                                 <button onClick={agregarTarea} style={styles.btnAgregar}>Agregar tarea</button>
                                 {tareas.length > 0 && (

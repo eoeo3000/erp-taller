@@ -97,9 +97,27 @@ exports.actualizarEstado = async (req, res) => {
             estado, empresaSolicitante, solicitante, correo, numero, direccion,
             descripcion, origen, fechaEjecucionSolicitada, plazoEjecucionSugerido, adjuntos,
         } = req.body;
-        const actualizada = await Solicitud.findByIdAndUpdate(id, {
-            estado, empresaSolicitante, solicitante, correo, numero, direccion,
+
+        // Una vez que la solicitud pasó a evaluación (se aprobó y existe una OT — estado
+        // 'Aprobada'/'Tratada'/'Programada'/etc., puestos por otController al convertir),
+        // el contenido ya no se edita desde acá: quedaría desincronizado con la OT, que es
+        // la fuente de verdad desde ese punto. Los cambios de solo `estado` (los que dispara
+        // el propio flujo de aprobación) siguen permitidos siempre.
+        const camposContenido = {
+            empresaSolicitante, solicitante, correo, numero, direccion,
             descripcion, origen, fechaEjecucionSolicitada, plazoEjecucionSugerido, adjuntos,
+        };
+        const tocaContenido = Object.values(camposContenido).some(v => v !== undefined);
+        if (tocaContenido) {
+            const actual = await Solicitud.findById(id).select('estado');
+            if (!actual) return res.status(404).json({ error: "Solicitud no encontrada" });
+            if (!['Pendiente', 'Rechazada'].includes(actual.estado)) {
+                return res.status(409).json({ error: 'La solicitud ya pasó a evaluación (tiene una OT asociada) y no se puede editar desde aquí.' });
+            }
+        }
+
+        const actualizada = await Solicitud.findByIdAndUpdate(id, {
+            estado, ...camposContenido,
         }, { new: true, runValidators: true });
         if (!actualizada) return res.status(404).json({ error: "Solicitud no encontrada" });
         res.json(actualizada);

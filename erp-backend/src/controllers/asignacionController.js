@@ -80,16 +80,27 @@ async function otsSupervisadasPorRecurso(OT, recursoId) {
     return OT.find({ supervisorId: recursoId, estado: { $ne: 'Pagada' } }).lean();
 }
 
+// Igual que hoyEnTerreno (más abajo, para S1): la fecha de cabecera (ot.fechaEjecucion) no basta,
+// porque se desincroniza de las tareas reales una vez que el Gantt se reprograma — hay que
+// considerar también tareas[].fecha, o el supervisor deja de ver en su día/semana un OT que
+// sí tiene trabajo programado ese día.
 function supervisionesDesdeOTs(ots, fechasISO) {
-    return ots
-        .filter(ot => ot.fechaEjecucion && fechasISO.includes(aISO(new Date(ot.fechaEjecucion))))
-        .map(ot => ({
-            _id: `ot-sup-${ot._id}`,
-            tipo: 'supervision',
-            otId: ot._id,
-            fechaPlanificada: aISO(new Date(ot.fechaEjecucion)),
-            estado: 'pendiente',
-        }));
+    const filas = [];
+    for (const ot of ots) {
+        const fechasConTrabajo = new Set((ot.tareas || []).map(t => t.fecha).filter(Boolean));
+        if (ot.fechaEjecucion) fechasConTrabajo.add(aISO(new Date(ot.fechaEjecucion)));
+        for (const dia of fechasISO) {
+            if (!fechasConTrabajo.has(dia)) continue;
+            filas.push({
+                _id: `ot-sup-${ot._id}-${dia}`,
+                tipo: 'supervision',
+                otId: ot._id,
+                fechaPlanificada: dia,
+                estado: 'pendiente',
+            });
+        }
+    }
+    return filas;
 }
 
 // Datos por-tarea de las OT supervisadas dentro de un rango de fechas (S2 Mi semana del
