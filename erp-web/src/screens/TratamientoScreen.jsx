@@ -86,6 +86,10 @@ const conPrimeraLineaReemplazada = (texto, nuevaPrimera) => {
 };
 const GRID_MATERIALES = '104px 128px minmax(200px,1fr) 62px 96px 100px 100px 24px';
 const GRID_LOGISTICA = '96px 96px minmax(200px,1fr) 62px 96px 100px 140px 24px';
+// Mismo problema y mismo fix que GRID_TAREAS_MIN_W: sin minWidth explícito, el fondo de
+// header/filas no cubre las columnas que quedan fuera del ancho disponible.
+const GRID_MATERIALES_MIN_W = 104 + 128 + 200 + 62 + 96 + 100 + 100 + 24 + 7 * 8 + 32;
+const GRID_LOGISTICA_MIN_W = 96 + 96 + 200 + 62 + 96 + 100 + 140 + 24 + 7 * 8 + 32;
 
 const fmtFecha = (iso) => iso ? new Date(iso).toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—';
 
@@ -1331,7 +1335,7 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                     {/* 2 · EQUIPOS Y MATERIALES */}
                     {tabActiva === 'componentes' && (
                         <div style={{ padding: '0 0 16px' }}>
-                            <div style={styles.tablaHeader(GRID_MATERIALES)}>
+                            <div style={{ ...styles.tablaHeader(GRID_MATERIALES), minWidth: GRID_MATERIALES_MIN_W }}>
                                 <span>Tipo</span><span>Código</span><span>Descripción</span>
                                 <span style={{ textAlign: 'right' }}>Cant.</span><span style={{ textAlign: 'right' }}>Unitario</span>
                                 <span style={{ textAlign: 'right' }}>Subtotal</span><span>Disponibilidad</span><span />
@@ -1340,7 +1344,7 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                                 const estado = disponibilidadEquipo(c.codigo);
                                 const ok = estado === 'Disponible';
                                 return (
-                                    <div key={c.id || idx} style={styles.tablaFila(GRID_MATERIALES)}>
+                                    <div key={c.id || idx} style={{ ...styles.tablaFila(GRID_MATERIALES), minWidth: GRID_MATERIALES_MIN_W }}>
                                         <input className="campo-ed" style={styles.inputCelda} placeholder="Tipo" value={c.tipo || ''} onChange={e => actualizarComponente(idx, 'tipo', e.target.value)} />
                                         <input className="campo-ed" style={styles.inputCelda} value={c.codigo || ''} onChange={e => actualizarComponente(idx, 'codigo', e.target.value)} />
                                         <input
@@ -1381,7 +1385,7 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                     {/* 3 · SUMINISTROS DIRECTOS */}
                     {tabActiva === 'Logistica' && (
                         <div style={{ padding: '0 0 16px' }}>
-                            <div style={styles.tablaHeader(GRID_LOGISTICA)}>
+                            <div style={{ ...styles.tablaHeader(GRID_LOGISTICA), minWidth: GRID_LOGISTICA_MIN_W }}>
                                 <span>Código</span><span>Patente</span><span>Descripción</span>
                                 <span style={{ textAlign: 'right' }}>Cant.</span><span style={{ textAlign: 'right' }}>Unitario</span>
                                 <span style={{ textAlign: 'right' }}>Subtotal</span><span>Stock</span><span />
@@ -1391,7 +1395,7 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                                 const disponible = disponibilidadSuministro(codigo);
                                 const falta = disponible !== null && Number(l.cantidad) > disponible;
                                 return (
-                                    <div key={l._id || idx} style={styles.tablaFila(GRID_LOGISTICA)}>
+                                    <div key={l._id || idx} style={{ ...styles.tablaFila(GRID_LOGISTICA), minWidth: GRID_LOGISTICA_MIN_W }}>
                                         <input
                                             list="lista-suministros-recursos" className="campo-ed" style={styles.inputCelda}
                                             placeholder="Buscar código…" value={codigo || ''}
