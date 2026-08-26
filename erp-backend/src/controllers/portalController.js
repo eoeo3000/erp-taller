@@ -5,6 +5,7 @@ const getSolicitud = require('../models/Solicitud');
 const getOT = require('../models/OT');
 const getSesionPortal = require('../models/SesionPortal');
 const getCliente = require('../models/Cliente');
+const otController = require('./otController');
 const transporter = require('../config/mailer');
 const { PWA_CLIENTE_URL } = require('../config/urls');
 
@@ -64,11 +65,16 @@ function otPublica(ot) {
             hora: t.hora,
             completada: t.completada
         })),
+        // Antes exponía {nombre, precioUnitario, subtotal} — campos que no existen en el
+        // schema real de OT.componentes (models/OT.js: codigo/descripcion/cantidad/precio/
+        // tipo), así que esta sección salía vacía en el Portal Cliente y en la PWA. subtotal
+        // se calcula acá porque no se guarda como campo propio en el documento.
         componentes: (ot.componentes || []).map(c => ({
-            nombre: c.nombre,
+            descripcion: c.descripcion,
             cantidad: c.cantidad,
-            precioUnitario: c.precioUnitario,
-            subtotal: c.subtotal
+            precio: c.precio,
+            tipo: c.tipo,
+            subtotal: (c.cantidad || 0) * (c.precio || 0),
         })),
         // Reportes de terreno — los usa C4 (design_handoff_pwa_movil/README.md §6). Las fotos
         // ya llegan comprimidas desde el origen (O3/O4 y supervisorPortal recomprimen a un
@@ -80,15 +86,18 @@ function otPublica(ot) {
             foto: r.foto,
             usuario: r.usuario,
         })),
+        // Mismo problema que componentes arriba: logistica tampoco guarda "subtotal" como
+        // campo propio (models/OT.js: unidad/patente/descripcion/cantidad/precio).
         logistica: (ot.logistica || []).map(l => ({
             descripcion: l.descripcion,
-            subtotal: l.subtotal
+            subtotal: (l.cantidad || 0) * (l.precio || 0),
         })),
         pago: ot.pago ? { estado: ot.pago.estado } : null,
-        // Solo respuestaCliente — es lo único que C2/C3 necesitan para distinguir "presupuesto
-        // rechazado" de "en preparación" ahora que ese dato salió de OT.estado (ver models/OT.js).
-        // El resto de cotizacion (fechas propuestas, verificación de capacidad) es interno.
-        cotizacion: ot.cotizacion ? { respuestaCliente: ot.cotizacion.respuestaCliente } : null,
+        // respuestaCliente + enviada: lo que C2/C3 necesitan para distinguir "presupuesto
+        // rechazado" de "en preparación" de "cotización enviada, esperando tu respuesta"
+        // (ver models/OT.js). El resto de cotizacion (fechas propuestas, verificación de
+        // capacidad) sigue siendo interno.
+        cotizacion: ot.cotizacion ? { respuestaCliente: ot.cotizacion.respuestaCliente, enviada: ot.cotizacion.enviada } : null,
         descripcionGeneral: ot.descripcionGeneral
     };
 }
@@ -285,6 +294,20 @@ exports.acceso = async (req, res) => {
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
+};
+
+// Emite una SesionPortal nueva para un teléfono (mismo patrón que acceso(), sin pedir
+// numeroSolicitud como segundo factor porque acá el llamador ya conoce la OT/Solicitud de
+// origen) y devuelve el token en claro. Hoy solo la usa mailRoutes.js al enviar una
+// cotización, para que el link del correo entre a la PWA ya autenticado.
+exports.emitirSesionParaTelefono = async function emitirSesionParaTelefono(conn, telefonoCrudo, empresaSolicitante) {
+    const SesionPortal = getSesionPortal(conn);
+    const telefono = normalizarTelefono(telefonoCrudo);
+    if (!telefono) return null;
+    const token = nuevoToken();
+    const expira = new Date(Date.now() + DIAS_VIGENCIA_TOKEN * 24 * 60 * 60 * 1000);
+    await SesionPortal.create({ telefono, expira, tokenHash: hashToken(token), empresaSolicitante });
+    return token;
 };
 
 // Construye el link del portal y despacha el correo de acceso — reutilizado por emisión,
@@ -582,5 +605,38 @@ exports.misSolicitudes = async (req, res) => {
         res.json({ empresaSolicitante: sesion.empresaSolicitante, trabajos });
     } catch (err) {
         res.status(500).json({ error: err.message });
+    }
+};
+
+// POST /api/portal/ot/:id/responder?token= — aprobar/rechazar una cotización desde la PWA
+// Cliente (reemplaza, para correos nuevos, el link sin auth GET /api/mail/respuesta/:id/:nuevoEstado
+// — ver mailRoutes.js). Exige SesionPortal válida y que la OT pertenezca a ese teléfono,
+// misma lógica de pertenencia que ya usa trabajosPorTelefono.
+exports.responderCotizacion = async (req, res) => {
+    const OT = getOT(req.db);
+    const Solicitud = getSolicitud(req.db);
+    const SesionPortal = getSesionPortal(req.db);
+    try {
+        const sesion = await SesionPortal.findOne({ tokenHash: hashToken(req.query.token), estado: 'activo' });
+        if (!sesion || sesion.expira < new Date()) return res.status(403).json({ error: 'Sesión inválida o vencida' });
+
+        const { id } = req.params;
+        const { estado, motivoRechazo } = req.body;
+
+        const ot = await OT.findById(id).lean();
+        if (!ot) return res.status(404).json({ error: 'OT no encontrada' });
+
+        const solicitud = await Solicitud.findById(ot.solicitudId || ot._id).lean();
+        if (!solicitud || normalizarTelefono(solicitud.numero) !== sesion.telefono) {
+            return res.status(403).json({ error: 'Esta OT no pertenece a tu sesión.' });
+        }
+
+        const otActualizada = await otController.aplicarRespuestaCotizacion({
+            id, nuevoEstado: estado, motivoRechazo, conn: req.db,
+        });
+
+        res.json({ ok: true, ot: otPublica(otActualizada) });
+    } catch (err) {
+        res.status(err.status || 500).json({ error: err.message });
     }
 };

@@ -11,6 +11,7 @@ router.post('/solicitud',      ctrl.crearSolicitud);
 router.post('/acceso',            ctrl.acceso);
 router.post('/emitir-token',      ctrl.emitirTokenContacto);
 router.get('/mis-solicitudes',    ctrl.misSolicitudes);
+router.post('/ot/:id/responder',  ctrl.responderCotizacion);
 router.get('/sesiones',              ctrl.listarSesiones);
 router.get('/stock-tokens',              ctrl.stockTokens);
 router.post('/sesiones/lote',            ctrl.generarLote);

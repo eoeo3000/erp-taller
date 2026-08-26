@@ -573,52 +573,61 @@ exports.accionMovil = async (req, res) => {
 // Programada, porque para este punto ya se verificó capacidad en Gantt); rechazar deja la
 // OT en 'Planificada' con cotizacion.respuestaCliente='Rechazada' como señal de "esperando
 // corrección del Planificador", sin sacarla de la fase en la que estaba.
+//
+// Lógica compartida entre el link viejo del correo (responderCotizacionCliente, sin auth,
+// se deja intacto por compatibilidad con correos ya enviados) y el endpoint nuevo autenticado
+// por SesionPortal (portalController.responderCotizacion) — un solo lugar que sabe aplicar
+// la respuesta y reservar recursos, cada endpoint solo decide cómo se autoriza y qué responde.
+async function aplicarRespuestaCotizacion({ id, nuevoEstado, motivoRechazo, conn }) {
+    const OT = getOT(conn);
+
+    if (!['Aprobada', 'Rechazada'].includes(nuevoEstado)) {
+        const e = new Error('Respuesta no reconocida.'); e.status = 400; throw e;
+    }
+
+    const otAnterior = await OT.findById(id).lean();
+    if (!otAnterior) {
+        const e = new Error('Registro no encontrado.'); e.status = 404; throw e;
+    }
+
+    if (otAnterior.cotizacion?.respuestaCliente && otAnterior.cotizacion.respuestaCliente !== 'Pendiente') {
+        const e = new Error(`Esta cotización ya fue respondida (${otAnterior.cotizacion.respuestaCliente}).`); e.status = 409; throw e;
+    }
+
+    if (nuevoEstado === 'Aprobada' && !otAnterior.supervisorId) {
+        const e = new Error(`La orden ${otAnterior.numeroOT || ''} todavía no tiene un supervisor asignado.`);
+        e.status = 409; e.sinSupervisor = true; throw e;
+    }
+
+    const cambios = {
+        'cotizacion.respuestaCliente': nuevoEstado,
+        'cotizacion.fechaRespuesta': new Date(),
+    };
+    if (nuevoEstado === 'Aprobada') cambios.estado = 'Programada';
+    if (nuevoEstado === 'Rechazada' && motivoRechazo) cambios['cotizacion.motivoRechazo'] = motivoRechazo;
+
+    const otActualizada = await OT.findByIdAndUpdate(id, { $set: cambios }, { new: true });
+
+    // Sincronizar con la Solicitud original: solo la aprobación mueve la fase macro, así
+    // que solo ella se refleja ahí — un rechazo no movió a la OT de 'Planificada'.
+    if (nuevoEstado === 'Aprobada') {
+        const idSolicitud = otActualizada.solicitudId || otActualizada._id;
+        const Solicitud = require('../models/Solicitud')(conn);
+        await Solicitud.findByIdAndUpdate(idSolicitud, { estado: 'Programada' });
+    }
+
+    // Reserva/liberación de recursos si corresponde (aprobar -> reserva herramientas e insumos)
+    await aplicarReservaPorCambioEstado(otAnterior, otActualizada, conn);
+
+    console.log(`♻️ ERP Actualizado: OT ${otActualizada.numeroOT} — cliente respondió ${nuevoEstado}`);
+    return otActualizada;
+}
+exports.aplicarRespuestaCotizacion = aplicarRespuestaCotizacion;
+
 exports.responderCotizacionCliente = async (req, res) => {
-    const OT = getOT(req.db);
     try {
         const { id, nuevoEstado } = req.params;
-
-        if (!['Aprobada', 'Rechazada'].includes(nuevoEstado)) {
-            return res.status(400).send("<h1>Error: respuesta no reconocida.</h1>");
-        }
-
-        const otAnterior = await OT.findById(id).lean();
-        if (!otAnterior) {
-            return res.status(404).send("<h1>Error: Registro no encontrado.</h1>");
-        }
-
-        if (nuevoEstado === 'Aprobada' && !otAnterior.supervisorId) {
-            return res.status(409).send(`
-                <div style="font-family: sans-serif; text-align: center; padding: 100px 20px;">
-                    <h1 style="color: #2c3e50;">No pudimos procesar su respuesta</h1>
-                    <p style="font-size: 18px; color: #7f8c8d;">
-                        La orden <b>${otAnterior.numeroOT || ''}</b> todavía no tiene un supervisor asignado en nuestro sistema.
-                        Por favor contáctenos para confirmar la aprobación.
-                    </p>
-                </div>
-            `);
-        }
-
-        const cambios = {
-            'cotizacion.respuestaCliente': nuevoEstado,
-            'cotizacion.fechaRespuesta': new Date(),
-        };
-        if (nuevoEstado === 'Aprobada') cambios.estado = 'Programada';
-
-        const otActualizada = await OT.findByIdAndUpdate(id, { $set: cambios }, { new: true });
-
-        // Sincronizar con la Solicitud original: solo la aprobación mueve la fase macro, así
-        // que solo ella se refleja ahí — un rechazo no movió a la OT de 'Planificada'.
-        if (nuevoEstado === 'Aprobada') {
-            const idSolicitud = otActualizada.solicitudId || otActualizada._id;
-            const Solicitud = require('../models/Solicitud')(req.db);
-            await Solicitud.findByIdAndUpdate(idSolicitud, { estado: 'Programada' });
-        }
-
-        // Reserva/liberación de recursos si corresponde (aprobar -> reserva herramientas e insumos)
-        await aplicarReservaPorCambioEstado(otAnterior, otActualizada, req.db);
-
-        console.log(`♻️ ERP Actualizado: OT ${otActualizada.numeroOT} — cliente respondió ${nuevoEstado}`);
+        const otActualizada = await aplicarRespuestaCotizacion({ id, nuevoEstado, conn: req.db });
 
         // Respuesta visual simple para el cliente
         res.send(`
@@ -633,6 +642,19 @@ exports.responderCotizacionCliente = async (req, res) => {
 
     } catch (error) {
         console.error("Error al procesar respuesta:", error);
+        if (error.sinSupervisor) {
+            return res.status(409).send(`
+                <div style="font-family: sans-serif; text-align: center; padding: 100px 20px;">
+                    <h1 style="color: #2c3e50;">No pudimos procesar su respuesta</h1>
+                    <p style="font-size: 18px; color: #7f8c8d;">
+                        ${error.message} Por favor contáctenos para confirmar la aprobación.
+                    </p>
+                </div>
+            `);
+        }
+        if (error.status === 404) return res.status(404).send("<h1>Error: Registro no encontrado.</h1>");
+        if (error.status === 400) return res.status(400).send(`<h1>Error: ${error.message}</h1>`);
+        if (error.status === 409) return res.status(409).send(`<h1>${error.message}</h1>`);
         res.status(500).send("Error interno.");
     }
 };

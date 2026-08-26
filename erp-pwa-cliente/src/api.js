@@ -60,3 +60,11 @@ export function misSolicitudes() {
 export function crearSolicitud(datos) {
     return pedir('/portal/solicitud', { method: 'POST', body: JSON.stringify({ ...datos, origen: 'Portal' }) });
 }
+
+// POST /api/portal/ot/:id/responder?token= — aprobar/rechazar la cotización de un trabajo
+export function responderCotizacion(otId, estado, motivoRechazo) {
+    const { token } = getSesion();
+    return pedir(`/portal/ot/${otId}/responder?token=${encodeURIComponent(token)}`, {
+        method: 'POST', body: JSON.stringify({ estado, motivoRechazo }),
+    });
+}
