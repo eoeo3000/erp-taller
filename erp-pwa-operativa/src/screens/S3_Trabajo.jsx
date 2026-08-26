@@ -92,6 +92,10 @@ export default function S3Trabajo({ nav, asignacion, persona }) {
 
     if (verInforme) return <VistaInforme ot={ot} onVolver={() => setVerInforme(false)} />;
 
+    // La OT quedó marcada "Reprogramar" — solo se puede ver, no editar, hasta que la oficina
+    // le asigne una fecha nueva y vuelva a 'Programada' (TratamientoScreen.jsx, guardarPlanificacion).
+    const bloqueada = ot.estado === 'Reprogramar';
+
     const tareas = ot.tareas || [];
     const resueltas = tareas.filter((t) => t.completada || t.motivoNoRealizada).length;
     const horasHechas = tareas.filter((t) => t.completada).reduce((a, t) => a + (Number(t.duracion) || 0), 0);
@@ -105,6 +109,7 @@ export default function S3Trabajo({ nav, asignacion, persona }) {
     const hoy = hoyISO();
 
     const guardarTarea = async (idx, cambios) => {
+        if (bloqueada) return;
         const nuevasTareas = tareas.map((t, i) => (i === idx ? { ...t, ...cambios } : t));
         setGuardando(true);
         try { await actualizarOT(otId, { tareas: nuevasTareas }); await cargar(); } finally { setGuardando(false); }
@@ -140,6 +145,7 @@ export default function S3Trabajo({ nav, asignacion, persona }) {
     };
 
     const guardarLoIngresado = async () => {
+        if (bloqueada) return;
         const conBorrador = Object.keys(borradores).filter((idx) => borradores[idx].texto?.trim() || borradores[idx].fotos?.length);
         if (conBorrador.length === 0) return;
         const ahora = new Date();
@@ -154,6 +160,7 @@ export default function S3Trabajo({ nav, asignacion, persona }) {
     };
 
     const terminarTrabajo = async () => {
+        if (bloqueada) return;
         if (!window.confirm('¿Marcar el trabajo como finalizado? Queda lista para que la oficina facture.')) return;
         setGuardando(true);
         try { await accionOT(otId, { accion: 'terminar' }); await cargar(); } finally { setGuardando(false); }
@@ -173,6 +180,11 @@ export default function S3Trabajo({ nav, asignacion, persona }) {
         setEnviandoEstado(true); setErrorEstado('');
         try {
             await accionOT(otId, { accion: accionEstado, motivo: motivoEstado.trim(), foto: fotoEstado });
+            // Reprogramar detiene la OT hasta que la oficina le asigne fecha nueva — no hay más
+            // nada que hacer acá, se vuelve a "Mi semana" para que el supervisor vea de una que
+            // quedó marcada (S2 ya la destaca en rojo, ver S2_MiSemanaSupervisor.jsx). Replanificar
+            // en cambio sigue en curso, así que se queda en la pantalla como con cualquier otra acción.
+            if (accionEstado === 'reprogramar') { nav.volver(); return; }
             cancelarAccionEstado();
             await cargar();
         } catch (e) {
@@ -211,7 +223,11 @@ export default function S3Trabajo({ nav, asignacion, persona }) {
                             <span className="mono" style={{ fontSize: 11, fontWeight: 700, color: 'var(--atencion)', textTransform: 'uppercase' }}>· Replanificar pendiente</span>
                         )}
                     </div>
-                    {accionEstado === null ? (
+                    {bloqueada ? (
+                        <div style={{ marginTop: 8, fontSize: 12.5, color: 'var(--detenido)' }}>
+                            Esta OT quedó marcada para reprogramar — solo se puede ver hasta que la oficina le asigne una fecha nueva.
+                        </div>
+                    ) : accionEstado === null ? (
                         <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
                             <button className="boton-secundario" style={{ width: 'auto', minHeight: 40, padding: '0 12px', fontSize: 13 }} onClick={() => setAccionEstado('reprogramar')}>Reprogramar</button>
                             <button className="boton-secundario" style={{ width: 'auto', minHeight: 40, padding: '0 12px', fontSize: 13 }} onClick={() => setAccionEstado('replanificar')}>Replanificar</button>
@@ -272,6 +288,7 @@ export default function S3Trabajo({ nav, asignacion, persona }) {
                             motivoAbierto={motivoAbierto === idx}
                             motivoTexto={motivoTexto}
                             guardando={guardando}
+                            bloqueada={bloqueada}
                             onMarcarRealizada={() => toggleRealizada(idx)}
                             onAbrirMotivo={() => { setMotivoAbierto(idx); setMotivoTexto(''); }}
                             onCancelarMotivo={() => setMotivoAbierto(null)}
@@ -287,11 +304,11 @@ export default function S3Trabajo({ nav, asignacion, persona }) {
             </div>
 
             <div className="pie-accion">
-                <button className="boton-primario" disabled={guardando} onClick={guardarLoIngresado}>Guardar lo ingresado</button>
+                <button className="boton-primario" disabled={guardando || bloqueada} onClick={guardarLoIngresado}>Guardar lo ingresado</button>
                 <button className="boton-secundario" onClick={() => setVerInforme(true)}>Ver informe</button>
                 <button
                     className="boton-secundario"
-                    disabled={!puedeTerminar || guardando}
+                    disabled={!puedeTerminar || guardando || bloqueada}
                     onClick={terminarTrabajo}
                     style={puedeTerminar ? { background: 'var(--accion-primaria)', color: '#fff', borderColor: 'var(--accion-primaria)' } : {}}
                 >
@@ -308,7 +325,7 @@ export default function S3Trabajo({ nav, asignacion, persona }) {
 }
 
 function FilaTarea({
-    t, idx, dias, totalUnidades, hoy, otEnEjecucion, cruce, borrador, motivoAbierto, motivoTexto, guardando,
+    t, idx, dias, totalUnidades, hoy, otEnEjecucion, cruce, borrador, motivoAbierto, motivoTexto, guardando, bloqueada,
     onMarcarRealizada, onAbrirMotivo, onCancelarMotivo, onCambiarMotivoTexto, onConfirmarMotivo, onCambiarTexto, onAgregarFoto,
 }) {
     const dayIndex = dias.indexOf(t.fecha);
@@ -329,7 +346,7 @@ function FilaTarea({
             <span style={{ flex: 'none', width: 30, height: 48, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', paddingTop: 1 }}>
                 <button
                     onClick={onMarcarRealizada}
-                    disabled={guardando}
+                    disabled={guardando || bloqueada}
                     title={resuelta ? 'Volver a dejarla pendiente' : 'Marcar realizada'}
                     className="mono"
                     style={{
@@ -390,7 +407,7 @@ function FilaTarea({
                             <span className="mono" style={{ display: 'block', marginTop: 3, fontSize: 11.5, color: 'var(--texto-atenuado-3)' }}>{registro.hora} · {registro.fotos?.length || 0} foto{registro.fotos?.length === 1 ? '' : 's'}</span>
                         </span>
                     </span>
-                ) : !resuelta && (
+                ) : !resuelta && !bloqueada && (
                     <>
                         <span style={{ display: 'flex', gap: 8, marginTop: 9 }}>
                             <input

@@ -35,7 +35,10 @@ const t = {
 
 const DIAS_L = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
 const GRID = '118px minmax(180px,1fr) 132px 104px 52px 62px 62px repeat(7, minmax(0,1fr))';
-const ESTADOS_ACTIVOS = ['Planificada', 'Programada', 'En Ejecución', 'Reprogramar'];
+// 'Reprogramar' queda fuera a propósito: la OT necesita una fecha nueva, así que sus tareas
+// (con la fecha vieja) ya no deben seguir ocupando HH/capacidad de nadie — deja el slot libre
+// hasta que el planificador la reprograme desde Tareas (ver el badge clickeable más abajo).
+const ESTADOS_ACTIVOS = ['Planificada', 'Programada', 'En Ejecución'];
 const ESTADOS_EJECUTADOS = ['Trabajo Terminado', 'Con Informe', 'Pagada'];
 
 const colorEstadoOT = (estado) => {
@@ -292,7 +295,13 @@ const GanttScreen = ({ recursos = [], ots = [], calendarios = [], obtenerHorasPa
                                             <span style={{ fontSize: 10.5, color: t.textoAtenuado3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' }}>{ot.descripcion || ''}</span>
                                         </span>
                                         <span style={{ ...styles.celda, fontSize: 10.5, fontWeight: 600, color: colorEstadoOT(ot.estado) }}>
-                                            {ot.estado}
+                                            {ot.estado === 'Reprogramar' ? (
+                                                <span
+                                                    onClick={(e) => { e.stopPropagation(); navigate('/tratamiento', { state: { ...ot, _tabDestino: 'tareas' } }); }}
+                                                    title="Ir a Tareas para asignar una fecha nueva"
+                                                    style={{ textDecoration: 'underline', cursor: 'pointer' }}
+                                                >{ot.estado}</span>
+                                            ) : ot.estado}
                                             {ot.subEstado === 'Replanificar' && (
                                                 <span title="Replanificar: necesita revisión de alcance/recursos" style={{ marginLeft: 4, color: t.rojo }}>●</span>
                                             )}
@@ -423,7 +432,13 @@ const GanttScreen = ({ recursos = [], ots = [], calendarios = [], obtenerHorasPa
                                         <span style={{ fontSize: 10, color: t.textoDeshabilitado, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' }}>{supervisor?.puesto || ''}</span>
                                     </span>
                                     <span style={{ ...styles.celda, fontSize: 10.5, fontWeight: 600, color: colorEstadoOT(ot.estado) }}>
-                                        {ot.estado}
+                                        {ot.estado === 'Reprogramar' ? (
+                                            <span
+                                                onClick={(e) => { e.stopPropagation(); navigate('/tratamiento', { state: { ...ot, _tabDestino: 'tareas' } }); }}
+                                                title="Ir a Tareas para asignar una fecha nueva"
+                                                style={{ textDecoration: 'underline', cursor: 'pointer' }}
+                                            >{ot.estado}</span>
+                                        ) : ot.estado}
                                         {ot.subEstado === 'Replanificar' && (
                                             <span title="Replanificar: necesita revisión de alcance/recursos" style={{ marginLeft: 4, color: t.rojo }}>●</span>
                                         )}
