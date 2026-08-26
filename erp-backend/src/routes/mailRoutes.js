@@ -2,10 +2,32 @@ const express = require('express');
 const router = express.Router();
 const transporter = require('../config/mailer');
 const otController = require('../controllers/otController');
+const portalController = require('../controllers/portalController');
+const getOT = require('../models/OT');
+const getSolicitud = require('../models/Solicitud');
+const { PWA_CLIENTE_URL } = require('../config/urls');
 
 router.post('/enviar-cotizacion', async (req, res) => {
     const { emails, otId, cliente, total, pdfData, tareas = [] } = req.body;
-    const URL_BASE = "http://localhost:5000/api/mail";
+
+    // Link al portal del cliente (PWA), autenticado con una SesionPortal emitida acá mismo
+    // para el teléfono de la Solicitud vinculada a esta OT — reemplaza los botones viejos de
+    // Aceptar/Rechazar directos (sin auth, y con URL_BASE hardcodeada a localhost, ver
+    // historial de este archivo). Si no se puede resolver el teléfono, se degrada a un aviso
+    // sin romper el envío del correo/PDF.
+    let linkPortal = null;
+    try {
+        const OT = getOT(req.db);
+        const Solicitud = getSolicitud(req.db);
+        const ot = await OT.findById(otId).lean();
+        const solicitud = ot ? await Solicitud.findById(ot.solicitudId || ot._id).lean() : null;
+        if (solicitud?.numero) {
+            const token = await portalController.emitirSesionParaTelefono(req.db, solicitud.numero, solicitud.empresaSolicitante);
+            if (token) linkPortal = `${PWA_CLIENTE_URL}/?token=${token}&entorno=${req.entorno}`;
+        }
+    } catch (eToken) {
+        console.warn('[enviar-cotizacion] no se pudo emitir el link del portal:', eToken.message);
+    }
 
     let fechaInicioStr = "Por confirmar";
     let fechaTerminoStr = "Por confirmar";
@@ -52,22 +74,20 @@ router.post('/enviar-cotizacion', async (req, res) => {
                     <p style="text-align: center; font-weight: bold; margin-top: 30px; color: #2c3e50;">
                         ¿Desea aceptar la programación y el costo indicados?
                     </p>
-                    
-                    <div style="text-align: center; margin-top: 20px;">
-                        <a href="${URL_BASE}/respuesta/${otId}/Aprobada" 
-                           style="background-color: #27ae60; color: white; padding: 14px 28px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block; margin: 5px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
-                           ✅ Aceptar y Programar Trabajo
-                        </a>
 
-                        <a href="${URL_BASE}/respuesta/${otId}/Rechazada" 
-                           style="background-color: #e74c3c; color: white; padding: 14px 28px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block; margin: 5px; opacity: 0.9;">
-                           ❌ Rechazar
+                    ${linkPortal ? `
+                    <div style="text-align: center; margin-top: 20px;">
+                        <a href="${linkPortal}"
+                           style="background-color: #27ae60; color: white; padding: 14px 28px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block; margin: 5px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                           ✅ Ver cotización y responder
                         </a>
                     </div>
-
                     <p style="font-size: 13px; color: #7f8c8d; margin-top: 40px; text-align: center; font-style: italic;">
-                        Al hacer clic en "Aceptar", la orden quedará programada en nuestro sistema con las fechas indicadas; la ejecución en terreno se coordinará según ese cronograma.
-                    </p>
+                        En el portal puede revisar el detalle completo y aceptar o rechazar la propuesta. Al aceptar, la orden queda programada con las fechas indicadas.
+                    </p>` : `
+                    <p style="text-align: center; margin-top: 20px; color: #2c3e50;">
+                        Por favor contáctenos para confirmar su respuesta a esta cotización.
+                    </p>`}
                 </div>
             `,
             attachments: [

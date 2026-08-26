@@ -11,6 +11,9 @@ const COLOR = { activo: 'var(--en-curso)', pago: 'var(--atencion)', cerrado: 'va
 function clasificar(t) {
     const ot = t.ot;
     if (!ot) return { grupo: 'en_curso', color: COLOR.activo, linea: 'En evaluación' };
+    if (ot.estado === 'Planificada' && ot.cotizacion?.enviada && ot.cotizacion?.respuestaCliente === 'Pendiente') {
+        return { grupo: 'por_aprobar', color: COLOR.pago, linea: 'Cotización lista — requiere tu aprobación' };
+    }
     if (ot.estado === 'Planificada' && ot.cotizacion?.respuestaCliente === 'Rechazada') {
         return { grupo: 'cerradas', color: COLOR.rechazado, linea: 'Presupuesto no aceptado' };
     }
@@ -36,6 +39,7 @@ function clasificar(t) {
 
 const CHIPS = [
     { id: 'todas', label: 'Todas' },
+    { id: 'por_aprobar', label: 'Por aprobar' },
     { id: 'en_curso', label: 'En curso' },
     { id: 'por_pagar', label: 'Por pagar' },
     { id: 'cerradas', label: 'Cerradas' },

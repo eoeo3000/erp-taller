@@ -330,7 +330,7 @@ function CotizacionView({ sol, ot, compacta }) {
                 <div style={s.subTit}>Materiales y Equipos</div>
                 <div style={{ overflowX: 'auto' }}>
                     <table style={s.tabla}><thead><tr style={s.thFila}><th style={s.th}>Ítem</th><th style={s.thN}>Cant.</th><th style={s.thN}>P.Unit.</th><th style={s.thN}>Subtotal</th></tr></thead>
-                        <tbody>{ot.componentes.map((c, i) => <tr key={i} style={i%2===0?{}:{background:'#fafafa'}}><td style={s.td}>{c.nombre}</td><td style={s.tdN}>{c.cantidad}</td><td style={s.tdN}>{CLP(c.precioUnitario)}</td><td style={s.tdN}>{CLP(c.subtotal)}</td></tr>)}</tbody>
+                        <tbody>{ot.componentes.map((c, i) => <tr key={i} style={i%2===0?{}:{background:'#fafafa'}}><td style={s.td}>{c.descripcion}</td><td style={s.tdN}>{c.cantidad}</td><td style={s.tdN}>{CLP(c.precio)}</td><td style={s.tdN}>{CLP(c.subtotal)}</td></tr>)}</tbody>
                     </table>
                 </div>
             </>}

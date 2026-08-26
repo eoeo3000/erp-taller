@@ -1,3 +1,6 @@
+import { useState } from 'react';
+import { responderCotizacion } from '../api.js';
+
 // Mismo idx/MAPA_ETAPA que ya usan DashboardScreen.jsx y TratamientoScreen.jsx en
 // erp-web (duplicado ahí también, no importado de un módulo común — mismo criterio).
 // Las etiquetas acá son la traducción a lenguaje de cliente de esas mismas 8 posiciones.
@@ -13,12 +16,15 @@ const MAPA_ETAPA = {
 // 'Aprobada'/'Rechazada' ya no son valores de OT.estado — un rechazo se detecta por
 // cotizacion.respuestaCliente sin sacar a la OT de 'Planificada' (ver erp-backend/src/models/OT.js).
 function etapaInfo(ot) {
-    if (!ot) return { idx: 0, label: ETAPAS_CLIENTE[0], rechazada: false };
+    if (!ot) return { idx: 0, label: ETAPAS_CLIENTE[0], rechazada: false, porAprobar: false };
+    if (ot.estado === 'Planificada' && ot.cotizacion?.enviada && ot.cotizacion?.respuestaCliente === 'Pendiente') {
+        return { idx: 2, label: 'Cotización por aprobar', rechazada: false, porAprobar: true };
+    }
     if (ot.estado === 'Planificada' && ot.cotizacion?.respuestaCliente === 'Rechazada') {
-        return { idx: 2, label: 'Presupuesto rechazado', rechazada: true };
+        return { idx: 2, label: 'Presupuesto rechazado', rechazada: true, porAprobar: false };
     }
     const idx = MAPA_ETAPA[ot.estado] ?? 0;
-    return { idx, label: ETAPAS_CLIENTE[idx], rechazada: false };
+    return { idx, label: ETAPAS_CLIENTE[idx], rechazada: false, porAprobar: false };
 }
 
 const CLP = (n) => '$ ' + Math.round(n || 0).toLocaleString('es-CL');
@@ -27,6 +33,9 @@ const fmtCorta = (iso) => iso ? new Date((iso + '').split('T')[0] + 'T00:00:00')
 
 function lineaCliente(ot) {
     if (!ot) return 'Su solicitud está siendo evaluada.';
+    if (ot.estado === 'Planificada' && ot.cotizacion?.enviada && ot.cotizacion?.respuestaCliente === 'Pendiente') {
+        return 'Revise el detalle y responda a la cotización.';
+    }
     if (ot.estado === 'Planificada' && ot.cotizacion?.respuestaCliente === 'Rechazada') return 'El presupuesto no fue aceptado.';
     if (ot.estado === 'Programada') {
         const fecha = (ot.tareas || []).map((t) => t.fecha).filter(Boolean).sort()[0];
@@ -38,11 +47,30 @@ function lineaCliente(ot) {
     return 'En preparación.';
 }
 
-export default function C3EstadoTrabajo({ nav, trabajo }) {
+export default function C3EstadoTrabajo({ nav, trabajo: trabajoProp }) {
+    const [trabajo, setTrabajo] = useState(trabajoProp);
+    const [accion, setAccion] = useState(null); // null | 'aceptar' | 'rechazar'
+    const [motivo, setMotivo] = useState('');
+    const [enviando, setEnviando] = useState(false);
+    const [error, setError] = useState('');
     if (!trabajo) return null;
     const ot = trabajo.ot;
     const info = etapaInfo(ot);
-    const color = info.rechazada ? 'var(--detenido)' : 'var(--en-curso)';
+    const color = info.rechazada ? 'var(--detenido)' : info.porAprobar ? 'var(--atencion)' : 'var(--en-curso)';
+
+    const responder = async (estado) => {
+        setEnviando(true); setError('');
+        try {
+            const resultado = await responderCotizacion(ot._id, estado, estado === 'Rechazada' ? motivo : undefined);
+            setTrabajo((t) => ({ ...t, ot: resultado.ot }));
+            setAccion(null);
+            setMotivo('');
+        } catch (e) {
+            setError(e.message);
+        } finally {
+            setEnviando(false);
+        }
+    };
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
@@ -65,7 +93,7 @@ export default function C3EstadoTrabajo({ nav, trabajo }) {
                 {ETAPAS_CLIENTE.map((label, i) => {
                     const cumplida = i < info.idx;
                     const esActual = i === info.idx;
-                    const texto = info.rechazada && esActual ? 'Presupuesto rechazado' : label;
+                    const texto = info.rechazada && esActual ? 'Presupuesto rechazado' : info.porAprobar && esActual ? 'Cotización por aprobar' : label;
                     return (
                         <div key={i} style={{
                             minHeight: 48, display: 'flex', alignItems: 'center', gap: 10, padding: '0 16px',
@@ -86,6 +114,44 @@ export default function C3EstadoTrabajo({ nav, trabajo }) {
                 <div style={{ padding: 16 }}>
                     <div className="versalita">Presupuesto</div>
                     <div className="mono" style={{ fontSize: 17, fontWeight: 600, marginTop: 4 }}>{CLP(ot.granTotal)}</div>
+                </div>
+            )}
+
+            {info.porAprobar && (
+                <div style={{ padding: '0 16px 16px' }}>
+                    {error && <div style={{ fontSize: 'var(--fs-secundario)', color: 'var(--detenido)', marginBottom: 8 }}>{error}</div>}
+                    {accion === null && (
+                        <div style={{ display: 'flex', gap: 8 }}>
+                            <button className="boton-primario" disabled={enviando} onClick={() => setAccion('aceptar')}>Aceptar cotización</button>
+                            <button className="boton-secundario" disabled={enviando} onClick={() => setAccion('rechazar')}>Rechazar</button>
+                        </div>
+                    )}
+                    {accion === 'aceptar' && (
+                        <div>
+                            <div style={{ fontSize: 'var(--fs-secundario)', color: 'var(--texto-secundario-1)', marginBottom: 8 }}>
+                                ¿Confirma? El trabajo quedará programado con las fechas indicadas.
+                            </div>
+                            <div style={{ display: 'flex', gap: 8 }}>
+                                <button className="boton-primario" disabled={enviando} onClick={() => responder('Aprobada')}>{enviando ? 'Enviando…' : 'Confirmar aceptación'}</button>
+                                <button className="boton-secundario" disabled={enviando} onClick={() => setAccion(null)}>Cancelar</button>
+                            </div>
+                        </div>
+                    )}
+                    {accion === 'rechazar' && (
+                        <div>
+                            <textarea
+                                className="input-campo"
+                                placeholder="Motivo del rechazo (opcional)"
+                                value={motivo}
+                                onChange={(e) => setMotivo(e.target.value)}
+                                style={{ width: '100%', minHeight: 70, boxSizing: 'border-box', marginBottom: 8, resize: 'vertical' }}
+                            />
+                            <div style={{ display: 'flex', gap: 8 }}>
+                                <button className="boton-primario" disabled={enviando} onClick={() => responder('Rechazada')}>{enviando ? 'Enviando…' : 'Confirmar rechazo'}</button>
+                                <button className="boton-secundario" disabled={enviando} onClick={() => setAccion(null)}>Cancelar</button>
+                            </div>
+                        </div>
+                    )}
                 </div>
             )}
 
