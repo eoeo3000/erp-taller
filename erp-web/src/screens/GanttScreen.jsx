@@ -198,6 +198,10 @@ const GanttScreen = ({ recursos = [], ots = [], calendarios = [], obtenerHorasPa
                 'cotizacion.fechasPropuestas.inicio': fechasPropuestas.inicio,
                 'cotizacion.fechasPropuestas.fin': fechasPropuestas.fin,
             } : {}),
+            // Reprogramar (S3, PWA Operativa) no vuelve a pasar por aprobación del cliente — ya
+            // había aprobado la cotización original, esto solo reconfirma capacidad con la fecha
+            // nueva — así que confirmar acá mismo la devuelve a 'Programada'.
+            ...(ot.estado === 'Reprogramar' ? { estado: 'Programada' } : {}),
         });
         if (!resultado?.exito) { notificar.error(resultado?.error || 'No se pudo confirmar la capacidad.'); return; }
         if (cargarDatos) cargarDatos();
@@ -267,7 +271,10 @@ const GanttScreen = ({ recursos = [], ots = [], calendarios = [], obtenerHorasPa
                         {modoVista === 'todo' && <div style={styles.filaSeccion}>Por operario</div>}
                         {ots.map(ot => {
                             const estaEjecutado = ESTADOS_EJECUTADOS.includes(ot.estado);
-                            const estadoValido = ['Planificada', 'Programada'].includes(ot.estado);
+                            // 'Reprogramar' entra acá también: sus tareas se editaron con fecha
+                            // nueva en Tratamiento y necesita el mismo gate de capacidad que una
+                            // OT que nunca se envió — confirmarCapacidad la devuelve a 'Programada'.
+                            const estadoValido = ['Planificada', 'Programada', 'Reprogramar'].includes(ot.estado);
                             // Sin tareas con fecha no hay nada que verificar: verificarDisponibilidad
                             // y fechasPropuestasDe recorren tareas con fecha, así que una OT sin
                             // ninguna "confirmaría" trivialmente sin chequear nada real.
@@ -277,9 +284,9 @@ const GanttScreen = ({ recursos = [], ots = [], calendarios = [], obtenerHorasPa
                             const fechasTareas = (ot.tareas || []).filter(tt => tt.fecha).map(tt => tt.fecha).sort();
                             const fmtFecha = iso => iso ? new Date(iso + 'T00:00:00').toLocaleDateString('es-CL', { day: '2-digit', month: 'short' }) : '—';
                             const enSemana = diasSemana.some(d => fechasTareas.includes(d));
-                            const accionLabel = !puedeProgramar ? 'No disponible' : capacidadVerificada ? 'Reconfirmar capacidad' : 'Confirmar capacidad y fechas';
+                            const accionLabel = !puedeProgramar ? 'No disponible' : ot.estado === 'Reprogramar' ? 'Confirmar y volver a Programada' : capacidadVerificada ? 'Reconfirmar capacidad' : 'Confirmar capacidad y fechas';
                             const tituloAccion = !estadoValido
-                                ? 'La OT debe estar Planificada primero'
+                                ? 'La OT debe estar Planificada, Programada o Reprogramar'
                                 : !tieneTareasConFecha
                                     ? 'Agrega tareas con fecha en Tratamiento antes de verificar capacidad'
                                     : '';
@@ -550,11 +557,11 @@ const GanttScreen = ({ recursos = [], ots = [], calendarios = [], obtenerHorasPa
                                 <div style={{ padding: '11px 16px 14px' }}>
                                     <div style={styles.tituloSub}>Acciones</div>
                                     {(() => {
-                                        const estadoValidoSel = ['Planificada', 'Programada'].includes(otSel.estado);
+                                        const estadoValidoSel = ['Planificada', 'Programada', 'Reprogramar'].includes(otSel.estado);
                                         const tieneTareasConFechaSel = (otSel.tareas || []).some(tt => tt.fecha);
                                         const puedeSel = estadoValidoSel && tieneTareasConFechaSel;
                                         const tituloSel = !estadoValidoSel
-                                            ? 'La OT debe estar Planificada primero'
+                                            ? 'La OT debe estar Planificada, Programada o Reprogramar'
                                             : !tieneTareasConFechaSel
                                                 ? 'Agrega tareas con fecha en Tratamiento antes de verificar capacidad'
                                                 : '';
@@ -564,7 +571,7 @@ const GanttScreen = ({ recursos = [], ots = [], calendarios = [], obtenerHorasPa
                                                 disabled={!puedeSel}
                                                 title={tituloSel}
                                                 style={{ ...styles.btnSecundario, width: '100%', marginBottom: 6, opacity: puedeSel ? 1 : .5 }}
-                                            >{otSel.cotizacion?.capacidadVerificada ? 'Reconfirmar capacidad y fechas' : 'Confirmar capacidad y fechas'}</button>
+                                            >{otSel.estado === 'Reprogramar' ? 'Confirmar y volver a Programada' : otSel.cotizacion?.capacidadVerificada ? 'Reconfirmar capacidad y fechas' : 'Confirmar capacidad y fechas'}</button>
                                         );
                                     })()}
                                     {otSel.estado === 'Programada' && (

@@ -29,10 +29,13 @@ function aplicarAccionOT(ot, { accion, motivo, comentario, foto, usuarioNombre =
         ot.estado = 'Trabajo Terminado';
     } else if (accion === 'reprogramar') {
         // Solo desde S3 (supervisor) — no está en el flujo de O3 (ejecutor). La OT necesita una
-        // fecha nueva; el planificador la devuelve a 'Programada' desde el Gantt al reasignar
-        // fechas (GanttScreen.jsx).
+        // fecha nueva; el planificador la reasigna en Tareas (Tratamiento) y recién vuelve a
+        // 'Programada' al reconfirmar capacidad en el Gantt (GanttScreen.confirmarCapacidad) —
+        // mismo gate que exige capacidadVerificada antes de poder enviar la cotización la
+        // primera vez. Se resetea acá para que ese botón vuelva a pedirse.
         if (!motivo) { const e = new Error('Motivo requerido'); e.status = 400; throw e; }
         ot.estado = 'Reprogramar';
+        if (ot.cotizacion) ot.cotizacion.capacidadVerificada = false;
         ot.reportes = ot.reportes || [];
         ot.reportes.push({ comentario: `📅 REPROGRAMACIÓN SOLICITADA: ${motivo}`, fecha: new Date(), usuario: usuarioNombre });
     } else if (accion === 'replanificar') {
