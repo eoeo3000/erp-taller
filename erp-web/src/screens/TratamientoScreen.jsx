@@ -506,12 +506,13 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
             ...datosRecibidos,
             solicitudId: datosRecibidos.solicitudId || datosRecibidos._id,
             numeroOT: otSeleccionada.numeroOT || datosRecibidos.numeroOT,
-            // 'Reprogramar' (el supervisor la marcó desde S3, PWA Operativa) no es un estado en
-            // el que la planificación se quede: guardar cambios acá (reasignar fechas de tareas)
-            // es justamente la acción que la resuelve, devolviendo la OT a 'Programada'. Sin este
-            // caso especial caía al else de abajo y la mandaba a 'Tratada', perdiendo el avance.
-            estado: estadoForzado || (otSeleccionada?.estado === 'Reprogramar' ? 'Programada'
-                : ['Pendiente', 'Tratada', 'Planificada', 'Programada', 'En Ejecución', 'Trabajo Terminado', 'Con Informe', 'Pagada'].includes(otSeleccionada?.estado) ? otSeleccionada.estado : 'Tratada'),
+            // 'Reprogramar' (el supervisor la marcó desde S3, PWA Operativa) se preserva tal cual
+            // al guardar acá — reasignar fechas de tareas no la resuelve por sí solo, hace falta
+            // reconfirmar capacidad en el Gantt (mismo gate que antes de enviar la cotización la
+            // primera vez, ver GanttScreen.confirmarCapacidad) antes de volver a 'Programada'. Sin
+            // 'Reprogramar' en esta lista caía al else de abajo y la mandaba a 'Tratada', perdiendo
+            // el avance.
+            estado: estadoForzado || (['Pendiente', 'Tratada', 'Planificada', 'Programada', 'En Ejecución', 'Reprogramar', 'Trabajo Terminado', 'Con Informe', 'Pagada'].includes(otSeleccionada?.estado) ? otSeleccionada.estado : 'Tratada'),
             tareas,
             componentes: limpiarIds(componentes),
             logistica: (logistica || []).map(l => ({
