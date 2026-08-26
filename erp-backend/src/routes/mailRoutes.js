@@ -108,4 +108,92 @@ router.post('/enviar-cotizacion', async (req, res) => {
 
 router.get('/respuesta/:id/:nuevoEstado', otController.responderCotizacionCliente);
 
+// POST /enviar-excepcion — mirror de /enviar-cotizacion, pero para una "extensión de
+// cotización" (OT.excepciones, ver models/OT.js §7): el planificador ya completó
+// componentesExtra/tareasExtra con precios en Tratamiento y la manda al cliente. Marca la
+// excepción como 'Enviada' y limpia OT.subEstado ('Replanificar') — la oficina ya preparó y
+// mandó la extensión, ese flag queda resuelto.
+router.post('/enviar-excepcion', async (req, res) => {
+    const { emails, otId, excepcionId, cliente } = req.body;
+    const OT = getOT(req.db);
+
+    try {
+        const ot = await OT.findById(otId);
+        if (!ot) return res.status(404).json({ ok: false, error: 'OT no encontrada' });
+
+        const excepcion = ot.excepciones.id(excepcionId);
+        if (!excepcion) return res.status(404).json({ ok: false, error: 'Excepción no encontrada' });
+
+        const componentesExtra = excepcion.componentesExtra || [];
+        const tareasExtra = excepcion.tareasExtra || [];
+        if (componentesExtra.length === 0 && tareasExtra.length === 0) {
+            return res.status(400).json({ ok: false, error: 'Agrega al menos un material o una tarea extra antes de enviar.' });
+        }
+
+        const montoExtra = componentesExtra.reduce((s, c) => s + (c.cantidad || 0) * (c.precio || 0), 0)
+            + tareasExtra.reduce((s, t) => s + (t.duracion || 0) * (t.valorHora || 0), 0);
+
+        excepcion.montoExtra = montoExtra;
+        excepcion.estado = 'Enviada';
+        excepcion.fechaEnvio = new Date();
+        ot.subEstado = '';
+        await ot.save();
+
+        // Mismo link autenticado que /enviar-cotizacion — ver ese endpoint para el detalle.
+        let linkPortal = null;
+        try {
+            const Solicitud = getSolicitud(req.db);
+            const solicitud = await Solicitud.findById(ot.solicitudId || ot._id).lean();
+            if (solicitud?.numero) {
+                const token = await portalController.emitirSesionParaTelefono(req.db, solicitud.numero, solicitud.empresaSolicitante);
+                if (token) linkPortal = `${PWA_CLIENTE_URL}/?token=${token}&entorno=${req.entorno}`;
+            }
+        } catch (eToken) {
+            console.warn('[enviar-excepcion] no se pudo emitir el link del portal:', eToken.message);
+        }
+
+        const filasExtra = [
+            ...componentesExtra.map(c => `<li>${c.cantidad || 0} × ${c.descripcion || c.codigo || 'Material'} — $${((c.cantidad || 0) * (c.precio || 0)).toLocaleString()}</li>`),
+            ...tareasExtra.map(t => `<li>${t.duracion || 0} h × ${t.descripcion || t.puesto || 'Tarea'} — $${((t.duracion || 0) * (t.valorHora || 0)).toLocaleString()}</li>`),
+        ].join('');
+
+        await transporter.sendMail({
+            from: `"Gestión de Suministros" <${process.env.EMAIL_FROM}>`,
+            to: emails,
+            subject: `📄 Extensión de cotización - OT: ${ot.numeroOT || otId}`,
+            html: `
+                <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 30px; border: 1px solid #e0e0e0; border-radius: 10px; max-width: 600px; margin: auto; color: #333;">
+                    <h2 style="color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 10px;">Extensión de cotización</h2>
+                    <p>Estimado/a <b>${cliente || ''}</b>,</p>
+                    <p>Durante la ejecución de la OT <b>${ot.numeroOT || ''}</b> identificamos que se necesita lo siguiente, adicional a lo ya cotizado:</p>
+                    <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 5px solid #3498db;">
+                        <p>${excepcion.descripcion || ''}</p>
+                        <ul style="margin: 10px 0; padding-left: 20px;">${filasExtra}</ul>
+                        <p style="margin: 15px 0 5px 0; font-size: 1.1em;"><strong>💰 Costo adicional:</strong></p>
+                        <strong style="font-size: 24px; color: #27ae60;">$${montoExtra.toLocaleString()}</strong>
+                    </div>
+                    <p style="text-align: center; font-weight: bold; margin-top: 30px; color: #2c3e50;">
+                        ¿Aprueba este costo adicional?
+                    </p>
+                    ${linkPortal ? `
+                    <div style="text-align: center; margin-top: 20px;">
+                        <a href="${linkPortal}"
+                           style="background-color: #27ae60; color: white; padding: 14px 28px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block; margin: 5px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                           ✅ Ver y responder
+                        </a>
+                    </div>` : `
+                    <p style="text-align: center; margin-top: 20px; color: #2c3e50;">
+                        Por favor contáctenos para confirmar su respuesta a esta extensión de cotización.
+                    </p>`}
+                </div>
+            `,
+        });
+
+        res.status(200).json({ ok: true, message: 'Enviado con éxito' });
+    } catch (error) {
+        console.error('[enviar-excepcion] Error:', error);
+        res.status(500).json({ ok: false, error: error.message });
+    }
+});
+
 module.exports = router;

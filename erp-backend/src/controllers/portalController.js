@@ -98,6 +98,18 @@ function otPublica(ot) {
         // (ver models/OT.js). El resto de cotizacion (fechas propuestas, verificación de
         // capacidad) sigue siendo interno.
         cotizacion: ot.cotizacion ? { respuestaCliente: ot.cotizacion.respuestaCliente, enviada: ot.cotizacion.enviada } : null,
+        // Excepciones ("extensión de cotización", ver models/OT.js §7) — se filtran los
+        // 'Borrador' porque todavía no tienen precio ni fueron revisados por la oficina, no le
+        // corresponden al cliente hasta que el planificador los envía.
+        excepciones: (ot.excepciones || []).filter(e => e.estado !== 'Borrador').map(e => ({
+            _id: e._id,
+            descripcion: e.descripcion,
+            componentesExtra: e.componentesExtra,
+            tareasExtra: e.tareasExtra,
+            montoExtra: e.montoExtra,
+            estado: e.estado,
+            motivoRechazo: e.motivoRechazo,
+        })),
         descripcionGeneral: ot.descripcionGeneral
     };
 }
@@ -633,6 +645,38 @@ exports.responderCotizacion = async (req, res) => {
 
         const otActualizada = await otController.aplicarRespuestaCotizacion({
             id, nuevoEstado: estado, motivoRechazo, conn: req.db,
+        });
+
+        res.json({ ok: true, ot: otPublica(otActualizada) });
+    } catch (err) {
+        res.status(err.status || 500).json({ error: err.message });
+    }
+};
+
+// POST /api/portal/ot/:id/excepciones/:excepcionId/responder?token= — aprobar/rechazar una
+// excepción ("extensión de cotización") desde la PWA Cliente. Mismo esqueleto que
+// responderCotizacion arriba.
+exports.responderExcepcion = async (req, res) => {
+    const OT = getOT(req.db);
+    const Solicitud = getSolicitud(req.db);
+    const SesionPortal = getSesionPortal(req.db);
+    try {
+        const sesion = await SesionPortal.findOne({ tokenHash: hashToken(req.query.token), estado: 'activo' });
+        if (!sesion || sesion.expira < new Date()) return res.status(403).json({ error: 'Sesión inválida o vencida' });
+
+        const { id, excepcionId } = req.params;
+        const { estado, motivoRechazo } = req.body;
+
+        const ot = await OT.findById(id).lean();
+        if (!ot) return res.status(404).json({ error: 'OT no encontrada' });
+
+        const solicitud = await Solicitud.findById(ot.solicitudId || ot._id).lean();
+        if (!solicitud || normalizarTelefono(solicitud.numero) !== sesion.telefono) {
+            return res.status(403).json({ error: 'Esta OT no pertenece a tu sesión.' });
+        }
+
+        const otActualizada = await otController.aplicarRespuestaExcepcion({
+            id, excepcionId, nuevoEstado: estado, motivoRechazo, conn: req.db,
         });
 
         res.json({ ok: true, ot: otPublica(otActualizada) });

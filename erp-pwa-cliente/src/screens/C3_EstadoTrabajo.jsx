@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { responderCotizacion } from '../api.js';
+import { responderCotizacion, responderExcepcion } from '../api.js';
 
 // Mismo idx/MAPA_ETAPA que ya usan DashboardScreen.jsx y TratamientoScreen.jsx en
 // erp-web (duplicado ahí también, no importado de un módulo común — mismo criterio).
@@ -16,15 +16,22 @@ const MAPA_ETAPA = {
 // 'Aprobada'/'Rechazada' ya no son valores de OT.estado — un rechazo se detecta por
 // cotizacion.respuestaCliente sin sacar a la OT de 'Planificada' (ver erp-backend/src/models/OT.js).
 function etapaInfo(ot) {
-    if (!ot) return { idx: 0, label: ETAPAS_CLIENTE[0], rechazada: false, porAprobar: false };
+    if (!ot) return { idx: 0, label: ETAPAS_CLIENTE[0], rechazada: false, porAprobar: false, reprogramando: false };
     if (ot.estado === 'Planificada' && ot.cotizacion?.enviada && ot.cotizacion?.respuestaCliente === 'Pendiente') {
-        return { idx: 2, label: 'Cotización por aprobar', rechazada: false, porAprobar: true };
+        return { idx: 2, label: 'Cotización por aprobar', rechazada: false, porAprobar: true, reprogramando: false };
     }
     if (ot.estado === 'Planificada' && ot.cotizacion?.respuestaCliente === 'Rechazada') {
-        return { idx: 2, label: 'Presupuesto rechazado', rechazada: true, porAprobar: false };
+        return { idx: 2, label: 'Presupuesto rechazado', rechazada: true, porAprobar: false, reprogramando: false };
+    }
+    // 'Reprogramar' no está en MAPA_ETAPA (lo marca el supervisor desde S3, PWA Operativa,
+    // cuando el trabajo necesita una fecha nueva) — sin este caso especial el timeline
+    // saltaría de vuelta a "Solicitud recibida" (idx 0), un regreso confuso para el cliente.
+    // Se mantiene en el punto donde ya iba (idx 3, "Visita programada").
+    if (ot.estado === 'Reprogramar') {
+        return { idx: 3, label: 'Coordinando nueva fecha', rechazada: false, porAprobar: false, reprogramando: true };
     }
     const idx = MAPA_ETAPA[ot.estado] ?? 0;
-    return { idx, label: ETAPAS_CLIENTE[idx], rechazada: false, porAprobar: false };
+    return { idx, label: ETAPAS_CLIENTE[idx], rechazada: false, porAprobar: false, reprogramando: false };
 }
 
 const CLP = (n) => '$ ' + Math.round(n || 0).toLocaleString('es-CL');
@@ -37,6 +44,7 @@ function lineaCliente(ot) {
         return 'Revise el detalle y responda a la cotización.';
     }
     if (ot.estado === 'Planificada' && ot.cotizacion?.respuestaCliente === 'Rechazada') return 'El presupuesto no fue aceptado.';
+    if (ot.estado === 'Reprogramar') return 'Estamos coordinando una nueva fecha para su trabajo.';
     if (ot.estado === 'Programada') {
         const fecha = (ot.tareas || []).map((t) => t.fecha).filter(Boolean).sort()[0];
         return fecha ? `Nuestro equipo llega el ${fmtLarga(fecha)}.` : 'Su trabajo está programado.';
@@ -53,10 +61,18 @@ export default function C3EstadoTrabajo({ nav, trabajo: trabajoProp }) {
     const [motivo, setMotivo] = useState('');
     const [enviando, setEnviando] = useState(false);
     const [error, setError] = useState('');
+
+    // Excepciones ("extensión de cotización") — puede haber más de una pendiente a la vez,
+    // así que el estado va indexado por excepcionId en vez de una sola variable como arriba.
+    const [accionExc, setAccionExc] = useState({});
+    const [motivoExc, setMotivoExc] = useState({});
+    const [enviandoExc, setEnviandoExc] = useState(null);
+    const [errorExc, setErrorExc] = useState({});
+
     if (!trabajo) return null;
     const ot = trabajo.ot;
     const info = etapaInfo(ot);
-    const color = info.rechazada ? 'var(--detenido)' : info.porAprobar ? 'var(--atencion)' : 'var(--en-curso)';
+    const color = info.rechazada ? 'var(--detenido)' : (info.porAprobar || info.reprogramando) ? 'var(--atencion)' : 'var(--en-curso)';
 
     const responder = async (estado) => {
         setEnviando(true); setError('');
@@ -69,6 +85,21 @@ export default function C3EstadoTrabajo({ nav, trabajo: trabajoProp }) {
             setError(e.message);
         } finally {
             setEnviando(false);
+        }
+    };
+
+    const responderExc = async (excepcionId, estado) => {
+        setEnviandoExc(excepcionId);
+        setErrorExc((prev) => ({ ...prev, [excepcionId]: '' }));
+        try {
+            const resultado = await responderExcepcion(ot._id, excepcionId, estado, estado === 'Rechazada' ? motivoExc[excepcionId] : undefined);
+            setTrabajo((t) => ({ ...t, ot: resultado.ot }));
+            setAccionExc((prev) => ({ ...prev, [excepcionId]: null }));
+            setMotivoExc((prev) => ({ ...prev, [excepcionId]: '' }));
+        } catch (e) {
+            setErrorExc((prev) => ({ ...prev, [excepcionId]: e.message }));
+        } finally {
+            setEnviandoExc(null);
         }
     };
 
@@ -93,7 +124,10 @@ export default function C3EstadoTrabajo({ nav, trabajo: trabajoProp }) {
                 {ETAPAS_CLIENTE.map((label, i) => {
                     const cumplida = i < info.idx;
                     const esActual = i === info.idx;
-                    const texto = info.rechazada && esActual ? 'Presupuesto rechazado' : info.porAprobar && esActual ? 'Cotización por aprobar' : label;
+                    const texto = info.rechazada && esActual ? 'Presupuesto rechazado'
+                        : info.porAprobar && esActual ? 'Cotización por aprobar'
+                        : info.reprogramando && esActual ? 'Coordinando nueva fecha'
+                        : label;
                     return (
                         <div key={i} style={{
                             minHeight: 48, display: 'flex', alignItems: 'center', gap: 10, padding: '0 16px',
@@ -154,6 +188,45 @@ export default function C3EstadoTrabajo({ nav, trabajo: trabajoProp }) {
                     )}
                 </div>
             )}
+
+            {(ot?.excepciones || []).filter((e) => e.estado === 'Enviada').map((e) => (
+                <div key={e._id} style={{ padding: '0 16px 16px' }}>
+                    <div className="versalita" style={{ marginBottom: 6 }}>Costo adicional</div>
+                    <div style={{ fontSize: 'var(--fs-secundario)', color: 'var(--texto-secundario-1)', marginBottom: 6 }}>{e.descripcion}</div>
+                    <div className="mono" style={{ fontSize: 17, fontWeight: 600, marginBottom: 8 }}>{CLP(e.montoExtra)}</div>
+                    {errorExc[e._id] && <div style={{ fontSize: 'var(--fs-secundario)', color: 'var(--detenido)', marginBottom: 8 }}>{errorExc[e._id]}</div>}
+                    {!accionExc[e._id] && (
+                        <div style={{ display: 'flex', gap: 8 }}>
+                            <button className="boton-primario" disabled={enviandoExc === e._id} onClick={() => setAccionExc((a) => ({ ...a, [e._id]: 'aceptar' }))}>Aceptar</button>
+                            <button className="boton-secundario" disabled={enviandoExc === e._id} onClick={() => setAccionExc((a) => ({ ...a, [e._id]: 'rechazar' }))}>Rechazar</button>
+                        </div>
+                    )}
+                    {accionExc[e._id] === 'aceptar' && (
+                        <div>
+                            <div style={{ fontSize: 'var(--fs-secundario)', color: 'var(--texto-secundario-1)', marginBottom: 8 }}>¿Confirma este costo adicional?</div>
+                            <div style={{ display: 'flex', gap: 8 }}>
+                                <button className="boton-primario" disabled={enviandoExc === e._id} onClick={() => responderExc(e._id, 'Aprobada')}>{enviandoExc === e._id ? 'Enviando…' : 'Confirmar'}</button>
+                                <button className="boton-secundario" disabled={enviandoExc === e._id} onClick={() => setAccionExc((a) => ({ ...a, [e._id]: null }))}>Cancelar</button>
+                            </div>
+                        </div>
+                    )}
+                    {accionExc[e._id] === 'rechazar' && (
+                        <div>
+                            <textarea
+                                className="input-campo"
+                                placeholder="Motivo del rechazo (opcional)"
+                                value={motivoExc[e._id] || ''}
+                                onChange={(ev) => setMotivoExc((m) => ({ ...m, [e._id]: ev.target.value }))}
+                                style={{ width: '100%', minHeight: 70, boxSizing: 'border-box', marginBottom: 8, resize: 'vertical' }}
+                            />
+                            <div style={{ display: 'flex', gap: 8 }}>
+                                <button className="boton-primario" disabled={enviandoExc === e._id} onClick={() => responderExc(e._id, 'Rechazada')}>{enviandoExc === e._id ? 'Enviando…' : 'Confirmar rechazo'}</button>
+                                <button className="boton-secundario" disabled={enviandoExc === e._id} onClick={() => setAccionExc((a) => ({ ...a, [e._id]: null }))}>Cancelar</button>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            ))}
 
             <div style={{ flex: 1 }} />
             <div className="pie-accion" style={{ flexDirection: 'row' }}>

@@ -35,11 +35,12 @@ const t = {
 
 const DIAS_L = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
 const GRID = '118px minmax(180px,1fr) 132px 104px 52px 62px 62px repeat(7, minmax(0,1fr))';
-const ESTADOS_ACTIVOS = ['Planificada', 'Programada', 'En Ejecución'];
+const ESTADOS_ACTIVOS = ['Planificada', 'Programada', 'En Ejecución', 'Reprogramar'];
 const ESTADOS_EJECUTADOS = ['Trabajo Terminado', 'Con Informe', 'Pagada'];
 
 const colorEstadoOT = (estado) => {
     if (ESTADOS_EJECUTADOS.includes(estado)) return t.textoAtenuado1;
+    if (estado === 'Reprogramar') return t.rojo;
     if (estado === 'En Ejecución') return t.verde;
     if (estado === 'Programada') return t.acento;
     return t.textoSecundario2;
@@ -290,7 +291,12 @@ const GanttScreen = ({ recursos = [], ots = [], calendarios = [], obtenerHorasPa
                                             <span style={{ fontSize: 12, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' }}>{ot.solicitante || 'Cliente'}</span>
                                             <span style={{ fontSize: 10.5, color: t.textoAtenuado3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' }}>{ot.descripcion || ''}</span>
                                         </span>
-                                        <span style={{ ...styles.celda, fontSize: 10.5, fontWeight: 600, color: colorEstadoOT(ot.estado) }}>{ot.estado}</span>
+                                        <span style={{ ...styles.celda, fontSize: 10.5, fontWeight: 600, color: colorEstadoOT(ot.estado) }}>
+                                            {ot.estado}
+                                            {ot.subEstado === 'Replanificar' && (
+                                                <span title="Replanificar: necesita revisión de alcance/recursos" style={{ marginLeft: 4, color: t.rojo }}>●</span>
+                                            )}
+                                        </span>
                                         <span style={styles.celda}>
                                             {estaEjecutado ? null : (
                                                 <button
@@ -416,7 +422,12 @@ const GanttScreen = ({ recursos = [], ots = [], calendarios = [], obtenerHorasPa
                                         <span style={{ fontSize: 11, color: t.textoSecundario1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' }}>{supervisor?.nombre || <span style={{ color: t.textoDeshabilitado }}>Sin supervisor</span>}</span>
                                         <span style={{ fontSize: 10, color: t.textoDeshabilitado, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' }}>{supervisor?.puesto || ''}</span>
                                     </span>
-                                    <span style={{ ...styles.celda, fontSize: 10.5, fontWeight: 600, color: colorEstadoOT(ot.estado) }}>{ot.estado}</span>
+                                    <span style={{ ...styles.celda, fontSize: 10.5, fontWeight: 600, color: colorEstadoOT(ot.estado) }}>
+                                        {ot.estado}
+                                        {ot.subEstado === 'Replanificar' && (
+                                            <span title="Replanificar: necesita revisión de alcance/recursos" style={{ marginLeft: 4, color: t.rojo }}>●</span>
+                                        )}
+                                    </span>
                                     <span style={{ ...styles.celda, justifyContent: 'flex-end', fontFamily: t.fontMono, fontSize: 11 }}>{`${horasSemana} h`}</span>
                                     <span style={{ ...styles.celda, justifyContent: 'flex-end', fontFamily: t.fontMono, fontSize: 10.5, color: t.textoSecundario1 }}>{fmtFecha(fechasTareas[0])}</span>
                                     <span style={{ ...styles.celda, justifyContent: 'flex-end', fontFamily: t.fontMono, fontSize: 10.5, color: t.textoSecundario1, borderRight: `1px solid ${t.hairlineBloque}` }}>{fmtFecha(fechasTareas[fechasTareas.length - 1])}</span>

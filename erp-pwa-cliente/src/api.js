@@ -68,3 +68,12 @@ export function responderCotizacion(otId, estado, motivoRechazo) {
         method: 'POST', body: JSON.stringify({ estado, motivoRechazo }),
     });
 }
+
+// POST /api/portal/ot/:id/excepciones/:excepcionId/responder?token= — aprobar/rechazar una
+// excepción ("extensión de cotización") de un trabajo
+export function responderExcepcion(otId, excepcionId, estado, motivoRechazo) {
+    const { token } = getSesion();
+    return pedir(`/portal/ot/${otId}/excepciones/${excepcionId}/responder?token=${encodeURIComponent(token)}`, {
+        method: 'POST', body: JSON.stringify({ estado, motivoRechazo }),
+    });
+}

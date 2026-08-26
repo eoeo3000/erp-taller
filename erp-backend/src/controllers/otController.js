@@ -27,6 +27,25 @@ function aplicarAccionOT(ot, { accion, motivo, comentario, foto, usuarioNombre =
         if (ot.estado === 'Trabajo Terminado') ot.estado = 'Con Informe';
     } else if (accion === 'terminar') {
         ot.estado = 'Trabajo Terminado';
+    } else if (accion === 'reprogramar') {
+        // Solo desde S3 (supervisor) — no está en el flujo de O3 (ejecutor). La OT necesita una
+        // fecha nueva; el planificador la devuelve a 'Programada' desde el Gantt al reasignar
+        // fechas (GanttScreen.jsx).
+        if (!motivo) { const e = new Error('Motivo requerido'); e.status = 400; throw e; }
+        ot.estado = 'Reprogramar';
+        ot.reportes = ot.reportes || [];
+        ot.reportes.push({ comentario: `📅 REPROGRAMACIÓN SOLICITADA: ${motivo}`, fecha: new Date(), usuario: usuarioNombre });
+    } else if (accion === 'replanificar') {
+        // Solo desde S3 — la OT sigue en curso, pero necesita más HH/materiales de lo cotizado.
+        // Crea de una vez el borrador de la excepción con el motivo del supervisor, para que el
+        // planificador no arranque de cero, solo la complete con precios (ver
+        // aplicarRespuestaExcepcion y TratamientoScreen.jsx, pestaña Excepciones).
+        if (!motivo) { const e = new Error('Motivo requerido'); e.status = 400; throw e; }
+        ot.subEstado = 'Replanificar';
+        ot.excepciones = ot.excepciones || [];
+        ot.excepciones.push({ descripcion: motivo, foto: foto || '', creadoPor: usuarioNombre, fecha: new Date() });
+        ot.reportes = ot.reportes || [];
+        ot.reportes.push({ comentario: `🔧 REPLANIFICACIÓN SOLICITADA: ${motivo}`, fecha: new Date(), usuario: usuarioNombre });
     } else {
         const e = new Error('Acción no reconocida'); e.status = 400; throw e;
     }
@@ -658,3 +677,48 @@ exports.responderCotizacionCliente = async (req, res) => {
         res.status(500).send("Error interno.");
     }
 };
+
+// Respuesta del cliente a una excepción ("extensión de cotización", ver models/OT.js §7 y
+// aplicarAccionOT accion:'replanificar') — mismo criterio que aplicarRespuestaCotizacion, pero
+// acá sí hace falta un documento Mongoose completo (no .lean()) para usar ot.excepciones.id(...)
+// y para hacer push directo sobre componentes/tareas antes de guardar.
+async function aplicarRespuestaExcepcion({ id, excepcionId, nuevoEstado, motivoRechazo, conn }) {
+    const OT = getOT(conn);
+
+    if (!['Aprobada', 'Rechazada'].includes(nuevoEstado)) {
+        const e = new Error('Respuesta no reconocida.'); e.status = 400; throw e;
+    }
+
+    const ot = await OT.findById(id);
+    if (!ot) { const e = new Error('Registro no encontrado.'); e.status = 404; throw e; }
+
+    const excepcion = ot.excepciones.id(excepcionId);
+    if (!excepcion) { const e = new Error('Excepción no encontrada.'); e.status = 404; throw e; }
+
+    if (excepcion.estado !== 'Enviada') {
+        const e = new Error(`Esta excepción ya fue respondida o todavía no fue enviada (${excepcion.estado}).`);
+        e.status = 409; throw e;
+    }
+
+    excepcion.estado = nuevoEstado;
+    excepcion.fechaRespuesta = new Date();
+    if (nuevoEstado === 'Rechazada' && motivoRechazo) excepcion.motivoRechazo = motivoRechazo;
+
+    // Aprobar es la única vía del sistema donde el backend recalcula granTotal: acá no hay
+    // ningún frontend de escritorio en la transacción que lo mande ya sumado (a diferencia del
+    // resto de actualizarOT, ver comentario ahí).
+    if (nuevoEstado === 'Aprobada') {
+        // .toObject(): son subdocumentos Mongoose de un array distinto (componentesExtra, con
+        // su propio schema) — pasarlos tal cual a .push() de otro DocumentArray puede arrastrar
+        // su _id/parent original; como objetos planos, Mongoose los castea limpio al schema de
+        // componentes/tareas y les asigna _id nuevos.
+        ot.componentes.push(...(excepcion.componentesExtra || []).map(c => c.toObject()));
+        ot.tareas.push(...(excepcion.tareasExtra || []).map(tt => tt.toObject()));
+        ot.granTotal = (ot.granTotal || 0) + (excepcion.montoExtra || 0);
+    }
+
+    await ot.save();
+    console.log(`♻️ ERP Actualizado: OT ${ot.numeroOT} — cliente respondió ${nuevoEstado} a una excepción`);
+    return ot;
+}
+exports.aplicarRespuestaExcepcion = aplicarRespuestaExcepcion;
