@@ -14,6 +14,11 @@ function clasificar(t) {
     if (ot.estado === 'Planificada' && ot.cotizacion?.enviada && ot.cotizacion?.respuestaCliente === 'Pendiente') {
         return { grupo: 'por_aprobar', color: COLOR.pago, linea: 'Cotización lista — requiere tu aprobación' };
     }
+    // Excepción ("extensión de cotización") pendiente — puede pasar con la OT en cualquier
+    // estado (típicamente 'En Ejecución'), no solo 'Planificada' como la cotización inicial.
+    if (ot.excepciones?.some((e) => e.estado === 'Enviada')) {
+        return { grupo: 'por_aprobar', color: COLOR.pago, linea: 'Costo adicional — requiere tu aprobación' };
+    }
     if (ot.estado === 'Planificada' && ot.cotizacion?.respuestaCliente === 'Rechazada') {
         return { grupo: 'cerradas', color: COLOR.rechazado, linea: 'Presupuesto no aceptado' };
     }

@@ -3,7 +3,7 @@ import { obtenerOT, actualizarOT, accionOT, miSemana, subirFoto } from '../api.j
 import { detectarCruces } from '../cruces.js';
 import Cargando from './Cargando.jsx';
 
-const COLOR_ESTADO = { 'En Ejecución': 'var(--en-curso)', 'Trabajo Terminado': 'var(--listo)', 'Con Informe': 'var(--listo)', 'Pagada': 'var(--listo)' };
+const COLOR_ESTADO = { 'En Ejecución': 'var(--en-curso)', 'Trabajo Terminado': 'var(--listo)', 'Con Informe': 'var(--listo)', 'Pagada': 'var(--listo)', 'Reprogramar': 'var(--atencion)' };
 const NOMBRE_DIA = { 1: 'LUN', 2: 'MAR', 3: 'MIÉ', 4: 'JUE', 5: 'VIE', 6: 'SÁB', 0: 'DOM' };
 
 function horasDecimal(hhmm) {
@@ -33,6 +33,16 @@ export default function S3Trabajo({ nav, asignacion, persona }) {
     const [motivoAbierto, setMotivoAbierto] = useState(null);
     const [motivoTexto, setMotivoTexto] = useState('');
     const [verInforme, setVerInforme] = useState(false);
+
+    // Reprogramar / Replanificar — a nivel de OT completa, no por tarea (ver motivoAbierto
+    // arriba, que es lo mismo pero por tarea individual). Solo esta pantalla (supervisor);
+    // O2_MiDia/O3_TrabajoEnCurso (ejecutor) no lo tienen.
+    const [accionEstado, setAccionEstado] = useState(null); // null | 'reprogramar' | 'replanificar'
+    const [motivoEstado, setMotivoEstado] = useState('');
+    const [fotoEstado, setFotoEstado] = useState('');
+    const [subiendoFotoEstado, setSubiendoFotoEstado] = useState(false);
+    const [enviandoEstado, setEnviandoEstado] = useState(false);
+    const [errorEstado, setErrorEstado] = useState('');
 
     const cargar = () => obtenerOT(otId).then(setOt).catch((e) => setError(e.message));
 
@@ -149,6 +159,29 @@ export default function S3Trabajo({ nav, asignacion, persona }) {
         try { await accionOT(otId, { accion: 'terminar' }); await cargar(); } finally { setGuardando(false); }
     };
 
+    const agregarFotoEstado = async (archivo) => {
+        setSubiendoFotoEstado(true);
+        try { setFotoEstado(await subirFoto(archivo)); }
+        catch { window.alert('No se pudo subir la foto — revisa la señal e intenta de nuevo.'); }
+        finally { setSubiendoFotoEstado(false); }
+    };
+
+    const cancelarAccionEstado = () => { setAccionEstado(null); setMotivoEstado(''); setFotoEstado(''); setErrorEstado(''); };
+
+    const confirmarAccionEstado = async () => {
+        if (!motivoEstado.trim()) return;
+        setEnviandoEstado(true); setErrorEstado('');
+        try {
+            await accionOT(otId, { accion: accionEstado, motivo: motivoEstado.trim(), foto: fotoEstado });
+            cancelarAccionEstado();
+            await cargar();
+        } catch (e) {
+            setErrorEstado(e.message);
+        } finally {
+            setEnviandoEstado(false);
+        }
+    };
+
     return (
         <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
             {cabecera}
@@ -169,6 +202,48 @@ export default function S3Trabajo({ nav, asignacion, persona }) {
                         <div className="versalita">Horas</div>
                         <div className="mono" style={{ marginTop: 4, fontSize: 17, fontWeight: 600 }}>{horasHechas} / {horasTotal} h</div>
                     </div>
+                </div>
+
+                <div style={{ padding: '12px 18px', borderBottom: '1px solid var(--linea-fina)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <span className="versalita">Estado de la OT</span>
+                        {ot.subEstado === 'Replanificar' && (
+                            <span className="mono" style={{ fontSize: 11, fontWeight: 700, color: 'var(--atencion)', textTransform: 'uppercase' }}>· Replanificar pendiente</span>
+                        )}
+                    </div>
+                    {accionEstado === null ? (
+                        <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                            <button className="boton-secundario" style={{ width: 'auto', minHeight: 40, padding: '0 12px', fontSize: 13 }} onClick={() => setAccionEstado('reprogramar')}>Reprogramar</button>
+                            <button className="boton-secundario" style={{ width: 'auto', minHeight: 40, padding: '0 12px', fontSize: 13 }} onClick={() => setAccionEstado('replanificar')}>Replanificar</button>
+                        </div>
+                    ) : (
+                        <div style={{ marginTop: 8 }}>
+                            <div style={{ fontSize: 12.5, color: 'var(--texto-secundario-2)', marginBottom: 6 }}>
+                                {accionEstado === 'reprogramar'
+                                    ? 'La OT necesita una fecha nueva — la oficina la reprograma desde el Gantt.'
+                                    : 'La OT necesita más horas o materiales de lo cotizado — se avisa a la oficina para que prepare la extensión de la cotización.'}
+                            </div>
+                            {errorEstado && <div style={{ fontSize: 12.5, color: 'var(--detenido)', marginBottom: 6 }}>{errorEstado}</div>}
+                            <input
+                                value={motivoEstado} onChange={(e) => setMotivoEstado(e.target.value)}
+                                placeholder="Motivo (obligatorio)"
+                                style={{ width: '100%', height: 40, padding: '0 10px', background: '#fff', border: '1px solid rgba(0,0,0,.20)', borderRadius: 'var(--radio)', fontSize: 14, boxSizing: 'border-box' }}
+                            />
+                            {accionEstado === 'replanificar' && (
+                                <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: 8, height: 36, padding: '0 12px', background: '#fff', border: '1px solid rgba(0,0,0,.20)', borderRadius: 'var(--radio)', fontSize: 13, cursor: 'pointer' }}>
+                                    {subiendoFotoEstado ? 'Subiendo…' : fotoEstado ? 'Foto agregada' : 'Agregar foto (opcional)'}
+                                    <input type="file" accept="image/*" capture="environment" style={{ display: 'none' }} onChange={(e) => { const f = e.target.files?.[0]; if (f) agregarFotoEstado(f); e.target.value = ''; }} />
+                                </label>
+                            )}
+                            <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                                <button
+                                    className="boton-primario" style={{ width: 'auto', minHeight: 40, padding: '0 14px', fontSize: 13 }}
+                                    disabled={!motivoEstado.trim() || enviandoEstado} onClick={confirmarAccionEstado}
+                                >{enviandoEstado ? 'Enviando…' : 'Confirmar'}</button>
+                                <button className="boton-secundario" style={{ width: 'auto', minHeight: 40, padding: '0 14px', fontSize: 13 }} onClick={cancelarAccionEstado}>Cancelar</button>
+                            </div>
+                        </div>
+                    )}
                 </div>
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '16px 18px 6px' }}>

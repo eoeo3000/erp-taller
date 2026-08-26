@@ -18,6 +18,7 @@ const OTSchema = new mongoose.Schema({
             'Rechazada',        // Cliente rechazó la cotización (cierre)
             'Programada',       // Agendada en Gantt
             'En Ejecución',     // Trabajo en terreno
+            'Reprogramar',      // El supervisor marcó (S3, PWA Operativa) que no sigue en la fecha planificada
             'Trabajo Terminado',// Faena completada
             'Con Informe',      // Reporte entregado
             'Pagada'            // Cobro recibido
@@ -25,6 +26,12 @@ const OTSchema = new mongoose.Schema({
         default: 'Pendiente'
     },
     origen: { type: String, default: 'Manual' },
+
+    // Marca liviana aparte de `estado`: el supervisor la deja en 'Replanificar' desde S3 cuando
+    // la OT sigue en curso pero necesita más HH/materiales de lo cotizado — no mueve el pipeline
+    // principal, solo alerta al planificador (Gantt/Tratamiento) hasta que prepara y envía la
+    // extensión de cotización correspondiente (ver excepciones más abajo), momento en que se limpia.
+    subEstado: { type: String, default: '' },
 
     // Informe de Evaluación: levantamiento en terreno previo a cotizar (ver docs/funcionalidades-v2.md)
     informeEvaluacion: {
@@ -183,6 +190,30 @@ const OTSchema = new mongoose.Schema({
         fechaRespuesta: { type: Date, default: null },
         motivoRechazo: { type: String, default: '' },
     },
+
+    // 7. Excepciones — "extensión de cotización": el supervisor la crea en Borrador desde S3
+    // (accion:'replanificar', ver otController.aplicarAccionOT) cuando necesita más HH o
+    // materiales de los ya cotizados; el planificador completa componentesExtra/tareasExtra
+    // con precios en Tratamiento y la envía al cliente (POST /mail/enviar-excepcion), que
+    // aprueba/rechaza desde la PWA Cliente igual que la cotización inicial. Al aprobar, esos
+    // ítems se concatenan a componentes/tareas y granTotal += montoExtra (ver
+    // otController.aplicarRespuestaExcepcion) — es la única vía del sistema donde el backend
+    // recalcula granTotal, porque ahí no hay ningún frontend de escritorio en la transacción.
+    excepciones: [{
+        descripcion: { type: String, default: '' },
+        creadoPor: { type: String, default: '' },
+        fecha: { type: Date, default: Date.now },
+        foto: { type: String, default: '' },
+
+        componentesExtra: [{ codigo: String, descripcion: String, cantidad: Number, precio: Number, tipo: String }],
+        tareasExtra: [{ descripcion: String, puesto: String, duracion: Number, valorHora: Number }],
+        montoExtra: { type: Number, default: 0 },
+
+        estado: { type: String, enum: ['Borrador', 'Enviada', 'Aprobada', 'Rechazada'], default: 'Borrador' },
+        fechaEnvio: { type: Date, default: null },
+        fechaRespuesta: { type: Date, default: null },
+        motivoRechazo: { type: String, default: '' },
+    }],
 
     // --- Metadatos y Asignación ---
     // 'Media'/'Alta' quedaron en el enum viejo pero nunca se usaron en ningún lado del

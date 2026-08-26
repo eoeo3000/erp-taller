@@ -378,6 +378,7 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
     const [otSeleccionada, setOtSeleccionada] = useState(datosRecibidos || {});
     const [tareas, setTareas] = useState([]);
     const [componentes, setComponentes] = useState([]);
+    const [excepciones, setExcepciones] = useState([]);
     const [informeEvaluacion, setInformeEvaluacion] = useState({ ...informeEvaluacionVacio, ...(datosRecibidos?.informeEvaluacion || {}) });
     const [isModalEnvioOpen, setIsModalEnvioOpen] = useState(false);
     const [emailsEnvio, setEmailsEnvio] = useState([]);
@@ -431,6 +432,70 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
     const calcularSubtotal = (lista) => lista.reduce((sum, i) => sum + (Number(i.cantidad || 0) * Number(i.unitario || 0)), 0);
     void calcularSubtotal;
 
+    // Excepciones ("extensión de cotización", ver models/OT.js §7) — el supervisor las crea en
+    // Borrador desde S3 (PWA Operativa, accion:'replanificar'); acá se completan con precios
+    // (mismo patrón de edición que componentes/tareas arriba, pero anidado dentro de cada
+    // excepción) y se envían al cliente. id sin _id (ítems recién agregados acá) llega igual al
+    // $set genérico de actualizarOT — Mongoose lo descarta al castear al subschema, no hace
+    // falta limpiarlo como con componentes/tareas de nivel OT.
+    const excepcionesBorrador = excepciones.filter(e => e.estado === 'Borrador');
+    const [enviandoExcepcion, setEnviandoExcepcion] = useState(null); // idx en curso, o null
+
+    const agregarComponenteExtra = (idxExcepcion) => setExcepciones(prev => prev.map((e, i) => i === idxExcepcion
+        ? { ...e, componentesExtra: [...(e.componentesExtra || []), { id: Date.now(), codigo: '', descripcion: '', cantidad: 1, precio: 0, tipo: 'Material' }] }
+        : e));
+    const actualizarComponenteExtra = (idxExcepcion, idxItem, campo, valor) => setExcepciones(prev => prev.map((e, i) => i !== idxExcepcion ? e : {
+        ...e,
+        componentesExtra: (e.componentesExtra || []).map((c, j) => j === idxItem
+            ? { ...c, [campo]: (campo === 'cantidad' || campo === 'precio') ? parseFloat(valor || 0) : valor }
+            : c),
+    }));
+    const eliminarComponenteExtra = (idxExcepcion, idxItem) => setExcepciones(prev => prev.map((e, i) => i !== idxExcepcion ? e : {
+        ...e, componentesExtra: (e.componentesExtra || []).filter((_, j) => j !== idxItem),
+    }));
+    const agregarTareaExtra = (idxExcepcion) => setExcepciones(prev => prev.map((e, i) => i === idxExcepcion
+        ? { ...e, tareasExtra: [...(e.tareasExtra || []), { id: Date.now(), descripcion: '', puesto: '', duracion: 1, valorHora: 0 }] }
+        : e));
+    const actualizarTareaExtra = (idxExcepcion, idxItem, campo, valor) => setExcepciones(prev => prev.map((e, i) => i !== idxExcepcion ? e : {
+        ...e,
+        tareasExtra: (e.tareasExtra || []).map((tt, j) => j === idxItem
+            ? { ...tt, [campo]: (campo === 'duracion' || campo === 'valorHora') ? Number(valor) : valor }
+            : tt),
+    }));
+    const eliminarTareaExtra = (idxExcepcion, idxItem) => setExcepciones(prev => prev.map((e, i) => i !== idxExcepcion ? e : {
+        ...e, tareasExtra: (e.tareasExtra || []).filter((_, j) => j !== idxItem),
+    }));
+
+    const montoExcepcion = (e) =>
+        (e.componentesExtra || []).reduce((s, c) => s + (Number(c.cantidad) || 0) * (Number(c.precio) || 0), 0)
+        + (e.tareasExtra || []).reduce((s, tt) => s + (Number(tt.duracion) || 0) * (Number(tt.valorHora) || 0), 0);
+
+    const enviarExcepcion = async (idx) => {
+        const e = excepciones[idx];
+        if ((e.componentesExtra || []).length === 0 && (e.tareasExtra || []).length === 0) {
+            notificar.advertencia('Agrega al menos un material o una tarea extra antes de enviar.');
+            return;
+        }
+        setEnviandoExcepcion(idx);
+        try {
+            await actualizarOtGlobal(otSeleccionada._id, { excepciones }); // persiste lo editado antes de enviar
+            const respuesta = await axios.post(`${API}/mail/enviar-excepcion`, {
+                otId: otSeleccionada._id,
+                excepcionId: e._id,
+                emails: [datosRecibidos?.correo].filter(Boolean),
+                cliente: datosRecibidos?.solicitante || 'Cliente General',
+            });
+            if (respuesta.data.ok) {
+                notificar.exito('Extensión de cotización enviada.');
+                if (cargarDatos) await cargarDatos();
+            }
+        } catch (error) {
+            notificar.error('No se pudo enviar la excepción: ' + (error.response?.data?.error || error.message));
+        } finally {
+            setEnviandoExcepcion(null);
+        }
+    };
+
     const limpiarIds = (lista) => (lista || []).map(item => {
         const { _id, id: _omitido, ...resto } = item;
         return (String(_id).length === 24) ? { _id, ...resto } : resto;
@@ -441,7 +506,12 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
             ...datosRecibidos,
             solicitudId: datosRecibidos.solicitudId || datosRecibidos._id,
             numeroOT: otSeleccionada.numeroOT || datosRecibidos.numeroOT,
-            estado: estadoForzado || (['Pendiente', 'Tratada', 'Planificada', 'Programada', 'En Ejecución', 'Trabajo Terminado', 'Con Informe', 'Pagada'].includes(otSeleccionada?.estado) ? otSeleccionada.estado : 'Tratada'),
+            // 'Reprogramar' (el supervisor la marcó desde S3, PWA Operativa) no es un estado en
+            // el que la planificación se quede: guardar cambios acá (reasignar fechas de tareas)
+            // es justamente la acción que la resuelve, devolviendo la OT a 'Programada'. Sin este
+            // caso especial caía al else de abajo y la mandaba a 'Tratada', perdiendo el avance.
+            estado: estadoForzado || (otSeleccionada?.estado === 'Reprogramar' ? 'Programada'
+                : ['Pendiente', 'Tratada', 'Planificada', 'Programada', 'En Ejecución', 'Trabajo Terminado', 'Con Informe', 'Pagada'].includes(otSeleccionada?.estado) ? otSeleccionada.estado : 'Tratada'),
             tareas,
             componentes: limpiarIds(componentes),
             logistica: (logistica || []).map(l => ({
@@ -741,6 +811,7 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                     setOtSeleccionada(data);
                     setTareas(data.tareas || []);
                     setComponentes(data.componentes || []);
+                    setExcepciones(data.excepciones || []);
                     if (data.pago) setPago(data.pago);
                     if (data.informeEvaluacion) setInformeEvaluacion({ ...informeEvaluacionVacio, ...data.informeEvaluacion });
                     if (data.logistica?.length > 0) setLogistica(data.logistica);
@@ -1076,6 +1147,11 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                     <button onClick={() => puedeEjecucion && setTabActiva('reportes')} disabled={!puedeEjecucion} title={puedeEjecucion ? '' : 'Disponible una vez que la OT esté Programada'} style={{ ...(tabActiva === 'reportes' ? styles.tabActivo : styles.tab), opacity: puedeEjecucion ? 1 : .5 }}>
                         Ejecución {otSeleccionada.reportes?.length ? `(${otSeleccionada.reportes.length})` : ''}
                     </button>
+                    {excepciones.length > 0 && (
+                        <button onClick={() => setTabActiva('excepciones')} style={tabActiva === 'excepciones' ? styles.tabActivo : styles.tab}>
+                            Excepciones{excepcionesBorrador.length ? ` (${excepcionesBorrador.length})` : ''}
+                        </button>
+                    )}
                     <button onClick={() => setTabActiva('pago')} style={tabActiva === 'pago' ? styles.tabActivo : styles.tab}>Pago</button>
                     <button onClick={() => setTabActiva('documentos')} style={tabActiva === 'documentos' ? styles.tabActivo : styles.tab}>Documentos de terreno</button>
                 </div>
@@ -1646,6 +1722,81 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                             ) : (
                                 <div style={{ textAlign: 'center', padding: 40, color: t.textoAtenuado3, fontSize: 12.5 }}>Sin reportes fotográficos aún. Aparecerán cuando el supervisor suba evidencias desde terreno.</div>
                             )}
+                        </div>
+                    )}
+
+                    {/* EXCEPCIONES — "extensión de cotización" (ver models/OT.js §7). El supervisor
+                        las crea en Borrador desde S3 (PWA Operativa); acá se completan con precios
+                        y se envían al cliente. */}
+                    {tabActiva === 'excepciones' && (
+                        <div style={{ padding: '16px 16px 24px', display: 'flex', flexDirection: 'column', gap: 20 }}>
+                            {excepciones.map((e, idx) => {
+                                const esBorrador = e.estado === 'Borrador';
+                                const monto = montoExcepcion(e);
+                                return (
+                                    <div key={e._id || idx} style={{ border: `1px solid ${t.bordeZona}`, borderRadius: 3, overflow: 'hidden' }}>
+                                        <div style={{ padding: '10px 14px', background: t.encabezadoTabla, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                            <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: esBorrador ? t.rojo : t.textoAtenuado1 }}>
+                                                {e.estado} · {e.fecha ? new Date(e.fecha).toLocaleDateString('es-CL') : ''} {e.creadoPor ? `· ${e.creadoPor}` : ''}
+                                            </span>
+                                            <span style={{ fontFamily: t.fontMono, fontSize: 12.5, fontWeight: 700 }}>{CLP(monto)}</span>
+                                        </div>
+                                        <div style={{ padding: '10px 14px' }}>
+                                            <div style={{ fontSize: 12.5, color: t.textoSecundario1, marginBottom: e.foto ? 8 : 0 }}>{e.descripcion}</div>
+                                            {e.foto && <img src={e.foto} alt="Evidencia" style={{ maxWidth: 180, borderRadius: 2, border: `1px solid ${t.bordeZona}` }} />}
+                                            {!esBorrador && e.motivoRechazo && (
+                                                <div style={{ marginTop: 8, fontSize: 12, color: t.rojo }}>Motivo de rechazo: {e.motivoRechazo}</div>
+                                            )}
+                                        </div>
+
+                                        {esBorrador ? (
+                                            <>
+                                                <div style={{ padding: '0 14px 6px' }}>
+                                                    <div style={styles.tituloSub}>Materiales/equipos extra</div>
+                                                    {(e.componentesExtra || []).map((c, j) => (
+                                                        <div key={c.id || c._id || j} style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 6 }}>
+                                                            <input className="campo-ed" style={{ ...styles.inputCelda, flex: '0 0 90px' }} placeholder="Tipo" value={c.tipo || ''} onChange={ev => actualizarComponenteExtra(idx, j, 'tipo', ev.target.value)} />
+                                                            <input className="campo-ed" style={{ ...styles.inputCelda, flex: '0 0 90px' }} placeholder="Código" value={c.codigo || ''} onChange={ev => actualizarComponenteExtra(idx, j, 'codigo', ev.target.value)} />
+                                                            <input list="lista-componentes-recursos" className="campo-ed" style={{ ...styles.inputCelda, flex: 1 }} placeholder="Descripción" value={c.descripcion || ''} onChange={ev => actualizarComponenteExtra(idx, j, 'descripcion', ev.target.value)} />
+                                                            <input type="number" className="campo-ed" style={{ ...styles.inputCelda, flex: '0 0 64px', textAlign: 'right' }} placeholder="Cant." value={c.cantidad} onChange={ev => actualizarComponenteExtra(idx, j, 'cantidad', ev.target.value)} />
+                                                            <input type="number" className="campo-ed" style={{ ...styles.inputCelda, flex: '0 0 90px', textAlign: 'right' }} placeholder="Precio" value={c.precio} onChange={ev => actualizarComponenteExtra(idx, j, 'precio', ev.target.value)} />
+                                                            <span style={{ ...styles.celdaSubtotal, flex: '0 0 90px' }}>{CLP((Number(c.cantidad) || 0) * (Number(c.precio) || 0))}</span>
+                                                            <span onClick={() => eliminarComponenteExtra(idx, j)} style={styles.xFila}>×</span>
+                                                        </div>
+                                                    ))}
+                                                    <button onClick={() => agregarComponenteExtra(idx)} style={styles.btnAgregar}>Agregar material/equipo</button>
+                                                </div>
+
+                                                <div style={{ padding: '10px 14px 6px' }}>
+                                                    <div style={styles.tituloSub}>Horas extra</div>
+                                                    {(e.tareasExtra || []).map((tt, j) => (
+                                                        <div key={tt.id || tt._id || j} style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 6 }}>
+                                                            <input className="campo-ed" style={{ ...styles.inputCelda, flex: 1 }} placeholder="Descripción" value={tt.descripcion || ''} onChange={ev => actualizarTareaExtra(idx, j, 'descripcion', ev.target.value)} />
+                                                            <select className="campo-ed" style={{ ...styles.inputCelda, flex: '0 0 130px' }} value={tt.puesto || ''} onChange={ev => actualizarTareaExtra(idx, j, 'puesto', ev.target.value)}>
+                                                                <option value="">Puesto —</option>
+                                                                {puestosDB.map(p => <option key={p._id} value={p.nombre}>{p.nombre}</option>)}
+                                                            </select>
+                                                            <input type="number" className="campo-ed" style={{ ...styles.inputCelda, flex: '0 0 64px', textAlign: 'right' }} placeholder="Hrs" value={tt.duracion} onChange={ev => actualizarTareaExtra(idx, j, 'duracion', ev.target.value)} />
+                                                            <input type="number" className="campo-ed" style={{ ...styles.inputCelda, flex: '0 0 90px', textAlign: 'right' }} placeholder="$/hora" value={tt.valorHora} onChange={ev => actualizarTareaExtra(idx, j, 'valorHora', ev.target.value)} />
+                                                            <span style={{ ...styles.celdaSubtotal, flex: '0 0 90px' }}>{CLP((Number(tt.duracion) || 0) * (Number(tt.valorHora) || 0))}</span>
+                                                            <span onClick={() => eliminarTareaExtra(idx, j)} style={styles.xFila}>×</span>
+                                                        </div>
+                                                    ))}
+                                                    <button onClick={() => agregarTareaExtra(idx)} style={styles.btnAgregar}>Agregar horas extra</button>
+                                                </div>
+
+                                                <div style={{ ...styles.continuarWrap, justifyContent: 'flex-start' }}>
+                                                    <button
+                                                        onClick={() => enviarExcepcion(idx)}
+                                                        disabled={enviandoExcepcion === idx}
+                                                        style={styles.btnPrimario}
+                                                    >{enviandoExcepcion === idx ? 'Enviando…' : 'Enviar al cliente'}</button>
+                                                </div>
+                                            </>
+                                        ) : null}
+                                    </div>
+                                );
+                            })}
                         </div>
                     )}
 
