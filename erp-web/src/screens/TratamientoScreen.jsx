@@ -1191,21 +1191,19 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
     // esto, se podía completar todo en memoria y saltar directo a la pestaña 4 sin haber
     // confirmado el paso, dejando la OT igual en 'Tratada'.
     const planificacionTerminada = !['Pendiente', 'Tratada'].includes(otSeleccionada?.estado);
-    // Congelar Tareas/Equipos/Suministros una vez terminada la planificación: de lo contrario
-    // se podía seguir editando después de "Terminar planificación" sin que quedara ningún
-    // rastro de que el plan cambió respecto al que se cotizó. 'Reprogramar' es una excepción
-    // — es justo el estado en el que el planificador necesita volver a Tareas a reasignar
-    // fechas (ver aplicarAccionOT accion:'reprogramar' y GanttScreen.confirmarCapacidad).
+    // Congelar Tareas/Equipos/Suministros una vez terminada la planificación: "Terminar
+    // planificación" (puedeTerminarPlanificacion, arriba) ya exige tareas completas y equipos
+    // con costo antes de habilitarse, así que al llegar acá los datos YA estaban completos por
+    // definición — no hace falta seguir revisando en vivo si siguen completos para decidir el
+    // freeze (eso volvía el freeze reactivo a cada tecleo y se activaba a mitad de una edición,
+    // ver historial de este archivo). Regla simple y estable: solo el estado. 'Reprogramar' es
+    // la excepción — es justo el estado en el que el planificador necesita volver a Tareas a
+    // reasignar fechas (ver aplicarAccionOT accion:'reprogramar' y GanttScreen.confirmarCapacidad).
     //
-    // La otra excepción, y la importante: si todavía queda algo sin resolver (tareas
-    // incompletas, un equipo/herramienta sin costo, o capacidad sin confirmar en el Gantt —
-    // ver bloqueoCotizacion más abajo), NO se congela, aunque el estado ya sea 'Planificada'.
-    // Antes esto se decidía solo por estado, y una OT vieja con un ítem en $0 de antes de que
-    // existiera esta validación quedaba en un callejón sin salida: la pestaña Cotización
-    // mandaba a "Ir a Equipos y materiales" a corregir el precio, pero esa pestaña ya estaba
-    // congelada — no había forma de arreglarlo.
-    const otListaParaEnviar = todasTareasCompletas && equiposHerramientasConCosto && !!otSeleccionada.cotizacion?.capacidadVerificada;
-    const soloLecturaPlanificacion = planificacionTerminada && otListaParaEnviar && otSeleccionada?.estado !== 'Reprogramar';
+    // Una OT vieja con datos incompletos de antes de que existiera esta validación (no puede
+    // volver a pasar con una OT nueva) se corrige reprogramándola desde la PWA del supervisor,
+    // no reabriendo el freeze automáticamente.
+    const soloLecturaPlanificacion = planificacionTerminada && otSeleccionada?.estado !== 'Reprogramar';
 
     // Único condicionante bloqueante de la pestaña Cotización, en el orden en que se resuelven
     // (tareas -> costos -> terminar planificación -> programar). Se muestra solo ese recuadro,
