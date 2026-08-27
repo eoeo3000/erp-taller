@@ -1656,7 +1656,7 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                             <div style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, padding: '10px 14px', background: '#fbeceb', border: `1px solid ${t.rojo}`, borderRadius: 2 }}>
                                 <span style={{ fontSize: 12, color: t.textoPrincipal }}>Requiere programar la OT: falta verificar capacidad y fijar las fechas antes de poder enviar la cotización.</span>
                                 <button
-                                    onClick={() => navigate('/gantt', { state: { _volverAOT: otSeleccionada._id, _volverATab: 'cotizacion' } })}
+                                    onClick={() => navigate('/gantt', { state: { _volverAOT: otSeleccionada._id } })}
                                     style={{ ...styles.btnPrimario, flex: 'none' }}
                                 >Ir a Programación</button>
                             </div>
