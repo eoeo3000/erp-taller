@@ -522,6 +522,12 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
             })),
             informeEvaluacion,
             granTotal,
+            // Cualquier guardado de tareas/componentes/logística invalida una capacidad ya
+            // confirmada (GanttScreen.confirmarCapacidad): el plan que se verificó pudo cambiar
+            // (fechas, horas, ítems) y "Enviar cotización" solo mira este booleano, no vuelve a
+            // sumar horas — sin este reset, una OT con capacidadVerificada=true de antes seguía
+            // dejando enviar/programar aunque ahora sus tareas quedaran en 0 horas o sin fecha.
+            cotizacion: { ...(otSeleccionada?.cotizacion || datosRecibidos?.cotizacion || {}), capacidadVerificada: false },
         };
         try {
             const respuesta = await actualizarOtGlobal(datosRecibidos._id, dataCompleta);
