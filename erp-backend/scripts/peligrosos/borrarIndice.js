@@ -1,8 +1,11 @@
 require('dotenv').config();
 const mongoose = require('mongoose');
+const { confirmarDestructivo } = require('./_confirmar');
 
 async function borrarIndiceCorrupto() {
     try {
+        await confirmarDestructivo('Elimina el índice "patente_1" de la colección "suministros".');
+
         await mongoose.connect(process.env.MONGO_URI);
         const db = mongoose.connection.db;
 

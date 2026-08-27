@@ -1,8 +1,11 @@
 require('dotenv').config();
 const mongoose = require('mongoose');
+const { confirmarDestructivo } = require('./_confirmar');
 
 async function limpiezaSuministros() {
     try {
+        await confirmarDestructivo('Vacía por completo (deleteMany) la colección "suministros".');
+
         console.log("⏳ Conectando para limpieza de suministros...");
         // Asegúrate de que tu .env tenga MONGO_URI
         await mongoose.connect(process.env.MONGO_URI);

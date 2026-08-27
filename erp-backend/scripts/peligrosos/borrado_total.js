@@ -1,8 +1,11 @@
 require('dotenv').config();
 const mongoose = require('mongoose');
+const { confirmarDestructivo } = require('./_confirmar');
 
 async function bombaDeLimpieza() {
     try {
+        await confirmarDestructivo('Elimina por completo (drop) toda colección cuyo nombre contenga "solicitud" u "ot".');
+
         await mongoose.connect(process.env.MONGO_URI);
         const db = mongoose.connection.db;
 

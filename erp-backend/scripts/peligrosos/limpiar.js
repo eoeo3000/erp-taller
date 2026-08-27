@@ -1,8 +1,11 @@
 require('dotenv').config();
 const mongoose = require('mongoose');
+const { confirmarDestructivo } = require('./_confirmar');
 
 async function limpiezaAtomica() {
     try {
+        await confirmarDestructivo('Vacía por completo (deleteMany) las colecciones "solicitudes"/"solicituds" y "ots".');
+
         console.log("⏳ Conectando para limpieza profunda...");
         await mongoose.connect(process.env.MONGO_URI);
         const db = mongoose.connection.db;
