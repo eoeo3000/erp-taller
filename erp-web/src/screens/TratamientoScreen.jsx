@@ -1107,13 +1107,20 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
     const info = etapaInfo(otSeleccionada);
     const puedeEjecucion = ['Programada', 'En Ejecución', 'Trabajo Terminado', 'Con Informe', 'Pagada'].includes(otSeleccionada.estado);
     const habilitadoTabs14 = informeEvaluacion.completo || yaTeniaContenidoPrevio;
-    // Sin al menos una tarea con horas reales no hay nada que cotizar — mismo criterio que ya
-    // exige GanttScreen.confirmarCapacidad más adelante, pero acá se corta antes: no tiene
-    // sentido terminar la planificación ni entrar a Cotización con $0 de mano de obra.
-    const tieneTareasConHoras = tareas.some(tt => Number(tt.duracion) > 0);
+    // Campos que hacen a una tarea "cotizable": descripción, puesto, al menos un responsable,
+    // horas, fecha, hora de inicio y $/hora — todo lo que la fila de Tareas deja editar, salvo
+    // "desarrollo" (ese queda como advertencia suave aparte, con su propio punto rojo en la
+    // fila — decisión ya tomada, no se vuelve obligatorio acá).
+    const tareaCompleta = (tt) => !!(
+        (tt.descripcion || '').trim() && (tt.puesto || '').trim() && (tt.operarioId || []).length > 0
+        && Number(tt.duracion) > 0 && (tt.fecha || '').trim() && (tt.hora || '').trim() && Number(tt.valorHora) > 0
+    );
+    // Todas, no solo alguna: una tarea a medio llenar da un total y una fecha de Gantt
+    // equivocados, aunque otra tarea de la misma OT sí esté completa.
+    const todasTareasCompletas = tareas.length > 0 && tareas.every(tareaCompleta);
     // "Terminar planificación" (no las pestañas 1-3, que quedan libres para ir armando) es lo
-    // que bloquea una observación abierta sobre el informe inicial y la falta de tareas con horas.
-    const puedeTerminarPlanificacion = informeEvaluacion.revision?.estado !== 'ConObservaciones' && tieneTareasConHoras;
+    // que bloquea una observación abierta sobre el informe inicial y las tareas incompletas.
+    const puedeTerminarPlanificacion = informeEvaluacion.revision?.estado !== 'ConObservaciones' && todasTareasCompletas;
 
     return (
         <div style={styles.raiz}>
@@ -1156,9 +1163,9 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                     <button onClick={() => irATab('Logistica')} disabled={!habilitadoTabs14} title={habilitadoTabs14 ? '' : 'Completa el Informe Inicial primero'} style={{ ...(tabActiva === 'Logistica' ? styles.tabActivo : styles.tab), opacity: habilitadoTabs14 ? 1 : .5 }}>3 · Suministros directos</button>
                     <button
                         onClick={() => irATab('cotizacion')}
-                        disabled={!habilitadoTabs14 || !tieneTareasConHoras}
-                        title={!habilitadoTabs14 ? 'Completa el Informe Inicial primero' : !tieneTareasConHoras ? 'Agrega al menos una tarea con horas en la pestaña Tareas' : ''}
-                        style={{ ...(tabActiva === 'cotizacion' ? styles.tabActivo : styles.tab), opacity: (habilitadoTabs14 && tieneTareasConHoras) ? 1 : .5 }}
+                        disabled={!habilitadoTabs14 || !todasTareasCompletas}
+                        title={!habilitadoTabs14 ? 'Completa el Informe Inicial primero' : !todasTareasCompletas ? 'Completa descripción, puesto, responsable, horas, fecha, hora y $/hora de todas las tareas' : ''}
+                        style={{ ...(tabActiva === 'cotizacion' ? styles.tabActivo : styles.tab), opacity: (habilitadoTabs14 && todasTareasCompletas) ? 1 : .5 }}
                     >4 · Cotización</button>
                     <button onClick={() => puedeEjecucion && setTabActiva('reportes')} disabled={!puedeEjecucion} title={puedeEjecucion ? '' : 'Disponible una vez que la OT esté Programada'} style={{ ...(tabActiva === 'reportes' ? styles.tabActivo : styles.tab), opacity: puedeEjecucion ? 1 : .5 }}>
                         Ejecución {otSeleccionada.reportes?.length ? `(${otSeleccionada.reportes.length})` : ''}
@@ -1528,14 +1535,14 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                                 <button onClick={agregarLogistica} style={styles.btnAgregar}>Agregar suministro</button>
                             </div>
                             <div style={{ ...styles.continuarWrap, justifyContent: 'space-between' }}>
-                                {tieneTareasConHoras
+                                {todasTareasCompletas
                                     ? <span style={{ fontSize: 11.5, color: t.verde, fontWeight: 600 }}>Tareas, equipos y suministros definidos</span>
-                                    : <span style={{ fontSize: 11.5, color: t.rojo, fontWeight: 600 }}>Agrega al menos una tarea con horas antes de terminar</span>}
+                                    : <span style={{ fontSize: 11.5, color: t.rojo, fontWeight: 600 }}>Completa descripción, puesto, responsable, horas, fecha, hora y $/hora de todas las tareas</span>}
                                 <button
                                     onClick={() => guardarPlanificacion('Planificada')}
                                     disabled={!puedeTerminarPlanificacion}
                                     title={
-                                        !tieneTareasConHoras ? 'Agrega al menos una tarea con horas en la pestaña Tareas'
+                                        !todasTareasCompletas ? 'Completa descripción, puesto, responsable, horas, fecha, hora y $/hora de todas las tareas'
                                             : informeEvaluacion.revision?.estado === 'ConObservaciones' ? 'El informe inicial tiene observaciones sin resolver'
                                                 : ''
                                     }
