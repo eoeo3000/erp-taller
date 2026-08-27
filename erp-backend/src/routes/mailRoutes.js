@@ -7,24 +7,29 @@ const getOT = require('../models/OT');
 const getSolicitud = require('../models/Solicitud');
 const { PWA_CLIENTE_URL } = require('../config/urls');
 
+// Link autenticado al portal del cliente (PWA), con una SesionPortal emitida acá mismo para
+// el teléfono de la Solicitud vinculada a la OT — reemplaza los botones viejos de Aceptar/
+// Rechazar directos (sin auth, y con URL_BASE hardcodeada a localhost, ver historial de este
+// archivo). Compartido por /enviar-cotizacion, /enviar-excepcion y /link-cotizacion (este
+// último para mandar el mismo link por WhatsApp u otro canal en vez de correo).
+async function resolverLinkPortal(req, otId) {
+    const OT = getOT(req.db);
+    const Solicitud = getSolicitud(req.db);
+    const ot = await OT.findById(otId).lean();
+    const solicitud = ot ? await Solicitud.findById(ot.solicitudId || ot._id).lean() : null;
+    if (!solicitud?.numero) return { link: null, telefono: null };
+    const token = await portalController.emitirSesionParaTelefono(req.db, solicitud.numero, solicitud.empresaSolicitante);
+    return { link: token ? `${PWA_CLIENTE_URL}/?token=${token}&entorno=${req.entorno}` : null, telefono: solicitud.numero };
+}
+
 router.post('/enviar-cotizacion', async (req, res) => {
     const { emails, otId, cliente, total, pdfData, tareas = [] } = req.body;
 
-    // Link al portal del cliente (PWA), autenticado con una SesionPortal emitida acá mismo
-    // para el teléfono de la Solicitud vinculada a esta OT — reemplaza los botones viejos de
-    // Aceptar/Rechazar directos (sin auth, y con URL_BASE hardcodeada a localhost, ver
-    // historial de este archivo). Si no se puede resolver el teléfono, se degrada a un aviso
-    // sin romper el envío del correo/PDF.
+    // Si no se puede resolver el teléfono, se degrada a un aviso sin romper el envío del
+    // correo/PDF.
     let linkPortal = null;
     try {
-        const OT = getOT(req.db);
-        const Solicitud = getSolicitud(req.db);
-        const ot = await OT.findById(otId).lean();
-        const solicitud = ot ? await Solicitud.findById(ot.solicitudId || ot._id).lean() : null;
-        if (solicitud?.numero) {
-            const token = await portalController.emitirSesionParaTelefono(req.db, solicitud.numero, solicitud.empresaSolicitante);
-            if (token) linkPortal = `${PWA_CLIENTE_URL}/?token=${token}&entorno=${req.entorno}`;
-        }
+        ({ link: linkPortal } = await resolverLinkPortal(req, otId));
     } catch (eToken) {
         console.warn('[enviar-cotizacion] no se pudo emitir el link del portal:', eToken.message);
     }
@@ -139,15 +144,10 @@ router.post('/enviar-excepcion', async (req, res) => {
         ot.subEstado = '';
         await ot.save();
 
-        // Mismo link autenticado que /enviar-cotizacion — ver ese endpoint para el detalle.
+        // Mismo link autenticado que /enviar-cotizacion — ver resolverLinkPortal arriba.
         let linkPortal = null;
         try {
-            const Solicitud = getSolicitud(req.db);
-            const solicitud = await Solicitud.findById(ot.solicitudId || ot._id).lean();
-            if (solicitud?.numero) {
-                const token = await portalController.emitirSesionParaTelefono(req.db, solicitud.numero, solicitud.empresaSolicitante);
-                if (token) linkPortal = `${PWA_CLIENTE_URL}/?token=${token}&entorno=${req.entorno}`;
-            }
+            ({ link: linkPortal } = await resolverLinkPortal(req, otId));
         } catch (eToken) {
             console.warn('[enviar-excepcion] no se pudo emitir el link del portal:', eToken.message);
         }
@@ -192,6 +192,27 @@ router.post('/enviar-excepcion', async (req, res) => {
         res.status(200).json({ ok: true, message: 'Enviado con éxito' });
     } catch (error) {
         console.error('[enviar-excepcion] Error:', error);
+        res.status(500).json({ ok: false, error: error.message });
+    }
+});
+
+// POST /link-cotizacion — mismo link autenticado de /enviar-cotizacion, pero sin mandar
+// correo: el planificador lo comparte por WhatsApp u otro canal en vez de (o además de)
+// email. TratamientoScreen.jsx marca la cotización como enviada por su cuenta después de
+// abrir el link, igual que ya hace tras el envío por correo.
+router.post('/link-cotizacion', async (req, res) => {
+    const { otId } = req.body;
+    try {
+        const { link, telefono } = await resolverLinkPortal(req, otId);
+        if (!link) {
+            return res.status(400).json({
+                ok: false,
+                error: telefono ? 'No se pudo generar el link de acceso.' : 'Esta OT no tiene un teléfono de contacto registrado en la Solicitud.',
+            });
+        }
+        res.json({ ok: true, link, telefono });
+    } catch (error) {
+        console.error('[link-cotizacion] Error:', error);
         res.status(500).json({ ok: false, error: error.message });
     }
 });
