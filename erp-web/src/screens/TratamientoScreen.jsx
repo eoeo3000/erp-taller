@@ -6,41 +6,22 @@ import autoTable from 'jspdf-autotable';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import { notificar, confirmar } from '../utils/notificar';
+import { t, styles, fmtFecha, CLP } from './tratamiento/comunTratamiento';
+import TabAntecedentes from './tratamiento/TabAntecedentes';
+import TabDocumentosPdf from './tratamiento/TabDocumentosPdf';
+import TabTareas from './tratamiento/TabTareas';
+import TabEquiposMateriales from './tratamiento/TabEquiposMateriales';
+import TabSuministrosDirectos from './tratamiento/TabSuministrosDirectos';
+import TabPago from './tratamiento/TabPago';
 
 // Paso 4 del rediseño (ver docs/rediseno/design_handoff_panel_control/README.md §6):
 // pipeline + 7 tabs (se agrega "0 · Informe Inicial", que no estaba en el mock, ver resumen
 // entregado al usuario) + tablas editables + panel de resumen. Mismos tokens que el resto (§2).
 // Sin emoji, sin clases de Bootstrap (había varias reales en el archivo anterior: mb-4, p-3,
 // border-start, bg-light, text-primary, text-muted — se retiran todas).
-
-const t = {
-    fondoMain: '#f6f5f2',
-    superficie: '#ffffff',
-    textoPrincipal: '#1a1a18',
-    textoSecundario1: '#3a3a35',
-    textoSecundario2: '#4a4a44',
-    textoSecundario3: '#57564f',
-    textoAtenuado1: '#6b6a63',
-    textoAtenuado2: '#75746e',
-    textoAtenuado3: '#8a8981',
-    textoDeshabilitado: '#a3a29a',
-    encabezadoTabla: '#e4e2dc',
-    barraContexto: '#e9e7e2',
-    barraFiltrosPie: '#f0efeb',
-    hairlineFila: 'rgba(0,0,0,.06)',
-    hairlineBloque: 'rgba(0,0,0,.10)',
-    bordeZona: 'rgba(0,0,0,.12)',
-    bordeInput: 'rgba(0,0,0,.18)',
-    acento: 'oklch(0.48 0.10 250)',
-    acentoHover: 'oklch(0.40 0.10 250)',
-    verde: 'oklch(0.48 0.10 155)',
-    ambar: 'oklch(0.55 0.11 65)',
-    rojo: 'oklch(0.52 0.13 25)',
-    fontUi: '"Helvetica Neue", Helvetica, Arial, sans-serif',
-    fontMono: 'ui-monospace, Menlo, monospace',
-};
-
-const CLP = n => '$ ' + Math.round(n || 0).toLocaleString('es-CL');
+// Tokens de estilo (`t`, `styles`) y `fmtFecha` viven en ./tratamiento/comunTratamiento —
+// compartidos con las pestañas ya extraídas a archivo propio (TabAntecedentes,
+// TabDocumentosPdf), ver plan de robustecimiento, punto 6.
 
 const ETAPAS_VISUAL = ['Solicitud', 'Tratamiento', 'Planificada', 'Programada', 'Ejecución', 'Terminado', 'Con informe', 'Pagada'];
 const MAPA_ETAPA = {
@@ -65,33 +46,6 @@ const informeEvaluacionVacio = {
     tareas: [], componentes: [], logistica: [], hallazgos: [],
     revision: { estado: 'Pendiente', comentario: '', fecha: null, autor: '' },
 };
-
-// Grillas fijas de cada tabla editable (README §6). Las de materiales/suministros suman una
-// columna de disponibilidad/OC que el mock no contemplaba (ver Gap 2b/2c, funcionalidades-v2.md).
-const GRID_TAREAS = 'minmax(200px,1fr) 160px 118px 132px 52px 68px 62px 84px 96px 40px';
-// Ancho mínimo real de una fila de GRID_TAREAS (suma de columnas fijas + mínimo de la 1ra +
-// gaps + padding lateral). Un div display:grid en flujo normal no crece más allá del ancho
-// disponible solo porque sus tracks lo exijan — el excedente queda como "ink overflow"
-// (se puede scrollear porque el ancestro overflow-x:auto lo mide, pero el fondo de color de
-// la propia fila no llega a pintarlo). Fijar minWidth explícito en header y filas es lo que
-// hace que el fondo sí cubra todo el ancho scrolleable.
-const GRID_TAREAS_MIN_W = 200 + 160 + 118 + 132 + 52 + 68 + 62 + 84 + 96 + 40 + 9 * 8 + 32;
-
-// Mejora "Metodología por tarea": la fila edita solo la primera línea de desarrollo; el
-// resto del texto (parágrafos siguientes, escritos desde el panel expandido) se conserva.
-const primeraLinea = (texto) => (texto || '').split('\n')[0];
-const conPrimeraLineaReemplazada = (texto, nuevaPrimera) => {
-    const resto = (texto || '').split('\n').slice(1).join('\n');
-    return resto ? `${nuevaPrimera}\n${resto}` : nuevaPrimera;
-};
-const GRID_MATERIALES = '104px 128px minmax(200px,1fr) 62px 96px 100px 100px 24px';
-const GRID_LOGISTICA = '96px 96px minmax(200px,1fr) 62px 96px 100px 140px 24px';
-// Mismo problema y mismo fix que GRID_TAREAS_MIN_W: sin minWidth explícito, el fondo de
-// header/filas no cubre las columnas que quedan fuera del ancho disponible.
-const GRID_MATERIALES_MIN_W = 104 + 128 + 200 + 62 + 96 + 100 + 100 + 24 + 7 * 8 + 32;
-const GRID_LOGISTICA_MIN_W = 96 + 96 + 200 + 62 + 96 + 100 + 140 + 24 + 7 * 8 + 32;
-
-const fmtFecha = (iso) => iso ? new Date(iso).toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—';
 
 // Mismo criterio y mismo límite que otController.cotizacionVencida/GanttScreen.cotizacionVencida
 // — duplicado acá porque no hay forma de compartir código entre el backend y el frontend, y
@@ -121,257 +75,6 @@ const calcularHoraFin = (horaInicio, duracionHoras) => {
     return `${hh}:${mm}`;
 };
 
-const filaAnte = { display: 'grid', gridTemplateColumns: '132px 1fr', gap: 8, padding: '7px 0', borderBottom: `1px solid ${t.hairlineFila}` };
-const etiquetaAnte = { fontSize: '11px', color: t.textoAtenuado2 };
-const valorAnte = { fontSize: '11.5px', color: t.textoPrincipal };
-const controlAnte = { height: 26, border: '1px solid rgba(0,0,0,.22)', borderRadius: 2, padding: '0 8px', fontSize: '11.5px', fontFamily: t.fontUi, width: '100%', boxSizing: 'border-box', background: '#fff' };
-
-function FilaAntecedente({ etiqueta, valor, negrita }) {
-    return (
-        <div style={filaAnte}>
-            <span style={etiquetaAnte}>{etiqueta}</span>
-            <span style={{ ...valorAnte, fontWeight: negrita ? 600 : 400 }}>{valor ?? '—'}</span>
-        </div>
-    );
-}
-
-// Pestaña Antecedentes: solicitud de origen (solo lectura) + asignación de la OT (editable),
-// incluida la asignación del supervisor a cargo — independiente del responsable de cada
-// tarea (tareas[].operarioNombre). Ver docs/rediseno/design_handoff_panel_control.
-function TabAntecedentes({ cargando, antecedentes, form, onCampo, onGuardar, guardando, aviso, soloLectura }) {
-    if (cargando || !antecedentes) {
-        return (
-            <div style={{ padding: 16 }}>
-                {[1, 2, 3].map(i => (
-                    <div key={i} style={{ height: 26, background: '#eeece7', borderRadius: 2, marginBottom: 10, maxWidth: 420 }} />
-                ))}
-            </div>
-        );
-    }
-
-    const { solicitud, ot, candidatos } = antecedentes;
-    const PRIORIDADES = ['Baja', 'Normal', 'Urgente'];
-
-    return (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(300px,100%), 1fr))' }}>
-            {/* Columna izquierda — Solicitud de origen (solo lectura) */}
-            <div style={{ padding: 16, borderRight: `1px solid rgba(0,0,0,.08)` }}>
-                <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 8 }}>
-                    <span style={{ fontSize: '12px', fontWeight: 700, color: t.textoPrincipal }}>Solicitud de origen</span>
-                    <span style={{ fontFamily: t.fontMono, fontSize: '11px', color: t.textoAtenuado1 }}>{solicitud.numero || '—'}</span>
-                </div>
-
-                <FilaAntecedente etiqueta="Empresa solicitante" valor={solicitud.empresa} negrita />
-                <FilaAntecedente etiqueta="Solicitante" valor={solicitud.solicitante} />
-                <FilaAntecedente etiqueta="Teléfono" valor={solicitud.telefono} />
-                <FilaAntecedente etiqueta="Fecha de solicitud" valor={fmtFecha(solicitud.fechaSolicitud)} />
-                <FilaAntecedente etiqueta="Origen" valor={solicitud.origen} />
-                <FilaAntecedente etiqueta="Faena / dirección" valor={solicitud.direccion} />
-                <FilaAntecedente etiqueta="Ejecución solicitada" valor={fmtFecha(solicitud.fechaEjecucionSolicitada)} />
-                <div style={{ ...filaAnte, borderBottom: 'none' }}>
-                    <span style={etiquetaAnte}>Adjuntos</span>
-                    {solicitud.adjuntos?.length ? (
-                        <span style={valorAnte}>
-                            {solicitud.adjuntos.map((a, i) => (
-                                <a key={i} href={a} target="_blank" rel="noreferrer" style={{ color: t.acento, textDecoration: 'none' }}>
-                                    {a.split('/').pop()}
-                                </a>
-                            ))}
-                        </span>
-                    ) : <span style={{ ...valorAnte, color: t.textoDeshabilitado }}>Sin adjuntos</span>}
-                </div>
-
-                <div style={{ marginTop: 12, background: '#f7f6f2', border: '1px solid rgba(0,0,0,.08)', borderRadius: 2, padding: 10 }}>
-                    <div style={{ fontSize: '10.5px', fontWeight: 700, color: t.textoAtenuado2, marginBottom: 4 }}>Descripción del cliente</div>
-                    <div style={{ fontSize: '11.5px', color: t.textoPrincipal, lineHeight: 1.55 }}>{solicitud.descripcion || '—'}</div>
-                </div>
-            </div>
-
-            {/* Columna derecha — Datos de la orden de trabajo (editable) */}
-            <div style={{ padding: 16 }}>
-                <div style={{ fontSize: '12px', fontWeight: 700, color: t.textoPrincipal, marginBottom: 10 }}>Datos de la orden de trabajo</div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '132px 1fr', gap: '10px 12px', alignItems: 'center' }}>
-                    <span style={etiquetaAnte}>N° de OT</span>
-                    <span style={{ ...valorAnte, fontFamily: t.fontMono }}>{ot.numero || 'Se asigna al guardar'}</span>
-
-                    <span style={etiquetaAnte}>Fecha de creación</span>
-                    <span style={{ ...valorAnte, fontFamily: t.fontMono }}>{fmtFecha(ot.fechaCreacion)}</span>
-
-                    <span style={etiquetaAnte}>Supervisor a cargo</span>
-                    <select
-                        style={controlAnte} disabled={soloLectura}
-                        value={form.supervisorId} onChange={e => onCampo('supervisorId', e.target.value)}
-                    >
-                        <option value="">Sin asignar</option>
-                        {candidatos.map(c => <option key={c.id} value={c.id}>{c.nombre} · {c.puesto}</option>)}
-                    </select>
-
-                    <span style={etiquetaAnte}>Fecha de ejecución</span>
-                    <input
-                        style={{ ...controlAnte, fontFamily: t.fontMono }} disabled={soloLectura}
-                        placeholder="dd-mm-aaaa" value={form.fechaEjecucion}
-                        onChange={e => onCampo('fechaEjecucion', e.target.value)}
-                    />
-
-                    <span style={etiquetaAnte}>Orden de compra</span>
-                    <input
-                        style={controlAnte} disabled={soloLectura}
-                        placeholder="Sin OC del cliente" value={form.ordenCompra}
-                        onChange={e => onCampo('ordenCompra', e.target.value)}
-                    />
-
-                    <span style={etiquetaAnte}>Prioridad</span>
-                    <div style={{ display: 'flex', gap: 4 }}>
-                        {PRIORIDADES.map(p => (
-                            <button
-                                key={p} type="button" disabled={soloLectura}
-                                onClick={() => onCampo('prioridad', p)}
-                                style={{
-                                    flex: 1, height: 26, border: '1px solid rgba(0,0,0,.22)', borderRadius: 2,
-                                    background: form.prioridad === p ? '#1c1d1b' : '#fff',
-                                    color: form.prioridad === p ? '#fff' : t.textoPrincipal,
-                                    fontWeight: form.prioridad === p ? 700 : 400, fontSize: '11px', cursor: soloLectura ? 'default' : 'pointer',
-                                }}
-                            >
-                                {p}
-                            </button>
-                        ))}
-                    </div>
-
-                    <span style={{ ...etiquetaAnte, alignSelf: 'start', marginTop: 4 }}>Instrucciones</span>
-                    <textarea
-                        style={{ ...controlAnte, height: 'auto', minHeight: 58, padding: 8, resize: 'vertical' }} disabled={soloLectura}
-                        placeholder="Indicaciones para el supervisor en terreno"
-                        value={form.instruccionesTerreno}
-                        onChange={e => onCampo('instruccionesTerreno', e.target.value)}
-                    />
-                </div>
-
-                {!soloLectura && (
-                    <div style={{ marginTop: 14, display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <button
-                            onClick={onGuardar} disabled={guardando}
-                            style={{
-                                height: 28, padding: '0 14px', background: t.acento, color: '#fff', fontWeight: 700,
-                                fontSize: '11.5px', border: 'none', borderRadius: 2, cursor: guardando ? 'default' : 'pointer',
-                                opacity: guardando ? .7 : 1,
-                            }}
-                        >
-                            {guardando ? 'Guardando…' : 'Guardar y asignar'}
-                        </button>
-                        {aviso && (
-                            <span style={{ fontSize: '11px', color: aviso.tipo === 'ok' ? '#4c7a4c' : t.rojo }}>{aviso.texto}</span>
-                        )}
-                    </div>
-                )}
-                {soloLectura && (
-                    <div style={{ marginTop: 14, fontSize: '11px', color: t.textoAtenuado2 }}>
-                        La OT está pagada — Antecedentes queda en solo lectura.
-                    </div>
-                )}
-
-                <p style={{ fontSize: '10.5px', color: t.textoAtenuado3, marginTop: 14, lineHeight: 1.5 }}>
-                    Al asignar, la OT aparece en la agenda del supervisor y en su aplicación de terreno.
-                    Las tareas individuales mantienen su propio responsable.
-                </p>
-            </div>
-        </div>
-    );
-}
-
-// Mejora v3 #5 — Carpeta de OT: documento interno consolidado (informe de evaluación,
-// tareas y metodología, recursos, cotización, informes de ejecución, OC), no se envía al
-// cliente. Se regenera bajo demanda en vez de guardar el PDF en la OT (evitar blobs
-// grandes en Mongo, sin storage de archivos configurado en el proyecto) — solo queda el
-// registro de cuándo se generó, quién y con qué secciones (OT.carpetaOT).
-function construirIndiceCarpeta({ otSeleccionada, tareas, componentes }) {
-    const tareasConDesarrollo = tareas.filter(tt => (tt.desarrollo || '').trim()).length;
-    const reportes = otSeleccionada.reportes || [];
-    const fotosReportes = reportes.filter(r => r.foto).length;
-    const ocs = otSeleccionada.ordenesCompra || [];
-    return [
-        { k: 'evaluacion', label: 'Informe de evaluación', activo: !!otSeleccionada.informeEvaluacion?.completo,
-            detalle: otSeleccionada.informeEvaluacion?.fecha ? `Visita del ${otSeleccionada.informeEvaluacion.fecha} · ${otSeleccionada.informeEvaluacion.fotos?.length || 0} fotos` : 'Sin informe de evaluación',
-            resumen: 'Diagnóstico en faena, mediciones y registro fotográfico del estado inicial.', pags: otSeleccionada.informeEvaluacion?.completo ? 2 : 0 },
-        { k: 'tareas', label: 'Tareas y metodología', activo: tareas.length > 0,
-            detalle: `${tareasConDesarrollo} de ${tareas.length} tareas con desarrollo definido`,
-            resumen: 'Alcance comprometido y cómo se ejecutó cada tarea.', pags: Math.max(1, Math.ceil(tareas.length / 4)) },
-        { k: 'recursos', label: 'Recursos asignados', activo: tareas.length > 0 || componentes.length > 0,
-            detalle: 'Personal, equipos y materiales', resumen: 'Personal, horas hombre, equipos y materiales consumidos.', pags: 1 },
-        { k: 'cotizacion', label: 'Cotización aprobada', activo: ['Programada', 'En Ejecución', 'Trabajo Terminado', 'Con Informe', 'Pagada'].includes(otSeleccionada.estado),
-            detalle: `${otSeleccionada.numeroOT || 'Sin OT'} · ${otSeleccionada.estado}`, resumen: 'Desglose comercial y condiciones aceptadas por el cliente.', pags: 1 },
-        { k: 'ejecucion', label: 'Informes de ejecución', activo: reportes.length > 0,
-            detalle: `${reportes.length} informes de terreno · ${fotosReportes} fotos`, resumen: 'Avance por jornada, desviaciones y respaldo fotográfico.', pags: Math.max(1, Math.ceil(reportes.length / 2)) },
-        { k: 'ocs', label: 'Órdenes de compra', activo: ocs.length > 0,
-            detalle: `${ocs.length} OC a proveedores`, resumen: 'Compras asociadas a la OT con proveedor y monto.', pags: ocs.length > 0 ? 1 : 0 },
-    ];
-}
-
-function TabDocumentosPdf({ otSeleccionada, tareas, componentes, antecedentes, onGenerar }) {
-    const indiceCompleto = construirIndiceCarpeta({ otSeleccionada, tareas, componentes });
-    const [marcados, setMarcados] = useState(() => Object.fromEntries(indiceCompleto.map(it => [it.k, it.activo])));
-    const [generadoPor, setGeneradoPor] = useState('');
-    const [aviso, setAviso] = useState('');
-
-    const seleccionados = indiceCompleto.filter(it => marcados[it.k]);
-    const totalPags = 1 + seleccionados.reduce((a, it) => a + it.pags, 0); // +1 portada
-
-    const generar = () => {
-        if (!generadoPor.trim()) { setAviso('Escribe quién genera la carpeta.'); return; }
-        onGenerar(seleccionados, generadoPor.trim(), totalPags);
-        setAviso(`Carpeta generada: OT-${otSeleccionada.numeroOT || 'nueva'}-carpeta.pdf`);
-    };
-
-    return (
-        <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start', flexWrap: 'wrap', padding: 16 }}>
-            <div style={{ width: 300, flex: 'none', background: t.superficie, border: `1px solid ${t.bordeZona}` }}>
-                <div style={{ padding: '9px 12px', background: t.encabezadoTabla, borderBottom: `1px solid ${t.hairlineBloque}`, fontSize: 9.5, letterSpacing: '.11em', textTransform: 'uppercase', color: t.textoAtenuado3 }}>Contenido de la carpeta</div>
-                {indiceCompleto.map(it => (
-                    <label key={it.k} style={{ display: 'grid', gridTemplateColumns: '16px 1fr auto', gap: 9, alignItems: 'center', padding: '9px 12px', borderBottom: `1px solid ${t.hairlineFila}`, cursor: 'pointer' }}>
-                        <input type="checkbox" checked={!!marcados[it.k]} onChange={() => { setMarcados(m => ({ ...m, [it.k]: !m[it.k] })); setAviso(''); }} style={{ width: 14, height: 14 }} />
-                        <span style={{ minWidth: 0 }}>
-                            <span style={{ display: 'block', fontSize: 11.5, fontWeight: 600 }}>{it.label}</span>
-                            <span style={{ display: 'block', fontSize: 10.5, color: t.textoAtenuado3 }}>{it.detalle}</span>
-                        </span>
-                        <span style={{ fontFamily: t.fontMono, fontSize: 10.5, color: t.textoDeshabilitado }}>{it.pags} p</span>
-                    </label>
-                ))}
-                <div style={{ padding: 11 }}>
-                    <div style={{ fontSize: 10.5, color: t.textoAtenuado3, lineHeight: 1.5, marginBottom: 8 }}>Documento interno. No se envía al cliente.</div>
-                    <input placeholder="Generado por" value={generadoPor} onChange={e => { setGeneradoPor(e.target.value); setAviso(''); }} style={{ ...styles.inputPlano, marginBottom: 8, border: `1px solid ${t.bordeInput}` }} />
-                    <button onClick={generar} style={{ ...styles.btnPrimario, width: '100%' }}>Generar carpeta de OT</button>
-                    <div style={{ fontSize: 10.5, color: aviso.startsWith('Carpeta') ? t.verde : t.rojo, marginTop: 7, minHeight: 14 }}>{aviso}</div>
-                </div>
-            </div>
-
-            <div style={{ width: 600, maxWidth: '100%', background: '#fff', border: `1px solid ${t.bordeZona}`, padding: '28px 32px', boxShadow: '0 1px 3px rgba(0,0,0,.07)' }}>
-                <div style={{ borderBottom: '2px solid #1c1d1b', paddingBottom: 9 }}>
-                    <div style={{ fontSize: 9.5, letterSpacing: '.13em', textTransform: 'uppercase', color: t.textoAtenuado3 }}>Carpeta de orden de trabajo</div>
-                    <div style={{ fontSize: 19, fontWeight: 700, marginTop: 3 }}>{otSeleccionada.numeroOT || 'Sin número'}</div>
-                    <div style={{ fontSize: 11, color: t.textoAtenuado1, marginTop: 2 }}>
-                        {otSeleccionada.solicitante || 'Cliente'} · {antecedentes?.solicitud?.direccion || 'Sin faena registrada'} · Supervisor {antecedentes?.ot?.supervisor?.nombre || 'sin asignar'}
-                    </div>
-                </div>
-                {seleccionados.length === 0 && <div style={{ padding: '16px 0', fontSize: 11.5, color: t.textoAtenuado3 }}>Marca al menos una sección para ver el índice.</div>}
-                {seleccionados.map((it, i) => (
-                    <div key={it.k} style={{ display: 'grid', gridTemplateColumns: '26px 1fr 46px', gap: 10, alignItems: 'baseline', padding: '8px 0', borderBottom: `1px solid ${t.hairlineFila}` }}>
-                        <span style={{ fontFamily: t.fontMono, fontSize: 11, color: t.textoDeshabilitado }}>{String(i + 1).padStart(2, '0')}</span>
-                        <span style={{ minWidth: 0 }}>
-                            <span style={{ display: 'block', fontSize: 12.5, fontWeight: 600 }}>{it.label}</span>
-                            <span style={{ display: 'block', fontSize: 11, color: t.textoAtenuado1, lineHeight: 1.5 }}>{it.resumen}</span>
-                        </span>
-                        <span style={{ fontFamily: t.fontMono, fontSize: 10.5, color: t.textoDeshabilitado, textAlign: 'right' }}>{it.pags} p</span>
-                    </div>
-                ))}
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 14, fontSize: 10.5, color: t.textoAtenuado3 }}>
-                    <span>{generadoPor ? `Generado el ${new Date().toLocaleDateString('es-CL')} por ${generadoPor}` : 'Sin generar todavía'}</span>
-                    <span style={{ fontFamily: t.fontMono }}>{totalPags} páginas</span>
-                </div>
-            </div>
-        </div>
-    );
-}
 
 const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = [],
     componentes: componentesDB = [],
@@ -1425,247 +1128,38 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
 
                     {/* 1 · TAREAS */}
                     {tabActiva === 'tareas' && (
-                        // pointerEvents/opacity (no fieldset+disabled): varios controles de esta
-                        // pestaña son <span onClick> (los "×" de eliminar, el backspace del
-                        // responsable), no <input>/<button> reales, así que disabled de un
-                        // fieldset no los habría bloqueado. Se frena TODO el bloque en cambio.
-                        <div style={{ padding: '0 0 16px', ...(soloLecturaPlanificacion ? { pointerEvents: 'none', opacity: .6 } : {}) }}>
-                            {/* En pantallas angostas GRID_TAREAS (min ~1100px) no cabe: sin minWidth el
-                                div display:grid no crece más allá del ancho disponible aunque sus columnas
-                                lo exijan (el excedente queda como "ink overflow", scrolleable vía .contenido
-                                pero sin fondo pintado detrás) — ver docs/bugs-conocidos.md B3 y
-                                GRID_TAREAS_MIN_W más arriba. El scroll horizontal lo sigue manejando
-                                .contenido (mismo panel que el vertical), no un contenedor propio. */}
-                            <div style={{ ...styles.tablaHeader(GRID_TAREAS), minWidth: GRID_TAREAS_MIN_W }}>
-                                <span>Descripción</span><span>Desarrollo / metodología</span><span>Puesto</span><span>Responsable</span>
-                                <span style={{ textAlign: 'right' }}>Hrs</span><span style={{ textAlign: 'right' }}>Fecha</span>
-                                <span style={{ textAlign: 'right' }}>Hora</span><span style={{ textAlign: 'right' }}>$/hora</span>
-                                <span style={{ textAlign: 'right' }}>Subtotal</span><span />
-                            </div>
-                            {tareas.map((tt, idx) => {
-                                const horas = Number(tt.duracion) || 0;
-                                const precioHora = Number(tt.valorHora) || 0;
-                                const personas = Array.isArray(tt.operarioId) ? tt.operarioId.length : 0;
-                                const sub = horas * precioHora * (personas > 0 ? personas : 1);
-                                const idKey = tt._id || tt.id || `tarea-${idx}`;
-                                const tieneDesarrollo = !!(tt.desarrollo || '').trim();
-                                return (
-                                    <div key={idKey}>
-                                    <div style={{ ...styles.tablaFila(GRID_TAREAS), minWidth: GRID_TAREAS_MIN_W }}>
-                                        <input className="campo-ed" style={styles.inputCelda} value={tt.descripcion} onChange={e => actualizarTarea(idx, 'descripcion', e.target.value)} />
-                                        <input
-                                            className="campo-ed" style={styles.inputCelda}
-                                            value={primeraLinea(tt.desarrollo)}
-                                            placeholder="Sin desarrollo"
-                                            onFocus={() => setTareaExpandida(idKey)}
-                                            onChange={e => actualizarTarea(idx, 'desarrollo', conPrimeraLineaReemplazada(tt.desarrollo, e.target.value))}
-                                        />
-                                        <select className="campo-ed" style={styles.inputCelda} value={tt.puesto} onChange={(e) => {
-                                            const nombreSeleccionado = e.target.value;
-                                            const puestoEncontrado = puestosDB.find(p => p.nombre === nombreSeleccionado);
-                                            setTareas(prev => prev.map((tarea, i) => i === idx ? { ...tarea, puesto: nombreSeleccionado, ...(puestoEncontrado ? { valorHora: puestoEncontrado.costoHora } : {}) } : tarea));
-                                        }}>
-                                            <option value="">—</option>
-                                            {puestosDB.map(p => <option key={p._id} value={p.nombre}>{p.nombre}</option>)}
-                                        </select>
-                                        <div
-                                            style={styles.celdaResponsable}
-                                            tabIndex="0"
-                                            onKeyDown={(e) => {
-                                                if (e.key === 'Backspace' && (tt.operarioId || []).length > 0) {
-                                                    const nuevosIds = tt.operarioId.slice(0, -1);
-                                                    const nuevosNombres = (tt.operarioNombre || []).slice(0, -1);
-                                                    setTareas(prev => prev.map((tarea, i) => i === idx ? { ...tarea, operarioId: nuevosIds, operarioNombre: nuevosNombres } : tarea));
-                                                }
-                                            }}
-                                        >
-                                            <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                                {Array.isArray(tt.operarioNombre) && tt.operarioNombre.length > 0 ? tt.operarioNombre.join(', ') : <span style={{ color: t.textoDeshabilitado }}>Sin asignar</span>}
-                                            </span>
-                                            <select
-                                                style={styles.selectInvisible}
-                                                value=""
-                                                onChange={(e) => {
-                                                    const val = e.target.value;
-                                                    if (!val) return;
-                                                    const recurso = recursos.find(r => String(r._id) === String(val));
-                                                    if (!recurso) return;
-                                                    const idsActuales = (tt.operarioId || []).filter(Boolean);
-                                                    const nombresActuales = (tt.operarioNombre || []).filter(n => n && n !== 'Sin asignar');
-                                                    if (idsActuales.includes(val)) return;
-                                                    setTareas(prev => prev.map((tarea, i) => i === idx ? { ...tarea, operarioId: [...idsActuales, val], operarioNombre: [...nombresActuales, recurso.nombre] } : tarea));
-                                                }}
-                                            >
-                                                <option value="">+</option>
-                                                {recursos.map(r => <option key={r._id} value={r._id}>{r.nombre}</option>)}
-                                            </select>
-                                        </div>
-                                        <input type="number" className="campo-ed" style={{ ...styles.inputCelda, textAlign: 'right' }} value={tt.duracion} onChange={e => actualizarTarea(idx, 'duracion', e.target.value)} />
-                                        <input type="date" className="campo-ed" style={{ ...styles.inputCelda, textAlign: 'right' }} value={tt.fecha} onChange={e => actualizarTarea(idx, 'fecha', e.target.value)} />
-                                        <input type="time" className="campo-ed" style={{ ...styles.inputCelda, textAlign: 'right' }} value={tt.hora} onChange={e => actualizarTarea(idx, 'hora', e.target.value)} />
-                                        <input type="number" className="campo-ed" style={{ ...styles.inputCelda, textAlign: 'right' }} value={tt.valorHora || ''} onChange={e => actualizarTarea(idx, 'valorHora', e.target.value)} />
-                                        <span style={styles.celdaSubtotal}>{CLP(sub)}</span>
-                                        <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 5 }}>
-                                            {!tieneDesarrollo && <span title="Sin desarrollo definido" style={{ width: 6, height: 6, borderRadius: '50%', background: t.rojo, flex: 'none' }} />}
-                                            <span onClick={() => eliminarTarea(idx)} style={styles.xFila}>×</span>
-                                        </span>
-                                    </div>
-                                    {tareaExpandida === idKey && (
-                                        <div style={{ background: '#f7f6f2', padding: '10px 16px 14px', borderBottom: `1px solid ${t.hairlineFila}` }}>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
-                                                <span style={{ fontSize: 11, fontWeight: 700, color: t.textoSecundario1 }}>
-                                                    Desarrollo extendido · {tt.descripcion || 'Tarea sin nombre'}
-                                                </span>
-                                                <span onClick={() => setTareaExpandida(null)} style={{ fontSize: 11, color: t.acento, cursor: 'pointer' }}>Contraer</span>
-                                            </div>
-                                            <textarea
-                                                className="campo-ed"
-                                                style={{ width: '100%', minHeight: 90, boxSizing: 'border-box', padding: 8, fontFamily: 'inherit', fontSize: 12, color: t.textoPrincipal, borderRadius: 2, resize: 'vertical' }}
-                                                value={tt.desarrollo || ''}
-                                                onChange={e => actualizarTarea(idx, 'desarrollo', e.target.value)}
-                                                autoFocus
-                                            />
-                                        </div>
-                                    )}
-                                    </div>
-                                );
-                            })}
-                            <div style={{ padding: '8px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
-                                <button onClick={agregarTarea} style={styles.btnAgregar}>Agregar tarea</button>
-                                {tareas.length > 0 && (
-                                    <span style={{ fontSize: 11, color: t.textoAtenuado2 }}>
-                                        {tareas.filter(tt => (tt.desarrollo || '').trim()).length} de {tareas.length} tareas con desarrollo definido
-                                    </span>
-                                )}
-                            </div>
-                            <div style={styles.continuarWrap}><button onClick={() => setTabActiva('componentes')} style={styles.btnSecundario}>Continuar: Equipos y materiales →</button></div>
-                        </div>
+                        <TabTareas
+                            tareas={tareas} setTareas={setTareas} actualizarTarea={actualizarTarea}
+                            agregarTarea={agregarTarea} eliminarTarea={eliminarTarea}
+                            tareaExpandida={tareaExpandida} setTareaExpandida={setTareaExpandida}
+                            puestosDB={puestosDB} recursos={recursos}
+                            soloLecturaPlanificacion={soloLecturaPlanificacion} setTabActiva={setTabActiva}
+                        />
                     )}
 
                     {/* 2 · EQUIPOS Y MATERIALES */}
                     {tabActiva === 'componentes' && (
-                        <div style={{ padding: '0 0 16px', ...(soloLecturaPlanificacion ? { pointerEvents: 'none', opacity: .6 } : {}) }}>
-                            <div style={{ ...styles.tablaHeader(GRID_MATERIALES), minWidth: GRID_MATERIALES_MIN_W }}>
-                                <span>Tipo</span><span>Código</span><span>Descripción</span>
-                                <span style={{ textAlign: 'right' }}>Cant.</span><span style={{ textAlign: 'right' }}>Unitario</span>
-                                <span style={{ textAlign: 'right' }}>Subtotal</span><span>Disponibilidad</span><span />
-                            </div>
-                            {componentes.map((c, idx) => {
-                                const estado = disponibilidadEquipo(c.codigo);
-                                const ok = estado === 'Disponible';
-                                return (
-                                    <div key={c.id || idx} style={{ ...styles.tablaFila(GRID_MATERIALES), minWidth: GRID_MATERIALES_MIN_W }}>
-                                        <input className="campo-ed" style={styles.inputCelda} placeholder="Tipo" value={c.tipo || ''} onChange={e => actualizarComponente(idx, 'tipo', e.target.value)} />
-                                        <input className="campo-ed" style={styles.inputCelda} value={c.codigo || ''} onChange={e => actualizarComponente(idx, 'codigo', e.target.value)} />
-                                        <input
-                                            list="lista-componentes-recursos" className="campo-ed" style={styles.inputCelda}
-                                            placeholder="Escribe para buscar…" value={c.descripcion || ''}
-                                            onChange={(e) => {
-                                                const val = e.target.value;
-                                                actualizarComponente(idx, 'descripcion', val);
-                                                if (val.length < 2) return;
-                                                const match = (componentesDB || []).find(db => {
-                                                    const nombreLimpio = db.nombre ? db.nombre.trim() : '';
-                                                    const formatoCompleto = db.tipo ? `${nombreLimpio} (${db.tipo})` : nombreLimpio;
-                                                    return val === nombreLimpio || val === formatoCompleto;
-                                                });
-                                                if (match) setTimeout(() => {
-                                                    actualizarComponente(idx, 'descripcion', match.nombre);
-                                                    actualizarComponente(idx, 'tipo', match.tipo || 'Equipo');
-                                                    actualizarComponente(idx, 'codigo', match.codigo || 'REF');
-                                                    actualizarComponente(idx, 'precio', match.precio || 0);
-                                                }, 50);
-                                            }}
-                                        />
-                                        <input type="number" className="campo-ed" style={{ ...styles.inputCelda, textAlign: 'right' }} value={c.cantidad} onChange={e => actualizarComponente(idx, 'cantidad', e.target.value)} />
-                                        <input type="number" className="campo-ed" style={{ ...styles.inputCelda, textAlign: 'right' }} value={c.precio} onChange={e => actualizarComponente(idx, 'precio', e.target.value)} />
-                                        <span style={styles.celdaSubtotal}>{CLP((Number(c.cantidad) || 0) * (Number(c.precio) || 0))}</span>
-                                        <span>{!estado ? <span style={{ color: t.textoDeshabilitado, fontSize: 11 }}>—</span> : <span style={{ fontSize: 11, fontWeight: 600, color: ok ? t.verde : t.rojo }}>{estado}</span>}</span>
-                                        <span onClick={() => eliminarComponente(idx)} style={styles.xFila}>×</span>
-                                    </div>
-                                );
-                            })}
-                            <div style={{ padding: '8px 16px' }}>
-                                <button onClick={agregarComponente} style={styles.btnAgregar}>Agregar componente</button>
-                            </div>
-                            <div style={styles.continuarWrap}><button onClick={() => setTabActiva('Logistica')} style={styles.btnSecundario}>Continuar: Suministros directos →</button></div>
-                        </div>
+                        <TabEquiposMateriales
+                            componentes={componentes} componentesDB={componentesDB}
+                            actualizarComponente={actualizarComponente} agregarComponente={agregarComponente}
+                            eliminarComponente={eliminarComponente} disponibilidadEquipo={disponibilidadEquipo}
+                            soloLecturaPlanificacion={soloLecturaPlanificacion} setTabActiva={setTabActiva}
+                        />
                     )}
 
                     {/* 3 · SUMINISTROS DIRECTOS */}
                     {tabActiva === 'Logistica' && (
-                        <div style={{ padding: '0 0 16px', ...(soloLecturaPlanificacion ? { pointerEvents: 'none', opacity: .6 } : {}) }}>
-                            <div style={{ ...styles.tablaHeader(GRID_LOGISTICA), minWidth: GRID_LOGISTICA_MIN_W }}>
-                                <span>Código</span><span>Patente</span><span>Descripción</span>
-                                <span style={{ textAlign: 'right' }}>Cant.</span><span style={{ textAlign: 'right' }}>Unitario</span>
-                                <span style={{ textAlign: 'right' }}>Subtotal</span><span>Stock</span><span />
-                            </div>
-                            {(logistica || []).map((l, idx) => {
-                                const codigo = l.codigo || l.unidad;
-                                const disponible = disponibilidadSuministro(codigo);
-                                const falta = disponible !== null && Number(l.cantidad) > disponible;
-                                return (
-                                    <div key={l._id || idx} style={{ ...styles.tablaFila(GRID_LOGISTICA), minWidth: GRID_LOGISTICA_MIN_W }}>
-                                        <input
-                                            list="lista-suministros-recursos" className="campo-ed" style={styles.inputCelda}
-                                            placeholder="Buscar código…" value={codigo || ''}
-                                            onChange={(e) => {
-                                                const val = e.target.value;
-                                                actualizarLogistica(idx, 'codigo', val);
-                                                actualizarLogistica(idx, 'unidad', val);
-                                                const match = (suministrosDB || []).find(s => s.codigo?.toLowerCase() === val.toLowerCase() || s.descripcion?.toLowerCase() === val.toLowerCase());
-                                                if (match) {
-                                                    actualizarLogistica(idx, 'codigo', match.codigo);
-                                                    actualizarLogistica(idx, 'descripcion', match.descripcion);
-                                                    actualizarLogistica(idx, 'precio', Number(match.precio) || 0);
-                                                }
-                                            }}
-                                        />
-                                        <input className="campo-ed" style={styles.inputCelda} value={l.patente || ''} onChange={e => actualizarLogistica(idx, 'patente', e.target.value)} />
-                                        <input className="campo-ed" style={styles.inputCelda} value={l.descripcion || ''} placeholder="Descripción del suministro" onChange={e => actualizarLogistica(idx, 'descripcion', e.target.value)} />
-                                        <input type="number" className="campo-ed" style={{ ...styles.inputCelda, textAlign: 'right' }} value={l.cantidad || 1} onChange={e => actualizarLogistica(idx, 'cantidad', e.target.value)} />
-                                        <input type="number" className="campo-ed" style={{ ...styles.inputCelda, textAlign: 'right' }} value={l.precio || 0} onChange={e => actualizarLogistica(idx, 'precio', e.target.value)} />
-                                        <span style={styles.celdaSubtotal}>{CLP((Number(l.cantidad) || 0) * (Number(l.precio) || 0))}</span>
-                                        <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                            {disponible === null ? <span style={{ color: t.textoDeshabilitado, fontSize: 11 }}>—</span> : (
-                                                <span style={{ fontSize: 11, fontWeight: 600, color: falta ? t.rojo : t.verde }}>{falta ? `falta ${Number(l.cantidad) - disponible}` : disponible}</span>
-                                            )}
-                                            {falta && (
-                                                <button
-                                                    title="Generar Orden de Compra para cubrir el faltante"
-                                                    onClick={() => navigate('/compras', { state: { otId: otSeleccionada._id || datosRecibidos?._id, suministroId: (suministrosDB || []).find(s => s.codigo === codigo)?._id || '', descripcion: l.descripcion, cantidad: Number(l.cantidad) - disponible, precioUnitario: Number(l.precio) || 0 } })}
-                                                    style={styles.btnOC}
-                                                >Generar OC</button>
-                                            )}
-                                        </span>
-                                        <span onClick={() => eliminarLogistica(idx)} style={styles.xFila}>×</span>
-                                    </div>
-                                );
-                            })}
-                            <div style={{ padding: '8px 16px' }}>
-                                <button onClick={agregarLogistica} style={styles.btnAgregar}>Agregar suministro</button>
-                            </div>
-                            <div style={{ ...styles.continuarWrap, justifyContent: 'space-between' }}>
-                                {puedeTerminarPlanificacion
-                                    ? <span style={{ fontSize: 11.5, color: t.verde, fontWeight: 600 }}>Tareas, equipos y suministros definidos</span>
-                                    : <span style={{ fontSize: 11.5, color: t.rojo, fontWeight: 600 }}>
-                                        {!todasTareasCompletas ? 'Completa descripción, puesto, responsable, horas, fecha, hora y $/hora de todas las tareas'
-                                            : !equiposHerramientasConCosto ? 'Todo equipo o herramienta debe tener un costo mayor a $0'
-                                                : 'El informe inicial tiene observaciones sin resolver'}
-                                    </span>}
-                                <button
-                                    onClick={() => guardarPlanificacion('Planificada')}
-                                    disabled={!puedeTerminarPlanificacion}
-                                    title={
-                                        !todasTareasCompletas ? 'Completa descripción, puesto, responsable, horas, fecha, hora y $/hora de todas las tareas'
-                                            : !equiposHerramientasConCosto ? 'Todo equipo o herramienta debe tener un costo mayor a $0'
-                                                : informeEvaluacion.revision?.estado === 'ConObservaciones' ? 'El informe inicial tiene observaciones sin resolver'
-                                                    : ''
-                                    }
-                                    style={{ ...styles.btnPrimario, opacity: puedeTerminarPlanificacion ? 1 : .5 }}
-                                >Terminar planificación</button>
-                            </div>
-                        </div>
+                        <TabSuministrosDirectos
+                            logistica={logistica} suministrosDB={suministrosDB}
+                            actualizarLogistica={actualizarLogistica} agregarLogistica={agregarLogistica}
+                            eliminarLogistica={eliminarLogistica} disponibilidadSuministro={disponibilidadSuministro}
+                            soloLecturaPlanificacion={soloLecturaPlanificacion}
+                            puedeTerminarPlanificacion={puedeTerminarPlanificacion}
+                            todasTareasCompletas={todasTareasCompletas}
+                            equiposHerramientasConCosto={equiposHerramientasConCosto}
+                            informeEvaluacion={informeEvaluacion} guardarPlanificacion={guardarPlanificacion}
+                            navigate={navigate} otIdParaOC={otSeleccionada._id || datosRecibidos?._id}
+                        />
                     )}
 
                     {/* 4 · COTIZACIÓN */}
@@ -2066,56 +1560,10 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
 
                     {/* PAGO */}
                     {tabActiva === 'pago' && (
-                        <div style={{ maxWidth: 520, padding: 16 }}>
-                            <div style={styles.tituloSub}>Registro de pago</div>
-                            {pago.anulado && (
-                                <div style={{ background: t.barraFiltrosPie, borderLeft: `2px solid ${t.rojo}`, padding: '8px 10px', marginBottom: 12, fontSize: 11.5 }}>
-                                    <div style={{ fontWeight: 700, color: t.rojo }}>Pago anulado</div>
-                                    <div style={{ color: t.textoSecundario1 }}>
-                                        {pago.fechaAnulacion && <>Fecha: <strong>{pago.fechaAnulacion}</strong> — </>}
-                                        {pago.motivoAnulacion ? <>Motivo: <strong>{pago.motivoAnulacion}</strong></> : 'Sin motivo registrado'}
-                                    </div>
-                                </div>
-                            )}
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 16 }}>
-                                {[
-                                    { label: 'Total cotizado', valor: CLP(granTotal * 1.19), nota: 'con IVA' },
-                                    { label: 'Monto pagado', valor: CLP(pago.montoPagado), nota: '' },
-                                    { label: 'Saldo pendiente', valor: CLP(Math.max(0, granTotal * 1.19 - Number(pago.montoPagado || 0))), nota: '' },
-                                ].map(k => (
-                                    <div key={k.label} style={{ background: t.barraFiltrosPie, padding: 10, textAlign: 'center', borderRadius: 2 }}>
-                                        <div style={{ fontSize: 9.5, letterSpacing: '.08em', textTransform: 'uppercase', color: t.textoAtenuado3 }}>{k.label}</div>
-                                        <div style={{ fontFamily: t.fontMono, fontSize: 16, fontWeight: 700, marginTop: 4 }}>{k.valor}</div>
-                                    </div>
-                                ))}
-                            </div>
-                            <div style={{ marginBottom: 12, display: 'flex', gap: 2 }}>
-                                {['Pendiente', 'Parcial', 'Pagado'].map(e => (
-                                    <button key={e} onClick={() => setPago(p => ({ ...p, estado: e }))} style={pago.estado === e ? styles.chipActivo : styles.chip}>{pago.estado === e ? '▪ ' : ''}{e}</button>
-                                ))}
-                            </div>
-                            <div style={{ display: 'grid', gridTemplateColumns: '130px 1fr', gap: '8px 12px', alignItems: 'center', marginBottom: 12 }}>
-                                <span style={{ fontSize: 11.5, color: t.textoSecundario3 }}>Monto pagado</span>
-                                <input type="number" className="campo-ed" style={styles.inputPlano} value={pago.montoPagado} onChange={e => setPago(p => ({ ...p, montoPagado: Number(e.target.value) }))} />
-                                <span style={{ fontSize: 11.5, color: t.textoSecundario3 }}>Fecha de pago</span>
-                                <input type="date" className="campo-ed" style={styles.inputPlano} value={pago.fechaPago} onChange={e => setPago(p => ({ ...p, fechaPago: e.target.value }))} />
-                                <span style={{ fontSize: 11.5, color: t.textoSecundario3 }}>Método</span>
-                                <select className="campo-ed" style={styles.inputPlano} value={pago.metodoPago} onChange={e => setPago(p => ({ ...p, metodoPago: e.target.value }))}>
-                                    {['Transferencia', 'Efectivo', 'Cheque', 'Débito', 'Crédito', 'Otro'].map(m => <option key={m}>{m}</option>)}
-                                </select>
-                                <span style={{ fontSize: 11.5, color: t.textoSecundario3 }}>N° referencia</span>
-                                <input className="campo-ed" style={styles.inputPlano} value={pago.referencia} onChange={e => setPago(p => ({ ...p, referencia: e.target.value }))} placeholder="Ej: TRF-20260817-001" />
-                            </div>
-                            <label style={styles.campoLabel}>
-                                <span style={styles.etiqueta}>Notas</span>
-                                <textarea className="campo-ed" style={{ ...styles.inputPlano, minHeight: 60 }} value={pago.notas} onChange={e => setPago(p => ({ ...p, notas: e.target.value }))} />
-                            </label>
-                            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 14 }}>
-                                <button onClick={guardarPago} style={styles.btnPrimario}>Guardar información de pago</button>
-                                {!pago.anulado && pago.estado !== 'Pendiente' && <button onClick={anularPago} style={{ ...styles.btnSecundario, color: t.rojo }}>Anular pago</button>}
-                                {pago.anulado && <button onClick={restaurarPago} style={styles.btnSecundario}>Restaurar pago</button>}
-                            </div>
-                        </div>
+                        <TabPago
+                            pago={pago} setPago={setPago} granTotal={granTotal}
+                            guardarPago={guardarPago} anularPago={anularPago} restaurarPago={restaurarPago}
+                        />
                     )}
 
                     {/* DOCUMENTOS DE TERRENO */}
@@ -2281,85 +1729,6 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
             )}
         </div>
     );
-};
-
-const styles = {
-    raiz: { display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, background: t.fondoMain, color: t.textoPrincipal, fontFamily: t.fontUi, fontSize: '13px' },
-    header: { flex: 'none', display: 'flex', alignItems: 'baseline', gap: 14, padding: '9px 16px', background: t.superficie, borderBottom: `1px solid ${t.bordeZona}` },
-    h1: { margin: 0, fontSize: 14, fontWeight: 700, letterSpacing: '-.01em', whiteSpace: 'nowrap' },
-    empresa: { fontSize: 12.5, fontWeight: 600, color: t.textoSecundario1, whiteSpace: 'nowrap' },
-    subtitulo: { fontSize: 11.5, color: t.textoAtenuado2, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
-    btnVolver: { marginLeft: 'auto', flex: 'none', height: 24, padding: '0 10px', background: t.superficie, border: `1px solid ${t.bordeZona}`, fontSize: 11.5, color: '#262622', cursor: 'pointer', borderRadius: 2, fontFamily: t.fontUi },
-
-    pipeline: { flex: 'none', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '2px 16px', padding: '6px 16px', background: t.barraContexto, borderBottom: `1px solid ${t.hairlineBloque}` },
-    pipelineItem: { display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' },
-
-    tabsFila: { flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, padding: '0 16px', background: t.barraFiltrosPie, borderBottom: `1px solid ${t.hairlineBloque}` },
-    tabs: { display: 'flex', flexWrap: 'wrap', gap: 1 },
-    tab: { height: 31, padding: '0 12px', background: 'transparent', border: 0, borderBottom: '2px solid transparent', fontSize: 11.5, fontWeight: 400, color: t.textoAtenuado1, cursor: 'pointer', whiteSpace: 'nowrap', fontFamily: t.fontUi },
-    tabActivo: { height: 31, padding: '0 12px', background: t.superficie, border: 0, borderBottom: `2px solid ${t.textoPrincipal}`, fontSize: 11.5, fontWeight: 700, color: t.textoPrincipal, cursor: 'pointer', whiteSpace: 'nowrap', fontFamily: t.fontUi },
-
-    cuerpo: { flex: 1, minHeight: 0, display: 'flex' },
-    contenido: { flex: 1, minWidth: 0, overflow: 'auto', background: t.superficie },
-
-    tablaHeader: (grid) => ({
-        position: 'sticky', top: 0, zIndex: 2, display: 'grid', gridTemplateColumns: grid, gap: 8, alignItems: 'center',
-        height: 26, padding: '0 16px', background: t.encabezadoTabla, borderBottom: `1px solid ${t.bordeZona}`,
-        fontSize: 9.5, letterSpacing: '.1em', textTransform: 'uppercase', color: t.textoAtenuado1, fontWeight: 700,
-    }),
-    tablaFila: (grid) => ({ display: 'grid', gridTemplateColumns: grid, gap: 8, alignItems: 'center', padding: '4px 16px', borderBottom: `1px solid ${t.hairlineFila}` }),
-    inputCelda: { height: 24, minWidth: 0, padding: '0 6px', fontFamily: 'inherit', fontSize: 11.5, color: t.textoPrincipal, borderRadius: 2, width: '100%', boxSizing: 'border-box' },
-    celdaSubtotal: { fontFamily: t.fontMono, fontSize: 11.5, textAlign: 'right', color: t.textoPrincipal },
-    xFila: { fontFamily: t.fontMono, fontSize: 12, color: '#c9c7c0', cursor: 'pointer', textAlign: 'center' },
-    celdaResponsable: { display: 'flex', alignItems: 'center', gap: 4, height: 24, padding: '0 6px', border: '1px solid transparent', borderRadius: 2, minWidth: 0 },
-    selectInvisible: { width: 16, flex: 'none', border: 'none', background: 'transparent', fontSize: 11, color: t.acento, cursor: 'pointer' },
-
-    btnAgregar: { height: 24, padding: '0 10px', background: t.superficie, border: '1px dashed rgba(0,0,0,.28)', fontSize: 11.5, color: t.textoSecundario3, cursor: 'pointer', borderRadius: 2, fontFamily: t.fontUi },
-    continuarWrap: { display: 'flex', justifyContent: 'flex-end', padding: '10px 16px' },
-    btnOC: { height: 20, padding: '0 8px', background: t.superficie, border: `1px solid ${t.rojo}`, color: t.rojo, fontSize: 10.5, fontWeight: 600, cursor: 'pointer', borderRadius: 2, whiteSpace: 'nowrap', fontFamily: t.fontUi },
-
-    campoLabel: { display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 },
-    etiqueta: { fontSize: 9.5, letterSpacing: '.11em', textTransform: 'uppercase', color: t.textoAtenuado2 },
-    inputPlano: { height: 27, minWidth: 0, padding: '0 8px', border: `1px solid ${t.bordeInput}`, background: t.superficie, fontFamily: 'inherit', fontSize: 12, color: t.textoPrincipal, outline: 'none', borderRadius: 2, width: '100%', boxSizing: 'border-box' },
-    avisoOk: { background: '#eafaf1', border: '1px solid rgba(0,0,0,.08)', borderRadius: 2, padding: '8px 10px', marginBottom: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 11.5, color: t.verde },
-    xFoto: { position: 'absolute', top: -6, right: -6, width: 18, height: 18, borderRadius: '50%', background: '#fff', border: `1px solid ${t.bordeZona}`, fontSize: 11, lineHeight: '16px', textAlign: 'center', cursor: 'pointer', color: t.rojo },
-    agregarFoto: { width: 72, height: 72, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px dashed rgba(0,0,0,.28)', borderRadius: 2, cursor: 'pointer', color: t.textoAtenuado3, fontSize: 11 },
-    tituloSub: { fontSize: 9.5, letterSpacing: '.11em', textTransform: 'uppercase', color: t.textoAtenuado3, marginBottom: 7, padding: '11px 16px 0' },
-
-    filaCosto: { display: 'grid', gridTemplateColumns: '1fr auto', gap: 12, padding: '7px 0', borderBottom: `1px solid ${t.hairlineBloque}` },
-    thGantt: { textAlign: 'left', padding: '4px 8px', background: t.encabezadoTabla, fontWeight: 700, color: t.textoAtenuado1, fontSize: 9.5, textTransform: 'uppercase', letterSpacing: '.06em' },
-    tdGantt: { padding: '4px 8px', borderBottom: `1px solid ${t.hairlineFila}`, color: t.textoSecundario1 },
-
-    tarjetaReporte: { background: t.superficie, border: `1px solid ${t.bordeZona}`, borderRadius: 2, overflow: 'hidden', display: 'flex', flexDirection: 'column' },
-    badgeAnulado: { position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', background: 'rgba(180,35,24,.85)', color: '#fff', fontWeight: 700, fontSize: 11, padding: '4px 10px', borderRadius: 2, letterSpacing: '.06em' },
-    btnFilaTarjeta: { flex: 1, padding: 8, background: 'none', border: 'none', color: t.acento, cursor: 'pointer', fontSize: 11.5, fontWeight: 600, fontFamily: t.fontUi },
-
-    chip: { height: 24, padding: '0 11px', background: t.superficie, border: `1px solid ${t.bordeInput}`, fontSize: 11.5, color: t.textoSecundario1, cursor: 'pointer', borderRadius: 2, fontFamily: t.fontUi },
-    chipActivo: { height: 24, padding: '0 11px', background: t.textoPrincipal, border: `1px solid ${t.textoPrincipal}`, fontSize: 11.5, color: '#fff', fontWeight: 600, cursor: 'pointer', borderRadius: 2, fontFamily: t.fontUi },
-
-    asideTira: { width: 13, flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', background: t.encabezadoTabla, color: t.textoAtenuado3, fontFamily: t.fontMono, fontSize: 12, cursor: 'pointer', borderLeft: `1px solid ${t.hairlineBloque}` },
-    asideSeparador: { width: 5, flex: 'none', cursor: 'col-resize', background: t.encabezadoTabla, borderLeft: `1px solid ${t.hairlineBloque}`, borderRight: `1px solid ${t.hairlineBloque}` },
-    aside: { flex: 'none', display: 'flex', flexDirection: 'column', background: t.fondoMain, minHeight: 0, overflow: 'hidden' },
-    asideBloque: { flex: 'none', padding: '0 0 11px', background: t.superficie, borderBottom: `1px solid ${t.bordeZona}` },
-    asideScroll: { flex: 1, minHeight: 0, overflow: 'auto' },
-    fichaFila: { display: 'flex', justifyContent: 'space-between', gap: 10, padding: '3px 16px', fontSize: 11.5 },
-    fichaLabel: { color: t.textoAtenuado2, flex: 'none' },
-    fichaValor: { fontFamily: t.fontMono, color: '#262622' },
-    granTotalFila: { display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', margin: '7px 16px 0', paddingTop: 7, borderTop: '1px solid rgba(0,0,0,.16)' },
-    accionesGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 },
-    btnAccion: { height: 28, padding: '0 8px', background: t.superficie, border: `1px solid ${t.bordeZona}`, fontSize: 11.5, fontWeight: 600, color: '#262622', cursor: 'pointer', borderRadius: 2, textAlign: 'center', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontFamily: t.fontUi },
-    btnPrimarioAside: { width: '100%', height: 30, marginTop: 6, background: t.acento, border: `1px solid ${t.acento}`, color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', borderRadius: 2, fontFamily: t.fontUi },
-    notaAside: { fontSize: 10.5, color: t.textoAtenuado3, marginTop: 6, lineHeight: 1.5 },
-
-    btnPrimario: { height: 30, padding: '0 14px', background: t.acento, border: `1px solid ${t.acento}`, color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', borderRadius: 2, fontFamily: t.fontUi },
-    btnSecundario: { height: 27, padding: '0 12px', background: t.superficie, border: `1px solid ${t.bordeZona}`, fontSize: 12, color: '#262622', cursor: 'pointer', borderRadius: 2, whiteSpace: 'nowrap', fontFamily: t.fontUi },
-
-    overlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 999 },
-    modal: { background: t.superficie, borderRadius: 2, width: 450, boxShadow: '0 8px 24px rgba(0,0,0,.14)' },
-    modalHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 16px', borderBottom: `1px solid ${t.hairlineBloque}` },
-    modalFooter: { display: 'flex', justifyContent: 'flex-end', gap: 8, padding: '10px 16px', borderTop: `1px solid ${t.hairlineBloque}` },
-    xModal: { fontFamily: t.fontMono, fontSize: 14, color: t.textoAtenuado3, cursor: 'pointer' },
-    tagEmail: { display: 'inline-flex', alignItems: 'center', background: t.barraFiltrosPie, color: t.textoSecundario1, padding: '3px 8px', borderRadius: 2, margin: 3, fontSize: 11.5 },
 };
 
 export default TratamientoScreen;
