@@ -1107,9 +1107,13 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
     const info = etapaInfo(otSeleccionada);
     const puedeEjecucion = ['Programada', 'En Ejecución', 'Trabajo Terminado', 'Con Informe', 'Pagada'].includes(otSeleccionada.estado);
     const habilitadoTabs14 = informeEvaluacion.completo || yaTeniaContenidoPrevio;
-    // "Terminar planificación" (no las pestañas 1-4, que quedan libres) es lo único que
-    // bloquea una observación abierta sobre el informe inicial.
-    const puedeTerminarPlanificacion = informeEvaluacion.revision?.estado !== 'ConObservaciones';
+    // Sin al menos una tarea con horas reales no hay nada que cotizar — mismo criterio que ya
+    // exige GanttScreen.confirmarCapacidad más adelante, pero acá se corta antes: no tiene
+    // sentido terminar la planificación ni entrar a Cotización con $0 de mano de obra.
+    const tieneTareasConHoras = tareas.some(tt => Number(tt.duracion) > 0);
+    // "Terminar planificación" (no las pestañas 1-3, que quedan libres para ir armando) es lo
+    // que bloquea una observación abierta sobre el informe inicial y la falta de tareas con horas.
+    const puedeTerminarPlanificacion = informeEvaluacion.revision?.estado !== 'ConObservaciones' && tieneTareasConHoras;
 
     return (
         <div style={styles.raiz}>
@@ -1150,7 +1154,12 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                     <button onClick={() => irATab('tareas')} disabled={!habilitadoTabs14} title={habilitadoTabs14 ? '' : 'Completa el Informe Inicial primero'} style={{ ...(tabActiva === 'tareas' ? styles.tabActivo : styles.tab), opacity: habilitadoTabs14 ? 1 : .5 }}>1 · Tareas</button>
                     <button onClick={() => irATab('componentes')} disabled={!habilitadoTabs14} title={habilitadoTabs14 ? '' : 'Completa el Informe Inicial primero'} style={{ ...(tabActiva === 'componentes' ? styles.tabActivo : styles.tab), opacity: habilitadoTabs14 ? 1 : .5 }}>2 · Equipos y materiales</button>
                     <button onClick={() => irATab('Logistica')} disabled={!habilitadoTabs14} title={habilitadoTabs14 ? '' : 'Completa el Informe Inicial primero'} style={{ ...(tabActiva === 'Logistica' ? styles.tabActivo : styles.tab), opacity: habilitadoTabs14 ? 1 : .5 }}>3 · Suministros directos</button>
-                    <button onClick={() => irATab('cotizacion')} disabled={!habilitadoTabs14} title={habilitadoTabs14 ? '' : 'Completa el Informe Inicial primero'} style={{ ...(tabActiva === 'cotizacion' ? styles.tabActivo : styles.tab), opacity: habilitadoTabs14 ? 1 : .5 }}>4 · Cotización</button>
+                    <button
+                        onClick={() => irATab('cotizacion')}
+                        disabled={!habilitadoTabs14 || !tieneTareasConHoras}
+                        title={!habilitadoTabs14 ? 'Completa el Informe Inicial primero' : !tieneTareasConHoras ? 'Agrega al menos una tarea con horas en la pestaña Tareas' : ''}
+                        style={{ ...(tabActiva === 'cotizacion' ? styles.tabActivo : styles.tab), opacity: (habilitadoTabs14 && tieneTareasConHoras) ? 1 : .5 }}
+                    >4 · Cotización</button>
                     <button onClick={() => puedeEjecucion && setTabActiva('reportes')} disabled={!puedeEjecucion} title={puedeEjecucion ? '' : 'Disponible una vez que la OT esté Programada'} style={{ ...(tabActiva === 'reportes' ? styles.tabActivo : styles.tab), opacity: puedeEjecucion ? 1 : .5 }}>
                         Ejecución {otSeleccionada.reportes?.length ? `(${otSeleccionada.reportes.length})` : ''}
                     </button>
@@ -1519,11 +1528,17 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                                 <button onClick={agregarLogistica} style={styles.btnAgregar}>Agregar suministro</button>
                             </div>
                             <div style={{ ...styles.continuarWrap, justifyContent: 'space-between' }}>
-                                <span style={{ fontSize: 11.5, color: t.verde, fontWeight: 600 }}>Tareas, equipos y suministros definidos</span>
+                                {tieneTareasConHoras
+                                    ? <span style={{ fontSize: 11.5, color: t.verde, fontWeight: 600 }}>Tareas, equipos y suministros definidos</span>
+                                    : <span style={{ fontSize: 11.5, color: t.rojo, fontWeight: 600 }}>Agrega al menos una tarea con horas antes de terminar</span>}
                                 <button
                                     onClick={() => guardarPlanificacion('Planificada')}
                                     disabled={!puedeTerminarPlanificacion}
-                                    title={puedeTerminarPlanificacion ? '' : 'El informe inicial tiene observaciones sin resolver'}
+                                    title={
+                                        !tieneTareasConHoras ? 'Agrega al menos una tarea con horas en la pestaña Tareas'
+                                            : informeEvaluacion.revision?.estado === 'ConObservaciones' ? 'El informe inicial tiene observaciones sin resolver'
+                                                : ''
+                                    }
                                     style={{ ...styles.btnPrimario, opacity: puedeTerminarPlanificacion ? 1 : .5 }}
                                 >Terminar planificación</button>
                             </div>
