@@ -25,7 +25,23 @@ export default function C5CuentaPago({ nav, trabajo }) {
                 <div style={{ padding: 16 }}>
                     <div style={{ fontWeight: 700, fontSize: 18 }}>Cotización — {ot?.numeroOT}</div>
                     <div style={{ fontSize: 14, color: 'var(--texto-atenuado-1)', marginTop: 4 }}>{trabajo.empresaSolicitante}</div>
-                    {ot?.tareas?.length > 0 && <BloqueDoc titulo="Mano de obra" filas={ot.tareas.map((t) => [t.descripcion, `${t.duracion} h`])} />}
+                    {ot?.tareas?.length > 0 && (
+                        <div style={{ marginTop: 14 }}>
+                            <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: 'var(--texto-atenuado-2)' }}>Mano de obra</div>
+                            {ot.tareas.map((t, i) => (
+                                <div key={i} style={{ padding: '4px 0' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13.5 }}>
+                                        <span>{t.descripcion}</span><span className="mono">{t.duracion} h</span>
+                                    </div>
+                                    {/* El "cómo": la metodología planificada por tarea, para que el cliente
+                                        vea con qué está de acuerdo antes de aprobar (otPublica ahora la expone). */}
+                                    {(t.desarrollo || '').trim() && (
+                                        <div style={{ fontSize: 12, color: 'var(--texto-atenuado-1)', marginTop: 2, whiteSpace: 'pre-wrap' }}>{t.desarrollo}</div>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    )}
                     {ot?.componentes?.length > 0 && <BloqueDoc titulo="Materiales y equipos" filas={ot.componentes.map((c) => [c.descripcion, CLP(c.subtotal)])} />}
                     {ot?.logistica?.length > 0 && <BloqueDoc titulo="Logística" filas={ot.logistica.map((l) => [l.descripcion, CLP(l.subtotal)])} />}
                     <div style={{ marginTop: 16, borderTop: '2px solid var(--texto-principal)', paddingTop: 8, display: 'flex', justifyContent: 'space-between', fontWeight: 700 }}>

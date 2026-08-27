@@ -1,6 +1,14 @@
 import { useState } from 'react';
 import { responderCotizacion, responderExcepcion } from '../api.js';
 
+// Mismo criterio y mismo límite que otController.cotizacionVencida/GanttScreen.cotizacionVencida
+// (erp-backend, erp-web) — duplicado acá porque no hay forma de compartir código entre apps.
+const HORAS_LIMITE_APROBACION_COTIZACION = 12;
+const cotizacionVencida = (ot) => !!(
+    ot?.cotizacion?.enviada && ot?.cotizacion?.respuestaCliente === 'Pendiente' && ot?.cotizacion?.fechaEnvio
+    && (Date.now() - new Date(ot.cotizacion.fechaEnvio).getTime()) > HORAS_LIMITE_APROBACION_COTIZACION * 3600 * 1000
+);
+
 // Mismo idx/MAPA_ETAPA que ya usan DashboardScreen.jsx y TratamientoScreen.jsx en
 // erp-web (duplicado ahí también, no importado de un módulo común — mismo criterio).
 // Las etiquetas acá son la traducción a lenguaje de cliente de esas mismas 8 posiciones.
@@ -153,10 +161,19 @@ export default function C3EstadoTrabajo({ nav, trabajo: trabajoProp }) {
 
             {info.porAprobar && (
                 <div style={{ padding: '0 16px 16px' }}>
+                    <button
+                        onClick={() => nav.ir('c5', { trabajo })}
+                        style={{ background: 'none', border: 'none', padding: 0, marginBottom: 10, fontSize: 'var(--fs-secundario)', color: 'var(--en-curso)', textDecoration: 'underline', cursor: 'pointer' }}
+                    >Ver detalle de la cotización</button>
                     {error && <div style={{ fontSize: 'var(--fs-secundario)', color: 'var(--detenido)', marginBottom: 8 }}>{error}</div>}
+                    {cotizacionVencida(ot) && (
+                        <div style={{ fontSize: 'var(--fs-secundario)', color: 'var(--atencion)', marginBottom: 8 }}>
+                            Esta cotización venció (más de 12 h sin respuesta) — ya no se puede aceptar. Escriba a la oficina para que se la reenvíen.
+                        </div>
+                    )}
                     {accion === null && (
                         <div style={{ display: 'flex', gap: 8 }}>
-                            <button className="boton-primario" disabled={enviando} onClick={() => setAccion('aceptar')}>Aceptar cotización</button>
+                            {!cotizacionVencida(ot) && <button className="boton-primario" disabled={enviando} onClick={() => setAccion('aceptar')}>Aceptar cotización</button>}
                             <button className="boton-secundario" disabled={enviando} onClick={() => setAccion('rechazar')}>Rechazar</button>
                         </div>
                     )}

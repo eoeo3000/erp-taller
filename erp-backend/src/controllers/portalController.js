@@ -63,7 +63,9 @@ function otPublica(ot) {
             duracion: t.duracion,
             fecha: t.fecha,
             hora: t.hora,
-            completada: t.completada
+            completada: t.completada,
+            // El "cómo" de la cotización (ver C5_CuentaPago.jsx) — antes no viajaba al cliente.
+            desarrollo: t.desarrollo,
         })),
         // Antes exponía {nombre, precioUnitario, subtotal} — campos que no existen en el
         // schema real de OT.componentes (models/OT.js: codigo/descripcion/cantidad/precio/
@@ -95,9 +97,14 @@ function otPublica(ot) {
         pago: ot.pago ? { estado: ot.pago.estado } : null,
         // respuestaCliente + enviada: lo que C2/C3 necesitan para distinguir "presupuesto
         // rechazado" de "en preparación" de "cotización enviada, esperando tu respuesta"
-        // (ver models/OT.js). El resto de cotizacion (fechas propuestas, verificación de
-        // capacidad) sigue siendo interno.
-        cotizacion: ot.cotizacion ? { respuestaCliente: ot.cotizacion.respuestaCliente, enviada: ot.cotizacion.enviada } : null,
+        // (ver models/OT.js). fechaEnvio se suma para que la PWA pueda calcular el vencimiento
+        // de 12h (mismo criterio que otController.cotizacionVencida, duplicado ahí y acá). El
+        // resto de cotizacion (fechas propuestas, verificación de capacidad) sigue siendo interno.
+        cotizacion: ot.cotizacion ? {
+            respuestaCliente: ot.cotizacion.respuestaCliente,
+            enviada: ot.cotizacion.enviada,
+            fechaEnvio: ot.cotizacion.fechaEnvio,
+        } : null,
         // Excepciones ("extensión de cotización", ver models/OT.js §7) — se filtran los
         // 'Borrador' porque todavía no tienen precio ni fueron revisados por la oficina, no le
         // corresponden al cliente hasta que el planificador los envía.

@@ -3,6 +3,18 @@ const getRecurso = require('../models/Recurso');
 const getUsuario = require('../models/Usuario');
 const getAsignacion = require('../models/Asignacion');
 
+// La aprobación del cliente queda abierta un máximo de 12h desde que se envía la cotización
+// (o hasta que el planificador la cancele desde Tratamiento, ver actualizarOT) — pasado eso,
+// deja de poder aprobarse y de bloquear capacidad en el Gantt (GanttScreen.jsx duplica este
+// mismo criterio, no hay forma de compartir código entre el backend y el frontend acá).
+const HORAS_LIMITE_APROBACION_COTIZACION = 12;
+function cotizacionVencida(ot) {
+    return !!(
+        ot.cotizacion?.enviada && ot.cotizacion?.respuestaCliente === 'Pendiente' && ot.cotizacion?.fechaEnvio
+        && (Date.now() - new Date(ot.cotizacion.fechaEnvio).getTime()) > HORAS_LIMITE_APROBACION_COTIZACION * 3600 * 1000
+    );
+}
+
 // Acciones sobre una OT en terreno (iniciar/posponer/interrumpir/reporte/terminar) —
 // compartida por supervisorAccion (token por OT, portal HTML) y accionMovil (token por
 // persona, PWA Operativa, ver docs/rediseno/design_handoff_pwa_movil/README.md §5, O3/O4).
@@ -619,6 +631,13 @@ async function aplicarRespuestaCotizacion({ id, nuevoEstado, motivoRechazo, conn
     if (nuevoEstado === 'Aprobada' && !otAnterior.supervisorId) {
         const e = new Error(`La orden ${otAnterior.numeroOT || ''} todavía no tiene un supervisor asignado.`);
         e.status = 409; e.sinSupervisor = true; throw e;
+    }
+
+    // El rechazo no se bloquea por vencimiento — solo la aprobación, porque es la que
+    // compromete HH/recursos que ya pudieron liberarse en el Gantt al pasar las 12h.
+    if (nuevoEstado === 'Aprobada' && cotizacionVencida(otAnterior)) {
+        const e = new Error('Esta cotización venció (máximo 12 horas para aprobar). Contacta a la oficina para que la reenvíe.');
+        e.status = 409; throw e;
     }
 
     const cambios = {
