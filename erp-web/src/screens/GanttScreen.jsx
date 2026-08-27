@@ -198,10 +198,14 @@ const GanttScreen = ({ recursos = [], ots = [], calendarios = [], obtenerHorasPa
                 'cotizacion.fechasPropuestas.inicio': fechasPropuestas.inicio,
                 'cotizacion.fechasPropuestas.fin': fechasPropuestas.fin,
             } : {}),
-            // Reprogramar (S3, PWA Operativa) no vuelve a pasar por aprobación del cliente — ya
-            // había aprobado la cotización original, esto solo reconfirma capacidad con la fecha
-            // nueva — así que confirmar acá mismo la devuelve a 'Programada'.
-            ...(ot.estado === 'Reprogramar' ? { estado: 'Programada' } : {}),
+            // Reprogramar (S3, PWA Operativa) SÍ vuelve a pasar por aprobación del cliente: la
+            // fecha cambió, así que hay que ofrecérsela de nuevo antes de comprometerla. En vez
+            // de inventar un circuito aparte, se reusa el mismo que ya existe para la cotización
+            // inicial — volver a 'Planificada' habilita "Enviar cotización" en Tratamiento (que
+            // resetea cotizacion.respuestaCliente a 'Pendiente'), el cliente la ve en "Por
+            // aprobar" en la app, y al aprobarla el propio aplicarRespuestaCotizacion la manda a
+            // 'Programada' — nada de esto hay que reimplementarlo acá.
+            ...(ot.estado === 'Reprogramar' ? { estado: 'Planificada' } : {}),
         });
         if (!resultado?.exito) { notificar.error(resultado?.error || 'No se pudo confirmar la capacidad.'); return; }
         if (cargarDatos) cargarDatos();
@@ -285,7 +289,7 @@ const GanttScreen = ({ recursos = [], ots = [], calendarios = [], obtenerHorasPa
                             const fechasTareas = (ot.tareas || []).filter(tt => tt.fecha).map(tt => tt.fecha).sort();
                             const fmtFecha = iso => iso ? new Date(iso + 'T00:00:00').toLocaleDateString('es-CL', { day: '2-digit', month: 'short' }) : '—';
                             const enSemana = diasSemana.some(d => fechasTareas.includes(d));
-                            const accionLabel = !puedeProgramar ? 'No disponible' : ot.estado === 'Reprogramar' ? 'Confirmar y volver a Programada' : capacidadVerificada ? 'Reconfirmar capacidad' : 'Confirmar capacidad y fechas';
+                            const accionLabel = !puedeProgramar ? 'No disponible' : ot.estado === 'Reprogramar' ? 'Confirmar fecha nueva' : capacidadVerificada ? 'Reconfirmar capacidad' : 'Confirmar capacidad y fechas';
                             const tituloAccion = !estadoValido
                                 ? 'La OT debe estar Planificada, Programada o Reprogramar'
                                 : !tieneTareasConFecha
@@ -572,7 +576,7 @@ const GanttScreen = ({ recursos = [], ots = [], calendarios = [], obtenerHorasPa
                                                 disabled={!puedeSel}
                                                 title={tituloSel}
                                                 style={{ ...styles.btnSecundario, width: '100%', marginBottom: 6, opacity: puedeSel ? 1 : .5 }}
-                                            >{otSel.estado === 'Reprogramar' ? 'Confirmar y volver a Programada' : otSel.cotizacion?.capacidadVerificada ? 'Reconfirmar capacidad y fechas' : 'Confirmar capacidad y fechas'}</button>
+                                            >{otSel.estado === 'Reprogramar' ? 'Confirmar fecha nueva' : otSel.cotizacion?.capacidadVerificada ? 'Reconfirmar capacidad y fechas' : 'Confirmar capacidad y fechas'}</button>
                                         );
                                     })()}
                                     {otSel.estado === 'Programada' && (
@@ -651,7 +655,11 @@ const styles = {
     filaCapacidad: { display: 'grid', gridTemplateColumns: GRID, alignItems: 'stretch', borderBottom: `1px solid ${t.hairlineFila}` },
     filaSeccion: { display: 'flex', alignItems: 'center', height: 30, padding: '0 16px', marginTop: 14, position: 'sticky', left: 0, background: t.encabezadoTabla, borderTop: `1px solid ${t.bordeZona}`, borderBottom: `1px solid ${t.hairlineBloque}`, fontSize: 9.5, letterSpacing: '.11em', textTransform: 'uppercase', color: t.textoAtenuado1, fontWeight: 700 },
     celda: { display: 'flex', alignItems: 'center', padding: '5px 10px', minWidth: 0 },
-    btnAccionFila: { width: '100%', height: 21, padding: '0 6px', background: t.superficie, border: `1px solid ${t.bordeZona}`, fontSize: 10.5, fontWeight: 600, color: '#262622', cursor: 'pointer', borderRadius: 2, whiteSpace: 'nowrap', fontFamily: t.fontUi },
+    // overflow/textOverflow: con nowrap solo, un label largo como "Confirmar y volver a
+    // Programada" desbordaba visualmente la celda de 104px y se metía sobre las columnas de
+    // fecha de al lado (mismo problema de "ink overflow" ya visto en la tabla de Tareas) —
+    // acá se trunca con "…" en vez de agrandar la fila.
+    btnAccionFila: { width: '100%', height: 21, padding: '0 6px', background: t.superficie, border: `1px solid ${t.bordeZona}`, fontSize: 10.5, fontWeight: 600, color: '#262622', cursor: 'pointer', borderRadius: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontFamily: t.fontUi },
 
     asideTira: {
         width: '13px', flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center',
