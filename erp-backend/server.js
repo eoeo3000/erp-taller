@@ -6,6 +6,7 @@ const fs = require('fs');
 const apiRoutes = require('./src/routes/index');
 const mailRoutes = require('./src/routes/mailRoutes');
 const resolverEntorno = require('./src/middlewares/entorno');
+const contratoRespuesta = require('./src/middlewares/respuestas');
 const { inicializarConexiones } = require('./src/config/conexiones');
 const app = express();
 
@@ -14,6 +15,10 @@ app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+// res.ok/res.fail — contrato de respuesta consistente para controladores nuevos o ya
+// tocados por otra razón (ver src/middlewares/respuestas.js). Antes de las rutas para que
+// esté disponible en /api/mail también, no solo en /api.
+app.use(contratoRespuesta);
 app.use('/api/mail', mailRoutes);
 // Asegurar carpeta de subidas
 const dir = './uploads';
