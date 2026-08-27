@@ -1198,6 +1198,20 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
     // reasignar fechas (ver aplicarAccionOT accion:'reprogramar' y GanttScreen.confirmarCapacidad).
     const soloLecturaPlanificacion = planificacionTerminada && otSeleccionada?.estado !== 'Reprogramar';
 
+    // Único condicionante bloqueante de la pestaña Cotización, en el orden en que se resuelven
+    // (tareas -> costos -> terminar planificación -> programar). Se muestra solo ese recuadro,
+    // sin el resto del contenido de la pestaña — para que quede claro que es un paso obligatorio,
+    // no un aviso más al lado de una cotización que en realidad todavía no se puede ver/enviar.
+    const bloqueoCotizacion = !todasTareasCompletas
+        ? { mensaje: 'Faltan datos en Tareas: descripción, puesto, responsable, horas, fecha, hora o $/hora de alguna tarea.', boton: 'Ir a Tareas', accion: () => irATab('tareas') }
+        : !equiposHerramientasConCosto
+            ? { mensaje: 'Todo equipo o herramienta debe tener un costo mayor a $0.', boton: 'Ir a Equipos y materiales', accion: () => irATab('componentes') }
+            : !planificacionTerminada
+                ? { mensaje: 'Todavía falta presionar "Terminar planificación" en la pestaña Suministros directos.', boton: 'Ir a Suministros directos', accion: () => irATab('Logistica') }
+                : !otSeleccionada.cotizacion?.capacidadVerificada
+                    ? { mensaje: 'Requiere programar la OT: falta verificar capacidad y fijar las fechas antes de poder enviar la cotización.', boton: 'Ir a Programación', accion: () => navigate('/gantt', { state: { _volverAOT: otSeleccionada._id } }) }
+                    : null;
+
     return (
         <div style={styles.raiz}>
             <style>{`
@@ -1237,17 +1251,15 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                     <button onClick={() => irATab('tareas')} disabled={!habilitadoTabs14} title={habilitadoTabs14 ? '' : 'Completa el Informe Inicial primero'} style={{ ...(tabActiva === 'tareas' ? styles.tabActivo : styles.tab), opacity: habilitadoTabs14 ? 1 : .5 }}>1 · Tareas</button>
                     <button onClick={() => irATab('componentes')} disabled={!habilitadoTabs14} title={habilitadoTabs14 ? '' : 'Completa el Informe Inicial primero'} style={{ ...(tabActiva === 'componentes' ? styles.tabActivo : styles.tab), opacity: habilitadoTabs14 ? 1 : .5 }}>2 · Equipos y materiales</button>
                     <button onClick={() => irATab('Logistica')} disabled={!habilitadoTabs14} title={habilitadoTabs14 ? '' : 'Completa el Informe Inicial primero'} style={{ ...(tabActiva === 'Logistica' ? styles.tabActivo : styles.tab), opacity: habilitadoTabs14 ? 1 : .5 }}>3 · Suministros directos</button>
+                    {/* Ya no se deshabilita por tareas/costos/planificación incompletos (antes, si algo
+                        faltaba, la pestaña quedaba gris sin ninguna pista de qué hacer ni a dónde ir —
+                        se podía quedar "varado" en otra pestaña). Ahora siempre se puede entrar, y adentro
+                        se explica qué falta con un botón directo a la pestaña correspondiente. */}
                     <button
                         onClick={() => irATab('cotizacion')}
-                        disabled={!habilitadoTabs14 || !todasTareasCompletas || !equiposHerramientasConCosto || !planificacionTerminada}
-                        title={
-                            !habilitadoTabs14 ? 'Completa el Informe Inicial primero'
-                                : !todasTareasCompletas ? 'Completa descripción, puesto, responsable, horas, fecha, hora y $/hora de todas las tareas'
-                                    : !equiposHerramientasConCosto ? 'Todo equipo o herramienta debe tener un costo mayor a $0'
-                                        : !planificacionTerminada ? 'Presiona "Terminar planificación" primero'
-                                            : ''
-                        }
-                        style={{ ...(tabActiva === 'cotizacion' ? styles.tabActivo : styles.tab), opacity: (habilitadoTabs14 && todasTareasCompletas && equiposHerramientasConCosto && planificacionTerminada) ? 1 : .5 }}
+                        disabled={!habilitadoTabs14}
+                        title={habilitadoTabs14 ? '' : 'Completa el Informe Inicial primero'}
+                        style={{ ...(tabActiva === 'cotizacion' ? styles.tabActivo : styles.tab), opacity: habilitadoTabs14 ? 1 : .5 }}
                     >4 · Cotización</button>
                     <button onClick={() => puedeEjecucion && setTabActiva('reportes')} disabled={!puedeEjecucion} title={puedeEjecucion ? '' : 'Disponible una vez que la OT esté Programada'} style={{ ...(tabActiva === 'reportes' ? styles.tabActivo : styles.tab), opacity: puedeEjecucion ? 1 : .5 }}>
                         Ejecución {otSeleccionada.reportes?.length ? `(${otSeleccionada.reportes.length})` : ''}
@@ -1651,16 +1663,17 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
 
                     {/* 4 · COTIZACIÓN */}
                     {tabActiva === 'cotizacion' && (
-                        <div style={{ padding: 16, display: 'flex', gap: 16, alignItems: 'flex-start', flexWrap: 'wrap' }}>
-                        {!otSeleccionada.cotizacion?.capacidadVerificada && (
-                            <div style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, padding: '10px 14px', background: '#fbeceb', border: `1px solid ${t.rojo}`, borderRadius: 2 }}>
-                                <span style={{ fontSize: 12, color: t.textoPrincipal }}>Requiere programar la OT: falta verificar capacidad y fijar las fechas antes de poder enviar la cotización.</span>
-                                <button
-                                    onClick={() => navigate('/gantt', { state: { _volverAOT: otSeleccionada._id } })}
-                                    style={{ ...styles.btnPrimario, flex: 'none' }}
-                                >Ir a Programación</button>
+                        <div style={{ padding: 16 }}>
+                        {bloqueoCotizacion ? (
+                            // Se muestra SOLO este recuadro, sin el resto de la pestaña (desglose,
+                            // envío) — para que quede claro que es un paso obligatorio y no un aviso
+                            // más al lado de una cotización que en realidad todavía no se puede ver.
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, padding: '10px 14px', background: '#fbeceb', border: `1px solid ${t.rojo}`, borderRadius: 2 }}>
+                                <span style={{ fontSize: 12, color: t.textoPrincipal }}>{bloqueoCotizacion.mensaje}</span>
+                                <button onClick={bloqueoCotizacion.accion} style={{ ...styles.btnPrimario, flex: 'none' }}>{bloqueoCotizacion.boton}</button>
                             </div>
-                        )}
+                        ) : (
+                        <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start', flexWrap: 'wrap' }}>
                         {otSeleccionada.cotizacion?.enviada && otSeleccionada.cotizacion?.respuestaCliente === 'Pendiente' && (
                             <div style={{
                                 width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, padding: '10px 14px', borderRadius: 2,
@@ -1865,6 +1878,8 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                             >{enviandoWhatsApp ? 'Generando link…' : 'Enviar cotización por WhatsApp'}</button>
                             <div style={{ fontSize: 10.5, color: t.textoAtenuado3, marginTop: 9, lineHeight: 1.5 }}>Las cotizaciones ya emitidas se siguen viendo con su formato original.</div>
                         </div>
+                        </div>
+                        )}
                         </div>
                     )}
 
