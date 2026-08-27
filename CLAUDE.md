@@ -21,9 +21,9 @@ npm start          # node server.js — runs the API on $PORT (default 5000)
 ```
 There is no lint/test/build script for the backend (`npm test` is a stub). No test framework is configured anywhere in the repo.
 
-One-off maintenance scripts live at the backend root and are run directly with `node <file>.js` (not wired into package.json): `borrado_total.js`, `borrarIndice.js`, `limpiar.js`, `limpiarSuministros.js` are destructive Mongo cleanup scripts that connect using `MONGO_URI` from `.env` — treat them as dangerous, confirm with the user before running or modifying. `test-db.js` is an ad hoc manual check script with a hardcoded local Mongo URI, not a real test.
+One-off maintenance scripts live at the backend root and are run directly with `node <file>.js` (not wired into package.json). `test-db.js` is an ad hoc manual check script with a hardcoded local Mongo URI, not a real test. Destructive Mongo cleanup scripts (`borrado_total.js`, `borrarIndice.js`, `limpiar.js`, `limpiarSuministros.js`) live in `scripts/peligrosos/` (see its README) and connect using `MONGO_URI` from `.env` — they now require typing the target database name to confirm before touching anything, but still treat them as dangerous and confirm with the user before running or modifying.
 
-Required `erp-backend/.env` variables: `MONGO_URI`, `PORT` (optional, defaults to 5000), `BREVO_API_KEY` (SMTP relay for outgoing mail), `EMAIL_FROM`.
+Required `erp-backend/.env` variables: `MONGO_URI`, `PORT` (optional, defaults to 5000), `BREVO_API_KEY` (SMTP relay for outgoing mail), `EMAIL_FROM`. Optional: `API_KEY` — shared secret gating the highest-risk write routes (OT, contabilidad, recursos/puestos/calendarios; see `middlewares/apiKey.js`). Unset by default, which leaves those routes unprotected (with a console warning) exactly as before this was added — set it here and set the matching `VITE_API_KEY` in `erp-web/.env` to activate the gate. Not real per-person auth: it ships in the SPA build and is visible in any browser's network tab.
 
 ### Web (`erp-web/`)
 ```bash
@@ -41,7 +41,7 @@ No automated tests exist on the frontend either; UI changes should be verified b
 ### Backend structure
 Layered Express app under `erp-backend/src/`:
 - `routes/` — one router per resource, all mounted under `/api` in `routes/index.js` (e.g. `/api/recursos`, `/api/ots`, `/api/solicitudes`, `/api/equipos`, `/api/suministros`, `/api/calendarios`, `/api/puestos`, `/api/plantillas`). `server.js` also mounts `/api/mail` (quotation emails) directly, separate from `routes/index.js`.
-- `controllers/` — one file per resource, plain `exports.fn = async (req, res) => {...}` handlers. Convention: `try/catch` per handler, `res.status(...).json({ error: ... })` on failure (message key varies: `error`, `mensaje`, `message` — not standardized, don't assume one).
+- `controllers/` — one file per resource, plain `exports.fn = async (req, res) => {...}` handlers. Convention: `try/catch` per handler, `res.status(...).json({ error: ... })` on failure (message key varies: `error`, `mensaje`, `message` — not standardized across the 22 existing controllers, don't assume one). `res.ok(datos, status?)` / `res.fail(status, mensaje)` (`middlewares/respuestas.js`, wired globally in `server.js`) standardize on `{ error }` for failures — use them in new controllers or ones already being touched for another reason, don't retrofit existing untouched controllers just for consistency.
 - `models/` — Mongoose schemas. Note the filename casing is inconsistent (`OT.js`, `Recurso.js`, `Solicitud.js`, `Calendario.js`, `Plantilla.js` vs. lowercase `puesto.js`, `suministro.js`, `equiposHerramientas.js`) — match existing require paths exactly.
 - `middlewares/auth.js` — trivial shared-secret check (`req.body.key !== "ClaveSecreta123"`), used only on the `webhook-emails` route. Not a general auth system; most routes are unauthenticated.
 - `middlewares/upload.js` and inline multer configs in some routes — disk storage into `erp-backend/uploads/`, filename = timestamp + random suffix. Served statically at `/uploads`.
