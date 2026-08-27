@@ -527,6 +527,35 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
         }
     };
 
+    const [enviandoWhatsApp, setEnviandoWhatsApp] = useState(false);
+
+    // Vía alternativa a "Enviar cotización por correo": mismo link autenticado a la PWA
+    // Cliente (mailRoutes.resolverLinkPortal), pero compartido por WhatsApp — mismo patrón que
+    // enviarPortalCliente en App.jsx (wa.me armado en el cliente), acá con el link real de
+    // aprobación en vez del portal público de solo lectura.
+    const enviarCotizacionWhatsApp = async () => {
+        setEnviandoWhatsApp(true);
+        try {
+            const respuesta = await axios.post(`${API}/mail/link-cotizacion`, { otId: otSeleccionada._id });
+            const { link, telefono } = respuesta.data;
+            if (!link || !telefono) { notificar.error('No se pudo generar el link — revisa que la Solicitud tenga teléfono registrado.'); return; }
+            await actualizarOtGlobal(otSeleccionada._id, {
+                'cotizacion.enviada': true,
+                'cotizacion.fechaEnvio': new Date().toISOString(),
+                'cotizacion.respuestaCliente': 'Pendiente',
+                'cotizacion.fechaRespuesta': null,
+            });
+            const mensaje = `Hola ${datosRecibidos?.solicitante || ''}, le compartimos la cotización de la OT ${otSeleccionada?.numeroOT || ''}. Puede revisarla y responder desde acá:\n\n${link}`;
+            window.open(`https://wa.me/${telefono.replace(/\D/g, '')}?text=${encodeURIComponent(mensaje)}`, '_blank');
+            notificar.exito('Cotización enviada — se abrió WhatsApp con el link.');
+            if (cargarDatos) await cargarDatos();
+        } catch (error) {
+            notificar.error('No se pudo generar el link: ' + (error.response?.data?.error || error.message));
+        } finally {
+            setEnviandoWhatsApp(false);
+        }
+    };
+
     const limpiarIds = (lista) => (lista || []).map(item => {
         const { _id, id: _omitido, ...resto } = item;
         return (String(_id).length === 24) ? { _id, ...resto } : resto;
@@ -1828,6 +1857,12 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                                 title={otSeleccionada.cotizacion?.capacidadVerificada ? '' : 'Verifica la capacidad en Programación antes de enviar'}
                                 style={{ ...styles.btnSecundario, width: '100%', marginTop: 6, opacity: otSeleccionada.cotizacion?.capacidadVerificada ? 1 : .5 }}
                             >Enviar cotización por correo</button>
+                            <button
+                                onClick={enviarCotizacionWhatsApp}
+                                disabled={!otSeleccionada.cotizacion?.capacidadVerificada || enviandoWhatsApp}
+                                title={otSeleccionada.cotizacion?.capacidadVerificada ? '' : 'Verifica la capacidad en Programación antes de enviar'}
+                                style={{ ...styles.btnSecundario, width: '100%', marginTop: 6, opacity: (otSeleccionada.cotizacion?.capacidadVerificada && !enviandoWhatsApp) ? 1 : .5 }}
+                            >{enviandoWhatsApp ? 'Generando link…' : 'Enviar cotización por WhatsApp'}</button>
                             <div style={{ fontSize: 10.5, color: t.textoAtenuado3, marginTop: 9, lineHeight: 1.5 }}>Las cotizaciones ya emitidas se siguen viendo con su formato original.</div>
                         </div>
                         </div>
