@@ -35,11 +35,25 @@ const t = {
 
 const DIAS_L = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
 const GRID = '118px minmax(180px,1fr) 132px 104px 52px 62px 62px repeat(7, minmax(0,1fr))';
-// 'Reprogramar' queda fuera a propósito: la OT necesita una fecha nueva, así que sus tareas
-// (con la fecha vieja) ya no deben seguir ocupando HH/capacidad de nadie — deja el slot libre
-// hasta que el planificador la reprograme desde Tareas (ver el badge clickeable más abajo).
-const ESTADOS_ACTIVOS = ['Planificada', 'Programada', 'En Ejecución'];
 const ESTADOS_EJECUTADOS = ['Trabajo Terminado', 'Con Informe', 'Pagada'];
+
+// Mismo criterio y mismo límite que otController.cotizacionVencida — duplicado acá porque no
+// hay forma de compartir código entre el backend y el frontend en este repo.
+const HORAS_LIMITE_APROBACION_COTIZACION = 12;
+const cotizacionVencida = (ot) => !!(
+    ot.cotizacion?.enviada && ot.cotizacion?.respuestaCliente === 'Pendiente' && ot.cotizacion?.fechaEnvio
+    && (Date.now() - new Date(ot.cotizacion.fechaEnvio).getTime()) > HORAS_LIMITE_APROBACION_COTIZACION * 3600 * 1000
+);
+
+// Antes cualquier OT 'Planificada' ocupaba capacidad, se hubiera enviado la cotización o no.
+// Ahora una 'Planificada' solo bloquea capacidad MIENTRAS hay una aprobación del cliente
+// realmente en curso (enviada, todavía Pendiente, dentro de las 12h) — antes de enviar, o
+// después de que venza o el planificador la cancele (Tratamiento, pestaña Cotización), deja
+// el slot libre. 'Reprogramar' queda fuera igual que antes: necesita fecha nueva, sus tareas
+// con la fecha vieja no deben seguir contando (ver el badge clickeable más abajo).
+const otBloqueaCapacidad = (ot) =>
+    ['Programada', 'En Ejecución'].includes(ot.estado)
+    || (ot.estado === 'Planificada' && ot.cotizacion?.enviada && ot.cotizacion?.respuestaCliente === 'Pendiente' && !cotizacionVencida(ot));
 
 const colorEstadoOT = (estado) => {
     if (ESTADOS_EJECUTADOS.includes(estado)) return t.textoAtenuado1;
@@ -58,7 +72,7 @@ const GanttScreen = ({ recursos = [], ots = [], calendarios = [], obtenerHorasPa
     ots.forEach(ot => ot.tareas?.forEach(tt => { if (tt.fecha) diasConTareas.push(tt.fecha); }));
 
     const mapaCarga = {};
-    ots.filter(ot => ESTADOS_ACTIVOS.includes(ot.estado)).forEach(ot => {
+    ots.filter(otBloqueaCapacidad).forEach(ot => {
         ot.tareas?.forEach(tt => {
             if (tt.fecha && tt.operarioId) {
                 const ids = Array.isArray(tt.operarioId) ? tt.operarioId : [tt.operarioId];
@@ -131,7 +145,7 @@ const GanttScreen = ({ recursos = [], ots = [], calendarios = [], obtenerHorasPa
     // OT.supervisorId (Recurso), no en Asignacion: es simplificación deliberada — cuenta
     // supervisión de OT ya creadas, no evaluaciones que todavía son solo Solicitud.
     const supervisoresRecursos = recursos.filter(esSupervisor);
-    const otsActivasDe = (recursoId) => ots.filter(ot => String(ot.supervisorId) === String(recursoId) && ESTADOS_ACTIVOS.includes(ot.estado));
+    const otsActivasDe = (recursoId) => ots.filter(ot => String(ot.supervisorId) === String(recursoId) && otBloqueaCapacidad(ot));
     const diasOcupadosPorSupervisor = (recursoId) => {
         const mapa = {};
         otsActivasDe(recursoId).forEach(ot => {
@@ -183,10 +197,19 @@ const GanttScreen = ({ recursos = [], ots = [], calendarios = [], obtenerHorasPa
             notificar.advertencia('Esta OT no tiene tareas con fecha y horas asignadas — complétalas en Tratamiento antes de verificar capacidad.');
             return;
         }
+        // Antes esto solo pedía confirmación cuando ya había sobrecarga detectada — el pedido
+        // fue que "aceptar programación" siempre deje explícito revisar capacidad del personal,
+        // no solo avisar cuando el sistema ya encontró un problema.
         const conflictos = verificarDisponibilidad(ot);
         if (conflictos.length > 0) {
             const detalle = conflictos.map(c => `${c.nombre} el ${c.fecha} (+${c.deficit}h sobre su capacidad)`).join('; ');
             const continuar = await confirmar(`Esto deja responsables sobre su capacidad: ${detalle}. ¿Confirmar igual?`);
+            if (!continuar) return;
+        } else {
+            const continuar = await confirmar(
+                'Vas a aceptar la programación de esta OT. Revisa que el personal asignado tenga capacidad disponible en las fechas indicadas. ¿Confirmar?',
+                { danger: false, textoConfirmar: 'Aceptar programación' },
+            );
             if (!continuar) return;
         }
 
@@ -289,7 +312,7 @@ const GanttScreen = ({ recursos = [], ots = [], calendarios = [], obtenerHorasPa
                             const fechasTareas = (ot.tareas || []).filter(tt => tt.fecha).map(tt => tt.fecha).sort();
                             const fmtFecha = iso => iso ? new Date(iso + 'T00:00:00').toLocaleDateString('es-CL', { day: '2-digit', month: 'short' }) : '—';
                             const enSemana = diasSemana.some(d => fechasTareas.includes(d));
-                            const accionLabel = !puedeProgramar ? 'No disponible' : ot.estado === 'Reprogramar' ? 'Confirmar fecha nueva' : capacidadVerificada ? 'Reconfirmar capacidad' : 'Confirmar capacidad y fechas';
+                            const accionLabel = !puedeProgramar ? 'No disponible' : ot.estado === 'Reprogramar' ? 'Confirmar fecha nueva' : capacidadVerificada ? 'Reconfirmar programación' : 'Aceptar programación';
                             const tituloAccion = !estadoValido
                                 ? 'La OT debe estar Planificada, Programada o Reprogramar'
                                 : !tieneTareasConFecha
@@ -316,6 +339,9 @@ const GanttScreen = ({ recursos = [], ots = [], calendarios = [], obtenerHorasPa
                                             ) : ot.estado}
                                             {ot.subEstado === 'Replanificar' && (
                                                 <span title="Replanificar: necesita revisión de alcance/recursos" style={{ marginLeft: 4, color: t.rojo }}>●</span>
+                                            )}
+                                            {cotizacionVencida(ot) && (
+                                                <span style={{ marginLeft: 4, fontSize: 9, fontWeight: 700, color: t.rojo, letterSpacing: '.04em' }}>VENCIDA</span>
                                             )}
                                         </span>
                                         <span style={styles.celda}>
@@ -454,6 +480,9 @@ const GanttScreen = ({ recursos = [], ots = [], calendarios = [], obtenerHorasPa
                                         {ot.subEstado === 'Replanificar' && (
                                             <span title="Replanificar: necesita revisión de alcance/recursos" style={{ marginLeft: 4, color: t.rojo }}>●</span>
                                         )}
+                                        {cotizacionVencida(ot) && (
+                                            <span style={{ marginLeft: 4, fontSize: 9, fontWeight: 700, color: t.rojo, letterSpacing: '.04em' }}>VENCIDA</span>
+                                        )}
                                     </span>
                                     <span style={{ ...styles.celda, justifyContent: 'flex-end', fontFamily: t.fontMono, fontSize: 11 }}>{`${horasSemana} h`}</span>
                                     <span style={{ ...styles.celda, justifyContent: 'flex-end', fontFamily: t.fontMono, fontSize: 10.5, color: t.textoSecundario1 }}>{fmtFecha(fechasTareas[0])}</span>
@@ -576,7 +605,7 @@ const GanttScreen = ({ recursos = [], ots = [], calendarios = [], obtenerHorasPa
                                                 disabled={!puedeSel}
                                                 title={tituloSel}
                                                 style={{ ...styles.btnSecundario, width: '100%', marginBottom: 6, opacity: puedeSel ? 1 : .5 }}
-                                            >{otSel.estado === 'Reprogramar' ? 'Confirmar fecha nueva' : otSel.cotizacion?.capacidadVerificada ? 'Reconfirmar capacidad y fechas' : 'Confirmar capacidad y fechas'}</button>
+                                            >{otSel.estado === 'Reprogramar' ? 'Confirmar fecha nueva' : otSel.cotizacion?.capacidadVerificada ? 'Reconfirmar programación' : 'Aceptar programación'}</button>
                                         );
                                     })()}
                                     {otSel.estado === 'Programada' && (

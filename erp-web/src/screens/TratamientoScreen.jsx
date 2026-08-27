@@ -93,6 +93,20 @@ const GRID_LOGISTICA_MIN_W = 96 + 96 + 200 + 62 + 96 + 100 + 140 + 24 + 7 * 8 + 
 
 const fmtFecha = (iso) => iso ? new Date(iso).toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—';
 
+// Mismo criterio y mismo límite que otController.cotizacionVencida/GanttScreen.cotizacionVencida
+// — duplicado acá porque no hay forma de compartir código entre el backend y el frontend, y
+// entre pantallas del frontend, en este repo.
+const HORAS_LIMITE_APROBACION_COTIZACION = 12;
+const cotizacionVencida = (ot) => !!(
+    ot?.cotizacion?.enviada && ot?.cotizacion?.respuestaCliente === 'Pendiente' && ot?.cotizacion?.fechaEnvio
+    && (Date.now() - new Date(ot.cotizacion.fechaEnvio).getTime()) > HORAS_LIMITE_APROBACION_COTIZACION * 3600 * 1000
+);
+const horasRestantesAprobacion = (ot) => {
+    if (!ot?.cotizacion?.fechaEnvio) return null;
+    const limite = new Date(ot.cotizacion.fechaEnvio).getTime() + HORAS_LIMITE_APROBACION_COTIZACION * 3600 * 1000;
+    return Math.max(0, limite - Date.now()) / 3600000;
+};
+
 // tareas[].horaFin, persistido junto a horaInicio para que la detección de cruces de horario
 // de la PWA Operativa (modo supervisor) no tenga que recalcularlo — soporta turnos que cruzan
 // medianoche (ver bug de calcularHorasDia en App.jsx, mismo problema de módulo 1440).
@@ -493,6 +507,23 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
             notificar.error('No se pudo enviar la excepción: ' + (error.response?.data?.error || error.message));
         } finally {
             setEnviandoExcepcion(null);
+        }
+    };
+
+    // Cierra la ventana de aprobación antes de que venzan las 12h — vuelve todo a foja cero:
+    // hay que reconfirmar programación en el Gantt y reenviar para que el cliente pueda
+    // aprobar de nuevo (mismo criterio que el vencimiento automático, ver cotizacionVencida).
+    const cancelarAceptacion = async () => {
+        if (!(await confirmar('¿Cancelar la aceptación pendiente? El cliente ya no podrá aprobar este envío — habrá que reconfirmar programación y reenviar.', { danger: false, textoConfirmar: 'Cancelar aceptación' }))) return;
+        const resultado = await actualizarOtGlobal(otSeleccionada._id, {
+            'cotizacion.enviada': false,
+            'cotizacion.capacidadVerificada': false,
+        });
+        if (resultado?.exito) {
+            notificar.exito('Aceptación cancelada.');
+            if (cargarDatos) await cargarDatos();
+        } else {
+            notificar.error(resultado?.error || 'No se pudo cancelar.');
         }
     };
 
@@ -1601,6 +1632,23 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                                 >Ir a Programación</button>
                             </div>
                         )}
+                        {otSeleccionada.cotizacion?.enviada && otSeleccionada.cotizacion?.respuestaCliente === 'Pendiente' && (
+                            <div style={{
+                                width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, padding: '10px 14px', borderRadius: 2,
+                                background: cotizacionVencida(otSeleccionada) ? '#fbeceb' : '#fdf3e7',
+                                border: `1px solid ${cotizacionVencida(otSeleccionada) ? t.rojo : t.bordeZona}`,
+                            }}>
+                                <span style={{ fontSize: 12, color: t.textoPrincipal }}>
+                                    {cotizacionVencida(otSeleccionada)
+                                        ? 'La cotización venció (pasaron 12 h) — el cliente ya no puede aprobarla. Cancela y reenvía si sigue vigente.'
+                                        : `Esperando respuesta del cliente — vence en ${(() => {
+                                            const h = horasRestantesAprobacion(otSeleccionada);
+                                            return h == null ? '—' : `${Math.floor(h)} h ${Math.round((h % 1) * 60)} min`;
+                                        })()}.`}
+                                </span>
+                                <button onClick={cancelarAceptacion} style={{ ...styles.btnSecundario, flex: 'none' }}>Cancelar aceptación</button>
+                            </div>
+                        )}
                         <div style={{ maxWidth: 620, flex: '1 1 480px' }}>
                             <div style={styles.tituloSub}>Cotización técnica y comercial</div>
                             {[
@@ -1627,6 +1675,99 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                                 <span style={{ fontSize: 12, fontWeight: 700 }}>Total bruto</span>
                                 <span style={{ fontFamily: t.fontMono, fontSize: 15, fontWeight: 600 }}>{CLP(granTotal * 1.19)}</span>
                             </div>
+
+                            {/* Desglose completo: qué se hace, con qué, cómo y cuándo — la cotización
+                                es la culminación de la planificación, así que le sirve tanto al
+                                cliente (qué está aprobando) como al planificador (revisar que todo
+                                concuerde con lo que se va a ejecutar) antes de enviarla. */}
+                            {tareas.length > 0 && (
+                                <div style={{ marginTop: 20, overflowX: 'auto', background: '#fff' }}>
+                                    <div style={styles.tituloSub}>Tareas — qué, con quién, cuándo y cómo</div>
+                                    <table style={{ borderCollapse: 'collapse', fontSize: 10.5, width: '100%' }}>
+                                        <thead>
+                                            <tr>
+                                                <th style={styles.thGantt}>Tarea</th><th style={styles.thGantt}>Puesto</th>
+                                                <th style={styles.thGantt}>Responsables</th><th style={styles.thGantt}>Fecha</th>
+                                                <th style={styles.thGantt}>Hora</th><th style={{ ...styles.thGantt, textAlign: 'right' }}>Hrs</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {tareas.map((tt, idx) => (
+                                                <React.Fragment key={tt._id || tt.id || idx}>
+                                                    <tr>
+                                                        <td style={styles.tdGantt}>{tt.descripcion || '—'}</td>
+                                                        <td style={styles.tdGantt}>{tt.puesto || '—'}</td>
+                                                        <td style={styles.tdGantt}>{(tt.operarioNombre || []).join(', ') || '—'}</td>
+                                                        <td style={styles.tdGantt}>{tt.fecha ? fmtFecha(tt.fecha) : '—'}</td>
+                                                        <td style={styles.tdGantt}>{tt.hora || '—'}</td>
+                                                        <td style={{ ...styles.tdGantt, textAlign: 'right' }}>{tt.duracion || 0}</td>
+                                                    </tr>
+                                                    {(tt.desarrollo || '').trim() && (
+                                                        <tr>
+                                                            <td colSpan={6} style={{ ...styles.tdGantt, color: t.textoSecundario2, fontStyle: 'italic', whiteSpace: 'pre-wrap' }}>
+                                                                Metodología: {tt.desarrollo}
+                                                            </td>
+                                                        </tr>
+                                                    )}
+                                                </React.Fragment>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
+
+                            {componentes.length > 0 && (
+                                <div style={{ marginTop: 20, overflowX: 'auto', background: '#fff' }}>
+                                    <div style={styles.tituloSub}>Con qué — Equipos y materiales</div>
+                                    <table style={{ borderCollapse: 'collapse', fontSize: 10.5, width: '100%' }}>
+                                        <thead>
+                                            <tr>
+                                                <th style={styles.thGantt}>Descripción</th><th style={styles.thGantt}>Tipo</th>
+                                                <th style={{ ...styles.thGantt, textAlign: 'right' }}>Cant.</th>
+                                                <th style={{ ...styles.thGantt, textAlign: 'right' }}>Unitario</th>
+                                                <th style={{ ...styles.thGantt, textAlign: 'right' }}>Subtotal</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {componentes.map((c, idx) => (
+                                                <tr key={c._id || c.id || idx}>
+                                                    <td style={styles.tdGantt}>{c.descripcion || '—'}</td>
+                                                    <td style={styles.tdGantt}>{c.tipo || '—'}</td>
+                                                    <td style={{ ...styles.tdGantt, textAlign: 'right' }}>{c.cantidad || 0}</td>
+                                                    <td style={{ ...styles.tdGantt, textAlign: 'right' }}>{CLP(c.precio || 0)}</td>
+                                                    <td style={{ ...styles.tdGantt, textAlign: 'right' }}>{CLP((Number(c.cantidad) || 0) * (Number(c.precio) || 0))}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
+
+                            {logistica.length > 0 && (
+                                <div style={{ marginTop: 20, overflowX: 'auto', background: '#fff' }}>
+                                    <div style={styles.tituloSub}>Suministros directos</div>
+                                    <table style={{ borderCollapse: 'collapse', fontSize: 10.5, width: '100%' }}>
+                                        <thead>
+                                            <tr>
+                                                <th style={styles.thGantt}>Descripción</th>
+                                                <th style={{ ...styles.thGantt, textAlign: 'right' }}>Cant.</th>
+                                                <th style={{ ...styles.thGantt, textAlign: 'right' }}>Unitario</th>
+                                                <th style={{ ...styles.thGantt, textAlign: 'right' }}>Subtotal</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {logistica.map((l, idx) => (
+                                                <tr key={l._id || l.id || idx}>
+                                                    <td style={styles.tdGantt}>{l.descripcion || '—'}</td>
+                                                    <td style={{ ...styles.tdGantt, textAlign: 'right' }}>{l.cantidad || 0}</td>
+                                                    <td style={{ ...styles.tdGantt, textAlign: 'right' }}>{CLP(l.precio || 0)}</td>
+                                                    <td style={{ ...styles.tdGantt, textAlign: 'right' }}>{CLP((Number(l.cantidad) || 0) * (Number(l.precio) || 0))}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
 
                             {diasPlanificados.length > 0 && (
                                 <div id="seccion-gantt-visual" style={{ marginTop: 20, overflowX: 'auto', background: '#fff' }}>
