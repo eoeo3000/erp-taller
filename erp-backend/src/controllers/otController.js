@@ -97,9 +97,14 @@ function numeroOTDesdeSolicitud(numeroSolicitud) {
 }
 
 // --- Reserva/liberación de recursos por cambio de estado de la OT (ver docs/funcionalidades-v2.md, Gap 4) ---
-// Nota: hoy OT.componentes solo guarda 'codigo' como copia de texto (sin referencia real al catálogo),
-// así que el cruce con EquiposHerramientas/Suministro se hace por codigo — decisión documentada en el
-// gap analysis (Parte VIII, punto 3): aplica hacia adelante, es un cruce best-effort.
+// OT.componentes puede traer catalogoId (ObjectId real hacia EquiposHerramientas, capturado
+// cuando se elige desde el autocompletado — ver TabEquiposMateriales.jsx) además del
+// 'codigo' de texto histórico. El cruce prioriza catalogoId cuando está presente; codigo
+// queda como fallback para componentes cargados antes de este cambio o tecleados a mano
+// (Suministro no tiene un punto de captura de catalogoId hoy — no hay autocompletado contra
+// ese catálogo dentro de OT.componentes — así que esa rama sigue por codigo únicamente).
+// Ver plan de robustecimiento, punto 7 (antes era un cruce 100% por texto, "best-effort" —
+// un typo o un código reutilizado rompía esto en silencio).
 // NOTA: esta función no es un handler (req,res) — recibe la conexión explícitamente como `conn`
 // porque se invoca desde varios handlers distintos (actualizarOT, responderCotizacionCliente).
 async function aplicarReservaPorCambioEstado(otAnterior, otNueva, conn) {
@@ -114,6 +119,7 @@ async function aplicarReservaPorCambioEstado(otAnterior, otNueva, conn) {
         const componentes = otNueva.componentes || [];
 
         const esEquipo = (c) => c.tipo === 'Equipo' || c.tipo === 'Herramienta';
+        const filtroEquipo = (c) => c.catalogoId ? { _id: c.catalogoId } : { codigo: c.codigo };
 
         // Cliente aprobó la cotización y quedó agendada: reservar herramientas/equipos e
         // insumos comprometidos. Guard específico en la transición Planificada->Programada
@@ -122,9 +128,9 @@ async function aplicarReservaPorCambioEstado(otAnterior, otNueva, conn) {
         // volvería a reservar equipos que ya están 'En Uso'.
         if (estadoAnt === 'Planificada' && estadoNuevo === 'Programada') {
             for (const c of componentes) {
-                if (!c.codigo) continue;
+                if (!c.codigo && !c.catalogoId) continue;
                 if (esEquipo(c)) {
-                    await EquiposHerramientas.updateOne({ codigo: c.codigo, estado: 'Disponible' }, { estado: 'Reservado' });
+                    await EquiposHerramientas.updateOne({ ...filtroEquipo(c), estado: 'Disponible' }, { estado: 'Reservado' });
                 } else {
                     const suministro = await Suministro.findOne({ codigo: c.codigo });
                     if (suministro) {
@@ -141,8 +147,8 @@ async function aplicarReservaPorCambioEstado(otAnterior, otNueva, conn) {
         // Inicia la ejecución en terreno: lo reservado pasa a estar en uso
         if (estadoNuevo === 'En Ejecución' && estadoAnt !== 'En Ejecución') {
             for (const c of componentes) {
-                if (c.codigo && esEquipo(c)) {
-                    await EquiposHerramientas.updateOne({ codigo: c.codigo, estado: 'Reservado' }, { estado: 'En Uso' });
+                if ((c.codigo || c.catalogoId) && esEquipo(c)) {
+                    await EquiposHerramientas.updateOne({ ...filtroEquipo(c), estado: 'Reservado' }, { estado: 'En Uso' });
                 }
             }
         }
@@ -150,9 +156,9 @@ async function aplicarReservaPorCambioEstado(otAnterior, otNueva, conn) {
         // Faena completada: libera herramientas/equipos e insumos reservados
         if (estadoNuevo === 'Trabajo Terminado' && estadoAnt !== 'Trabajo Terminado') {
             for (const c of componentes) {
-                if (!c.codigo) continue;
+                if (!c.codigo && !c.catalogoId) continue;
                 if (esEquipo(c)) {
-                    await EquiposHerramientas.updateOne({ codigo: c.codigo, estado: 'En Uso' }, { estado: 'Disponible' });
+                    await EquiposHerramientas.updateOne({ ...filtroEquipo(c), estado: 'En Uso' }, { estado: 'Disponible' });
                 } else {
                     const suministro = await Suministro.findOne({ codigo: c.codigo });
                     if (suministro) {

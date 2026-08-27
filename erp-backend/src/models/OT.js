@@ -130,6 +130,14 @@ const OTSchema = new mongoose.Schema({
     // 2. Componentes y Materiales
     componentes: [{
         codigo: String,
+        // Referencia real hacia EquiposHerramientas, capturada cuando se elige desde el
+        // autocompletado (ver TabEquiposMateriales.jsx) — en paralelo a 'codigo', no lo
+        // reemplaza. otController.aplicarReservaPorCambioEstado prioriza este campo sobre el
+        // match por texto cuando está presente. Suministro no tiene un punto de captura
+        // propio hoy (no hay autocompletado contra ese catálogo acá), así que los
+        // componentes tipo 'Material' siguen cruzándose solo por 'codigo'. Ver plan de
+        // robustecimiento, punto 7.
+        catalogoId: { type: mongoose.Schema.Types.ObjectId, default: null },
         descripcion: String,
         cantidad: Number,
         precio: Number,

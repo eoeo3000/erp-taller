@@ -665,8 +665,17 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [tabActiva]);
 
-    const disponibilidadEquipo = (codigo) => {
-        const item = (componentesDB || []).find(db => db.codigo && codigo && db.codigo === codigo);
+    // Prioriza el match por catalogoId (ObjectId real, capturado al elegir del
+    // autocompletado) sobre el texto — mismo criterio que
+    // otController.aplicarReservaPorCambioEstado, ver plan de robustecimiento punto 7.
+    // `c` puede venir como string (codigo suelto, uso histórico) para no romper otros
+    // llamadores que todavía no pasan el componente completo.
+    const disponibilidadEquipo = (c) => {
+        const codigo = typeof c === 'string' ? c : c?.codigo;
+        const catalogoId = typeof c === 'string' ? null : c?.catalogoId;
+        const item = (componentesDB || []).find(db =>
+            (catalogoId && String(db._id) === String(catalogoId)) || (db.codigo && codigo && db.codigo === codigo)
+        );
         return item ? item.estado : null;
     };
     const disponibilidadSuministro = (codigo) => {

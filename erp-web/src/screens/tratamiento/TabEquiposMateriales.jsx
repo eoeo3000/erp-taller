@@ -19,7 +19,7 @@ export default function TabEquiposMateriales({
                 <span style={{ textAlign: 'right' }}>Subtotal</span><span>Disponibilidad</span><span />
             </div>
             {componentes.map((c, idx) => {
-                const estado = disponibilidadEquipo(c.codigo);
+                const estado = disponibilidadEquipo(c);
                 const ok = estado === 'Disponible';
                 return (
                     <div key={c.id || idx} style={{ ...styles.tablaFila(GRID_MATERIALES), minWidth: GRID_MATERIALES_MIN_W }}>
@@ -42,6 +42,9 @@ export default function TabEquiposMateriales({
                                     actualizarComponente(idx, 'tipo', match.tipo || 'Equipo');
                                     actualizarComponente(idx, 'codigo', match.codigo || 'REF');
                                     actualizarComponente(idx, 'precio', match.precio || 0);
+                                    // Referencia real al catálogo, en paralelo al código de texto —
+                                    // ver plan de robustecimiento, punto 7.
+                                    actualizarComponente(idx, 'catalogoId', match._id);
                                 }, 50);
                             }}
                         />
