@@ -1121,6 +1121,11 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
     // "Terminar planificación" (no las pestañas 1-3, que quedan libres para ir armando) es lo
     // que bloquea una observación abierta sobre el informe inicial y las tareas incompletas.
     const puedeTerminarPlanificacion = informeEvaluacion.revision?.estado !== 'ConObservaciones' && todasTareasCompletas;
+    // Que las tareas ESTÉN completas no basta para entrar a Cotización: hace falta además que
+    // se haya presionado "Terminar planificación" (guardarPlanificacion('Planificada')) — sin
+    // esto, se podía completar todo en memoria y saltar directo a la pestaña 4 sin haber
+    // confirmado el paso, dejando la OT igual en 'Tratada'.
+    const planificacionTerminada = !['Pendiente', 'Tratada'].includes(otSeleccionada?.estado);
 
     return (
         <div style={styles.raiz}>
@@ -1163,9 +1168,14 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                     <button onClick={() => irATab('Logistica')} disabled={!habilitadoTabs14} title={habilitadoTabs14 ? '' : 'Completa el Informe Inicial primero'} style={{ ...(tabActiva === 'Logistica' ? styles.tabActivo : styles.tab), opacity: habilitadoTabs14 ? 1 : .5 }}>3 · Suministros directos</button>
                     <button
                         onClick={() => irATab('cotizacion')}
-                        disabled={!habilitadoTabs14 || !todasTareasCompletas}
-                        title={!habilitadoTabs14 ? 'Completa el Informe Inicial primero' : !todasTareasCompletas ? 'Completa descripción, puesto, responsable, horas, fecha, hora y $/hora de todas las tareas' : ''}
-                        style={{ ...(tabActiva === 'cotizacion' ? styles.tabActivo : styles.tab), opacity: (habilitadoTabs14 && todasTareasCompletas) ? 1 : .5 }}
+                        disabled={!habilitadoTabs14 || !todasTareasCompletas || !planificacionTerminada}
+                        title={
+                            !habilitadoTabs14 ? 'Completa el Informe Inicial primero'
+                                : !todasTareasCompletas ? 'Completa descripción, puesto, responsable, horas, fecha, hora y $/hora de todas las tareas'
+                                    : !planificacionTerminada ? 'Presiona "Terminar planificación" primero'
+                                        : ''
+                        }
+                        style={{ ...(tabActiva === 'cotizacion' ? styles.tabActivo : styles.tab), opacity: (habilitadoTabs14 && todasTareasCompletas && planificacionTerminada) ? 1 : .5 }}
                     >4 · Cotización</button>
                     <button onClick={() => puedeEjecucion && setTabActiva('reportes')} disabled={!puedeEjecucion} title={puedeEjecucion ? '' : 'Disponible una vez que la OT esté Programada'} style={{ ...(tabActiva === 'reportes' ? styles.tabActivo : styles.tab), opacity: puedeEjecucion ? 1 : .5 }}>
                         Ejecución {otSeleccionada.reportes?.length ? `(${otSeleccionada.reportes.length})` : ''}
