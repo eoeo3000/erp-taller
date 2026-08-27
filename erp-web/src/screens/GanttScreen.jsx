@@ -233,11 +233,12 @@ const GanttScreen = ({ recursos = [], ots = [], calendarios = [], obtenerHorasPa
         if (!resultado?.exito) { notificar.error(resultado?.error || 'No se pudo confirmar la capacidad.'); return; }
         if (cargarDatos) cargarDatos();
 
-        // Si vino desde el aviso "Requiere programar la OT" de Tratamiento, vuelve directo a
-        // la pestaña Cotización con la OT ya actualizada.
-        if (location.state?._volverATab) {
-            navigate('/tratamiento', { state: { ...resultado.otActualizada, _tabDestino: location.state._volverATab } });
-        }
+        // Siempre vuelve a la pestaña Cotización con la OT ya actualizada — antes solo lo
+        // hacía si se había llegado acá desde el aviso "Requiere programar la OT" de
+        // Tratamiento (location.state._volverATab), así que entrando a Programación por
+        // cualquier otro camino (el menú, por ejemplo) "Aceptar programación" se quedaba en
+        // el Gantt sin ninguna forma obvia de continuar a enviar la cotización.
+        navigate('/tratamiento', { state: { ...resultado.otActualizada, _tabDestino: 'cotizacion' } });
     };
 
     // Escape hatch operativo: no hay forma en la UI de volver una OT de 'Programada' a
