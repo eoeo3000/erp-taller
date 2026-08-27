@@ -1131,6 +1131,12 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
     // esto, se podía completar todo en memoria y saltar directo a la pestaña 4 sin haber
     // confirmado el paso, dejando la OT igual en 'Tratada'.
     const planificacionTerminada = !['Pendiente', 'Tratada'].includes(otSeleccionada?.estado);
+    // Congelar Tareas/Equipos/Suministros una vez terminada la planificación: de lo contrario
+    // se podía seguir editando después de "Terminar planificación" sin que quedara ningún
+    // rastro de que el plan cambió respecto al que se cotizó. 'Reprogramar' es la única
+    // excepción — es justo el estado en el que el planificador necesita volver a Tareas a
+    // reasignar fechas (ver aplicarAccionOT accion:'reprogramar' y GanttScreen.confirmarCapacidad).
+    const soloLecturaPlanificacion = planificacionTerminada && otSeleccionada?.estado !== 'Reprogramar';
 
     return (
         <div style={styles.raiz}>
@@ -1199,6 +1205,12 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
 
             <div style={styles.cuerpo}>
                 <section style={styles.contenido}>
+
+                    {soloLecturaPlanificacion && ['tareas', 'componentes', 'Logistica'].includes(tabActiva) && (
+                        <div style={{ padding: '8px 16px', background: '#fdf3e7', borderBottom: `1px solid ${t.bordeZona}`, fontSize: 11.5, color: t.textoSecundario1 }}>
+                            Planificación terminada — esta pestaña quedó de solo lectura. Para cambiar fechas, reprograma la OT desde la PWA del supervisor.
+                        </div>
+                    )}
 
                     {/* ANTECEDENTES */}
                     {tabActiva === 'antecedentes' && (
@@ -1334,7 +1346,11 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
 
                     {/* 1 · TAREAS */}
                     {tabActiva === 'tareas' && (
-                        <div style={{ padding: '0 0 16px' }}>
+                        // pointerEvents/opacity (no fieldset+disabled): varios controles de esta
+                        // pestaña son <span onClick> (los "×" de eliminar, el backspace del
+                        // responsable), no <input>/<button> reales, así que disabled de un
+                        // fieldset no los habría bloqueado. Se frena TODO el bloque en cambio.
+                        <div style={{ padding: '0 0 16px', ...(soloLecturaPlanificacion ? { pointerEvents: 'none', opacity: .6 } : {}) }}>
                             {/* En pantallas angostas GRID_TAREAS (min ~1100px) no cabe: sin minWidth el
                                 div display:grid no crece más allá del ancho disponible aunque sus columnas
                                 lo exijan (el excedente queda como "ink overflow", scrolleable vía .contenido
@@ -1449,7 +1465,7 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
 
                     {/* 2 · EQUIPOS Y MATERIALES */}
                     {tabActiva === 'componentes' && (
-                        <div style={{ padding: '0 0 16px' }}>
+                        <div style={{ padding: '0 0 16px', ...(soloLecturaPlanificacion ? { pointerEvents: 'none', opacity: .6 } : {}) }}>
                             <div style={{ ...styles.tablaHeader(GRID_MATERIALES), minWidth: GRID_MATERIALES_MIN_W }}>
                                 <span>Tipo</span><span>Código</span><span>Descripción</span>
                                 <span style={{ textAlign: 'right' }}>Cant.</span><span style={{ textAlign: 'right' }}>Unitario</span>
@@ -1499,7 +1515,7 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
 
                     {/* 3 · SUMINISTROS DIRECTOS */}
                     {tabActiva === 'Logistica' && (
-                        <div style={{ padding: '0 0 16px' }}>
+                        <div style={{ padding: '0 0 16px', ...(soloLecturaPlanificacion ? { pointerEvents: 'none', opacity: .6 } : {}) }}>
                             <div style={{ ...styles.tablaHeader(GRID_LOGISTICA), minWidth: GRID_LOGISTICA_MIN_W }}>
                                 <span>Código</span><span>Patente</span><span>Descripción</span>
                                 <span style={{ textAlign: 'right' }}>Cant.</span><span style={{ textAlign: 'right' }}>Unitario</span>
@@ -2042,6 +2058,13 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                                             await actualizarOtGlobal(otSeleccionada._id, {
                                                 'cotizacion.enviada': true,
                                                 'cotizacion.fechaEnvio': new Date().toISOString(),
+                                                // Reenvío tras reprogramar: si el cliente ya la había
+                                                // aprobado/rechazado antes, hay que volver a dejarla
+                                                // 'Pendiente' — si no, aplicarRespuestaCotizacion la
+                                                // rechaza con 409 "ya fue respondida" y el cliente no
+                                                // puede aprobar la fecha nueva desde la app.
+                                                'cotizacion.respuestaCliente': 'Pendiente',
+                                                'cotizacion.fechaRespuesta': null,
                                             });
                                             notificar.exito(`Cotización enviada. Programado del ${minFecha.toLocaleDateString('es-CL')} al ${maxFecha.toLocaleDateString('es-CL')}`);
                                             setIsModalEnvioOpen(false);
