@@ -1118,9 +1118,14 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
     // Todas, no solo alguna: una tarea a medio llenar da un total y una fecha de Gantt
     // equivocados, aunque otra tarea de la misma OT sí esté completa.
     const todasTareasCompletas = tareas.length > 0 && tareas.every(tareaCompleta);
+    // Equipos y herramientas con costo $0 cotizarían gratis un ítem que sí tiene costo real —
+    // acotado a esos dos tipos (no a 'Material') porque el pedido fue puntual sobre equipos/
+    // herramientas; no hay ningún componentes.length>0 exigido, una OT puede no necesitar ninguno.
+    const equiposHerramientasConCosto = componentes.every(c => (c.tipo !== 'Equipo' && c.tipo !== 'Herramienta') || Number(c.precio) > 0);
     // "Terminar planificación" (no las pestañas 1-3, que quedan libres para ir armando) es lo
-    // que bloquea una observación abierta sobre el informe inicial y las tareas incompletas.
-    const puedeTerminarPlanificacion = informeEvaluacion.revision?.estado !== 'ConObservaciones' && todasTareasCompletas;
+    // que bloquea una observación abierta sobre el informe inicial, las tareas incompletas y
+    // los equipos/herramientas sin costo.
+    const puedeTerminarPlanificacion = informeEvaluacion.revision?.estado !== 'ConObservaciones' && todasTareasCompletas && equiposHerramientasConCosto;
     // Que las tareas ESTÉN completas no basta para entrar a Cotización: hace falta además que
     // se haya presionado "Terminar planificación" (guardarPlanificacion('Planificada')) — sin
     // esto, se podía completar todo en memoria y saltar directo a la pestaña 4 sin haber
@@ -1168,14 +1173,15 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                     <button onClick={() => irATab('Logistica')} disabled={!habilitadoTabs14} title={habilitadoTabs14 ? '' : 'Completa el Informe Inicial primero'} style={{ ...(tabActiva === 'Logistica' ? styles.tabActivo : styles.tab), opacity: habilitadoTabs14 ? 1 : .5 }}>3 · Suministros directos</button>
                     <button
                         onClick={() => irATab('cotizacion')}
-                        disabled={!habilitadoTabs14 || !todasTareasCompletas || !planificacionTerminada}
+                        disabled={!habilitadoTabs14 || !todasTareasCompletas || !equiposHerramientasConCosto || !planificacionTerminada}
                         title={
                             !habilitadoTabs14 ? 'Completa el Informe Inicial primero'
                                 : !todasTareasCompletas ? 'Completa descripción, puesto, responsable, horas, fecha, hora y $/hora de todas las tareas'
-                                    : !planificacionTerminada ? 'Presiona "Terminar planificación" primero'
-                                        : ''
+                                    : !equiposHerramientasConCosto ? 'Todo equipo o herramienta debe tener un costo mayor a $0'
+                                        : !planificacionTerminada ? 'Presiona "Terminar planificación" primero'
+                                            : ''
                         }
-                        style={{ ...(tabActiva === 'cotizacion' ? styles.tabActivo : styles.tab), opacity: (habilitadoTabs14 && todasTareasCompletas && planificacionTerminada) ? 1 : .5 }}
+                        style={{ ...(tabActiva === 'cotizacion' ? styles.tabActivo : styles.tab), opacity: (habilitadoTabs14 && todasTareasCompletas && equiposHerramientasConCosto && planificacionTerminada) ? 1 : .5 }}
                     >4 · Cotización</button>
                     <button onClick={() => puedeEjecucion && setTabActiva('reportes')} disabled={!puedeEjecucion} title={puedeEjecucion ? '' : 'Disponible una vez que la OT esté Programada'} style={{ ...(tabActiva === 'reportes' ? styles.tabActivo : styles.tab), opacity: puedeEjecucion ? 1 : .5 }}>
                         Ejecución {otSeleccionada.reportes?.length ? `(${otSeleccionada.reportes.length})` : ''}
@@ -1545,16 +1551,21 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                                 <button onClick={agregarLogistica} style={styles.btnAgregar}>Agregar suministro</button>
                             </div>
                             <div style={{ ...styles.continuarWrap, justifyContent: 'space-between' }}>
-                                {todasTareasCompletas
+                                {puedeTerminarPlanificacion
                                     ? <span style={{ fontSize: 11.5, color: t.verde, fontWeight: 600 }}>Tareas, equipos y suministros definidos</span>
-                                    : <span style={{ fontSize: 11.5, color: t.rojo, fontWeight: 600 }}>Completa descripción, puesto, responsable, horas, fecha, hora y $/hora de todas las tareas</span>}
+                                    : <span style={{ fontSize: 11.5, color: t.rojo, fontWeight: 600 }}>
+                                        {!todasTareasCompletas ? 'Completa descripción, puesto, responsable, horas, fecha, hora y $/hora de todas las tareas'
+                                            : !equiposHerramientasConCosto ? 'Todo equipo o herramienta debe tener un costo mayor a $0'
+                                                : 'El informe inicial tiene observaciones sin resolver'}
+                                    </span>}
                                 <button
                                     onClick={() => guardarPlanificacion('Planificada')}
                                     disabled={!puedeTerminarPlanificacion}
                                     title={
                                         !todasTareasCompletas ? 'Completa descripción, puesto, responsable, horas, fecha, hora y $/hora de todas las tareas'
-                                            : informeEvaluacion.revision?.estado === 'ConObservaciones' ? 'El informe inicial tiene observaciones sin resolver'
-                                                : ''
+                                            : !equiposHerramientasConCosto ? 'Todo equipo o herramienta debe tener un costo mayor a $0'
+                                                : informeEvaluacion.revision?.estado === 'ConObservaciones' ? 'El informe inicial tiene observaciones sin resolver'
+                                                    : ''
                                     }
                                     style={{ ...styles.btnPrimario, opacity: puedeTerminarPlanificacion ? 1 : .5 }}
                                 >Terminar planificación</button>
