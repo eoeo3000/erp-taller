@@ -1,5 +1,6 @@
 // src/App.jsx
 import { BrowserRouter as Router, Routes, Route, NavLink, useLocation } from 'react-router-dom';
+import { obtenerHorasParaDia as obtenerHorasParaDiaPura } from './utils/calendario';
 
 function NavPortalGuard({ children }) {
   const loc = useLocation();
@@ -46,9 +47,17 @@ import ClientesScreen from './screens/ClientesScreen';
 import BodegaTokensScreen from './screens/BodegaTokensScreen';
 import TableroSupervisoresScreen from './screens/TableroSupervisoresScreen';
 import useIsMobile from './hooks/useIsMobile';
-import { headerEntorno, obtenerEntorno, fijarEntorno } from './utils/entorno';
+import { obtenerEntorno, fijarEntorno } from './utils/entorno';
 import { notificar, confirmar } from './utils/notificar';
 import NotificacionesHost from './components/NotificacionesHost';
+import usePuestos from './hooks/usePuestos';
+import usePlantillas from './hooks/usePlantillas';
+import useComponentes from './hooks/useComponentes';
+import useSuministros from './hooks/useSuministros';
+import useRecursos from './hooks/useRecursos';
+import useOts from './hooks/useOts';
+import useSolicitudes from './hooks/useSolicitudes';
+import useCalendarios from './hooks/useCalendarios';
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 function App() {
@@ -60,16 +69,24 @@ function App() {
   const volverAProduccion = () => { fijarEntorno('produccion'); window.location.reload(); };
   const [cargando, setCargando] = useState(true);
   const [errorCarga, setErrorCarga] = useState(null);
-  const [recursos, setRecursos] = useState([]);
-  const [ots, setOts] = useState([]);
-  const [solicitudes, setSolicitudes] = useState([]);
-  const [calendarios, setCalendarios] = useState([]);
-  const [componentes, setComponentes] = useState([]);
-  const [suministros, setSuministros] = useState([]);
-  const [puestosDB, setPuestosDB] = useState([]);
-  const [plantillas, setPlantillas] = useState([]);
-  const [modalPuestosAbierto, setModalPuestosAbierto] = useState(false);
-  const [otSeleccionada, setOtSeleccionada] = useState(null);
+
+  // Estado y CRUD de cada dominio viven en su propio hook (ver plan de robustecimiento,
+  // punto 5) — App.jsx queda como composición: orquesta el sync compartido de /api/data
+  // (cargarDatos, el polling de abajo) y los pocos flujos que cruzan dos dominios a la vez
+  // (eliminarRecurso, eliminarCalendarioMaestro, asignarCalendarioGlobal, más abajo).
+  // `cargarDatos` se pasa como función lazy a los hooks que la necesitan para no depender
+  // del orden de declaración entre ellos y la propia `cargarDatos`.
+  const { recursos, setRecursos, crearRecurso, actualizarRecurso, guardarCambioManualGlobal } = useRecursos();
+  // `actualizarProgresoTarea` no se destructura: no se usa en ningún lado (ya estaba sin
+  // usar antes de esta extracción, confirmado por grep y por el lint de no-unused-vars).
+  const { ots, setOts, otSeleccionada, setOtSeleccionada, eliminarOT, actualizarOtGlobal, editarOtGlobal } = useOts(() => cargarDatos());
+  const { solicitudes, setSolicitudes, crearSolicitudGlobal, actualizarSolicitudGlobal, eliminarSolicitud, liberarSolicitudManual, actualizarEstadoSolicitud, aprobarYCrearOT } = useSolicitudes(() => cargarDatos());
+  const { calendarios, setCalendarios, guardarCalendarioGlobal } = useCalendarios(() => cargarDatos());
+  const { componentes, setComponentes, crearEquipo, eliminarEquipo, actualizarEquipo } = useComponentes();
+  const { suministros, setSuministros, crearSuministro, eliminarSuministro, actualizarSuministro, ajustarStockSuministro, obtenerMovimientosStock } = useSuministros();
+  const { puestosDB, setPuestosDB, crearPuesto, eliminarPuesto } = usePuestos();
+  const { plantillas, setPlantillas, crearPlantilla, actualizarPlantilla, eliminarPlantilla } = usePlantillas();
+
   const cargarDatos = async () => {
     try {
       const respuesta = await axios.get(`${API}/data`);
@@ -98,128 +115,7 @@ function App() {
       setCargando(false);
     }
   };
-  const actualizarRecurso = async (id, datosActualizados) => {
-    try {
-      const datosParaEnviar = {
-        ...datosActualizados,
-        // 🛡️ Priorizamos 'puesto'. Si no existe, usamos 'especialidad'.
-        puesto: datosActualizados.puesto || datosActualizados.especialidad
-      };
 
-      const res = await axios.put(`${API}/recursos/${id}`, datosParaEnviar);
-
-      if (res.status === 200) {
-        // Actualizamos el estado local con la respuesta fresca del servidor
-        setRecursos(prev => prev.map(r => r._id === id ? res.data : r));
-
-        // ... resto de tu lógica de OTs ...
-        return { success: true };
-      }
-    } catch (error) {
-      console.error("Error al actualizar recurso:", error);
-      return { success: false };
-    }
-  };
-  const crearSolicitudGlobal = async (datosForm, archivo) => {
-    try {
-      const formData = new FormData();
-
-      // 1. Adjuntar archivo físico
-      if (archivo) {
-        formData.append('archivo', archivo);
-      }
-
-      // 2. Adjuntar solo campos con contenido real
-      Object.keys(datosForm).forEach(key => {
-        const valor = datosForm[key];
-
-        // CRUCIAL: Solo agregamos si el valor no es nulo, indefinido o vacío
-        // Esto permite que Mongoose use los valores por defecto (como Date.now)
-        if (
-          valor !== undefined &&
-          valor !== null &&
-          valor !== "" &&
-          valor !== "undefined" &&
-          key !== 'adjuntos'
-        ) {
-          formData.append(key, valor);
-        }
-      });
-      // En App.jsx, dentro de crearSolicitudGlobal
-      const respuesta = await axios.post(`${API}/solicitudes`, formData);
-      // Quitar el objeto { headers: ... }, Axios lo detecta solo al ver el formData
-
-
-      if (respuesta.status === 200 || respuesta.status === 201) {
-        await cargarDatos();
-        return true;
-      }
-    } catch (error) {
-      // Si falla, esto te dirá EXACTAMENTE qué campo del modelo está rechazando Mongoose
-      console.error("❌ Detalle del error:", error.response?.data);
-      return false;
-    }
-  };
-  // Editar una solicitud ya creada (doble clic en la fila, Ingreso) — reutiliza el mismo
-  // endpoint PUT que ya actualizaba solo el estado, ahora ampliado para aceptar el resto
-  // de los campos del formulario.
-  const actualizarSolicitudGlobal = async (id, datosForm) => {
-    try {
-      const { data } = await axios.put(`${API}/solicitudes/${id}`, datosForm);
-      setSolicitudes(prev => prev.map(s => String(s._id) === String(id) ? data : s));
-      return true;
-    } catch (error) {
-      console.error("Error al actualizar solicitud:", error.response?.data || error.message);
-      return false;
-    }
-  };
-  const crearRecurso = async (nuevoRecurso) => {
-    try {
-      const datosParaEnviar = {
-        ...nuevoRecurso,
-        // 🛡️ Aseguramos que tome el valor correcto
-        puesto: nuevoRecurso.puesto || nuevoRecurso.especialidad
-      };
-
-      if (!datosParaEnviar.calendarioId || datosParaEnviar.calendarioId.trim() === "") {
-        delete datosParaEnviar.calendarioId;
-      }
-
-      const respuesta = await axios.post(`${API}/recursos`, datosParaEnviar);
-      setRecursos(prev => [...prev, respuesta.data]);
-      return true;
-    } catch (error) {
-      console.error("❌ Error en el Backend:", error.response?.data);
-      notificar.error("Error al crear recurso");
-      return false;
-    }
-  };
-  const actualizarAjusteRecurso = async (recursoId, dia, nuevasHoras) => {
-    try {
-      // 1. Usamos _id en lugar de id
-      const recursoActual = recursos.find(r => String(r._id) === String(recursoId));
-
-      if (!recursoActual) return;
-
-      const nuevosAjustes = {
-        ...(recursoActual.ajustes || {}),
-        [dia]: parseFloat(nuevasHoras)
-      };
-
-      // 2. La petición al backend ahora usa _id
-      await axios.put(`${API}/recursos/${recursoId}`, {
-        ajustes: nuevosAjustes
-      });
-
-      // 3. Actualizamos el estado global usando _id
-      setRecursos(prev => prev.map(r =>
-        String(r._id) === String(recursoId) ? { ...r, ajustes: nuevosAjustes } : r
-      ));
-
-    } catch (error) {
-      console.error("❌ Error al actualizar recurso:", error);
-    }
-  };
   useEffect(() => {
     cargarDatos(); // Carga inicial inmediata
 
@@ -256,44 +152,7 @@ function App() {
 
     return () => clearInterval(interval);
   }, []); // Se monta una sola vez — el intervalo interno no necesita reiniciarse por cambios de estado
-  const eliminarOT = async (id) => {
-    if (!id || id === 'null') return;
 
-    if (await confirmar("¿Deseas eliminar esta OT? (La solicitud volverá a estar pendiente)")) {
-      try {
-
-        // 1. Solo una petición: El backend hace el resto del trabajo sucio
-        const res = await axios.delete(`${API}/ots/${id}`);
-
-
-        // 2. Refrescamos la UI con los nuevos estados
-        await cargarDatos();
-
-        notificar.exito("OT eliminada y solicitud liberada automáticamente.");
-
-      } catch (error) {
-        console.error("❌ ERROR AL ELIMINAR:", error.response?.data || error.message);
-        notificar.error("No se pudo completar la operación.");
-      }
-    }
-  };
-  // Análogo a eliminarOT, pero para solicitudes que todavía no tienen OT — el backend
-  // (solicitudController.eliminarSolicitud) rechaza con 409 si ya existe una OT (en ese
-  // caso corresponde "Eliminar OT" en su lugar) y borra en cascada la Asignacion del
-  // Supervisor si ya había tomado la solicitud para el informe inicial.
-  const eliminarSolicitud = async (id) => {
-    if (!id) return;
-    if (await confirmar("¿Eliminar esta solicitud? Si un supervisor ya la tomó para el informe inicial, esa asignación también se elimina.")) {
-      try {
-        await axios.delete(`${API}/solicitudes/${id}`);
-        await cargarDatos();
-        notificar.exito("Solicitud eliminada.");
-      } catch (error) {
-        console.error("❌ ERROR AL ELIMINAR SOLICITUD:", error.response?.data || error.message);
-        notificar.error(error.response?.data?.error || "No se pudo completar la operación.");
-      }
-    }
-  };
   // Shell nuevo (ver docs/rediseno/design_handoff_panel_control/README.md, paso 1):
   // nav lateral colapsable con ancho arrastrable, en vez del top bar. En móvil arranca colapsada.
   useEffect(() => { if (isMobile) setNavOculta(true); }, [isMobile]);
@@ -310,168 +169,15 @@ function App() {
     window.addEventListener('pointermove', mover);
     window.addEventListener('pointerup', soltar);
   };
-  const guardarCalendarioGlobal = async (datos, id) => {
-    // URL apuntando explícitamente al BACKEND (Puerto 5000)
-    const API_URL = `${API}/calendarios`;
-    try {
-      if (id && id !== "null") {
-        await axios.put(`${API_URL}/${id}`, datos);
-      } else {
-        // Quitamos el _id si viene del estado inicial para que no choque
-        const { _id, ...datosNuevos } = datos;
-        await axios.post(API_URL, datosNuevos);
-      }
-      await cargarDatos(); // Recarga la lista de /api/data
-      return true;
-    } catch (error) {
-      console.error("Error al guardar:", error);
-      return false;
-    }
-  };
-  const actualizarOtGlobal = async (id, dataCompleta) => {
-    try {
-      const { _id, ...datosParaEnviar } = dataCompleta;
-      if (!datosParaEnviar.solicitudId) datosParaEnviar.solicitudId = id;
 
-      const respuesta = await fetch(`${API}/ots/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', ...headerEntorno() },
-        body: JSON.stringify(datosParaEnviar)
-      });
+  // Lógica pura (calendario rotativo/semanal, ajustes manuales, bloques horarios) vive en
+  // utils/calendario.js — testeada ahí. Este wrapper solo liga `calendarios` desde el estado
+  // del componente para no tener que tocar la firma de 2 argumentos que ya usan GanttScreen y
+  // RecursosScreen.
+  const obtenerHorasParaDia = (recurso, diaCalendario) => obtenerHorasParaDiaPura(recurso, diaCalendario, calendarios);
 
-      if (respuesta.ok) {
-        const resultado = await respuesta.json();
-        const otNueva = resultado.ot || resultado;
-
-        // 🚩 ACTUALIZACIÓN TRIPLE:
-        // 1. La lista general
-        setOts(prev => prev.map(o => o._id === id ? otNueva : o));
-        // 2. La OT activa en pantalla (Esto es lo que hace que se vea el reporte)
-        setOtSeleccionada(otNueva);
-        // 3. Fondo
-        await cargarDatos();
-
-        return { exito: true, otActualizada: otNueva };
-      }
-      // p.ej. 409 "La OT no tiene supervisor asignado" (pestaña Antecedentes) — se
-      // reenvía el mensaje del backend en vez de descartarlo, para que quien llame
-      // (GanttScreen al programar, etc.) pueda mostrárselo a quien está operando.
-      const cuerpo = await respuesta.json().catch(() => ({}));
-      return { exito: false, error: cuerpo.error || cuerpo.mensaje || null };
-    } catch (error) {
-      console.error("Error:", error);
-      return { exito: false };
-    }
-  };
-  const liberarSolicitudManual = async (solicitudId) => {
-    try {
-      await axios.put(`${API}/solicitudes/${solicitudId}`, { estado: 'Pendiente' });
-      await cargarDatos();
-      notificar.exito("Estado reseteado a Pendiente");
-    } catch (error) {
-      console.error("Error al liberar:", error);
-    }
-  };
-  const actualizarEstadoSolicitud = async (solicitudId, nuevoEstado) => {
-    try {
-      await axios.put(`${API}/solicitudes/${solicitudId}`, { estado: nuevoEstado });
-      setSolicitudes(prev => prev.map(s => String(s._id) === String(solicitudId) ? { ...s, estado: nuevoEstado } : s));
-    } catch (error) {
-      console.error("Error al actualizar solicitud:", error);
-    }
-  };
-  // Aprobar crea la OT de inmediato (no solo marca la Solicitud) — reutiliza
-  // PATCH /ots/:id/asignacion (otController.asignarSupervisor), que ya sabe crear la OT si
-  // todavía no existe cuando recibe el _id de la Solicitud, aunque no venga con supervisor
-  // (queda "sin asignar", asignable después desde Antecedentes o desde el resumen del
-  // Informe Inicial). Así la OT aparece de inmediato en "Solicitudes sin informe inicial" de
-  // la PWA, sin depender de que alguien entre a Tratamiento y guarde algo primero.
-  const aprobarYCrearOT = async (solicitud) => {
-    try {
-      await axios.put(`${API}/solicitudes/${solicitud._id}`, { estado: 'Aprobada' });
-      await axios.patch(`${API}/ots/${solicitud._id}/asignacion`, {});
-      await cargarDatos();
-    } catch (error) {
-      console.error("Error al aprobar y crear la OT:", error);
-      notificar.error('No se pudo aprobar la solicitud: ' + (error.response?.data?.error || error.message));
-    }
-  };
-  const editarOtGlobal = async (id, otActualizada) => {
-    try {
-      const respuesta = await fetch(`${API}/ots/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', ...headerEntorno() },
-        body: JSON.stringify(otActualizada)
-      });
-
-      if (respuesta.ok) {
-        await cargarDatos(); // Refrescamos la lista global
-        return true;
-      }
-    } catch (error) {
-      console.error("❌ Error al editar:", error);
-      return false;
-    }
-  };
-  const calcularHorasDia = (bloques) => {
-    if (!bloques || !Array.isArray(bloques)) return 0;
-    return bloques.reduce((total, bloque) => {
-      if (!bloque.inicio || !bloque.fin) return total;
-      const [hInicio, mInicio] = bloque.inicio.split(':').map(Number);
-      const [hFin, mFin] = bloque.fin.split(':').map(Number);
-      // Turno que cruza medianoche (ej. 22:00–06:00): sin el módulo, hFin*60+mFin < hInicio*60+mInicio
-      // da minutos negativos y las horas de S2/S3 en la PWA de supervisor salen mal.
-      const minutos = (((hFin * 60 + mFin) - (hInicio * 60 + mInicio)) % 1440 + 1440) % 1440;
-      return total + (minutos / 60);
-    }, 0);
-  };
-  const obtenerHorasParaDia = (recurso, diaCalendario) => {
-    // 1. PRIORIDAD ABSOLUTA: Ajustes manuales
-    const fechaISO = new Date(diaCalendario.fechaCompleta).toISOString().split('T')[0];
-
-    if (recurso.ajustes) {
-      if (recurso.ajustes instanceof Map && recurso.ajustes.has(fechaISO)) {
-        return Number(recurso.ajustes.get(fechaISO));
-      }
-      if (recurso.ajustes[fechaISO] !== undefined) {
-        return Number(recurso.ajustes[fechaISO]);
-      }
-    }
-
-    // 2. Lógica de Calendario
-    if (!recurso.calendarioId || !calendarios) return 0;
-
-    const cal = calendarios.find(c => String(c._id) === String(recurso.calendarioId));
-    if (!cal || !cal.config) return 0;
-
-    const fecha = new Date(diaCalendario.fechaCompleta);
-
-    // DETERMINAMOS LA FECHA DE ANCLAJE
-    // Si no tiene fechaInicioCiclo, usamos una por defecto, pero lo ideal es que siempre tenga.
-    const fechaInicio = recurso.fechaInicioCiclo ? new Date(recurso.fechaInicioCiclo) : new Date(fecha);
-
-    // Calculamos días transcurridos reales
-    const diasTranscurridos = Math.floor((fecha - fechaInicio) / (1000 * 60 * 60 * 24));
-    if (diasTranscurridos < 0) return 0; // No ha empezado a trabajar
-
-    // LÓGICA UNIFICADA POR CICLO (Para que el 5x2 funcione desde el día de inicio)
-    if (cal.tipo === 'rotativo' || cal.config.length === 7) {
-      // Si es rotativo O si tiene 7 días (como un 5x2 que se comporta como ciclo)
-      const largoCiclo = cal.tipo === 'rotativo' ? (cal.cicloDias || 1) : cal.config.length;
-      const diaDelCiclo = diasTranscurridos % largoCiclo;
-
-      const configDia = cal.config[diaDelCiclo];
-      return (configDia && configDia.activo) ? calcularHorasDia(configDia.bloques) : 0;
-    } else {
-      // Lógica semanal tradicional (Lunes es Lunes) solo si no es rotativo
-      const diasMapa = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];
-      const nombreDiaReal = diasMapa[fecha.getDay()];
-      const configDia = cal.config.find(c =>
-        String(c.dia).toLowerCase().trim() === nombreDiaReal
-      );
-      return (configDia && configDia.activo) ? calcularHorasDia(configDia.bloques) : 0;
-    }
-  };
+  // --- Flujos que cruzan dos dominios a la vez: se quedan en App.jsx como orquestación
+  // entre los hooks de cada uno, en vez de forzar que un hook manipule el estado de otro. ---
   const eliminarRecurso = async (id) => {
     try {
       const respuesta = await axios.delete(`${API}/recursos/${id}`);
@@ -496,6 +202,7 @@ function App() {
       notificar.error("No se pudo eliminar el recurso");
     }
   };
+
   const eliminarCalendarioMaestro = async (id) => {
     if (!(await confirmar("¿Estás seguro de eliminar este turno? Los operarios asignados quedarán 'Sin Turno'."))) return;
 
@@ -519,6 +226,7 @@ function App() {
       notificar.error("No se pudo eliminar el calendario");
     }
   };
+
   const asignarCalendarioGlobal = async (recursoId, calendarioId) => {
     try {
       const valorParaEnviar = calendarioId || null;
@@ -529,9 +237,7 @@ function App() {
         ajustes: {}
       };
 
-      console.log("Cuerpo exacto que sale al servidor:", JSON.stringify(bodyPeticion));
-
-      const res = await axios.put(`${API}/recursos/${recursoId}`, bodyPeticion);
+      await axios.put(`${API}/recursos/${recursoId}`, bodyPeticion);
 
       // Actualizamos el estado local
       setRecursos(prev => prev.map(r =>
@@ -540,213 +246,12 @@ function App() {
           : r
       ));
 
-      // IMPORTANTE: Si cargarDatos() vuelve a traer los recursos de la BD, 
+      // IMPORTANTE: Si cargarDatos() vuelve a traer los recursos de la BD,
       // asegúrate de que el backend realmente haya guardado el {}
       await cargarDatos();
 
     } catch (error) {
       console.error("❌ Error:", error);
-    }
-  };
-  const guardarCambioManualGlobal = async (recursoId, dia, nuevasHoras) => {
-    try {
-      const recursoActual = recursos.find(r => r._id === recursoId);
-      if (!recursoActual) return false;
-
-      const recursoActualizado = {
-        ...recursoActual,
-        // Agregamos o pisamos el día específico en el objeto de ajustes
-        ajustes: {
-          ...(recursoActual.ajustes || {}),
-          [dia]: Number(nuevasHoras)
-        }
-      };
-
-      const response = await fetch(`${API}/recursos/${recursoId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', ...headerEntorno() },
-        body: JSON.stringify(recursoActualizado)
-      });
-
-      if (response.ok) {
-        // Actualizamos el estado global para que todas las pantallas se enteren
-        setRecursos(prev => prev.map(r => r._id === recursoId ? recursoActualizado : r));
-        return true;
-      }
-    } catch (error) {
-      console.error("Error al guardar ajuste manual:", error);
-    }
-    return false;
-  };
-  const crearEquipo = async (nuevoEquipo) => {
-    try {
-      const datosNormalizados = {
-        ...nuevoEquipo,
-        // 🚩 Aseguramos que la primera letra sea mayúscula para cumplir con el enum
-        tipo: nuevoEquipo.tipo
-          ? nuevoEquipo.tipo.charAt(0).toUpperCase() + nuevoEquipo.tipo.slice(1).toLowerCase()
-          : 'Herramienta',
-        precio: parseFloat(nuevoEquipo.precio) || 0,
-        codigo: nuevoEquipo.codigo || `EQ-${Date.now()}` // Genera un código si no hay uno
-      };
-
-      const res = await axios.post(`${API}/equipos`, datosNormalizados);
-      if (res.status === 201 || res.status === 200) {
-        setComponentes(prev => [...prev, res.data]);
-        return true;
-      }
-    } catch (error) {
-      console.error("❌ Error de Validación:", error.response?.data);
-      return false;
-    }
-  };
-  const eliminarEquipo = async (id) => {
-    if (!(await confirmar("¿Eliminar este equipo?"))) return;
-    try {
-      await axios.delete(`${API}/equipos/${id}`);
-      setComponentes(prev => prev.filter(e => e._id !== id));
-    } catch (error) {
-      console.error("❌ Error al eliminar equipo:", error);
-    }
-  };
-  const actualizarEquipo = async (id, datosActualizados) => {
-    console.log("📦 Datos que se enviarán al servidor:", datosActualizados);
-    try {
-      const res = await axios.put(`${API}/equipos/${id}`, datosActualizados);
-      if (res.status === 200) {
-        // Actualizamos el estado local de componentes (equipos)
-        setComponentes(prev => prev.map(e => (e._id === id ? res.data : e)));
-        return true;
-      }
-    } catch (error) {
-      console.error("❌ Error al actualizar equipo:", error.response?.data);
-      return false;
-    }
-  };
-  // --- SECCIÓN SUMINISTROS (CRUD) ---
-  const crearSuministro = async (datos) => {
-    try {
-      // 🛡️ BLINDAJE: Solo extraemos lo que el Schema de Mongoose permite
-      const datosLimpios = {
-        codigo: String(datos.codigo).trim(),
-        descripcion: String(datos.descripcion).trim(),
-        precio: Number(datos.precio) || 0,
-        categoria: datos.categoria || 'Insumo', // Usamos el default del Schema
-        stockActual: Number(datos.stockActual) || 0,
-        bodega: datos.bodega || ''
-      };
-
-      console.log("📡 Enviando datos limpios al servidor:", datosLimpios);
-
-      const res = await axios.post(`${API}/suministros`, datosLimpios);
-
-      if (res.status === 201 || res.status === 200) {
-        setSuministros(prev => [...prev, res.data]);
-        return true;
-      }
-    } catch (error) {
-      // 🚩 Log detallado para ver exactamente qué rechazó el servidor
-      const mensajeServidor = error.response?.data?.error || error.message;
-      console.error("❌ Error al crear suministro:", mensajeServidor);
-      notificar.error(`No se pudo crear: ${mensajeServidor}`);
-      return false;
-    }
-  };
-  const eliminarSuministro = async (id) => {
-    try {
-      const res = await axios.delete(`${API}/suministros/${id}`);
-      if (res.status === 200) {
-        // ✅ Filtramos sobre el estado correcto
-        setSuministros(prev => prev.filter(s => s._id !== id));
-        return true;
-      }
-    } catch (error) {
-      console.error("❌ Error al eliminar suministro:", error);
-      notificar.error("No se pudo eliminar el registro");
-    }
-  };
-  const actualizarSuministro = async (id, datosActualizados) => {
-    try {
-      // Sanitización para evitar enviar el _id dentro del body
-      const { _id, ...soloDatos } = datosActualizados;
-
-      const datosLimpios = {
-        ...soloDatos,
-        precio: Number(soloDatos.precio) || 0
-      };
-
-      const res = await axios.put(`${API}/suministros/${id}`, datosLimpios);
-
-      if (res.status === 200) {
-        setSuministros(prev => prev.map(item =>
-          (item._id === id) ? res.data : item
-        ));
-        return true;
-      }
-    } catch (error) {
-      console.error("❌ Error al actualizar suministro:", error.response?.data || error.message);
-      return false;
-    }
-  };
-  const ajustarStockSuministro = async (id, cantidad, motivo) => {
-    try {
-      const res = await axios.put(`${API}/suministros/${id}/stock`, { cantidad: Number(cantidad), motivo: motivo || '' });
-      if (res.status === 200) {
-        setSuministros(prev => prev.map(item => (item._id === id) ? res.data : item));
-        return true;
-      }
-    } catch (error) {
-      console.error("❌ Error al ajustar stock:", error.response?.data || error.message);
-      notificar.error(error.response?.data?.error || 'No se pudo ajustar el stock');
-      return false;
-    }
-  };
-  const obtenerMovimientosStock = async (id) => {
-    try {
-      const res = await axios.get(`${API}/suministros/${id}/movimientos`);
-      return res.data;
-    } catch (error) {
-      console.error("❌ Error al obtener historial de stock:", error.response?.data || error.message);
-      return [];
-    }
-  };
-  const crearPuesto = async (nombre, costoHora) => {
-    try {
-      const response = await fetch(`${API}/puestos`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...headerEntorno() },
-        body: JSON.stringify({
-          nombre: String(nombre).trim(),
-          costoHora: parseFloat(costoHora),
-          categoria: 'Técnico' // Valor por defecto para cumplir con el modelo
-        })
-      });
-
-      const resultado = await response.json();
-
-      if (response.ok) {
-        setPuestosDB([...puestosDB, resultado]);
-        // Limpiar inputs
-        document.getElementById('nuevo-puesto-nombre').value = '';
-        document.getElementById('nuevo-puesto-costo').value = '';
-      } else {
-        // 🚩 Esto te dirá en la consola si el error es por "Duplicado" o "Validación"
-        console.error("Respuesta de error del servidor:", resultado);
-        notificar.error(`Error: ${resultado.mensaje || 'No se pudo crear el puesto'}`);
-      }
-    } catch (error) {
-      console.error("Error de red/conexión:", error);
-    }
-  };
-  const eliminarPuesto = async (id) => {
-    if (!(await confirmar("¿Seguro que deseas eliminar este puesto?"))) return;
-    try {
-      const response = await fetch(`${API}/puestos/${id}`, { method: 'DELETE', headers: headerEntorno() });
-      if (response.ok) {
-        setPuestosDB(puestosDB.filter(p => p._id !== id));
-      }
-    } catch (error) {
-      console.error("Error al eliminar puesto:", error);
     }
   };
 
@@ -772,37 +277,6 @@ function App() {
     }
   };
 
-  const crearPlantilla = async (datos) => {
-    try {
-      const res = await axios.post(`${API}/plantillas`, datos);
-      setPlantillas(prev => [...prev, res.data]);
-      return { exito: true, plantilla: res.data };
-    } catch (error) {
-      console.error('Error al crear plantilla:', error);
-      return { exito: false };
-    }
-  };
-
-  const actualizarPlantilla = async (id, datos) => {
-    try {
-      const res = await axios.put(`${API}/plantillas/${id}`, datos);
-      setPlantillas(prev => prev.map(p => p._id === id ? res.data : p));
-      return { exito: true };
-    } catch (error) {
-      console.error('Error al actualizar plantilla:', error);
-      return { exito: false };
-    }
-  };
-
-  const eliminarPlantilla = async (id) => {
-    try {
-      await axios.delete(`${API}/plantillas/${id}`);
-      setPlantillas(prev => prev.filter(p => p._id !== id));
-    } catch (error) {
-      console.error('Error al eliminar plantilla:', error);
-    }
-  };
-
   const enviarPortalCliente = (solicitud) => {
     if (!solicitud) return;
     const telefono = (solicitud.numero || '').replace(/\D/g, '');
@@ -820,24 +294,6 @@ function App() {
 
     const urlFinal = `https://wa.me/${telefono}?text=${encodeURIComponent(mensaje)}`;
     window.open(urlFinal, '_blank');
-  };
-
-  const actualizarProgresoTarea = async (otId, tareaId, evidencia) => {
-    // 1. Buscamos la OT en el estado global
-    const otPrev = ots.find(o => o._id === otId);
-    if (!otPrev) return;
-
-    // 2. Actualizamos solo la tarea específica dentro del array
-    const tareasNuevas = otPrev.tareas.map(t =>
-      (t._id === tareaId || t.id === tareaId)
-        ? { ...t, ...evidencia, fechaRegistro: new Date().toISOString() }
-        : t
-    );
-
-    const otActualizada = { ...otPrev, tareas: tareasNuevas };
-
-    // 3. Usamos tu función existente para persistir en DB
-    await actualizarOtGlobal(otId, otActualizada);
   };
 
   // Contadores reales del nav (nada de placeholders) — ver §1 del handoff.
