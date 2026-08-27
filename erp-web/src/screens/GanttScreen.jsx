@@ -179,8 +179,8 @@ const GanttScreen = ({ recursos = [], ots = [], calendarios = [], obtenerHorasPa
     // "no hacer nada" — el modal siempre es visible sin importar el estado del aside.
     const confirmarCapacidad = async (ot) => {
         setOtSel(ot);
-        if (!(ot.tareas || []).some(tt => tt.fecha)) {
-            notificar.advertencia('Esta OT no tiene tareas con fecha — agrégalas en Tratamiento antes de verificar capacidad.');
+        if (!(ot.tareas || []).some(tt => tt.fecha && Number(tt.duracion) > 0)) {
+            notificar.advertencia('Esta OT no tiene tareas con fecha y horas asignadas — complétalas en Tratamiento antes de verificar capacidad.');
             return;
         }
         const conflictos = verificarDisponibilidad(ot);
@@ -275,10 +275,11 @@ const GanttScreen = ({ recursos = [], ots = [], calendarios = [], obtenerHorasPa
                             // nueva en Tratamiento y necesita el mismo gate de capacidad que una
                             // OT que nunca se envió — confirmarCapacidad la devuelve a 'Programada'.
                             const estadoValido = ['Planificada', 'Programada', 'Reprogramar'].includes(ot.estado);
-                            // Sin tareas con fecha no hay nada que verificar: verificarDisponibilidad
-                            // y fechasPropuestasDe recorren tareas con fecha, así que una OT sin
-                            // ninguna "confirmaría" trivialmente sin chequear nada real.
-                            const tieneTareasConFecha = (ot.tareas || []).some(tt => tt.fecha);
+                            // Sin tareas con fecha Y horas (duracion > 0) no hay nada real que
+                            // verificar: verificarDisponibilidad/fechasPropuestasDe suman duracion
+                            // por tarea, así que una tarea con fecha pero 0 HH "confirmaría"
+                            // trivialmente sin comprometer ninguna capacidad real.
+                            const tieneTareasConFecha = (ot.tareas || []).some(tt => tt.fecha && Number(tt.duracion) > 0);
                             const puedeProgramar = estadoValido && tieneTareasConFecha;
                             const capacidadVerificada = !!ot.cotizacion?.capacidadVerificada;
                             const fechasTareas = (ot.tareas || []).filter(tt => tt.fecha).map(tt => tt.fecha).sort();
@@ -288,7 +289,7 @@ const GanttScreen = ({ recursos = [], ots = [], calendarios = [], obtenerHorasPa
                             const tituloAccion = !estadoValido
                                 ? 'La OT debe estar Planificada, Programada o Reprogramar'
                                 : !tieneTareasConFecha
-                                    ? 'Agrega tareas con fecha en Tratamiento antes de verificar capacidad'
+                                    ? 'Agrega tareas con fecha y horas asignadas en Tratamiento antes de verificar capacidad'
                                     : '';
                             const horasSemana = (ot.tareas || []).filter(tt => diasSemana.includes(tt.fecha)).reduce((a, tt) => a + (Number(tt.duracion) || 0), 0);
                             return (
@@ -558,12 +559,12 @@ const GanttScreen = ({ recursos = [], ots = [], calendarios = [], obtenerHorasPa
                                     <div style={styles.tituloSub}>Acciones</div>
                                     {(() => {
                                         const estadoValidoSel = ['Planificada', 'Programada', 'Reprogramar'].includes(otSel.estado);
-                                        const tieneTareasConFechaSel = (otSel.tareas || []).some(tt => tt.fecha);
+                                        const tieneTareasConFechaSel = (otSel.tareas || []).some(tt => tt.fecha && Number(tt.duracion) > 0);
                                         const puedeSel = estadoValidoSel && tieneTareasConFechaSel;
                                         const tituloSel = !estadoValidoSel
                                             ? 'La OT debe estar Planificada, Programada o Reprogramar'
                                             : !tieneTareasConFechaSel
-                                                ? 'Agrega tareas con fecha en Tratamiento antes de verificar capacidad'
+                                                ? 'Agrega tareas con fecha y horas asignadas en Tratamiento antes de verificar capacidad'
                                                 : '';
                                         return (
                                             <button
