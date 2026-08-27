@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { headerEntorno, obtenerEntorno, fijarEntorno } from '../utils/entorno';
+import { headerEntorno, headerApiKey, obtenerEntorno, fijarEntorno } from '../utils/entorno';
 
 // Paso 7 del rediseño (ver docs/rediseno/design_handoff_panel_control/README.md §9.1):
 // se respeta el backend existente tal cual — mismos endpoints, mismos módulos, misma lógica de
@@ -93,7 +93,7 @@ export default function ImportExportScreen({ API, cargarDatos }) {
 
     const cargarInfoEntornos = useCallback(async () => {
         try {
-            const r = await fetch(`${API}/demo/info`, { headers: headerEntorno() });
+            const r = await fetch(`${API}/demo/info`, { headers: { ...headerEntorno(), ...headerApiKey() } });
             setInfoEntornos(await r.json());
         } catch { /* no crítico: las tarjetas simplemente no muestran BD/host */ }
     }, [API]);
@@ -101,7 +101,7 @@ export default function ImportExportScreen({ API, cargarDatos }) {
     const cargarEstadoDemo = useCallback(async () => {
         if (entorno !== 'demo') { setEstadoDemo(null); return; }
         try {
-            const r = await fetch(`${API}/demo/estado`, { headers: headerEntorno() });
+            const r = await fetch(`${API}/demo/estado`, { headers: { ...headerEntorno(), ...headerApiKey() } });
             setEstadoDemo(await r.json());
         } catch { /* no crítico */ }
     }, [API, entorno]);
@@ -113,7 +113,7 @@ export default function ImportExportScreen({ API, cargarDatos }) {
     const [usoDisco, setUsoDisco] = useState(null);
     const cargarUsoDisco = useCallback(async () => {
         try {
-            const r = await fetch(`${API}/import/uso-disco`, { headers: headerEntorno() });
+            const r = await fetch(`${API}/import/uso-disco`, { headers: { ...headerEntorno(), ...headerApiKey() } });
             setUsoDisco(await r.json());
         } catch { /* no crítico */ }
     }, [API]);
@@ -128,7 +128,7 @@ export default function ImportExportScreen({ API, cargarDatos }) {
 
     const cargarCasosNoCubiertos = useCallback(async () => {
         try {
-            const r = await fetch(`${API}/tipos-trabajo/casos-no-cubiertos`, { headers: headerEntorno() });
+            const r = await fetch(`${API}/tipos-trabajo/casos-no-cubiertos`, { headers: { ...headerEntorno(), ...headerApiKey() } });
             setCasosNoCubiertos(await r.json());
         } catch { /* no crítico */ }
     }, [API]);
@@ -143,7 +143,7 @@ export default function ImportExportScreen({ API, cargarDatos }) {
     const cargarDemo = async () => {
         setAccionDemo('cargando');
         try {
-            const r = await fetch(`${API}/demo/cargar`, { method: 'POST', headers: headerEntorno() });
+            const r = await fetch(`${API}/demo/cargar`, { method: 'POST', headers: { ...headerEntorno(), ...headerApiKey() } });
             const d = await r.json();
             if (!r.ok) { setResultado({ error: d.error, modulo: 'Modo demostración' }); return; }
             await cargarEstadoDemo();
@@ -161,7 +161,7 @@ export default function ImportExportScreen({ API, cargarDatos }) {
         try {
             const r = await fetch(`${API}/demo/vaciar`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', ...headerEntorno() },
+                headers: { 'Content-Type': 'application/json', ...{ ...headerEntorno(), ...headerApiKey() } },
                 body: JSON.stringify({ confirmacion: confirmVaciar }),
             });
             const d = await r.json();
@@ -201,7 +201,7 @@ export default function ImportExportScreen({ API, cargarDatos }) {
         try {
             // fetch + blob (no un <a href> directo) para poder mandar el header X-Entorno:
             // un enlace de descarga plano no permite headers custom.
-            const r = await fetch(url, { headers: headerEntorno() });
+            const r = await fetch(url, { headers: { ...headerEntorno(), ...headerApiKey() } });
             if (!r.ok) throw new Error('No se pudo generar el archivo');
             const blob = await r.blob();
             const fecha = new Date().toISOString().slice(0, 10);
@@ -228,7 +228,7 @@ export default function ImportExportScreen({ API, cargarDatos }) {
         const form = new FormData();
         form.append('archivo', archivo);
         try {
-            const r = await fetch(`${API}/import/${mod.id}`, { method: 'POST', headers: headerEntorno(), body: form });
+            const r = await fetch(`${API}/import/${mod.id}`, { method: 'POST', headers: { ...headerEntorno(), ...headerApiKey() }, body: form });
             const d = await r.json();
             if (!r.ok) { setResultado({ error: d.error, modulo: mod.label }); return; }
             setResultado({ ...d, modulo: mod.label });
@@ -249,7 +249,7 @@ export default function ImportExportScreen({ API, cargarDatos }) {
     const descargarActual = async (mod) => {
         setDescargando(mod.id);
         try {
-            const r = await fetch(`${API}/import/exportar/batch?modulos=${mod.id}`, { headers: headerEntorno() });
+            const r = await fetch(`${API}/import/exportar/batch?modulos=${mod.id}`, { headers: { ...headerEntorno(), ...headerApiKey() } });
             if (!r.ok) throw new Error('No se pudo generar el archivo');
             const blob = await r.blob();
             const objUrl = URL.createObjectURL(blob);

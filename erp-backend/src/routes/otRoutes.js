@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const otController = require('../controllers/otController');
 const auth = require('../middlewares/auth');
+const apiKey = require('../middlewares/apiKey');
 
 // --- 1. Rutas específicas (Deben ir primero) ---
 
@@ -22,7 +23,9 @@ router.put('/:id/accion-movil', otController.accionMovil);
 router.get('/:id/antecedentes', otController.antecedentes);
 router.patch('/:id/asignacion', otController.asignarSupervisor);
 router.get('/:id', otController.obtenerOTPorId);
-router.put('/:id', otController.actualizarOT);
-router.delete('/:id', otController.eliminarOT);
+// apiKey acá porque es donde vive el pago de la OT (OT.pago no tiene ruta propia, se
+// escribe junto con el resto en actualizarOT) — ver plan de robustecimiento, punto 4.
+router.put('/:id', apiKey, otController.actualizarOT);
+router.delete('/:id', apiKey, otController.eliminarOT);
 
 module.exports = router;

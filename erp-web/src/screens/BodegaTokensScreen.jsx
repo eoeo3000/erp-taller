@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import axios from 'axios';
-import { headerEntorno } from '../utils/entorno';
+import { headerEntorno, headerApiKey } from '../utils/entorno';
 import { confirmar } from '../utils/notificar';
 
 // Mejora v3 #2 — "Bodega de tokens". Administración de accesos: tokens Cliente
@@ -75,7 +75,7 @@ function TokensActivos({ API }) {
     const [aviso, setAviso] = useState(null); // { tipo: 'ok'|'error', texto }
     const [procesando, setProcesando] = useState(null); // _id de la fila en curso
 
-    const cargar = () => axios.get(`${API}/portal/sesiones`, { headers: headerEntorno() })
+    const cargar = () => axios.get(`${API}/portal/sesiones`, { headers: { ...headerEntorno(), ...headerApiKey() } })
         .then(({ data }) => setTokens(data)).catch(e => setError(e.response?.data?.error || 'No se pudo cargar.'));
 
     useEffect(() => { cargar(); }, [API]);
@@ -89,7 +89,7 @@ function TokensActivos({ API }) {
         setAviso(null);
         setProcesando(tok._id);
         try {
-            await axios.post(`${base}/${rutas[tipoAccion]}`, { correo: tok.correo }, { headers: headerEntorno() });
+            await axios.post(`${base}/${rutas[tipoAccion]}`, { correo: tok.correo }, { headers: { ...headerEntorno(), ...headerApiKey() } });
             setAviso({ tipo: 'ok', texto: MENSAJES_ACCION[tipoAccion](tok) });
             await cargar();
         } catch (e) {
@@ -105,7 +105,7 @@ function TokensActivos({ API }) {
         setAviso(null);
         setProcesando(tok._id);
         try {
-            await axios.post(`${API}/usuarios`, { nombre: tok.nombre, puesto: tok.puesto, rol: 'supervisor', recursoId: tok.recursoId }, { headers: headerEntorno() });
+            await axios.post(`${API}/usuarios`, { nombre: tok.nombre, puesto: tok.puesto, rol: 'supervisor', recursoId: tok.recursoId }, { headers: { ...headerEntorno(), ...headerApiKey() } });
             setAviso({ tipo: 'ok', texto: `Acceso operativo emitido para ${tok.nombre}${tok.correo ? ` — correo enviado a ${tok.correo}` : ' — sin correo registrado en Recursos, no se pudo avisar por mail'}.` });
             await cargar();
         } catch (e) {
@@ -182,7 +182,7 @@ function EmitirAccesoCliente({ API }) {
     const [enviando, setEnviando] = useState(false);
 
     useEffect(() => {
-        axios.get(`${API}/clientes`, { headers: headerEntorno() }).then(({ data }) => setClientes(data)).catch(() => {});
+        axios.get(`${API}/clientes`, { headers: { ...headerEntorno(), ...headerApiKey() } }).then(({ data }) => setClientes(data)).catch(() => {});
     }, [API]);
 
     const cliente = clientes.find(c => c._id === clienteId);
@@ -200,7 +200,7 @@ function EmitirAccesoCliente({ API }) {
         try {
             const body = { clienteId, correo, telefono: fono, alcance, entorno: localStorage.getItem('erpTaller.entorno') || 'produccion' };
             if (nuevoContacto) body.nombreContacto = nombreNuevo; else body.contactoId = contactoId;
-            const { data } = await axios.post(`${API}/portal/emitir-token`, body, { headers: headerEntorno() });
+            const { data } = await axios.post(`${API}/portal/emitir-token`, body, { headers: { ...headerEntorno(), ...headerApiKey() } });
             setAviso(data.correoEnviado ? 'Acceso enviado por correo' : 'Acceso emitido (no se pudo enviar el correo, revisa la dirección)');
             setNuevoContacto(false); setNombreNuevo(''); setContactoId('');
         } catch (e) {
@@ -272,12 +272,12 @@ function StockPreGenerado({ API }) {
     const [cantidadCliente, setCantidadCliente] = useState('10');
     const [avisoCliente, setAvisoCliente] = useState('');
 
-    const cargar = () => axios.get(`${API}/portal/stock-tokens`, { headers: headerEntorno() }).then(({ data }) => setResumen(data)).catch(() => {});
+    const cargar = () => axios.get(`${API}/portal/stock-tokens`, { headers: { ...headerEntorno(), ...headerApiKey() } }).then(({ data }) => setResumen(data)).catch(() => {});
     useEffect(() => { cargar(); }, [API]);
 
     const generar = async () => {
         try {
-            const { data } = await axios.post(`${API}/portal/sesiones/lote`, { cantidad: cantidadCliente }, { headers: headerEntorno() });
+            const { data } = await axios.post(`${API}/portal/sesiones/lote`, { cantidad: cantidadCliente }, { headers: { ...headerEntorno(), ...headerApiKey() } });
             setAvisoCliente(`${data.cantidad} tokens generados`);
             cargar();
         } catch (e) {

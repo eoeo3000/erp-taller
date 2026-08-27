@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { headerEntorno } from '../utils/entorno';
+import { headerEntorno, headerApiKey } from '../utils/entorno';
 import { notificar, confirmar } from '../utils/notificar';
 
 const CLP = n => (Number(n) || 0).toLocaleString('es-CL');
@@ -48,7 +48,7 @@ export default function ContabilidadScreen({ API }) {
     // ── FETCH CUENTAS ──
     const fetchCuentas = useCallback(async () => {
         try {
-            const r = await fetch(`${API}/contabilidad/cuentas`, { headers: headerEntorno() });
+            const r = await fetch(`${API}/contabilidad/cuentas`, { headers: { ...headerEntorno(), ...headerApiKey() } });
             const d = await r.json();
             setCuentas(d);
         } catch { setError('No se pudo cargar el plan de cuentas'); }
@@ -63,7 +63,7 @@ export default function ContabilidadScreen({ API }) {
         if (filtroDiario.hasta) params.set('hasta', filtroDiario.hasta);
         if (filtroDiario.tipo) params.set('tipo', filtroDiario.tipo);
         try {
-            const r = await fetch(`${API}/contabilidad/asientos?${params}`, { headers: headerEntorno() });
+            const r = await fetch(`${API}/contabilidad/asientos?${params}`, { headers: { ...headerEntorno(), ...headerApiKey() } });
             const d = await r.json();
             setAsientos(Array.isArray(d) ? d : []);
         } catch { setError('No se pudo cargar el libro diario'); }
@@ -88,7 +88,7 @@ export default function ContabilidadScreen({ API }) {
         try {
             const url = editCuenta ? `${API}/contabilidad/cuentas/${editCuenta._id}` : `${API}/contabilidad/cuentas`;
             const method = editCuenta ? 'PUT' : 'POST';
-            const r = await fetch(url, { method, headers: { 'Content-Type': 'application/json', ...headerEntorno() }, body: JSON.stringify(formCuenta) });
+            const r = await fetch(url, { method, headers: { 'Content-Type': 'application/json', ...{ ...headerEntorno(), ...headerApiKey() } }, body: JSON.stringify(formCuenta) });
             const d = await r.json();
             if (!r.ok) return setError(d.error || 'Error al guardar');
             await fetchCuentas();
@@ -98,7 +98,7 @@ export default function ContabilidadScreen({ API }) {
     };
     const eliminarCuenta = async (id) => {
         if (!(await confirmar('¿Eliminar esta cuenta?'))) return;
-        const r = await fetch(`${API}/contabilidad/cuentas/${id}`, { method: 'DELETE', headers: headerEntorno() });
+        const r = await fetch(`${API}/contabilidad/cuentas/${id}`, { method: 'DELETE', headers: { ...headerEntorno(), ...headerApiKey() } });
         const d = await r.json();
         if (!r.ok) return notificar.error(d.error);
         fetchCuentas();
@@ -133,7 +133,7 @@ export default function ContabilidadScreen({ API }) {
         try {
             const r = await fetch(`${API}/contabilidad/asientos`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', ...headerEntorno() },
+                headers: { 'Content-Type': 'application/json', ...{ ...headerEntorno(), ...headerApiKey() } },
                 body: JSON.stringify({ ...formAsiento, lineas: lineasValidas })
             });
             const d = await r.json();
@@ -148,7 +148,7 @@ export default function ContabilidadScreen({ API }) {
         if (!modalAnular) return;
         const r = await fetch(`${API}/contabilidad/asientos/${modalAnular._id}/anular`, {
             method: 'PUT',
-            headers: { 'Content-Type': 'application/json', ...headerEntorno() },
+            headers: { 'Content-Type': 'application/json', ...{ ...headerEntorno(), ...headerApiKey() } },
             body: JSON.stringify({ motivo: motivoAnulacion })
         });
         const d = await r.json();
@@ -165,7 +165,7 @@ export default function ContabilidadScreen({ API }) {
         if (mayorDesde) params.set('desde', mayorDesde);
         if (mayorHasta) params.set('hasta', mayorHasta);
         try {
-            const r = await fetch(`${API}/contabilidad/mayor/${mayorCuentaId}?${params}`, { headers: headerEntorno() });
+            const r = await fetch(`${API}/contabilidad/mayor/${mayorCuentaId}?${params}`, { headers: { ...headerEntorno(), ...headerApiKey() } });
             const d = await r.json();
             setMayor(r.ok ? d : null);
             if (!r.ok) setError(d.error);
@@ -184,7 +184,7 @@ export default function ContabilidadScreen({ API }) {
             const url = subReporte === 'comprobacion'
                 ? `${API}/contabilidad/${endpoint}?hasta=${rpHasta}`
                 : `${API}/contabilidad/${endpoint}?${params}`;
-            const r = await fetch(url, { headers: headerEntorno() });
+            const r = await fetch(url, { headers: { ...headerEntorno(), ...headerApiKey() } });
             const d = await r.json();
             setDatosReporte(r.ok ? d : null);
             if (!r.ok) setError(d.error);

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import axios from 'axios';
-import { headerEntorno } from '../utils/entorno';
+import { headerEntorno, headerApiKey } from '../utils/entorno';
 import { notificar, confirmar } from '../utils/notificar';
 
 // Módulo Clientes (base para la mejora v3 #2, "Emisión de acceso cliente"): antes de esto
@@ -20,7 +20,7 @@ export default function ClientesScreen({ API }) {
     const [nuevaEmpresa, setNuevaEmpresa] = useState('');
     const [poblando, setPoblando] = useState(false);
 
-    const cargar = () => axios.get(`${API}/clientes`, { headers: headerEntorno() }).then(({ data }) => {
+    const cargar = () => axios.get(`${API}/clientes`, { headers: { ...headerEntorno(), ...headerApiKey() } }).then(({ data }) => {
         setClientes(data);
         if (seleccionado) setSeleccionado(data.find(c => c._id === seleccionado._id) || null);
     }).catch(() => {});
@@ -29,7 +29,7 @@ export default function ClientesScreen({ API }) {
 
     const crearEmpresa = async () => {
         if (!nuevaEmpresa.trim()) return;
-        const { data } = await axios.post(`${API}/clientes`, { empresa: nuevaEmpresa.trim() }, { headers: headerEntorno() });
+        const { data } = await axios.post(`${API}/clientes`, { empresa: nuevaEmpresa.trim() }, { headers: { ...headerEntorno(), ...headerApiKey() } });
         setNuevaEmpresa('');
         await cargar();
         setSeleccionado(data);
@@ -38,7 +38,7 @@ export default function ClientesScreen({ API }) {
     const poblar = async () => {
         setPoblando(true);
         try {
-            const { data } = await axios.post(`${API}/clientes/poblar-desde-solicitudes`, {}, { headers: headerEntorno() });
+            const { data } = await axios.post(`${API}/clientes/poblar-desde-solicitudes`, {}, { headers: { ...headerEntorno(), ...headerApiKey() } });
             notificar.exito(`${data.empresasCreadas} empresas creadas, ${data.empresasActualizadas} actualizadas.`);
             cargar();
         } finally {
@@ -95,14 +95,14 @@ function FichaCliente({ cliente, API, onCambio }) {
 
     const guardarEmpresa = async () => {
         if (!empresa.trim()) { setAvisoEmpresa('El nombre de la empresa no puede quedar vacío.'); return; }
-        await axios.put(`${API}/clientes/${cliente._id}`, { empresa: empresa.trim(), direccion }, { headers: headerEntorno() });
+        await axios.put(`${API}/clientes/${cliente._id}`, { empresa: empresa.trim(), direccion }, { headers: { ...headerEntorno(), ...headerApiKey() } });
         setAvisoEmpresa('Guardado.');
         onCambio();
     };
 
     const guardarContactos = async (lista) => {
         setContactos(lista);
-        await axios.put(`${API}/clientes/${cliente._id}`, { contactos: lista }, { headers: headerEntorno() });
+        await axios.put(`${API}/clientes/${cliente._id}`, { contactos: lista }, { headers: { ...headerEntorno(), ...headerApiKey() } });
         setAvisoContactos('Guardado.');
         onCambio();
     };
@@ -129,7 +129,7 @@ function FichaCliente({ cliente, API, onCambio }) {
             const { data } = await axios.post(`${API}/portal/emitir-token`, {
                 clienteId: cliente._id, contactoId: contacto._id, alcance: 'empresa',
                 entorno: localStorage.getItem('erpTaller.entorno') || 'produccion',
-            }, { headers: headerEntorno() });
+            }, { headers: { ...headerEntorno(), ...headerApiKey() } });
             setAvisoPorContacto(a => ({ ...a, [contacto._id]: data.correoEnviado ? 'Acceso enviado por correo' : 'Emitido, sin correo' }));
         } catch (e) {
             setAvisoPorContacto(a => ({ ...a, [contacto._id]: e.response?.data?.error || 'Error al emitir' }));

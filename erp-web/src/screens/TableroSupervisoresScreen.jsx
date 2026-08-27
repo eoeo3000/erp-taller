@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import axios from 'axios';
-import { headerEntorno } from '../utils/entorno';
+import { headerEntorno, headerApiKey } from '../utils/entorno';
 
 // Mejora v3 #4 — vista interna del planificador, en Operación bajo Programación (confirmado
 // con el usuario). No se expone en la PWA operativa. Grilla y colores según
@@ -19,7 +19,7 @@ export default function TableroSupervisoresScreen({ API }) {
     const [datos, setDatos] = useState(null);
 
     useEffect(() => {
-        axios.get(`${API}/asignaciones/tablero-supervisores`, { params: { periodo }, headers: headerEntorno() })
+        axios.get(`${API}/asignaciones/tablero-supervisores`, { params: { periodo }, headers: { ...headerEntorno(), ...headerApiKey() } })
             .then(({ data }) => setDatos(data)).catch(() => setDatos({ supervisores: [] }));
     }, [API, periodo]);
 

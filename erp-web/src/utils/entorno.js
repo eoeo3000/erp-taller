@@ -23,3 +23,16 @@ export function headerEntorno() {
 // Se ejecuta una sola vez al importar el módulo (import en App.jsx, antes de cualquier
 // llamada), dejando el header por defecto listo para todas las llamadas axios de la app.
 axios.defaults.headers.common['X-Entorno'] = obtenerEntorno();
+
+// Clave compartida para las rutas de escritura de mayor riesgo (OT, contabilidad,
+// recursos/puestos/calendarios) — ver plan de robustecimiento, punto 4. Vive en el build del
+// SPA (VITE_API_KEY, definida en erp-web/.env): no es autenticación real por persona, protege
+// contra acceso casual/directo a la API, no contra alguien que ya usa la app desde el
+// navegador. Si VITE_API_KEY no está definida, el header sale vacío y el backend permite el
+// paso igual (ver middlewares/apiKey.js) — así el gate solo se activa cuando se configura
+// explícitamente en ambos lados, sin romper la app para quien no la haya configurado.
+export function headerApiKey() {
+    return { 'X-Api-Key': import.meta.env.VITE_API_KEY || '' };
+}
+
+axios.defaults.headers.common['X-Api-Key'] = import.meta.env.VITE_API_KEY || '';
