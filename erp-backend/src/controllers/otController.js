@@ -253,6 +253,15 @@ exports.eliminarOT = async (req, res) => {
         const Solicitud = require('../models/Solicitud')(req.db);
         await Solicitud.findByIdAndUpdate(idSolicitudVinculada, { estado: 'Pendiente', numeroOT: null });
 
+        // Limpia las Asignacion de este ciclo (evaluación/ejecución/supervisión) — si no, la
+        // Asignacion tipo 'evaluacion' del ciclo eliminado sigue bloqueando la solicitud en
+        // solicitudesSinInformeDocs (S4/mi-panel la ve como "ya tomada" aunque la OT nueva
+        // parta sin informe), y además choca contra el índice único de solicitudId al intentar
+        // crear una evaluación nueva. Mismo criterio que la limpieza en cascada al eliminar
+        // Recurso/Calendario (ver models/OT.js).
+        const Asignacion = require('../models/Asignacion')(req.db);
+        await Asignacion.deleteMany({ $or: [{ otId: id }, { solicitudId: idSolicitudVinculada }] });
+
         res.status(200).json({ message: "OT eliminada y solicitud liberada" });
     } catch (error) {
         res.status(500).json({ error: error.message });
