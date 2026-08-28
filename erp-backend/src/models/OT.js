@@ -183,9 +183,6 @@ const OTSchema = new mongoose.Schema({
     informeFinal: {
         enviado: { type: Boolean, default: false },
         fechaEnvio: { type: Date, default: null },
-        // Texto libre que el Planificador agrega antes de enviar (ej. un resumen, algo que
-        // aclarar al cliente).
-        notas: { type: String, default: '' },
         // Borrador editable del informe — copia independiente de tareas/informeEvaluacion/
         // reportes (TratamientoScreen.armarBorradorDesdeVivo la genera la primera vez que se
         // abre "Editar informe"). Decisión explícita del usuario: corregir redacción/ortografía

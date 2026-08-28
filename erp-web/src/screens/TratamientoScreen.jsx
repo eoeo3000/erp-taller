@@ -367,11 +367,6 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
     // otPublica; esto solo marca que ya se compartió, mismo criterio que
     // marcarCotizacionEnviada (arriba) — un booleano + fecha.
     const [enviandoInforme, setEnviandoInforme] = useState(false);
-    // Texto libre adicional (ej. un resumen). Se guarda aparte (guardarNotasInforme) para no
-    // obligar a "enviar" solo para dejarlo escrito, y también viaja en enviarInformeFinal por
-    // si quedó sin guardar antes de enviar.
-    const [notasInforme, setNotasInforme] = useState(datosRecibidos?.informeFinal?.notas || '');
-    const [guardandoNotasInforme, setGuardandoNotasInforme] = useState(false);
     const [previsualizarInforme, setPrevisualizarInforme] = useState(false);
     const [pdfPreviewInformeUrl, setPdfPreviewInformeUrl] = useState(null);
     // Borrador editable del informe — copia independiente de tareas/informeEvaluacion/reportes
@@ -382,15 +377,6 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
     const [contenidoInforme, setContenidoInforme] = useState(datosRecibidos?.informeFinal?.contenido || null);
     const [editandoInforme, setEditandoInforme] = useState(false);
     const [guardandoBorradorInforme, setGuardandoBorradorInforme] = useState(false);
-
-    const guardarNotasInforme = async () => {
-        setGuardandoNotasInforme(true);
-        const resultado = await actualizarOtGlobal(otSeleccionada._id, { 'informeFinal.notas': notasInforme });
-        setGuardandoNotasInforme(false);
-        if (!resultado?.exito) { notificar.error(resultado?.error || 'No se pudieron guardar las notas.'); return; }
-        notificar.exito('Notas del informe guardadas.');
-        if (resultado.otActualizada) setOtSeleccionada(resultado.otActualizada);
-    };
 
     // Snapshot inicial del informe a partir de los datos en vivo — semilla del borrador editable
     // (abrirEditorInforme) y también lo que se usa para armar el PDF/vista previa mientras no
@@ -452,7 +438,6 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
         const resultado = await actualizarOtGlobal(otSeleccionada._id, {
             'informeFinal.enviado': true,
             'informeFinal.fechaEnvio': new Date().toISOString(),
-            'informeFinal.notas': notasInforme,
             'informeFinal.contenido': contenidoAEnviar,
         });
         setEnviandoInforme(false);
@@ -857,14 +842,6 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
             }
         }
 
-        if ((notasInforme || '').trim()) {
-            titulo('Notas');
-            doc.setFontSize(9); doc.setFont(undefined, 'normal'); doc.setTextColor(70);
-            if (y > 260) { doc.addPage(); y = 20; }
-            const notas = doc.splitTextToSize(notasInforme, pageWidth - 28);
-            doc.text(notas, 14, y); y += notas.length * 5 + 6;
-        }
-
         if (contenido.evidencias?.length > 0) {
             titulo('Evidencias generales');
             doc.setFontSize(9); doc.setFont(undefined, 'normal'); doc.setTextColor(70);
@@ -921,7 +898,6 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                     setExcepciones(data.excepciones || []);
                     if (data.pago) setPago(data.pago);
                     if (data.informeEvaluacion) setInformeEvaluacion({ ...informeEvaluacionVacio, ...data.informeEvaluacion });
-                    setNotasInforme(data.informeFinal?.notas || '');
                     setContenidoInforme(data.informeFinal?.contenido || null);
                     if (data.logistica?.length > 0) setLogistica(data.logistica);
                     else setLogistica([{ id: Date.now(), descripcion: '', cantidad: 1, precio: 0 }]);
@@ -1971,8 +1947,6 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                             guardarPago={guardarPago} anularPago={anularPago} restaurarPago={restaurarPago}
                             estadoOT={otSeleccionada.estado} informeFinal={otSeleccionada.informeFinal}
                             enviarInformeFinal={enviarInformeFinal} enviandoInforme={enviandoInforme}
-                            notasInforme={notasInforme} setNotasInforme={setNotasInforme}
-                            guardarNotasInforme={guardarNotasInforme} guardandoNotasInforme={guardandoNotasInforme}
                             verInformePDF={verInformePDF} descargarInformePDF={descargarInformePDF}
                             abrirEditorInforme={abrirEditorInforme}
                         />

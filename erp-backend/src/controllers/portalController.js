@@ -147,7 +147,6 @@ function otPublica(ot) {
         informeFinal: ot.informeFinal ? {
             enviado: ot.informeFinal.enviado,
             fechaEnvio: ot.informeFinal.fechaEnvio,
-            notas: ot.informeFinal.notas || '',
             // Copia editable congelada al enviar — si existe, el cliente ve esto en vez de
             // recalcular desde tareas/informeEvaluacion/reportes en vivo (ver C4_AvanceFotos.jsx).
             contenido: ot.informeFinal.contenido || null,

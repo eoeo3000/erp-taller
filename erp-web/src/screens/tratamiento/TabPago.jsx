@@ -16,7 +16,6 @@ function horasDesde(iso) {
 export default function TabPago({
     pago, setPago, granTotal, guardarPago, anularPago, restaurarPago,
     estadoOT, informeFinal, enviarInformeFinal, enviandoInforme,
-    notasInforme, setNotasInforme, guardarNotasInforme, guardandoNotasInforme,
     verInformePDF, descargarInformePDF, abrirEditorInforme,
 }) {
     // El informe (Solicitud + Informe Inicial + plan + lo reportado en terreno) solo tiene
@@ -41,18 +40,7 @@ export default function TabPago({
                             Todavía no se compartió con el cliente el detalle de lo ejecutado (plan, comentarios y fotos de terreno).
                         </div>
                     )}
-                    <label style={{ display: 'block', marginTop: 10 }}>
-                        <span style={{ fontSize: 10.5, color: t.textoSecundario3 }}>Notas del informe (opcional)</span>
-                        <textarea
-                            className="campo-ed" style={{ ...styles.inputPlano, minHeight: 50, marginTop: 3 }}
-                            value={notasInforme} onChange={e => setNotasInforme(e.target.value)}
-                            placeholder="Ej: un resumen o algo que aclarar al cliente"
-                        />
-                    </label>
-                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
-                        <button onClick={guardarNotasInforme} disabled={guardandoNotasInforme} style={{ ...styles.btnSecundario, opacity: guardandoNotasInforme ? .6 : 1 }}>
-                            {guardandoNotasInforme ? 'Guardando…' : 'Guardar notas'}
-                        </button>
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 10 }}>
                         <button onClick={abrirEditorInforme} style={styles.btnSecundario}>Editar informe</button>
                         <button onClick={verInformePDF} style={styles.btnSecundario}>Ver informe</button>
                         <button onClick={descargarInformePDF} style={styles.btnSecundario}>Descargar PDF</button>
