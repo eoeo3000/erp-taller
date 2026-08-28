@@ -39,6 +39,17 @@ function aplicarAccionOT(ot, { accion, motivo, comentario, foto, usuarioNombre =
         if (ot.estado === 'Trabajo Terminado') ot.estado = 'Con Informe';
     } else if (accion === 'terminar') {
         ot.estado = 'Trabajo Terminado';
+    } else if (accion === 'reabrir') {
+        // Solo desde S3 (supervisor), solo tiene sentido sobre una OT 'Trabajo Terminado' (el
+        // frontend es el que gatea cuándo mostrar el botón — acá no se valida el estado previo,
+        // mismo criterio que el resto de estas acciones). Vuelve a 'En Ejecución' — mismo
+        // estado que dejaba 'terminar', así que las tareas/checkboxes/registro quedan editables
+        // de nuevo sin duplicar esa lógica. Pensado para dos casos: falta agregar una foto o un
+        // comentario a alguna tarea, o la OT se cerró por error.
+        if (!motivo) { const e = new Error('Motivo requerido'); e.status = 400; throw e; }
+        ot.estado = 'En Ejecución';
+        ot.reportes = ot.reportes || [];
+        ot.reportes.push({ comentario: `🔓 OT REABIERTA: ${motivo}`, fecha: new Date(), usuario: usuarioNombre });
     } else if (accion === 'reprogramar') {
         // Solo desde S3 (supervisor) — no está en el flujo de O3 (ejecutor). La OT necesita una
         // fecha nueva; el planificador la reasigna en Tareas (Tratamiento) y recién vuelve a

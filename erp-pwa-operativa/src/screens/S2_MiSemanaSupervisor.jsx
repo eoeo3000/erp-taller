@@ -178,6 +178,11 @@ function FilaDia({ dia, nombre, grupos, cruces, esHoy, onEntrar }) {
                     // El supervisor la marcó "Reprogramar" (S3) — necesita una fecha nueva.
                     // Se destaca acá para que salte a la vista al repasar la semana.
                     const reprogramar = g.estadoOT === 'Reprogramar';
+                    // El trabajo ya se dio por terminado — antes esto se veía igual que
+                    // cualquier tarea pendiente sin resolver (gris por defecto), sin ninguna
+                    // pista de que ya está cerrado (pedido del usuario: poder ver el estado de
+                    // la OT en el mini-Gantt, no solo el caso de Reprogramar).
+                    const terminada = ['Trabajo Terminado', 'Con Informe'].includes(g.estadoOT);
                     // Barra muy temprana (poco antes de las 4 de la mañana): casi no hay espacio a
                     // su izquierda para el rótulo — ahí pasaba por encima de la barra. Se vira el
                     // rótulo a la derecha del final de la barra, donde sí sobra ancho.
@@ -199,16 +204,16 @@ function FilaDia({ dia, nombre, grupos, cruces, esHoy, onEntrar }) {
                                 style={{
                                     position: 'absolute', boxSizing: 'border-box', left: pctHora(hIni), width: `calc(${pctHora(g.duracion)} - 3px)`,
                                     top: laneTop(i), height: 42, pointerEvents: 'none',
-                                    background: reprogramar ? 'oklch(0.52 0.13 25 / .18)' : enCurso ? 'oklch(0.48 0.10 250 / .18)' : '#e6e4dd',
-                                    borderLeft: `3px solid ${reprogramar ? 'oklch(0.52 0.13 25)' : enCurso ? 'oklch(0.48 0.10 250)' : '#a3a29a'}`,
+                                    background: reprogramar ? 'oklch(0.52 0.13 25 / .18)' : terminada ? 'oklch(0.48 0.10 155 / .18)' : enCurso ? 'oklch(0.48 0.10 250 / .18)' : '#e6e4dd',
+                                    borderLeft: `3px solid ${reprogramar ? 'oklch(0.52 0.13 25)' : terminada ? 'oklch(0.48 0.10 155)' : enCurso ? 'oklch(0.48 0.10 250)' : '#a3a29a'}`,
                                 }} />
                             <span style={{
                                 position: 'absolute', top: laneTop(i), pointerEvents: 'none',
                                 display: 'flex', flexDirection: 'column', gap: 1,
                                 ...estiloRotulo,
                             }}>
-                                <span className="mono" style={{ fontSize: 14, fontWeight: 700, whiteSpace: 'nowrap', color: reprogramar ? 'oklch(0.52 0.13 25)' : enCurso ? 'var(--texto-principal)' : 'var(--texto-secundario-1)' }}>
-                                    {g.numeroOT}{reprogramar ? ' · Reprogramar' : ''}
+                                <span className="mono" style={{ fontSize: 14, fontWeight: 700, whiteSpace: 'nowrap', color: reprogramar ? 'oklch(0.52 0.13 25)' : terminada ? 'oklch(0.48 0.10 155)' : enCurso ? 'var(--texto-principal)' : 'var(--texto-secundario-1)' }}>
+                                    {g.numeroOT}{reprogramar ? ' · Reprogramar' : terminada ? ' · Terminado' : ''}
                                 </span>
                                 {/* Máximo 2 líneas: sin este tope, una descripción larga en una barra
                                     angosta (hora temprana → poco ancho disponible) se sale del carril y

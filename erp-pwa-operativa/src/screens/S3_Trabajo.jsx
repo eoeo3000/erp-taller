@@ -95,6 +95,12 @@ export default function S3Trabajo({ nav, asignacion, persona }) {
     // La OT quedó marcada "Reprogramar" — solo se puede ver, no editar, hasta que la oficina
     // le asigne una fecha nueva y vuelva a 'Programada' (TratamientoScreen.jsx, guardarPlanificacion).
     const bloqueada = ot.estado === 'Reprogramar';
+    // "Trabajo finalizado" ya no debería seguir editable — a menos que se reabra (más abajo).
+    // Antes de esto, la pantalla se quedaba igual de editable después de terminar la OT que
+    // antes: se podía seguir tocando "Guardar lo ingresado"/casillas aunque ya estuviera
+    // cerrada, sin ninguna pista de que el trabajo ya se dio por terminado.
+    const terminada = ot.estado === 'Trabajo Terminado';
+    const soloLectura = bloqueada || terminada;
 
     const tareas = ot.tareas || [];
     const resueltas = tareas.filter((t) => t.completada || t.motivoNoRealizada).length;
@@ -109,7 +115,7 @@ export default function S3Trabajo({ nav, asignacion, persona }) {
     const hoy = hoyISO();
 
     const guardarTarea = async (idx, cambios) => {
-        if (bloqueada) return;
+        if (soloLectura) return;
         const nuevasTareas = tareas.map((t, i) => (i === idx ? { ...t, ...cambios } : t));
         setGuardando(true);
         try { await actualizarOT(otId, { tareas: nuevasTareas }); await cargar(); } finally { setGuardando(false); }
@@ -145,7 +151,7 @@ export default function S3Trabajo({ nav, asignacion, persona }) {
     };
 
     const guardarLoIngresado = async () => {
-        if (bloqueada) return;
+        if (soloLectura) return;
         const conBorrador = Object.keys(borradores).filter((idx) => borradores[idx].texto?.trim() || borradores[idx].fotos?.length);
         if (conBorrador.length === 0) return;
         const ahora = new Date();
@@ -166,14 +172,14 @@ export default function S3Trabajo({ nav, asignacion, persona }) {
     // ese cambio de estado, ni el cliente (C3_EstadoTrabajo, erp-pwa-cliente) ni el
     // Planificador (Panel de control, escritorio) se enteraban de que ya empezó.
     const iniciarTrabajo = async () => {
-        if (bloqueada) return;
+        if (soloLectura) return;
         if (!window.confirm('¿Marcar el trabajo como iniciado? El cliente y la oficina lo van a ver en ejecución.')) return;
         setGuardando(true);
         try { await accionOT(otId, { accion: 'iniciar' }); await cargar(); } finally { setGuardando(false); }
     };
 
     const terminarTrabajo = async () => {
-        if (bloqueada) return;
+        if (soloLectura) return;
         if (!window.confirm('¿Marcar el trabajo como finalizado? Queda lista para que la oficina facture.')) return;
         setGuardando(true);
         try { await accionOT(otId, { accion: 'terminar' }); await cargar(); } finally { setGuardando(false); }
@@ -240,23 +246,35 @@ export default function S3Trabajo({ nav, asignacion, persona }) {
                         <div style={{ marginTop: 8, fontSize: 12.5, color: 'var(--detenido)' }}>
                             Esta OT quedó marcada para reprogramar — solo se puede ver hasta que la oficina le asigne una fecha nueva.
                         </div>
-                    ) : ot.estado === 'Programada' && (
+                    ) : terminada && accionEstado === null ? (
+                        // Motivos para reabrir: falta agregar una foto/comentario a alguna tarea, o
+                        // "Trabajo finalizado" se apretó por error — pedido explícito del usuario.
+                        <div style={{ marginTop: 8 }}>
+                            <div style={{ fontSize: 12.5, color: 'var(--texto-secundario-2)', marginBottom: 8 }}>
+                                Este trabajo ya se marcó como terminado. Si falta una foto o un comentario, o se cerró por error, podés reabrirlo.
+                            </div>
+                            <button className="boton-secundario" style={{ width: 'auto', minHeight: 40, padding: '0 14px', fontSize: 13 }} onClick={() => setAccionEstado('reabrir')}>Reabrir OT</button>
+                        </div>
+                    ) : !terminada && ot.estado === 'Programada' && accionEstado === null && (
                         <button
                             className="boton-primario" style={{ width: 'auto', minHeight: 40, padding: '0 14px', fontSize: 13, marginTop: 8, background: 'var(--en-curso)', borderColor: 'var(--en-curso)' }}
                             disabled={guardando} onClick={iniciarTrabajo}
                         >Marcar trabajo en ejecución</button>
                     )}
-                    {!bloqueada && (accionEstado === null ? (
+                    {!bloqueada && !terminada && accionEstado === null && (
                         <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
                             <button className="boton-secundario" style={{ width: 'auto', minHeight: 40, padding: '0 12px', fontSize: 13 }} onClick={() => setAccionEstado('reprogramar')}>Reprogramar</button>
                             <button className="boton-secundario" style={{ width: 'auto', minHeight: 40, padding: '0 12px', fontSize: 13 }} onClick={() => setAccionEstado('replanificar')}>Replanificar</button>
                         </div>
-                    ) : (
+                    )}
+                    {!bloqueada && accionEstado !== null && (
                         <div style={{ marginTop: 8 }}>
                             <div style={{ fontSize: 12.5, color: 'var(--texto-secundario-2)', marginBottom: 6 }}>
                                 {accionEstado === 'reprogramar'
                                     ? 'La OT necesita una fecha nueva — la oficina la reprograma desde el Gantt.'
-                                    : 'La OT necesita más horas o materiales de lo cotizado — se avisa a la oficina para que prepare la extensión de la cotización.'}
+                                    : accionEstado === 'replanificar'
+                                    ? 'La OT necesita más horas o materiales de lo cotizado — se avisa a la oficina para que prepare la extensión de la cotización.'
+                                    : 'Se vuelve a dejar "En Ejecución" para poder corregir o completar lo que falte.'}
                             </div>
                             {errorEstado && <div style={{ fontSize: 12.5, color: 'var(--detenido)', marginBottom: 6 }}>{errorEstado}</div>}
                             <input
@@ -278,7 +296,7 @@ export default function S3Trabajo({ nav, asignacion, persona }) {
                                 <button className="boton-secundario" style={{ width: 'auto', minHeight: 40, padding: '0 14px', fontSize: 13 }} onClick={cancelarAccionEstado}>Cancelar</button>
                             </div>
                         </div>
-                    ))}
+                    )}
                 </div>
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '16px 18px 6px' }}>
@@ -307,7 +325,7 @@ export default function S3Trabajo({ nav, asignacion, persona }) {
                             motivoAbierto={motivoAbierto === idx}
                             motivoTexto={motivoTexto}
                             guardando={guardando}
-                            bloqueada={bloqueada}
+                            bloqueada={soloLectura}
                             onMarcarRealizada={() => toggleRealizada(idx)}
                             onAbrirMotivo={() => { setMotivoAbierto(idx); setMotivoTexto(''); }}
                             onCancelarMotivo={() => setMotivoAbierto(null)}
@@ -323,21 +341,29 @@ export default function S3Trabajo({ nav, asignacion, persona }) {
             </div>
 
             <div className="pie-accion">
-                <button className="boton-primario" disabled={guardando || bloqueada} onClick={guardarLoIngresado}>Guardar lo ingresado</button>
+                {/* Una vez terminada, ya no tiene sentido seguir "guardando" ni volver a
+                    "terminar" — la única acción disponible es Reabrir OT (arriba, en Estado
+                    de la OT). Antes esta barra se quedaba igual de editable después de
+                    terminar, sin ninguna pista de que el trabajo ya se dio por cerrado. */}
+                {!terminada && <button className="boton-primario" disabled={guardando || soloLectura} onClick={guardarLoIngresado}>Guardar lo ingresado</button>}
                 <button className="boton-secundario" onClick={() => setVerInforme(true)}>Ver informe</button>
-                <button
-                    className="boton-secundario"
-                    disabled={!puedeTerminar || guardando || bloqueada}
-                    onClick={terminarTrabajo}
-                    style={puedeTerminar ? { background: 'var(--accion-primaria)', color: '#fff', borderColor: 'var(--accion-primaria)' } : {}}
-                >
-                    Trabajo finalizado · informe final
-                </button>
-                <div style={{ fontSize: 12.5, lineHeight: 1.5, color: 'var(--texto-atenuado-2)', textAlign: 'center' }}>
-                    {puedeTerminar
-                        ? 'Todas las tareas están marcadas. El informe final reúne cada tarea con lo que se hizo y sus fotos.'
-                        : `Se habilita cuando las ${tareas.length} tareas estén marcadas — falta${faltan !== 1 ? 'n' : ''} ${faltan}.`}
-                </div>
+                {!terminada && (
+                    <button
+                        className="boton-secundario"
+                        disabled={!puedeTerminar || guardando || soloLectura}
+                        onClick={terminarTrabajo}
+                        style={puedeTerminar ? { background: 'var(--accion-primaria)', color: '#fff', borderColor: 'var(--accion-primaria)' } : {}}
+                    >
+                        Trabajo finalizado · informe final
+                    </button>
+                )}
+                {!terminada && (
+                    <div style={{ fontSize: 12.5, lineHeight: 1.5, color: 'var(--texto-atenuado-2)', textAlign: 'center' }}>
+                        {puedeTerminar
+                            ? 'Todas las tareas están marcadas. El informe final reúne cada tarea con lo que se hizo y sus fotos.'
+                            : `Se habilita cuando las ${tareas.length} tareas estén marcadas — falta${faltan !== 1 ? 'n' : ''} ${faltan}.`}
+                    </div>
+                )}
             </div>
         </div>
     );
