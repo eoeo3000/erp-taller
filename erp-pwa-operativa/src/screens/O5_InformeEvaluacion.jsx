@@ -16,6 +16,7 @@ export default function O5InformeEvaluacion({ nav, asignacion }) {
     const [ot, setOt] = useState(null);
     const [hallazgo, setHallazgo] = useState(nuevoHallazgo());
     const [guardando, setGuardando] = useState(false);
+    const [error, setError] = useState('');
     const [tiposTrabajo, setTiposTrabajo] = useState([]);
     const [catalogosTransversales, setCatalogosTransversales] = useState([]);
 
@@ -45,6 +46,7 @@ export default function O5InformeEvaluacion({ nav, asignacion }) {
     // guarda (no deja basura en informeEvaluacion.hallazgos), pero eso nunca bloquea salir.
     const terminarInforme = async () => {
         setGuardando(true);
+        setError('');
         const informeBase = { hallazgos: [], tareas: [], fotos: [], ...ot.informeEvaluacion };
         // Regrabar (ej. corrigiendo un informe "Con observaciones") vuelve la revisión a
         // 'Pendiente' — el Planificador tiene que volver a mirarlo, ver S5_MisInformes.jsx.
@@ -56,6 +58,8 @@ export default function O5InformeEvaluacion({ nav, asignacion }) {
             await actualizarOT(targetId, { informeEvaluacion: nuevo });
             if (asignacion?._id) await cerrarAsignacion(asignacion._id).catch(() => {});
             nav.volver();
+        } catch (e) {
+            setError(e.message || 'No se pudo guardar el informe.');
         } finally { setGuardando(false); }
     };
 
@@ -74,6 +78,7 @@ export default function O5InformeEvaluacion({ nav, asignacion }) {
                 />
             </div>
 
+            {error && <div style={{ margin: '0 18px 10px', fontSize: 13, color: 'var(--detenido)', fontWeight: 600 }}>{error}</div>}
             <div className="pie-accion" style={{ flexDirection: 'row' }}>
                 <button className="boton-secundario" style={{ width: 120 }} disabled={guardando} onClick={nav.volver}>Volver</button>
                 <button className="boton-primario" disabled={guardando} onClick={terminarInforme}>Guardar y salir</button>

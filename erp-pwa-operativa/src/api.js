@@ -32,10 +32,19 @@ function conEntorno(path) {
     return `${API}${path}${sep}entorno=${entorno}`;
 }
 
+// X-Api-Key: gate del backend en rutas de escritura de alto riesgo (OT, contabilidad,
+// recursos/puestos/calendarios — ver erp-backend/middlewares/apiKey.js, plan de
+// robustecimiento punto 4). actualizarOT (guardar el informe de evaluación) pega contra
+// PUT /api/ots/:id, una de esas rutas — sin este header, el backend devuelve 401 y el
+// guardado del informe falla en silencio. Mismo criterio que erp-web/utils/entorno.js.
+function headerApiKey() {
+    return { 'X-Api-Key': import.meta.env.VITE_API_KEY || '' };
+}
+
 async function pedir(path, opts = {}) {
     const resp = await fetch(conEntorno(path), {
         ...opts,
-        headers: { 'Content-Type': 'application/json', ...(opts.headers || {}) },
+        headers: { 'Content-Type': 'application/json', ...headerApiKey(), ...(opts.headers || {}) },
     });
     const data = await resp.json().catch(() => ({}));
     if (!resp.ok) throw new Error(data.error || `Error ${resp.status}`);
