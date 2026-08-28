@@ -265,6 +265,9 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
         // directo, no el `ots` global de App.jsx, así que cargarDatos() solo no alcanza (mismo
         // patrón que guardarPlanificacion, más arriba).
         if (resultado.otActualizada) setOtSeleccionada(resultado.otActualizada);
+        // El overlay es de pantalla completa (no solo del contenido de Cotización) — sin esto
+        // se queda pegado en pantalla después de cambiar de pestaña, porque nada más lo apaga.
+        setVolviendoAPlanificacion(false);
         if (cargarDatos) await cargarDatos();
     };
 
@@ -982,7 +985,15 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                 .campo-ed { border:1px solid transparent; background:transparent; }
                 .campo-ed:hover { border-color: rgba(0,0,0,.14); }
                 .campo-ed:focus { border-color: ${t.acento}; background:#fff; outline:none; }
+                @keyframes girarSpinner { to { transform: rotate(360deg); } }
             `}</style>
+
+            {volviendoAPlanificacion && (
+                <div style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, background: 'rgba(246,245,242,.85)' }}>
+                    <span style={{ width: 34, height: 34, borderRadius: '50%', border: `3px solid ${t.hairlineBloque}`, borderTopColor: t.acento, animation: 'girarSpinner .7s linear infinite' }} />
+                    <span style={{ fontSize: 12, color: t.textoSecundario1 }}>Volviendo a planificación…</span>
+                </div>
+            )}
 
             <header style={styles.header}>
                 <h1 style={styles.h1}>{otSeleccionada?.numeroOT || 'Nueva planificación'}</h1>
