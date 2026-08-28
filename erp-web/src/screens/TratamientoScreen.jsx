@@ -230,6 +230,28 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
         }
     };
 
+    // Corregir algo (una tarea, un material) sin esperar a que el supervisor marque
+    // 'Reprogramar' desde terreno — solo tiene sentido mientras la OT sigue en 'Planificada'
+    // (ver soloLecturaPlanificacion): pasada esa etapa ya hay reservas de stock/equipos reales
+    // comprometidas y esto dejaría de ser seguro. Si la cotización ya se había enviado, primero
+    // se cancela (mismo efecto que cancelarAceptacion) antes de volver a Tareas.
+    const volverAPlanificacion = async () => {
+        const yaEnviada = !!otSeleccionada?.cotizacion?.enviada;
+        const mensaje = yaEnviada
+            ? 'Vas a cancelar el envío pendiente y volver a Tareas/Equipos/Suministros. El cliente ya no podrá aprobar este envío — habrá que reconfirmar programación y reenviar. ¿Continuar?'
+            : '¿Volver a Tareas/Equipos/Suministros para corregir algo antes de enviar la cotización?';
+        if (!(await confirmar(mensaje, { danger: false, textoConfirmar: 'Volver a planificación' }))) return;
+        if (yaEnviada) {
+            const resultado = await actualizarOtGlobal(otSeleccionada._id, {
+                'cotizacion.enviada': false,
+                'cotizacion.capacidadVerificada': false,
+            });
+            if (!resultado?.exito) { notificar.error(resultado?.error || 'No se pudo cancelar el envío.'); return; }
+            if (cargarDatos) await cargarDatos();
+        }
+        setTabActiva('tareas');
+    };
+
     const [enviandoWhatsApp, setEnviandoWhatsApp] = useState(false);
 
     // Vía alternativa a "Enviar cotización por correo": mismo link autenticado a la PWA
@@ -915,7 +937,20 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
     // Una OT vieja con datos incompletos de antes de que existiera esta validación (no puede
     // volver a pasar con una OT nueva) se corrige reprogramándola desde la PWA del supervisor,
     // no reabriendo el freeze automáticamente.
-    const soloLecturaPlanificacion = planificacionTerminada && otSeleccionada?.estado !== 'Reprogramar';
+    //
+    // Segunda excepción: mientras la OT sigue en 'Planificada' y la cotización todavía NO se
+    // envió, no hay ningún riesgo en destrabar — aplicarReservaPorCambioEstado (backend) solo
+    // reserva stock/equipos en la transición Planificada->Programada, así que nada se
+    // comprometió todavía. Antes, corregir un olvido acá exigía esperar a que el supervisor
+    // marcara 'Reprogramar' desde terreno; ahora el botón "Cancelar y volver a planificación"
+    // de la pestaña Cotización cubre este caso sin salir del escritorio. `cotizacion.enviada`
+    // solo cambia por una acción explícita (enviar / cancelar aceptación), nunca como efecto
+    // de tipear en las tablas — no reintroduce el freeze reactivo que se sacó antes (ver
+    // comentario de arriba).
+    const cotizacionEnviada = !!otSeleccionada?.cotizacion?.enviada;
+    const soloLecturaPlanificacion = planificacionTerminada
+        && otSeleccionada?.estado !== 'Reprogramar'
+        && !(otSeleccionada?.estado === 'Planificada' && !cotizacionEnviada);
 
     // Único condicionante bloqueante de la pestaña Cotización, en el orden en que se resuelven
     // (tareas -> costos -> terminar planificación -> programar). Se muestra solo ese recuadro,
@@ -1386,6 +1421,13 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                                 title={otSeleccionada.cotizacion?.capacidadVerificada ? '' : 'Verifica la capacidad en Programación antes de enviar'}
                                 style={{ ...styles.btnSecundario, width: '100%', marginTop: 6, opacity: (otSeleccionada.cotizacion?.capacidadVerificada && !enviandoWhatsApp) ? 1 : .5 }}
                             >{enviandoWhatsApp ? 'Generando link…' : 'Enviar cotización por WhatsApp'}</button>
+                            {otSeleccionada.estado === 'Planificada' && (
+                                <button
+                                    onClick={volverAPlanificacion}
+                                    style={{ ...styles.btnSecundario, width: '100%', marginTop: 10, color: t.rojo }}
+                                    title="Corrige tareas, equipos o suministros sin esperar una reprogramación desde terreno"
+                                >Cancelar y volver a planificación</button>
+                            )}
                             <div style={{ fontSize: 10.5, color: t.textoAtenuado3, marginTop: 9, lineHeight: 1.5 }}>Las cotizaciones ya emitidas se siguen viendo con su formato original.</div>
                         </div>
                         </div>

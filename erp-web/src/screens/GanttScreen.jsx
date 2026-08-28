@@ -121,6 +121,10 @@ const GanttScreen = ({ recursos = [], ots = [], calendarios = [], obtenerHorasPa
     const diasSemana = semanaActual?.dias || [];
 
     const [otSel, setOtSel] = useState(null);
+    // Overlay de carga mientras se confirma capacidad y se vuelve a Tratamiento — el guardado
+    // (actualizarOtGlobal) más la navegación tardan lo suficiente en producción como para que,
+    // sin ningún indicador, el clic pareciera no haber hecho nada.
+    const [confirmandoCapacidad, setConfirmandoCapacidad] = useState(false);
     const [asideOculta, setAsideOculta] = useState(false);
     // Mejora v3 #3 — "Por operario" es exactamente lo que ya existía (sin cambios); "Por OT"
     // y "Por supervisor" son vistas nuevas, agregadas por OT/persona en vez de por tarea.
@@ -213,6 +217,7 @@ const GanttScreen = ({ recursos = [], ots = [], calendarios = [], obtenerHorasPa
             if (!continuar) return;
         }
 
+        setConfirmandoCapacidad(true);
         const fechasPropuestas = fechasPropuestasDe(ot);
         const resultado = await actualizarOtGlobal(ot._id, {
             'cotizacion.capacidadVerificada': true,
@@ -230,7 +235,11 @@ const GanttScreen = ({ recursos = [], ots = [], calendarios = [], obtenerHorasPa
             // 'Programada' — nada de esto hay que reimplementarlo acá.
             ...(ot.estado === 'Reprogramar' ? { estado: 'Planificada' } : {}),
         });
-        if (!resultado?.exito) { notificar.error(resultado?.error || 'No se pudo confirmar la capacidad.'); return; }
+        if (!resultado?.exito) {
+            setConfirmandoCapacidad(false);
+            notificar.error(resultado?.error || 'No se pudo confirmar la capacidad.');
+            return;
+        }
         if (cargarDatos) cargarDatos();
 
         // Siempre vuelve a la pestaña Cotización con la OT ya actualizada — antes solo lo
@@ -238,6 +247,7 @@ const GanttScreen = ({ recursos = [], ots = [], calendarios = [], obtenerHorasPa
         // Tratamiento (location.state._volverATab), así que entrando a Programación por
         // cualquier otro camino (el menú, por ejemplo) "Aceptar programación" se quedaba en
         // el Gantt sin ninguna forma obvia de continuar a enviar la cotización.
+        // No hace falta apagar confirmandoCapacidad acá: navigate() desmonta esta pantalla.
         navigate('/tratamiento', { state: { ...resultado.otActualizada, _tabDestino: 'cotizacion' } });
     };
 
@@ -255,6 +265,13 @@ const GanttScreen = ({ recursos = [], ots = [], calendarios = [], obtenerHorasPa
 
     return (
         <div style={styles.raiz}>
+            {confirmandoCapacidad && (
+                <div style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, background: 'rgba(246,245,242,.85)' }}>
+                    <style>{'@keyframes girarSpinner { to { transform: rotate(360deg); } }'}</style>
+                    <span style={{ width: 34, height: 34, borderRadius: '50%', border: `3px solid ${t.hairlineBloque}`, borderTopColor: t.acento, animation: 'girarSpinner .7s linear infinite' }} />
+                    <span style={{ fontSize: 12, color: t.textoSecundario1 }}>Confirmando programación…</span>
+                </div>
+            )}
             <header style={styles.header}>
                 <h1 style={styles.h1}>Programación</h1>
                 <span style={styles.subtitulo}>Plano de ejecución y capacidad real del taller</span>
