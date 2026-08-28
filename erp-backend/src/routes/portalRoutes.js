@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const ctrl = require('../controllers/portalController');
+const apiKey = require('../middlewares/apiKey');
 
 router.get('/buscar',          ctrl.buscar);
 router.get('/solicitud/:id',   ctrl.detalle);
@@ -20,5 +21,9 @@ router.post('/sesiones/:id/revocar',   ctrl.revocarSesion);
 router.post('/sesiones/:id/reactivar', ctrl.reactivarSesion);
 router.post('/sesiones/:id/regenerar', ctrl.regenerarToken);
 router.post('/sesiones/:id/reenviar',  ctrl.reenviarToken);
+// apiKey solo acá: borra el registro entero (Bodega de tokens, botón "Eliminar"), a
+// diferencia de revocar que solo invalida — mismo criterio de "escritura de mayor riesgo"
+// que ya protege OT/contabilidad/recursos/puestos/calendarios.
+router.delete('/sesiones/:id',         apiKey, ctrl.eliminarSesion);
 
 module.exports = router;

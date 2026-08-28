@@ -568,6 +568,21 @@ exports.reactivarSesion = async (req, res) => {
     }
 };
 
+// DELETE /api/portal/sesiones/:id — borra el registro entero (Bodega de tokens, botón
+// "Eliminar"). A diferencia de revocar (invalida el token pero conserva el registro para
+// auditoría de accesos), esto lo saca por completo de la tabla — pensado para limpiar
+// pruebas/duplicados, no como reemplazo de revocar en el uso normal.
+exports.eliminarSesion = async (req, res) => {
+    const SesionPortal = getSesionPortal(req.db);
+    try {
+        const sesion = await SesionPortal.findByIdAndDelete(req.params.id);
+        if (!sesion) return res.status(404).json({ error: 'Sesión no encontrada' });
+        res.json({ ok: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+};
+
 // POST /api/portal/sesiones/lote — "Stock pre-generado": crea N sesiones sin clienteId
 // (tokenHash vacío, sin asignar todavía). Se asignan más adelante regenerando esa sesión
 // una vez que se sabe a qué contacto va (mismo endpoint que "Regenerar").

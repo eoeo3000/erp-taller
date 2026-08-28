@@ -132,3 +132,21 @@ exports.reactivar = async (req, res) => {
         res.status(500).json({ error: error.message });
     }
 };
+
+// DELETE /api/usuarios/:id — borra el registro entero (Bodega de tokens, botón "Eliminar").
+// A diferencia de revocar (invalida el token pero conserva el registro para auditoría), esto
+// lo saca por completo de la tabla — pensado para limpiar pruebas/duplicados, no como
+// reemplazo de revocar en el uso normal. Limpia Recurso.usuarioId para no dejar una
+// referencia colgando (mismo criterio que la limpieza en cascada al eliminar una OT).
+exports.eliminar = async (req, res) => {
+    const Usuario = getUsuario(req.db);
+    const Recurso = getRecurso(req.db);
+    try {
+        const usuario = await Usuario.findByIdAndDelete(req.params.id);
+        if (!usuario) return res.status(404).json({ error: 'Usuario no encontrado' });
+        if (usuario.recursoId) await Recurso.updateOne({ _id: usuario.recursoId }, { usuarioId: null });
+        res.json({ ok: true });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+};

@@ -61,12 +61,13 @@ export default function BodegaTokensScreen({ API }) {
     );
 }
 
-const ETIQUETAS_ACCION = { revocar: 'Revocar', regenerar: 'Regenerar', reenviar: 'Reenviar', reactivar: 'Reactivar' };
+const ETIQUETAS_ACCION = { revocar: 'Revocar', regenerar: 'Regenerar', reenviar: 'Reenviar', reactivar: 'Reactivar', eliminar: 'Eliminar' };
 const MENSAJES_ACCION = {
     revocar: (tok) => `Acceso de ${tok.nombre} revocado.`,
     regenerar: (tok) => `Token de ${tok.nombre} regenerado — el link anterior ya no sirve. Correo reenviado a ${tok.correo || 'su casilla registrada'}.`,
     reenviar: (tok) => `Nuevo link enviado por correo a ${tok.correo || 'su casilla registrada'} (el token en claro no se guarda, así que reenviar equivale a regenerar).`,
     reactivar: (tok) => `Acceso de ${tok.nombre} reactivado.`,
+    eliminar: (tok) => `Acceso de ${tok.nombre} eliminado — no queda registro de esta fila.`,
 };
 
 function TokensActivos({ API }) {
@@ -86,10 +87,20 @@ function TokensActivos({ API }) {
             ? { revocar: 'revocar', regenerar: 'regenerar', reenviar: 'reenviar', reactivar: 'reactivar' }
             : { revocar: 'revocar', regenerar: 'reemitir-token', reenviar: 'reemitir-token', reactivar: 'reactivar' };
         if (tipoAccion === 'revocar' && !(await confirmar(`¿Revocar el acceso de ${tok.nombre}?`))) return;
+        // A diferencia de revocar (reversible con "Reactivar"), eliminar borra el registro
+        // entero — sin vuelta atrás, ni rastro de fecha/hora/dispositivo de accesos pasados.
+        if (tipoAccion === 'eliminar' && !(await confirmar(
+            `¿Eliminar definitivamente el acceso de ${tok.nombre}? Se borra el registro completo, incluido el historial de accesos — a diferencia de Revocar, esto no se puede deshacer.`,
+            { danger: true, textoConfirmar: 'Eliminar' },
+        ))) return;
         setAviso(null);
         setProcesando(tok._id);
         try {
-            await axios.post(`${base}/${rutas[tipoAccion]}`, { correo: tok.correo }, { headers: { ...headerEntorno(), ...headerApiKey() } });
+            if (tipoAccion === 'eliminar') {
+                await axios.delete(base, { headers: { ...headerEntorno(), ...headerApiKey() } });
+            } else {
+                await axios.post(`${base}/${rutas[tipoAccion]}`, { correo: tok.correo }, { headers: { ...headerEntorno(), ...headerApiKey() } });
+            }
             setAviso({ tipo: 'ok', texto: MENSAJES_ACCION[tipoAccion](tok) });
             await cargar();
         } catch (e) {
@@ -135,7 +146,7 @@ function TokensActivos({ API }) {
                 const accesoRojo = accesoTexto === 'nunca' || accesoTexto.includes('meses');
                 const estFondo = tok.pendiente ? 'rgba(184,134,47,.13)' : tok.estadoDisplay === 'Activo' ? 'rgba(76,122,76,.13)' : tok.estadoDisplay === 'Revocado' ? 'rgba(168,65,47,.13)' : '#f0efeb';
                 const estTono = tok.pendiente ? t.ambar : tok.estadoDisplay === 'Activo' ? t.verde : tok.estadoDisplay === 'Revocado' ? t.rojo : t.textoAtenuado1;
-                const acciones = tok.estadoDisplay === 'Revocado' ? ['reactivar'] : ['revocar', 'regenerar', 'reenviar'];
+                const acciones = tok.estadoDisplay === 'Revocado' ? ['reactivar', 'eliminar'] : ['revocar', 'regenerar', 'reenviar', 'eliminar'];
                 const enCurso = procesando === tok._id;
                 return (
                     <div key={tok._id} style={{ display: 'grid', gridTemplateColumns: GRID_TOKENS, gap: 10, alignItems: 'center', padding: '8px 12px', borderBottom: `1px solid ${t.hairline}` }}>
@@ -155,7 +166,7 @@ function TokensActivos({ API }) {
                             {tok.pendiente ? (
                                 <button onClick={() => emitirParaRecurso(tok)} disabled={enCurso} style={{ height: 23, padding: '0 8px', background: t.acento, border: `1px solid ${t.acento}`, fontSize: 10.5, fontWeight: 700, color: '#fff', cursor: enCurso ? 'default' : 'pointer', borderRadius: 2, opacity: enCurso ? .6 : 1 }}>{enCurso ? '…' : 'Emitir acceso'}</button>
                             ) : acciones.map(a => (
-                                <button key={a} onClick={() => accion(tok, a)} disabled={enCurso} style={{ height: 23, padding: '0 8px', background: '#fff', border: '1px solid rgba(0,0,0,.22)', fontSize: 10.5, color: a === 'revocar' ? t.rojo : t.textoSecundario2, cursor: enCurso ? 'default' : 'pointer', borderRadius: 2, opacity: enCurso ? .5 : 1 }}>{enCurso ? '…' : ETIQUETAS_ACCION[a]}</button>
+                                <button key={a} onClick={() => accion(tok, a)} disabled={enCurso} style={{ height: 23, padding: '0 8px', background: '#fff', border: '1px solid rgba(0,0,0,.22)', fontSize: 10.5, color: (a === 'revocar' || a === 'eliminar') ? t.rojo : t.textoSecundario2, cursor: enCurso ? 'default' : 'pointer', borderRadius: 2, opacity: enCurso ? .5 : 1 }}>{enCurso ? '…' : ETIQUETAS_ACCION[a]}</button>
                             ))}
                         </div>
                     </div>
