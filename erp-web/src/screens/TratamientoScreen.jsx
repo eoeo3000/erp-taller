@@ -1533,18 +1533,37 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                                 </div>
                             </div>
 
-                            {/* Metodología por tarea: el plan queda visible junto a los reportes de terreno,
-                                para comparar plan contra lo ejecutado. Los reportes no se vinculan a una
-                                tarea puntual hoy (aplicarAccionOT no guarda tareaId al crearlos), así que
-                                se muestra el plan completo de la OT, no un cruce reporte-por-reporte. */}
-                            {tareas.some(tt => (tt.desarrollo || '').trim()) && (
+                            {/* Metodología por tarea (el plan) + registro (lo que el supervisor reportó que
+                                se hizo, con foto — TabTrabajo.jsx en la PWA Operativa, "Guardar lo
+                                ingresado") quedan juntos por tarea, para comparar plan contra lo
+                                ejecutado. OT.reportes (más abajo, "Evidencias de terreno") es aparte:
+                                son reportes generales de la OT, no se vinculan a una tarea puntual
+                                (aplicarAccionOT no guarda tareaId al crearlos) — tareas[].registro sí
+                                está atado a la tarea exacta, por eso se muestra acá junto al plan. */}
+                            {tareas.some(tt => (tt.desarrollo || '').trim() || tt.registro?.texto || tt.registro?.fotos?.length) && (
                                 <div style={{ marginBottom: 16 }}>
-                                    <div style={styles.tituloSub}>Plan de trabajo (metodología planificada)</div>
+                                    <div style={styles.tituloSub}>Plan de trabajo y avance en terreno</div>
                                     <div style={{ border: `1px solid ${t.bordeZona}`, borderRadius: 2 }}>
-                                        {tareas.filter(tt => (tt.desarrollo || '').trim()).map((tt, i) => (
+                                        {tareas.filter(tt => (tt.desarrollo || '').trim() || tt.registro?.texto || tt.registro?.fotos?.length).map((tt, i) => (
                                             <div key={tt._id || tt.id || i} style={{ padding: '8px 12px', borderBottom: `1px solid ${t.hairlineFila}` }}>
                                                 <div style={{ fontSize: 11.5, fontWeight: 600, color: t.textoPrincipal }}>{tt.descripcion}</div>
-                                                <div style={{ fontSize: 11, color: t.textoSecundario2, marginTop: 2, whiteSpace: 'pre-wrap', lineHeight: 1.45 }}>{tt.desarrollo}</div>
+                                                {(tt.desarrollo || '').trim() && (
+                                                    <div style={{ fontSize: 11, color: t.textoSecundario2, marginTop: 2, whiteSpace: 'pre-wrap', lineHeight: 1.45 }}>{tt.desarrollo}</div>
+                                                )}
+                                                {(tt.registro?.texto || tt.registro?.fotos?.length > 0) && (
+                                                    <div style={{ display: 'flex', gap: 8, marginTop: 6, padding: '7px 9px', background: t.fondoMain, borderLeft: `2px solid ${t.verde}` }}>
+                                                        {tt.registro.fotos?.[0] && (
+                                                            <img src={tt.registro.fotos[0]} alt="" style={{ flex: 'none', width: 44, height: 34, objectFit: 'cover', borderRadius: 2, cursor: 'pointer' }} onClick={() => window.open(tt.registro.fotos[0], '_blank')} />
+                                                        )}
+                                                        <div style={{ flex: 1, minWidth: 0 }}>
+                                                            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.04em', textTransform: 'uppercase', color: t.verde }}>Reportado desde terreno</div>
+                                                            {tt.registro.texto && <div style={{ fontSize: 11, color: t.textoSecundario2, marginTop: 2, whiteSpace: 'pre-wrap', lineHeight: 1.4 }}>{tt.registro.texto}</div>}
+                                                            <div style={{ fontFamily: t.fontMono, fontSize: 10, color: t.textoAtenuado3, marginTop: 3 }}>
+                                                                {[tt.registro.autor, tt.registro.hora, tt.registro.fotos?.length ? `${tt.registro.fotos.length} foto${tt.registro.fotos.length === 1 ? '' : 's'}` : null].filter(Boolean).join(' · ')}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                )}
                                             </div>
                                         ))}
                                     </div>
