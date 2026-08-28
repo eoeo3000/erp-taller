@@ -179,16 +179,20 @@ const OTSchema = new mongoose.Schema({
     // 5b. Informe final al cliente (Solicitud + Informe Inicial + plan + lo reportado en
     // terreno, armado en la pestaña Ejecución) — el botón que lo marca como enviado vive en
     // la pestaña Pago (TabPago.jsx), no en Ejecución: pedido explícito del usuario, mismo
-    // criterio que cotizacion.enviada más abajo (un booleano + fecha, sin subdocumento propio
-    // de contenido — el contenido se arma en caliente desde tareas/informeEvaluacion/reportes
-    // ya existentes, esto solo trackea si ya se compartió con el cliente).
+    // criterio que cotizacion.enviada más abajo (un booleano + fecha).
     informeFinal: {
         enviado: { type: Boolean, default: false },
         fechaEnvio: { type: Date, default: null },
         // Texto libre que el Planificador agrega antes de enviar (ej. un resumen, algo que
-        // aclarar al cliente) — la única pieza del informe que se redacta a mano, el resto se
-        // arma solo con tareas/informeEvaluacion/reportes ya existentes.
+        // aclarar al cliente).
         notas: { type: String, default: '' },
+        // Borrador editable del informe — copia independiente de tareas/informeEvaluacion/
+        // reportes (TratamientoScreen.armarBorradorDesdeVivo la genera la primera vez que se
+        // abre "Editar informe"). Decisión explícita del usuario: corregir redacción/ortografía
+        // o agregar/quitar fotos acá NO debe tocar los registros originales de planificación/
+        // ejecución. Mixed porque es un snapshot de forma libre armado en el frontend — el
+        // backend no necesita validar su forma, solo guardarlo y devolverlo tal cual.
+        contenido: { type: mongoose.Schema.Types.Mixed, default: null },
     },
 
     // 6. Cotización y programación — respuesta del cliente ('Aprobada'/'Rechazada') dejó de

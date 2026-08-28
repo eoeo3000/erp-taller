@@ -18,6 +18,15 @@ function horasDesde(iso) {
     return `hace ${Math.floor(horas / 24)} día${Math.floor(horas / 24) === 1 ? '' : 's'}`;
 }
 
+function Galeria({ fotos }) {
+    if (!fotos?.length) return null;
+    return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8 }}>
+            {fotos.map((src, i) => <img key={i} src={src} alt="" style={{ width: '100%', height: 150, objectFit: 'cover', borderRadius: 'var(--radio)' }} />)}
+        </div>
+    );
+}
+
 export default function C4AvanceFotos({ nav, trabajo }) {
     if (!trabajo) return null;
     const ot = trabajo.ot;
@@ -30,8 +39,20 @@ export default function C4AvanceFotos({ nav, trabajo }) {
     // igual que siempre fue. Pedido del usuario: que el cliente vea "el trabajo completo como
     // producto de la solicitud", no solo fotos sueltas sin contexto.
     const informeEnviado = !!ot?.informeFinal?.enviado;
-    const tareasConDetalle = (ot?.tareas || []).filter((t) => (t.desarrollo || '').trim() || t.registro?.texto || t.registro?.fotos?.length);
-    const hallazgos = ot?.informeEvaluacion?.hallazgos || [];
+    // `contenido` es la copia editable que el Planificador arma/corrige antes de enviar
+    // (erp-web/TratamientoScreen.jsx, "Editar informe") — queda congelada al momento del envío,
+    // así que lo que ve el cliente no cambia después aunque se sigan editando tareas/informe de
+    // evaluación en el escritorio. Si no existe (informes enviados antes de que existiera el
+    // editor), se arma igual que antes a partir de los datos en vivo.
+    const contenido = ot?.informeFinal?.contenido;
+    const hallazgos = contenido ? (contenido.hallazgos || []) : (ot?.informeEvaluacion?.hallazgos || []);
+    const tareasConDetalle = contenido
+        ? (contenido.tareas || [])
+        : (ot?.tareas || [])
+            .filter((t) => (t.desarrollo || '').trim() || t.registro?.texto || t.registro?.fotos?.length)
+            .map((t) => ({ descripcion: t.descripcion, desarrollo: t.desarrollo, registroTexto: t.registro?.texto, fotos: t.registro?.fotos || [] }));
+    const evidenciasInforme = contenido ? (contenido.evidencias || []) : null;
+    const solicitudDescripcion = contenido ? contenido.solicitudDescripcion : trabajo.descripcion;
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
@@ -59,7 +80,7 @@ export default function C4AvanceFotos({ nav, trabajo }) {
                     <>
                         <div style={{ padding: '16px 16px 4px' }} className="versalita">Su solicitud</div>
                         <div style={{ padding: '0 16px 14px' }}>
-                            <div style={{ fontSize: 15, fontWeight: 600, lineHeight: 1.35 }}>{trabajo.descripcion}</div>
+                            <div style={{ fontSize: 15, fontWeight: 600, lineHeight: 1.35 }}>{solicitudDescripcion}</div>
                             <div style={{ fontSize: 13, color: 'var(--texto-secundario-2)', marginTop: 4 }}>
                                 {trabajo.numeroSolicitud}{trabajo.fechaCreacion ? ` · ${fmtFecha(trabajo.fechaCreacion)}` : ''}
                             </div>
@@ -70,8 +91,8 @@ export default function C4AvanceFotos({ nav, trabajo }) {
                                 <div style={{ padding: '14px 16px 4px', borderTop: '1px solid var(--linea-zona)' }} className="versalita">Evaluación inicial</div>
                                 {hallazgos.map((h, i) => (
                                     <div key={i} style={{ padding: '10px 16px', borderBottom: '1px solid var(--linea-fina)' }}>
-                                        {h.fotos?.[0] && <img src={h.fotos[0]} alt="" style={{ width: '100%', height: 150, objectFit: 'cover', borderRadius: 'var(--radio)' }} />}
-                                        {h.texto && <div style={{ fontSize: 14, marginTop: h.fotos?.[0] ? 8 : 0, whiteSpace: 'pre-wrap' }}>{h.texto}</div>}
+                                        {h.texto && <div style={{ fontSize: 14 }}>{h.texto}</div>}
+                                        <Galeria fotos={h.fotos} />
                                     </div>
                                 ))}
                             </>
@@ -86,13 +107,10 @@ export default function C4AvanceFotos({ nav, trabajo }) {
                                         {(t.desarrollo || '').trim() && (
                                             <div style={{ fontSize: 13, color: 'var(--texto-secundario-2)', marginTop: 3, whiteSpace: 'pre-wrap' }}>{t.desarrollo}</div>
                                         )}
-                                        {(t.registro?.texto || t.registro?.fotos?.length > 0) && (
+                                        {((t.registroTexto || '').trim() || t.fotos?.length > 0) && (
                                             <div style={{ marginTop: 8, padding: '9px 10px', background: 'var(--fondo-pantalla)', borderLeft: '2px solid var(--listo)' }}>
-                                                {t.registro.fotos?.[0] && <img src={t.registro.fotos[0]} alt="" style={{ width: '100%', height: 150, objectFit: 'cover', borderRadius: 'var(--radio)' }} />}
-                                                {t.registro.texto && <div style={{ fontSize: 13.5, marginTop: t.registro.fotos?.[0] ? 8 : 0 }}>{t.registro.texto}</div>}
-                                                <div className="mono" style={{ fontSize: 11.5, color: 'var(--texto-atenuado-1)', marginTop: 4 }}>
-                                                    {[t.registro.autor, t.registro.hora].filter(Boolean).join(' · ')}
-                                                </div>
+                                                {t.registroTexto && <div style={{ fontSize: 13.5 }}>{t.registroTexto}</div>}
+                                                <Galeria fotos={t.fotos} />
                                             </div>
                                         )}
                                     </div>
@@ -103,16 +121,33 @@ export default function C4AvanceFotos({ nav, trabajo }) {
                         <div style={{ padding: '14px 16px 6px', borderTop: '1px solid var(--linea-zona)' }} className="versalita">Evidencias generales</div>
                     </>
                 )}
-                {reportes.length === 0 && <div style={{ padding: 24, fontSize: 'var(--fs-cuerpo)', color: 'var(--texto-atenuado-1)' }}>Todavía no hay reportes de terreno.</div>}
-                {reportes.map((r, i) => (
-                    <div key={i} style={{ borderBottom: '1px solid var(--linea-fina)', padding: '14px 16px' }}>
-                        <div className="mono" style={{ fontSize: 'var(--fs-linea-mono)', color: 'var(--texto-atenuado-1)' }}>
-                            {fmtHora(r.fecha)}{r.usuario ? ` · ${r.usuario}` : ''}
-                        </div>
-                        {r.foto && <img src={r.foto} alt="" style={{ width: '100%', height: 190, objectFit: 'cover', borderRadius: 'var(--radio)', marginTop: 8 }} />}
-                        {r.comentario && <div style={{ fontSize: 14.5, marginTop: 8 }}>{r.comentario}</div>}
-                    </div>
-                ))}
+                {evidenciasInforme ? (
+                    <>
+                        {evidenciasInforme.length === 0 && <div style={{ padding: 24, fontSize: 'var(--fs-cuerpo)', color: 'var(--texto-atenuado-1)' }}>Sin evidencias adicionales.</div>}
+                        {evidenciasInforme.map((r, i) => (
+                            <div key={i} style={{ borderBottom: '1px solid var(--linea-fina)', padding: '14px 16px' }}>
+                                <div className="mono" style={{ fontSize: 'var(--fs-linea-mono)', color: 'var(--texto-atenuado-1)' }}>
+                                    {r.fecha ? fmtHora(r.fecha) : ''}{r.usuario ? ` · ${r.usuario}` : ''}
+                                </div>
+                                {r.comentario && <div style={{ fontSize: 14.5, marginTop: 8 }}>{r.comentario}</div>}
+                                <Galeria fotos={r.fotos} />
+                            </div>
+                        ))}
+                    </>
+                ) : (
+                    <>
+                        {reportes.length === 0 && <div style={{ padding: 24, fontSize: 'var(--fs-cuerpo)', color: 'var(--texto-atenuado-1)' }}>Todavía no hay reportes de terreno.</div>}
+                        {reportes.map((r, i) => (
+                            <div key={i} style={{ borderBottom: '1px solid var(--linea-fina)', padding: '14px 16px' }}>
+                                <div className="mono" style={{ fontSize: 'var(--fs-linea-mono)', color: 'var(--texto-atenuado-1)' }}>
+                                    {fmtHora(r.fecha)}{r.usuario ? ` · ${r.usuario}` : ''}
+                                </div>
+                                {r.foto && <img src={r.foto} alt="" style={{ width: '100%', height: 190, objectFit: 'cover', borderRadius: 'var(--radio)', marginTop: 8 }} />}
+                                {r.comentario && <div style={{ fontSize: 14.5, marginTop: 8 }}>{r.comentario}</div>}
+                            </div>
+                        ))}
+                    </>
+                )}
             </div>
 
             <div style={{ padding: '14px 16px', fontSize: 'var(--fs-linea-mono)', color: 'var(--texto-atenuado-2)' }}>

@@ -6,6 +6,7 @@ import autoTable from 'jspdf-autotable';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import { notificar, confirmar } from '../utils/notificar';
+import { subirFoto } from '../utils/fotos';
 import { t, styles, fmtFecha, CLP } from './tratamiento/comunTratamiento';
 import TabAntecedentes from './tratamiento/TabAntecedentes';
 import TabDocumentosPdf from './tratamiento/TabDocumentosPdf';
@@ -47,6 +48,27 @@ const etapaInfo = (ot) => {
     const idx = MAPA_ETAPA[estado] ?? 0;
     return { idx, label: ETAPAS_VISUAL[idx], rechazada: false };
 };
+
+// Galería mini usada en el editor del informe final — mismo control (miniaturas + "quitar" +
+// "agregar") para hallazgos, tareas y evidencias, ver armarBorradorDesdeVivo/actualizarItemInforme.
+function GaleriaFotos({ fotos = [], onAgregar, onQuitar }) {
+    const inputRef = useRef(null);
+    return (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
+            {fotos.map((src, i) => (
+                <div key={i} style={{ position: 'relative' }}>
+                    <img src={src} alt="" style={{ width: 90, height: 68, objectFit: 'cover', borderRadius: 2, border: `1px solid ${t.bordeZona}` }} />
+                    <span onClick={() => onQuitar(i)} style={{ position: 'absolute', top: -6, right: -6, background: t.rojo, color: '#fff', borderRadius: '50%', width: 16, height: 16, fontSize: 11, lineHeight: '16px', textAlign: 'center', cursor: 'pointer' }}>×</span>
+                </div>
+            ))}
+            <div onClick={() => inputRef.current?.click()} style={{ width: 90, height: 68, border: `1px dashed ${t.bordeZona}`, borderRadius: 2, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10.5, color: t.textoAtenuado3, cursor: 'pointer', textAlign: 'center' }}>
+                + Imagen
+            </div>
+            <input ref={inputRef} type="file" accept="image/*" style={{ display: 'none' }}
+                onChange={e => { const f = e.target.files?.[0]; if (f) onAgregar(f); e.target.value = ''; }} />
+        </div>
+    );
+}
 
 const informeEvaluacionVacio = {
     fecha: '', responsable: '', condicionesSitio: '', recursosObservados: '',
@@ -343,16 +365,24 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
     // El contenido del informe (Solicitud + Informe Inicial + plan + lo reportado en terreno
     // por tarea/OT.reportes) se arma en el cliente a partir de campos que ya viajan en
     // otPublica; esto solo marca que ya se compartió, mismo criterio que
-    // marcarCotizacionEnviada (arriba) — un booleano + fecha, sin subdocumento propio.
+    // marcarCotizacionEnviada (arriba) — un booleano + fecha.
     const [enviandoInforme, setEnviandoInforme] = useState(false);
-    // Único campo redactado a mano del informe — el resto (solicitud, informe inicial, plan y
-    // lo reportado en terreno) se arma solo a partir de datos que ya existen. Se guarda aparte
-    // (guardarNotasInforme) para no obligar a "enviar" solo para dejarlas escritas, y también
-    // viaja en el payload de enviarInformeFinal por si quedó sin guardar antes de enviar.
+    // Texto libre adicional (ej. un resumen). Se guarda aparte (guardarNotasInforme) para no
+    // obligar a "enviar" solo para dejarlo escrito, y también viaja en enviarInformeFinal por
+    // si quedó sin guardar antes de enviar.
     const [notasInforme, setNotasInforme] = useState(datosRecibidos?.informeFinal?.notas || '');
     const [guardandoNotasInforme, setGuardandoNotasInforme] = useState(false);
     const [previsualizarInforme, setPrevisualizarInforme] = useState(false);
     const [pdfPreviewInformeUrl, setPdfPreviewInformeUrl] = useState(null);
+    // Borrador editable del informe — copia independiente de tareas/informeEvaluacion/reportes
+    // (decisión explícita del usuario: corregir redacción u ortografía o agregar/quitar fotos
+    // acá no debe tocar los registros originales de planificación/ejecución). null = todavía no
+    // se generó ningún borrador; en ese caso Ver/Descargar arman el contenido al vuelo desde los
+    // datos en vivo (armarBorradorDesdeVivo), igual que antes de que existiera el editor.
+    const [contenidoInforme, setContenidoInforme] = useState(datosRecibidos?.informeFinal?.contenido || null);
+    const [editandoInforme, setEditandoInforme] = useState(false);
+    const [guardandoBorradorInforme, setGuardandoBorradorInforme] = useState(false);
+
     const guardarNotasInforme = async () => {
         setGuardandoNotasInforme(true);
         const resultado = await actualizarOtGlobal(otSeleccionada._id, { 'informeFinal.notas': notasInforme });
@@ -361,21 +391,75 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
         notificar.exito('Notas del informe guardadas.');
         if (resultado.otActualizada) setOtSeleccionada(resultado.otActualizada);
     };
+
+    // Snapshot inicial del informe a partir de los datos en vivo — semilla del borrador editable
+    // (abrirEditorInforme) y también lo que se usa para armar el PDF/vista previa mientras no
+    // exista un borrador guardado.
+    const armarBorradorDesdeVivo = () => ({
+        solicitudDescripcion: datosRecibidos?.descripcion || '',
+        hallazgos: (informeEvaluacion?.hallazgos || []).map(h => ({ texto: h.textoDescriptivo || h.textoGenerado || '', fotos: [...(h.fotos || [])] })),
+        tareas: tareas
+            .filter(tt => (tt.desarrollo || '').trim() || tt.registro?.texto || tt.registro?.fotos?.length)
+            .map(tt => ({ descripcion: tt.descripcion || '', desarrollo: tt.desarrollo || '', registroTexto: tt.registro?.texto || '', fotos: [...(tt.registro?.fotos || [])] })),
+        evidencias: (otSeleccionada?.reportes || []).map(r => ({ fecha: r.fecha, usuario: r.usuario || '', comentario: r.comentario || '', fotos: r.foto ? [r.foto] : [] })),
+    });
+
+    const abrirEditorInforme = () => {
+        setContenidoInforme(prev => prev || armarBorradorDesdeVivo());
+        setEditandoInforme(true);
+    };
+    const regenerarBorradorInforme = async () => {
+        if (!(await confirmar(
+            'Esto reemplaza el borrador actual del informe con los datos más recientes de tareas, evaluación inicial y reportes. Se pierden las correcciones y fotos agregadas manualmente que no se hayan guardado en otro lado. ¿Continuar?',
+            { danger: true, textoConfirmar: 'Regenerar' },
+        ))) return;
+        setContenidoInforme(armarBorradorDesdeVivo());
+    };
+    const guardarBorradorInforme = async () => {
+        setGuardandoBorradorInforme(true);
+        const resultado = await actualizarOtGlobal(otSeleccionada._id, { 'informeFinal.contenido': contenidoInforme });
+        setGuardandoBorradorInforme(false);
+        if (!resultado?.exito) { notificar.error(resultado?.error || 'No se pudo guardar el informe.'); return; }
+        notificar.exito('Cambios del informe guardados.');
+        if (resultado.otActualizada) setOtSeleccionada(resultado.otActualizada);
+        setEditandoInforme(false);
+    };
+
+    // Helpers genéricos para editar hallazgos/tareas/evidencias dentro del borrador —
+    // mismas 3 listas, mismo shape { ...campos, fotos: [] }.
+    const listaContenido = (clave, transformar) => setContenidoInforme(prev => ({ ...prev, [clave]: transformar(prev?.[clave] || []) }));
+    const actualizarItemInforme = (clave, idx, campo, valor) => listaContenido(clave, lista => lista.map((it, i) => i === idx ? { ...it, [campo]: valor } : it));
+    const quitarItemInforme = (clave, idx) => listaContenido(clave, lista => lista.filter((_, i) => i !== idx));
+    const agregarItemInforme = (clave, item) => listaContenido(clave, lista => [...lista, item]);
+    const agregarFotoItemInforme = async (clave, idx, archivo) => {
+        try {
+            const url = await subirFoto(archivo, API);
+            listaContenido(clave, lista => lista.map((it, i) => i === idx ? { ...it, fotos: [...(it.fotos || []), url] } : it));
+        } catch (e) { notificar.error('No se pudo subir la imagen: ' + e.message); }
+    };
+    const quitarFotoItemInforme = (clave, idx, fotoIdx) => listaContenido(clave, lista => lista.map((it, i) => i === idx ? { ...it, fotos: it.fotos.filter((_, j) => j !== fotoIdx) } : it));
+
     const enviarInformeFinal = async () => {
         if (!(await confirmar(
             '¿Enviar el informe al cliente? Va a poder ver el detalle completo de lo ejecutado (plan, comentarios y fotos de terreno) en su Portal — asegurate de que sepa cómo entrar (teléfono + número de solicitud).',
             { danger: false, textoConfirmar: 'Enviar informe' },
         ))) return;
         setEnviandoInforme(true);
+        // Si nunca se abrió el editor, el borrador se congela recién ahora (a partir de los
+        // datos en vivo) — así lo que ve el cliente queda fijo aunque después se sigan editando
+        // tareas/informe de evaluación.
+        const contenidoAEnviar = contenidoInforme || armarBorradorDesdeVivo();
         const resultado = await actualizarOtGlobal(otSeleccionada._id, {
             'informeFinal.enviado': true,
             'informeFinal.fechaEnvio': new Date().toISOString(),
             'informeFinal.notas': notasInforme,
+            'informeFinal.contenido': contenidoAEnviar,
         });
         setEnviandoInforme(false);
         if (!resultado?.exito) { notificar.error(resultado?.error || 'No se pudo enviar el informe.'); return; }
         notificar.exito('Informe enviado — ya está disponible en el Portal Cliente.');
         if (resultado.otActualizada) setOtSeleccionada(resultado.otActualizada);
+        setContenidoInforme(contenidoAEnviar);
         if (cargarDatos) await cargarDatos();
     };
 
@@ -675,15 +759,39 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
         } catch (e) { console.warn('No se pudo registrar la carpeta en la OT:', e.message); }
     };
 
-    // Informe final para el cliente — mismo contenido que arma C4_AvanceFotos.jsx (PWA Cliente)
-    // a partir de otPublica: Solicitud + Evaluación inicial (hallazgos) + trabajo por tarea
-    // (desarrollo + lo reportado en terreno) + notas + evidencias generales (OT.reportes).
-    // `descargar=false` se usa para la vista previa (no dispara doc.save).
-    const generarInformePDF = (descargar = true) => {
-        const hallazgos = informeEvaluacion?.hallazgos || [];
-        const tareasConDetalle = tareas.filter(tt => (tt.desarrollo || '').trim() || tt.registro?.texto || tt.registro?.fotos?.length);
-        const reportes = otSeleccionada?.reportes || [];
+    // Convierte cualquier foto (base64 ya embebido o URL de /api/uploads/foto — ver
+    // utils/fotos.js) a un data URI, que es lo único que jsPDF.addImage puede insertar. Sin
+    // esto, las fotos subidas post-refactor de storage (archivo real + URL, no base64) no salían
+    // en el PDF pese a mostrarse bien en pantalla en cualquier <img>.
+    const dataUriDeImagen = async (src) => {
+        if (!src) return null;
+        if (src.startsWith('data:')) return src;
+        try {
+            const resp = await fetch(src);
+            if (!resp.ok) return null;
+            const blob = await resp.blob();
+            return await new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = reject;
+                reader.readAsDataURL(blob);
+            });
+        } catch { return null; }
+    };
+    const medidasImagen = (dataUri) => new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => resolve({ w: img.naturalWidth || 4, h: img.naturalHeight || 3 });
+        img.onerror = () => resolve({ w: 4, h: 3 });
+        img.src = dataUri;
+    });
 
+    // Informe final para el cliente — arma el mismo contenido que ve en su Portal
+    // (C4_AvanceFotos.jsx): Solicitud + Evaluación inicial + trabajo por tarea + notas +
+    // evidencias generales, tomado del borrador editable si existe (contenidoInforme) o
+    // calculado al vuelo desde los datos en vivo si todavía no se generó ninguno.
+    // `descargar=false` se usa para la vista previa (no dispara doc.save).
+    const generarInformePDF = async (descargar = true) => {
+        const contenido = contenidoInforme || armarBorradorDesdeVivo();
         const doc = new jsPDF();
         const pageWidth = doc.internal.pageSize.getWidth();
         let y = 20;
@@ -699,39 +807,54 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
             doc.setFontSize(11); doc.setFont(undefined, 'bold'); doc.setTextColor(20);
             doc.text(texto, 14, y); y += 7;
         };
+        const agregarImagen = async (src) => {
+            const dataUri = await dataUriDeImagen(src);
+            if (!dataUri) return;
+            const { w, h } = await medidasImagen(dataUri);
+            const maxW = pageWidth - 28, maxH = 75;
+            let dw = maxW, dh = (h / w) * dw;
+            if (dh > maxH) { dh = maxH; dw = (w / h) * dh; }
+            if (y + dh > 285) { doc.addPage(); y = 20; }
+            const formato = (/^data:image\/(\w+);/.exec(dataUri)?.[1] || 'JPEG').toUpperCase();
+            try { doc.addImage(dataUri, formato, 14, y, dw, dh); y += dh + 6; } catch { /* imagen inválida, se omite */ }
+        };
 
         titulo('Solicitud');
         doc.setFontSize(9); doc.setFont(undefined, 'normal'); doc.setTextColor(70);
-        const desc = doc.splitTextToSize(`Descripción: ${datosRecibidos?.descripcion || '—'}`, pageWidth - 28);
+        const desc = doc.splitTextToSize(`Descripción: ${contenido.solicitudDescripcion || '—'}`, pageWidth - 28);
         doc.text(desc, 14, y); y += desc.length * 5 + 2;
         doc.text(`Solicitante: ${datosRecibidos?.solicitante || '—'}   ·   N° solicitud: ${datosRecibidos?.numeroSolicitud || datosRecibidos?._id?.slice(-8) || '—'}`, 14, y); y += 9;
 
-        if (hallazgos.length > 0) {
+        if (contenido.hallazgos?.length > 0) {
             titulo('Evaluación inicial');
             doc.setFontSize(9); doc.setFont(undefined, 'normal'); doc.setTextColor(70);
-            hallazgos.forEach(h => {
+            for (const h of contenido.hallazgos) {
                 if (y > 270) { doc.addPage(); y = 20; }
-                const fotos = h.fotos?.length ? ` (${h.fotos.length} foto${h.fotos.length === 1 ? '' : 's'})` : '';
-                const texto = doc.splitTextToSize(`• ${h.textoDescriptivo || h.textoGenerado || '—'}${fotos}`, pageWidth - 28);
-                doc.text(texto, 14, y); y += texto.length * 5 + 2;
-            });
-            y += 4;
+                const texto = doc.splitTextToSize(`• ${h.texto || '—'}`, pageWidth - 28);
+                doc.text(texto, 14, y); y += texto.length * 5 + 3;
+                for (const foto of (h.fotos || [])) await agregarImagen(foto);
+            }
+            y += 2;
         }
 
-        if (tareasConDetalle.length > 0) {
+        if (contenido.tareas?.length > 0) {
             titulo('Trabajo realizado, por tarea');
-            autoTable(doc, {
-                startY: y,
-                head: [['Tarea', 'Desarrollo', 'Reportado en terreno']],
-                body: tareasConDetalle.map(tt => [
-                    tt.descripcion || '—',
-                    tt.desarrollo || '—',
-                    [tt.registro?.texto, tt.registro?.fotos?.length ? `${tt.registro.fotos.length} foto${tt.registro.fotos.length === 1 ? '' : 's'}` : ''].filter(Boolean).join(' · ') || '—',
-                ]),
-                headStyles: { fillColor: [44, 62, 80] }, styles: { fontSize: 8, cellWidth: 'wrap' },
-                columnStyles: { 0: { cellWidth: 34 }, 1: { cellWidth: 70 }, 2: { cellWidth: 60 } },
-            });
-            y = doc.lastAutoTable.finalY + 10;
+            doc.setFontSize(9); doc.setFont(undefined, 'normal'); doc.setTextColor(70);
+            for (const tt of contenido.tareas) {
+                if (y > 265) { doc.addPage(); y = 20; }
+                doc.setFont(undefined, 'bold'); doc.text(tt.descripcion || '—', 14, y); y += 5;
+                doc.setFont(undefined, 'normal');
+                if ((tt.desarrollo || '').trim()) {
+                    const dTexto = doc.splitTextToSize(tt.desarrollo, pageWidth - 28);
+                    doc.text(dTexto, 14, y); y += dTexto.length * 5 + 2;
+                }
+                if ((tt.registroTexto || '').trim()) {
+                    const rTexto = doc.splitTextToSize(`Reportado en terreno: ${tt.registroTexto}`, pageWidth - 28);
+                    doc.text(rTexto, 14, y); y += rTexto.length * 5 + 2;
+                }
+                for (const foto of (tt.fotos || [])) await agregarImagen(foto);
+                y += 3;
+            }
         }
 
         if ((notasInforme || '').trim()) {
@@ -742,24 +865,32 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
             doc.text(notas, 14, y); y += notas.length * 5 + 6;
         }
 
-        if (reportes.length > 0) {
+        if (contenido.evidencias?.length > 0) {
             titulo('Evidencias generales');
-            autoTable(doc, {
-                startY: y, head: [['Fecha', 'Usuario', 'Comentario', 'Foto']],
-                body: reportes.map(r => [new Date(r.fecha).toLocaleDateString('es-CL'), r.usuario || '—', r.comentario || '—', r.foto ? 'Sí' : 'No']),
-                headStyles: { fillColor: [44, 62, 80] }, styles: { fontSize: 8.5 },
-            });
+            doc.setFontSize(9); doc.setFont(undefined, 'normal'); doc.setTextColor(70);
+            for (const r of contenido.evidencias) {
+                if (y > 270) { doc.addPage(); y = 20; }
+                const encabezado = [r.fecha ? new Date(r.fecha).toLocaleDateString('es-CL') : '', r.usuario].filter(Boolean).join(' · ');
+                if (encabezado) { doc.setFont(undefined, 'bold'); doc.text(encabezado, 14, y); y += 5; doc.setFont(undefined, 'normal'); }
+                if ((r.comentario || '').trim()) {
+                    const cTexto = doc.splitTextToSize(r.comentario, pageWidth - 28);
+                    doc.text(cTexto, 14, y); y += cTexto.length * 5 + 2;
+                }
+                for (const foto of (r.fotos || [])) await agregarImagen(foto);
+                y += 3;
+            }
         }
 
         if (descargar) doc.save(`Informe_OT_${otSeleccionada?.numeroOT || datosRecibidos?._id || 'nueva'}.pdf`);
         return doc;
     };
 
-    const verInformePDF = () => {
-        setPdfPreviewInformeUrl(generarInformePDF(false).output('datauristring'));
+    const verInformePDF = async () => {
+        const doc = await generarInformePDF(false);
+        setPdfPreviewInformeUrl(doc.output('datauristring'));
         setPrevisualizarInforme(true);
     };
-    const descargarInformePDF = () => generarInformePDF(true);
+    const descargarInformePDF = async () => { await generarInformePDF(true); };
 
     // Pestaña Antecedentes: al agregar una tarea en una OT que ya tiene supervisor
     // asignado, se precarga su nombre como responsable por defecto (solo valor inicial,
@@ -791,6 +922,7 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                     if (data.pago) setPago(data.pago);
                     if (data.informeEvaluacion) setInformeEvaluacion({ ...informeEvaluacionVacio, ...data.informeEvaluacion });
                     setNotasInforme(data.informeFinal?.notas || '');
+                    setContenidoInforme(data.informeFinal?.contenido || null);
                     if (data.logistica?.length > 0) setLogistica(data.logistica);
                     else setLogistica([{ id: Date.now(), descripcion: '', cantidad: 1, precio: 0 }]);
                 }
@@ -1842,6 +1974,7 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                             notasInforme={notasInforme} setNotasInforme={setNotasInforme}
                             guardarNotasInforme={guardarNotasInforme} guardandoNotasInforme={guardandoNotasInforme}
                             verInformePDF={verInformePDF} descargarInformePDF={descargarInformePDF}
+                            abrirEditorInforme={abrirEditorInforme}
                         />
                     )}
 
@@ -1899,6 +2032,89 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
             <datalist id="lista-suministros-recursos">
                 {(suministrosDB || []).map((item, idx) => <option key={item._id || idx} value={item.codigo}>{item.descripcion} - {CLP(item.precio)}</option>)}
             </datalist>
+
+            {/* MODAL EDITAR INFORME */}
+            {editandoInforme && contenidoInforme && (
+                <div style={styles.overlay}>
+                    <div style={{ ...styles.modal, width: 780, maxWidth: '95vw', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
+                        <div style={styles.modalHeader}>
+                            <span style={{ fontSize: 12.5, fontWeight: 700 }}>Editar informe</span>
+                            <span onClick={() => setEditandoInforme(false)} style={styles.xModal}>×</span>
+                        </div>
+                        <div style={{ flex: 1, overflowY: 'auto', padding: 16 }}>
+                            <p style={{ fontSize: 11, color: t.textoAtenuado3, marginTop: 0 }}>
+                                Copia independiente para el cliente — corregir texto o agregar/quitar fotos acá no cambia las tareas, el informe de evaluación ni los reportes originales.
+                            </p>
+                            <button onClick={regenerarBorradorInforme} style={{ ...styles.btnSecundario, marginBottom: 14 }}>Regenerar desde datos actuales</button>
+
+                            <div style={styles.tituloSub}>Solicitud</div>
+                            <textarea
+                                className="campo-ed" style={{ ...styles.inputPlano, minHeight: 50, marginBottom: 16 }}
+                                value={contenidoInforme.solicitudDescripcion || ''}
+                                onChange={e => setContenidoInforme(prev => ({ ...prev, solicitudDescripcion: e.target.value }))}
+                            />
+
+                            <div style={styles.tituloSub}>Evaluación inicial</div>
+                            {(contenidoInforme.hallazgos || []).length === 0 && <p style={{ fontSize: 11, color: t.textoAtenuado3 }}>Sin hallazgos.</p>}
+                            {(contenidoInforme.hallazgos || []).map((h, idx) => (
+                                <div key={idx} style={{ border: `1px solid ${t.bordeZona}`, borderRadius: 2, padding: 10, marginBottom: 10 }}>
+                                    <textarea
+                                        className="campo-ed" style={{ ...styles.inputPlano, minHeight: 40 }}
+                                        value={h.texto} onChange={e => actualizarItemInforme('hallazgos', idx, 'texto', e.target.value)}
+                                    />
+                                    <GaleriaFotos fotos={h.fotos} onAgregar={(archivo) => agregarFotoItemInforme('hallazgos', idx, archivo)} onQuitar={(fIdx) => quitarFotoItemInforme('hallazgos', idx, fIdx)} />
+                                    <button onClick={() => quitarItemInforme('hallazgos', idx)} style={{ ...styles.btnSecundario, color: t.rojo, fontSize: 10.5, marginTop: 8 }}>Quitar del informe</button>
+                                </div>
+                            ))}
+
+                            <div style={styles.tituloSub}>Trabajo realizado, por tarea</div>
+                            {(contenidoInforme.tareas || []).length === 0 && <p style={{ fontSize: 11, color: t.textoAtenuado3 }}>Sin tareas con detalle.</p>}
+                            {(contenidoInforme.tareas || []).map((tt, idx) => (
+                                <div key={idx} style={{ border: `1px solid ${t.bordeZona}`, borderRadius: 2, padding: 10, marginBottom: 10 }}>
+                                    <input
+                                        className="campo-ed" style={{ ...styles.inputPlano, fontWeight: 700, marginBottom: 6 }}
+                                        value={tt.descripcion} onChange={e => actualizarItemInforme('tareas', idx, 'descripcion', e.target.value)}
+                                    />
+                                    <textarea
+                                        className="campo-ed" style={{ ...styles.inputPlano, minHeight: 40 }} placeholder="Desarrollo"
+                                        value={tt.desarrollo} onChange={e => actualizarItemInforme('tareas', idx, 'desarrollo', e.target.value)}
+                                    />
+                                    <textarea
+                                        className="campo-ed" style={{ ...styles.inputPlano, minHeight: 40, marginTop: 6 }} placeholder="Reportado en terreno"
+                                        value={tt.registroTexto} onChange={e => actualizarItemInforme('tareas', idx, 'registroTexto', e.target.value)}
+                                    />
+                                    <GaleriaFotos fotos={tt.fotos} onAgregar={(archivo) => agregarFotoItemInforme('tareas', idx, archivo)} onQuitar={(fIdx) => quitarFotoItemInforme('tareas', idx, fIdx)} />
+                                    <button onClick={() => quitarItemInforme('tareas', idx)} style={{ ...styles.btnSecundario, color: t.rojo, fontSize: 10.5, marginTop: 8 }}>Quitar del informe</button>
+                                </div>
+                            ))}
+
+                            <div style={styles.tituloSub}>Evidencias generales</div>
+                            {(contenidoInforme.evidencias || []).map((r, idx) => (
+                                <div key={idx} style={{ border: `1px solid ${t.bordeZona}`, borderRadius: 2, padding: 10, marginBottom: 10 }}>
+                                    <div style={{ fontSize: 10.5, color: t.textoAtenuado3, marginBottom: 6 }}>
+                                        {r.fecha ? new Date(r.fecha).toLocaleString('es-CL') : 'Sin fecha'}{r.usuario ? ` · ${r.usuario}` : ''}
+                                    </div>
+                                    <textarea
+                                        className="campo-ed" style={{ ...styles.inputPlano, minHeight: 40 }}
+                                        value={r.comentario} onChange={e => actualizarItemInforme('evidencias', idx, 'comentario', e.target.value)}
+                                    />
+                                    <GaleriaFotos fotos={r.fotos} onAgregar={(archivo) => agregarFotoItemInforme('evidencias', idx, archivo)} onQuitar={(fIdx) => quitarFotoItemInforme('evidencias', idx, fIdx)} />
+                                    <button onClick={() => quitarItemInforme('evidencias', idx)} style={{ ...styles.btnSecundario, color: t.rojo, fontSize: 10.5, marginTop: 8 }}>Quitar del informe</button>
+                                </div>
+                            ))}
+                            <button onClick={() => agregarItemInforme('evidencias', { fecha: new Date().toISOString(), usuario: 'Oficina', comentario: '', fotos: [] })} style={styles.btnSecundario}>
+                                Agregar evidencia
+                            </button>
+                        </div>
+                        <div style={styles.modalFooter}>
+                            <button onClick={() => setEditandoInforme(false)} style={styles.btnSecundario}>Cerrar</button>
+                            <button onClick={guardarBorradorInforme} disabled={guardandoBorradorInforme} style={{ ...styles.btnPrimario, opacity: guardandoBorradorInforme ? .6 : 1 }}>
+                                {guardandoBorradorInforme ? 'Guardando…' : 'Guardar cambios'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* MODAL VISTA PREVIA DEL INFORME */}
             {previsualizarInforme && (

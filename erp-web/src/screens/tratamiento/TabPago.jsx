@@ -17,7 +17,7 @@ export default function TabPago({
     pago, setPago, granTotal, guardarPago, anularPago, restaurarPago,
     estadoOT, informeFinal, enviarInformeFinal, enviandoInforme,
     notasInforme, setNotasInforme, guardarNotasInforme, guardandoNotasInforme,
-    verInformePDF, descargarInformePDF,
+    verInformePDF, descargarInformePDF, abrirEditorInforme,
 }) {
     // El informe (Solicitud + Informe Inicial + plan + lo reportado en terreno) solo tiene
     // sentido una vez terminado el trabajo — antes de eso no hay nada completo que mostrarle
@@ -53,6 +53,7 @@ export default function TabPago({
                         <button onClick={guardarNotasInforme} disabled={guardandoNotasInforme} style={{ ...styles.btnSecundario, opacity: guardandoNotasInforme ? .6 : 1 }}>
                             {guardandoNotasInforme ? 'Guardando…' : 'Guardar notas'}
                         </button>
+                        <button onClick={abrirEditorInforme} style={styles.btnSecundario}>Editar informe</button>
                         <button onClick={verInformePDF} style={styles.btnSecundario}>Ver informe</button>
                         <button onClick={descargarInformePDF} style={styles.btnSecundario}>Descargar PDF</button>
                         {!informeFinal?.enviado && (

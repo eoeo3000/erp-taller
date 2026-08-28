@@ -148,6 +148,9 @@ function otPublica(ot) {
             enviado: ot.informeFinal.enviado,
             fechaEnvio: ot.informeFinal.fechaEnvio,
             notas: ot.informeFinal.notas || '',
+            // Copia editable congelada al enviar — si existe, el cliente ve esto en vez de
+            // recalcular desde tareas/informeEvaluacion/reportes en vivo (ver C4_AvanceFotos.jsx).
+            contenido: ot.informeFinal.contenido || null,
         } : null,
         // respuestaCliente + enviada: lo que C2/C3 necesitan para distinguir "presupuesto
         // rechazado" de "en preparación" de "cotización enviada, esperando tu respuesta"
