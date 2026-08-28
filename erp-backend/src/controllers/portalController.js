@@ -66,6 +66,9 @@ function otPublica(ot) {
         tareas: (ot.tareas || []).map(t => ({
             descripcion: t.descripcion,
             puesto: t.puesto,
+            // Responsables — para que "Tareas — qué, con quién, cuándo y cómo" (TratamientoScreen)
+            // se pueda replicar igual en la cotización del cliente; antes no viajaba.
+            operarioNombre: t.operarioNombre,
             duracion: t.duracion,
             fecha: t.fecha,
             hora: t.hora,
@@ -84,6 +87,16 @@ function otPublica(ot) {
             tipo: c.tipo,
             subtotal: (c.cantidad || 0) * (c.precio || 0),
         })),
+        // Condiciones comerciales — sección propia del PDF de escritorio (TratamientoScreen),
+        // antes no viajaba al cliente en absoluto.
+        condicionesComerciales: ot.condicionesComerciales ? {
+            validez: ot.condicionesComerciales.validez,
+            plazoPago: ot.condicionesComerciales.plazoPago,
+            formaPago: ot.condicionesComerciales.formaPago,
+            garantia: ot.condicionesComerciales.garantia,
+            plazoEjecucion: ot.condicionesComerciales.plazoEjecucion,
+            noIncluye: ot.condicionesComerciales.noIncluye,
+        } : null,
         // Reportes de terreno — los usa C4 (design_handoff_pwa_movil/README.md §6). Las fotos
         // ya llegan comprimidas desde el origen (O3/O4 y supervisorPortal recomprimen a un
         // ancho máximo de 1200px, calidad .75, antes de guardarlas en OT.reportes) — no se
@@ -95,9 +108,13 @@ function otPublica(ot) {
             usuario: r.usuario,
         })),
         // Mismo problema que componentes arriba: logistica tampoco guarda "subtotal" como
-        // campo propio (models/OT.js: unidad/patente/descripcion/cantidad/precio).
+        // campo propio (models/OT.js: unidad/patente/descripcion/cantidad/precio). cantidad/
+        // precio se agregan para poder mostrar la misma tabla "Suministros directos" que ya
+        // tiene TratamientoScreen (Cant./Unitario/Subtotal), no solo el subtotal ya sumado.
         logistica: (ot.logistica || []).map(l => ({
             descripcion: l.descripcion,
+            cantidad: l.cantidad,
+            precio: l.precio,
             subtotal: (l.cantidad || 0) * (l.precio || 0),
         })),
         pago: ot.pago ? { estado: ot.pago.estado } : null,
