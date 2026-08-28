@@ -238,24 +238,34 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
     // planificación" para ir para el otro lado, un solo bucle Tratada <-> Planificada. Si la
     // cotización ya se había enviado, de paso se cancela (mismo efecto que cancelarAceptacion)
     // para que el cliente no pueda aprobar un envío que va a quedar desactualizado.
+    const [volviendoAPlanificacion, setVolviendoAPlanificacion] = useState(false);
     const volverAPlanificacion = async () => {
         const yaEnviada = !!otSeleccionada?.cotizacion?.enviada;
         const mensaje = yaEnviada
             ? 'Vas a cancelar el envío pendiente y volver a Tareas/Equipos/Suministros. El cliente ya no podrá aprobar este envío — habrá que terminar la planificación y reenviar de nuevo. ¿Continuar?'
             : '¿Volver a Tareas/Equipos/Suministros para corregir algo? Vas a tener que terminar la planificación de nuevo antes de poder entrar a Cotización.';
         if (!(await confirmar(mensaje, { danger: false, textoConfirmar: 'Volver a planificación' }))) return;
+        setVolviendoAPlanificacion(true);
         const resultado = await actualizarOtGlobal(otSeleccionada._id, {
             estado: 'Tratada',
             ...(yaEnviada ? { 'cotizacion.enviada': false, 'cotizacion.capacidadVerificada': false } : {}),
         });
-        if (!resultado?.exito) { notificar.error(resultado?.error || 'No se pudo volver a planificación.'); return; }
+        if (!resultado?.exito) {
+            setVolviendoAPlanificacion(false);
+            notificar.error(resultado?.error || 'No se pudo volver a planificación.');
+            return;
+        }
+        // Cambiar de pestaña ANTES de actualizar otSeleccionada (no después): son dos setState
+        // separados por nada de por medio, así que React los pinta juntos en un solo render —
+        // en el orden inverso, quedaba un frame parado en Cotización con datos que ya la
+        // bloqueaban (el recuadro rojo de "falta X" se veía flashear antes de saltar a Tareas).
+        setTabActiva('tareas');
         // Sin esto, otSeleccionada seguía con el estado viejo ('Planificada') hasta recargar la
         // página — soloLecturaPlanificacion y el botón "4 · Cotización" leen otSeleccionada.estado
         // directo, no el `ots` global de App.jsx, así que cargarDatos() solo no alcanza (mismo
         // patrón que guardarPlanificacion, más arriba).
         if (resultado.otActualizada) setOtSeleccionada(resultado.otActualizada);
         if (cargarDatos) await cargarDatos();
-        setTabActiva('tareas');
     };
 
     const [enviandoWhatsApp, setEnviandoWhatsApp] = useState(false);
@@ -1426,9 +1436,10 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                             {otSeleccionada.estado === 'Planificada' && (
                                 <button
                                     onClick={volverAPlanificacion}
-                                    style={{ ...styles.btnSecundario, width: '100%', marginTop: 10, color: t.rojo }}
+                                    disabled={volviendoAPlanificacion}
+                                    style={{ ...styles.btnSecundario, width: '100%', marginTop: 10, color: t.rojo, opacity: volviendoAPlanificacion ? .6 : 1 }}
                                     title="Corrige tareas, equipos o suministros sin esperar una reprogramación desde terreno"
-                                >Cancelar y volver a planificación</button>
+                                >{volviendoAPlanificacion ? 'Volviendo…' : 'Cancelar y volver a planificación'}</button>
                             )}
                             <div style={{ fontSize: 10.5, color: t.textoAtenuado3, marginTop: 9, lineHeight: 1.5 }}>Las cotizaciones ya emitidas se siguen viendo con su formato original.</div>
                         </div>
