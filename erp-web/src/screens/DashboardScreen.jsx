@@ -53,10 +53,18 @@ const MAPA_ETAPA = {
     'En Ejecución': 4, 'Trabajo Terminado': 5, 'Con Informe': 6, Pagada: 7,
 };
 
+// 'Reprogramar' (el supervisor la marcó desde S3, PWA Operativa) no está en MAPA_ETAPA a
+// propósito — sin este caso especial, MAPA_ETAPA[estado] daba undefined y el ?? 0 hacía caer
+// la etapa a "Solicitud", como si la OT hubiera retrocedido al principio del todo en vez de
+// necesitar solo una fecha nueva. Se deja en el mismo casillero que 'Programada' (idx 3,
+// mismo criterio que erp-pwa-cliente/C3_EstadoTrabajo.jsx).
 const etapaInfo = (ot) => {
     if (!ot) return { idx: 0, label: ETAPAS_VISUAL[0], rechazada: false };
     if (ot.estado === 'Planificada' && ot.cotizacion?.respuestaCliente === 'Rechazada') {
         return { idx: 2, label: 'Rechazada', rechazada: true };
+    }
+    if (ot.estado === 'Reprogramar') {
+        return { idx: 3, label: 'Reprogramar', rechazada: true };
     }
     const idx = MAPA_ETAPA[ot.estado] ?? 0;
     return { idx, label: ETAPAS_VISUAL[idx], rechazada: false };
@@ -85,6 +93,10 @@ const subEstadoDe = (ot, s) => {
         if (!ot.cotizacion?.enviada) return 'Lista para enviar cotización (Planificador)';
         return 'Esperando aprobación (Cliente)';
     }
+    // El supervisor la marcó 'Reprogramar' desde S3 (PWA Operativa) — necesita fecha nueva;
+    // se resuelve reconfirmando capacidad en el Gantt (GanttScreen.confirmarCapacidad). Sin
+    // este caso, caía al '—' genérico de abajo, igual que una etapa sin nada pendiente.
+    if (ot.estado === 'Reprogramar') return 'Necesita fecha nueva (Planificador)';
     return '—';
 };
 

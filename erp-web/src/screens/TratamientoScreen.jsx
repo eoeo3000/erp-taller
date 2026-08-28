@@ -30,11 +30,19 @@ const MAPA_ETAPA = {
 };
 // 'Aprobada'/'Rechazada' ya no son valores de OT.estado (ver models/OT.js, cotizacion) —
 // un rechazo se detecta por cotizacion.respuestaCliente sin sacar a la OT de 'Planificada'.
+// 'Reprogramar' (el supervisor la marcó desde S3, PWA Operativa) tampoco está en MAPA_ETAPA
+// a propósito — sin este caso especial, MAPA_ETAPA[estado] daba undefined y el ?? 0 hacía
+// caer la etapa a "Solicitud", como si la OT hubiera retrocedido al principio del todo. Se
+// deja en el mismo casillero que 'Programada' (idx 3, mismo criterio que erp-pwa-cliente/
+// C3_EstadoTrabajo.jsx) — conceptualmente ya estaba programada, solo necesita fecha nueva.
 const etapaInfo = (ot) => {
     const estado = ot?.estado;
     if (!estado) return { idx: 0, label: ETAPAS_VISUAL[0], rechazada: false };
     if (estado === 'Planificada' && ot?.cotizacion?.respuestaCliente === 'Rechazada') {
         return { idx: 2, label: 'Rechazada', rechazada: true };
+    }
+    if (estado === 'Reprogramar') {
+        return { idx: 3, label: 'Reprogramar', rechazada: true };
     }
     const idx = MAPA_ETAPA[estado] ?? 0;
     return { idx, label: ETAPAS_VISUAL[idx], rechazada: false };
