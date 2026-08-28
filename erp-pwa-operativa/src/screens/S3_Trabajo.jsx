@@ -426,7 +426,14 @@ function FilaTarea({
                             <span className="mono" style={{ display: 'block', marginTop: 3, fontSize: 11.5, color: 'var(--texto-atenuado-3)' }}>{registro.hora} · {registro.fotos?.length || 0} foto{registro.fotos?.length === 1 ? '' : 's'}</span>
                         </span>
                     </span>
-                ) : !resuelta && !bloqueada && (
+                ) : !bloqueada && (
+                    // Antes exigía !resuelta acá — al marcar "completada" (onMarcarRealizada,
+                    // más arriba) este bloque entero desaparecía, incluido lo que ya se había
+                    // tecleado en el borrador (borrador?.texto/fotos). El dato seguía vivo en
+                    // memoria (borradores[idx] no se toca al marcar completada), pero para el
+                    // supervisor se veía como si se hubiera borrado. Marcar completada y
+                    // describir qué se hizo son dos acciones independientes — no hay motivo
+                    // para que una oculte a la otra.
                     <>
                         <span style={{ display: 'flex', gap: 8, marginTop: 9 }}>
                             <input
