@@ -152,10 +152,15 @@ export default function C3EstadoTrabajo({ nav, trabajo: trabajoProp }) {
                 })}
             </div>
 
+            {/* granTotal es neto — igual que TratamientoScreen (erp-web), el monto que
+                realmente se aprueba/paga es con IVA. Mostrar solo el neto acá hacía que el
+                cliente aprobara pensando un monto 19% más bajo del que después le llega a
+                cobrar en Cuenta y pago (C5), que si aplicaba el 19%. */}
             {ot?.granTotal > 0 && (
                 <div style={{ padding: 16 }}>
-                    <div className="versalita">Presupuesto</div>
-                    <div className="mono" style={{ fontSize: 17, fontWeight: 600, marginTop: 4 }}>{CLP(ot.granTotal)}</div>
+                    <div className="versalita">Presupuesto (con IVA)</div>
+                    <div className="mono" style={{ fontSize: 17, fontWeight: 600, marginTop: 4 }}>{CLP(ot.granTotal * 1.19)}</div>
+                    <div style={{ fontSize: 'var(--fs-secundario)', color: 'var(--texto-atenuado-1)', marginTop: 2 }}>Neto {CLP(ot.granTotal)} + IVA 19%</div>
                 </div>
             )}
 

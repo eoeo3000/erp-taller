@@ -57,6 +57,12 @@ function otPublica(ot) {
         numeroOT: ot.numeroOT,
         estado: ot.estado,
         granTotal: ot.granTotal,
+        // Igual que TratamientoScreen.granTotal/totalManoObra en erp-web — se suma acá y se
+        // expone como un solo número porque tareas[] (abajo) NUNCA manda valorHora al cliente
+        // (la tarifa por hora interna no le corresponde verla); sin este agregado, la mano de
+        // obra quedaba invisible en la cotización del Portal Cliente/PWA — el cliente veía
+        // materiales y suministros itemizados pero el total incluía una mano de obra "fantasma".
+        totalManoObra: (ot.tareas || []).reduce((sum, t) => sum + (Number(t.duracion) * Number(t.valorHora) || 0), 0),
         tareas: (ot.tareas || []).map(t => ({
             descripcion: t.descripcion,
             puesto: t.puesto,

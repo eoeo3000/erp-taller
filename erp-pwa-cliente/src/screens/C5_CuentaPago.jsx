@@ -12,8 +12,13 @@ export default function C5CuentaPago({ nav, trabajo }) {
     const ot = trabajo.ot;
 
     const totalNeto = ot?.granTotal || 0;
+    const iva = totalNeto * 0.19;
+    const totalBruto = totalNeto + iva;
     const pagado = ot?.pago?.montoPagado || 0;
-    const saldo = totalNeto - pagado;
+    // Antes restaba pagado del NETO — igual que TratamientoScreen.TabPago (erp-web), lo que
+    // realmente se cobra/paga es el total CON IVA. Con el cálculo viejo, el saldo pendiente
+    // que veía el cliente acá quedaba 19% más bajo que lo que la oficina espera cobrar.
+    const saldo = totalBruto - pagado;
 
     if (verCotizacion) {
         return (
@@ -27,7 +32,9 @@ export default function C5CuentaPago({ nav, trabajo }) {
                     <div style={{ fontSize: 14, color: 'var(--texto-atenuado-1)', marginTop: 4 }}>{trabajo.empresaSolicitante}</div>
                     {ot?.tareas?.length > 0 && (
                         <div style={{ marginTop: 14 }}>
-                            <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: 'var(--texto-atenuado-2)' }}>Mano de obra</div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: 'var(--texto-atenuado-2)' }}>
+                                <span>Mano de obra</span><span className="mono">{CLP(ot.totalManoObra)}</span>
+                            </div>
                             {ot.tareas.map((t, i) => (
                                 <div key={i} style={{ padding: '4px 0' }}>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13.5 }}>
@@ -43,9 +50,17 @@ export default function C5CuentaPago({ nav, trabajo }) {
                         </div>
                     )}
                     {ot?.componentes?.length > 0 && <BloqueDoc titulo="Materiales y equipos" filas={ot.componentes.map((c) => [c.descripcion, CLP(c.subtotal)])} />}
-                    {ot?.logistica?.length > 0 && <BloqueDoc titulo="Logística" filas={ot.logistica.map((l) => [l.descripcion, CLP(l.subtotal)])} />}
-                    <div style={{ marginTop: 16, borderTop: '2px solid var(--texto-principal)', paddingTop: 8, display: 'flex', justifyContent: 'space-between', fontWeight: 700 }}>
-                        <span>Total</span><span className="mono">{CLP(totalNeto)}</span>
+                    {ot?.logistica?.length > 0 && <BloqueDoc titulo="Suministros directos" filas={ot.logistica.map((l) => [l.descripcion, CLP(l.subtotal)])} />}
+                    <div style={{ marginTop: 16, borderTop: `1px solid var(--linea-zona)`, paddingTop: 8 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13.5 }}>
+                            <span>Total neto</span><span className="mono">{CLP(totalNeto)}</span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13.5, color: 'var(--texto-atenuado-1)', marginTop: 3 }}>
+                            <span>IVA 19%</span><span className="mono">{CLP(iva)}</span>
+                        </div>
+                        <div style={{ marginTop: 6, paddingTop: 6, borderTop: '2px solid var(--texto-principal)', display: 'flex', justifyContent: 'space-between', fontWeight: 700 }}>
+                            <span>Total con IVA</span><span className="mono">{CLP(totalBruto)}</span>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -66,13 +81,23 @@ export default function C5CuentaPago({ nav, trabajo }) {
             </div>
 
             <div style={{ padding: '14px 16px 4px' }} className="versalita">Detalle</div>
-            {/* OT.tareas no trae un monto por tarea (la mano de obra no se itemiza en precio,
-                solo en horas — igual que en la cotización de escritorio, PortalClienteScreen
-                CotizacionView) — no hay una fila de "Mano de obra" con monto real que mostrar. */}
+            {/* OT.tareas no trae un monto por tarea (la tarifa por hora es interna, no se le
+                manda al cliente — ver otController.otPublica) — pero sí el agregado
+                totalManoObra, calculado en el backend, así que la mano de obra queda visible
+                como un solo monto en vez de invisible dentro del total. */}
+            {ot?.totalManoObra > 0 && <FilaDetalle concepto="Mano de obra" monto={ot.totalManoObra} />}
             {ot?.componentes?.map((c, i) => <FilaDetalle key={i} concepto={c.descripcion} subtitulo={`${c.cantidad} un.`} monto={c.subtotal} />)}
             {ot?.logistica?.map((l, i) => <FilaDetalle key={i} concepto={l.descripcion} monto={l.subtotal} />)}
-            <div style={{ minHeight: 56, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 16px', background: 'var(--fondo-pantalla)', fontWeight: 700 }}>
-                <span>Total</span><span className="mono">{CLP(totalNeto)}</span>
+            <div style={{ padding: '10px 16px', background: 'var(--fondo-pantalla)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--fs-secundario)' }}>
+                    <span>Total neto</span><span className="mono">{CLP(totalNeto)}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--fs-secundario)', color: 'var(--texto-atenuado-1)', marginTop: 3 }}>
+                    <span>IVA 19%</span><span className="mono">{CLP(iva)}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700, marginTop: 6 }}>
+                    <span>Total con IVA</span><span className="mono">{CLP(totalBruto)}</span>
+                </div>
             </div>
 
             <div style={{ padding: '14px 16px 4px' }} className="versalita">Documentos</div>
