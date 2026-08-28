@@ -232,23 +232,24 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
 
     // Corregir algo (una tarea, un material) sin esperar a que el supervisor marque
     // 'Reprogramar' desde terreno — solo tiene sentido mientras la OT sigue en 'Planificada'
-    // (ver soloLecturaPlanificacion): pasada esa etapa ya hay reservas de stock/equipos reales
-    // comprometidas y esto dejaría de ser seguro. Si la cotización ya se había enviado, primero
-    // se cancela (mismo efecto que cancelarAceptacion) antes de volver a Tareas.
+    // (ver el botón "4 · Cotización" de la barra de tabs, y soloLecturaPlanificacion): pasada
+    // esa etapa ya hay reservas de stock/equipos reales comprometidas y esto dejaría de ser
+    // seguro. Vuelve el `estado` a 'Tratada' — es el mismo interruptor que usa "Terminar
+    // planificación" para ir para el otro lado, un solo bucle Tratada <-> Planificada. Si la
+    // cotización ya se había enviado, de paso se cancela (mismo efecto que cancelarAceptacion)
+    // para que el cliente no pueda aprobar un envío que va a quedar desactualizado.
     const volverAPlanificacion = async () => {
         const yaEnviada = !!otSeleccionada?.cotizacion?.enviada;
         const mensaje = yaEnviada
-            ? 'Vas a cancelar el envío pendiente y volver a Tareas/Equipos/Suministros. El cliente ya no podrá aprobar este envío — habrá que reconfirmar programación y reenviar. ¿Continuar?'
-            : '¿Volver a Tareas/Equipos/Suministros para corregir algo antes de enviar la cotización?';
+            ? 'Vas a cancelar el envío pendiente y volver a Tareas/Equipos/Suministros. El cliente ya no podrá aprobar este envío — habrá que terminar la planificación y reenviar de nuevo. ¿Continuar?'
+            : '¿Volver a Tareas/Equipos/Suministros para corregir algo? Vas a tener que terminar la planificación de nuevo antes de poder entrar a Cotización.';
         if (!(await confirmar(mensaje, { danger: false, textoConfirmar: 'Volver a planificación' }))) return;
-        if (yaEnviada) {
-            const resultado = await actualizarOtGlobal(otSeleccionada._id, {
-                'cotizacion.enviada': false,
-                'cotizacion.capacidadVerificada': false,
-            });
-            if (!resultado?.exito) { notificar.error(resultado?.error || 'No se pudo cancelar el envío.'); return; }
-            if (cargarDatos) await cargarDatos();
-        }
+        const resultado = await actualizarOtGlobal(otSeleccionada._id, {
+            estado: 'Tratada',
+            ...(yaEnviada ? { 'cotizacion.enviada': false, 'cotizacion.capacidadVerificada': false } : {}),
+        });
+        if (!resultado?.exito) { notificar.error(resultado?.error || 'No se pudo volver a planificación.'); return; }
+        if (cargarDatos) await cargarDatos();
         setTabActiva('tareas');
     };
 
@@ -938,19 +939,13 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
     // volver a pasar con una OT nueva) se corrige reprogramándola desde la PWA del supervisor,
     // no reabriendo el freeze automáticamente.
     //
-    // Segunda excepción: mientras la OT sigue en 'Planificada' y la cotización todavía NO se
-    // envió, no hay ningún riesgo en destrabar — aplicarReservaPorCambioEstado (backend) solo
-    // reserva stock/equipos en la transición Planificada->Programada, así que nada se
-    // comprometió todavía. Antes, corregir un olvido acá exigía esperar a que el supervisor
-    // marcara 'Reprogramar' desde terreno; ahora el botón "Cancelar y volver a planificación"
-    // de la pestaña Cotización cubre este caso sin salir del escritorio. `cotizacion.enviada`
-    // solo cambia por una acción explícita (enviar / cancelar aceptación), nunca como efecto
-    // de tipear en las tablas — no reintroduce el freeze reactivo que se sacó antes (ver
-    // comentario de arriba).
-    const cotizacionEnviada = !!otSeleccionada?.cotizacion?.enviada;
-    const soloLecturaPlanificacion = planificacionTerminada
-        && otSeleccionada?.estado !== 'Reprogramar'
-        && !(otSeleccionada?.estado === 'Planificada' && !cotizacionEnviada);
+    // "Cancelar y volver a planificación" (pestaña Cotización) es la vía de escritorio para lo
+    // mismo que 'Reprogramar' resuelve desde terreno: en vez de otro campo/estado especial,
+    // hace volver el propio `estado` a 'Tratada' — eso ya alcanza para que planificacionTerminada
+    // dé false y destrabe 1-3 acá, y para deshabilitar la pestaña Cotización (ver el botón de la
+    // barra de tabs, más abajo). Un solo interruptor (estado), sin duplicar la regla en dos
+    // lados — es el mismo bucle Tratada <-> Planificada que ya usa Terminar planificación.
+    const soloLecturaPlanificacion = planificacionTerminada && otSeleccionada?.estado !== 'Reprogramar';
 
     // Único condicionante bloqueante de la pestaña Cotización, en el orden en que se resuelven
     // (tareas -> costos -> terminar planificación -> programar). Se muestra solo ese recuadro,
@@ -1005,15 +1000,17 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                     <button onClick={() => irATab('tareas')} disabled={!habilitadoTabs14} title={habilitadoTabs14 ? '' : 'Completa el Informe Inicial primero'} style={{ ...(tabActiva === 'tareas' ? styles.tabActivo : styles.tab), opacity: habilitadoTabs14 ? 1 : .5 }}>1 · Tareas</button>
                     <button onClick={() => irATab('componentes')} disabled={!habilitadoTabs14} title={habilitadoTabs14 ? '' : 'Completa el Informe Inicial primero'} style={{ ...(tabActiva === 'componentes' ? styles.tabActivo : styles.tab), opacity: habilitadoTabs14 ? 1 : .5 }}>2 · Equipos y materiales</button>
                     <button onClick={() => irATab('Logistica')} disabled={!habilitadoTabs14} title={habilitadoTabs14 ? '' : 'Completa el Informe Inicial primero'} style={{ ...(tabActiva === 'Logistica' ? styles.tabActivo : styles.tab), opacity: habilitadoTabs14 ? 1 : .5 }}>3 · Suministros directos</button>
-                    {/* Ya no se deshabilita por tareas/costos/planificación incompletos (antes, si algo
-                        faltaba, la pestaña quedaba gris sin ninguna pista de qué hacer ni a dónde ir —
-                        se podía quedar "varado" en otra pestaña). Ahora siempre se puede entrar, y adentro
-                        se explica qué falta con un botón directo a la pestaña correspondiente. */}
+                    {/* Habilitada recién cuando "Terminar planificación" confirma el paso
+                        (planificacionTerminada) — no alcanza con tareas/costos completos en
+                        memoria, hay que haber presionado el botón. La única forma de deshabilitarla
+                        de nuevo es "Cancelar y volver a planificación" (dentro de Cotización): mismo
+                        bucle Tratada <-> Planificada que usa soloLecturaPlanificacion para las
+                        pestañas 1-3, así que ambas quedan siempre en sincronía entre sí. */}
                     <button
                         onClick={() => irATab('cotizacion')}
-                        disabled={!habilitadoTabs14}
-                        title={habilitadoTabs14 ? '' : 'Completa el Informe Inicial primero'}
-                        style={{ ...(tabActiva === 'cotizacion' ? styles.tabActivo : styles.tab), opacity: habilitadoTabs14 ? 1 : .5 }}
+                        disabled={!habilitadoTabs14 || !planificacionTerminada}
+                        title={!habilitadoTabs14 ? 'Completa el Informe Inicial primero' : !planificacionTerminada ? 'Termina la planificación (pestaña 3) primero' : ''}
+                        style={{ ...(tabActiva === 'cotizacion' ? styles.tabActivo : styles.tab), opacity: (habilitadoTabs14 && planificacionTerminada) ? 1 : .5 }}
                     >4 · Cotización</button>
                     <button onClick={() => puedeEjecucion && setTabActiva('reportes')} disabled={!puedeEjecucion} title={puedeEjecucion ? '' : 'Disponible una vez que la OT esté Programada'} style={{ ...(tabActiva === 'reportes' ? styles.tabActivo : styles.tab), opacity: puedeEjecucion ? 1 : .5 }}>
                         Ejecución {otSeleccionada.reportes?.length ? `(${otSeleccionada.reportes.length})` : ''}
