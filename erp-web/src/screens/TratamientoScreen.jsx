@@ -283,7 +283,7 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
             const respuesta = await axios.post(`${API}/mail/link-cotizacion`, { otId: otSeleccionada._id });
             const { link, telefono } = respuesta.data;
             if (!link || !telefono) { notificar.error('No se pudo generar el link — revisa que la Solicitud tenga teléfono registrado.'); return; }
-            await actualizarOtGlobal(otSeleccionada._id, {
+            const resultado = await actualizarOtGlobal(otSeleccionada._id, {
                 'cotizacion.enviada': true,
                 'cotizacion.fechaEnvio': new Date().toISOString(),
                 'cotizacion.respuestaCliente': 'Pendiente',
@@ -292,12 +292,43 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
             const mensaje = `Hola ${datosRecibidos?.solicitante || ''}, le compartimos la cotización de la OT ${otSeleccionada?.numeroOT || ''}. Puede revisarla y responder desde acá:\n\n${link}`;
             window.open(`https://wa.me/${telefono.replace(/\D/g, '')}?text=${encodeURIComponent(mensaje)}`, '_blank');
             notificar.exito('Cotización enviada — se abrió WhatsApp con el link.');
+            // Faltaba esto: sin actualizar otSeleccionada, el aviso "esperando respuesta del
+            // cliente" y el botón "Cancelar y volver a planificación" seguían leyendo
+            // cotizacion.enviada=false hasta recargar la página — mismo bug que ya se había
+            // corregido en volverAPlanificacion (ver ese comentario más arriba).
+            if (resultado?.otActualizada) setOtSeleccionada(resultado.otActualizada);
             if (cargarDatos) await cargarDatos();
         } catch (error) {
             notificar.error('No se pudo generar el link: ' + (error.response?.data?.error || error.message));
         } finally {
             setEnviandoWhatsApp(false);
         }
+    };
+
+    // El cliente puede entrar al Portal con teléfono + número de solicitud, sin depender de
+    // ningún link (ver otController.antecedentes) — así que "enviar la cotización" y "avisarle
+    // por un canal" son dos cosas separadas. Esto solo hace la primera: deja la cotización
+    // como "por aprobar" en el Portal Cliente (mismo criterio que C2_MisSolicitudes.jsx en
+    // erp-pwa-cliente), sin mandar correo ni WhatsApp — para cuando ya se le avisó de otra
+    // forma, o el cliente ya sabe entrar solo.
+    const [marcandoEnviada, setMarcandoEnviada] = useState(false);
+    const marcarCotizacionEnviada = async () => {
+        if (!(await confirmar(
+            '¿Marcar la cotización como enviada? Va a aparecer "por aprobar" en el Portal Cliente sin mandar ningún correo ni WhatsApp — asegurate de que el cliente sepa cómo entrar (teléfono + número de solicitud).',
+            { danger: false, textoConfirmar: 'Marcar como enviada' },
+        ))) return;
+        setMarcandoEnviada(true);
+        const resultado = await actualizarOtGlobal(otSeleccionada._id, {
+            'cotizacion.enviada': true,
+            'cotizacion.fechaEnvio': new Date().toISOString(),
+            'cotizacion.respuestaCliente': 'Pendiente',
+            'cotizacion.fechaRespuesta': null,
+        });
+        setMarcandoEnviada(false);
+        if (!resultado?.exito) { notificar.error(resultado?.error || 'No se pudo marcar como enviada.'); return; }
+        notificar.exito('Cotización marcada como enviada — ya aparece "por aprobar" en el Portal Cliente.');
+        if (resultado.otActualizada) setOtSeleccionada(resultado.otActualizada);
+        if (cargarDatos) await cargarDatos();
     };
 
     const limpiarIds = (lista) => (lista || []).map(item => {
@@ -1444,6 +1475,12 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                                 title={otSeleccionada.cotizacion?.capacidadVerificada ? '' : 'Verifica la capacidad en Programación antes de enviar'}
                                 style={{ ...styles.btnSecundario, width: '100%', marginTop: 6, opacity: (otSeleccionada.cotizacion?.capacidadVerificada && !enviandoWhatsApp) ? 1 : .5 }}
                             >{enviandoWhatsApp ? 'Generando link…' : 'Enviar cotización por WhatsApp'}</button>
+                            <button
+                                onClick={marcarCotizacionEnviada}
+                                disabled={!otSeleccionada.cotizacion?.capacidadVerificada || marcandoEnviada}
+                                title={otSeleccionada.cotizacion?.capacidadVerificada ? 'El cliente entra con teléfono + número de solicitud, sin necesitar un link' : 'Verifica la capacidad en Programación antes de enviar'}
+                                style={{ ...styles.btnSecundario, width: '100%', marginTop: 6, opacity: (otSeleccionada.cotizacion?.capacidadVerificada && !marcandoEnviada) ? 1 : .5 }}
+                            >{marcandoEnviada ? 'Marcando…' : 'Marcar como enviada (sin correo/WhatsApp)'}</button>
                             {otSeleccionada.estado === 'Planificada' && (
                                 <button
                                     onClick={volverAPlanificacion}
