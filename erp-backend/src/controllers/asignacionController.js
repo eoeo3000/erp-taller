@@ -75,9 +75,19 @@ const TIPOS_POR_ROL = {
 // cada una hacía su propio OT.find idéntico — en producción, con datos reales y sin índice
 // en supervisorId, esas dos consultas duplicadas eran buena parte de por qué mi-semana
 // tardaba ~8s (ver también el índice nuevo en models/OT.js).
+//
+// Solo estados donde el trabajo ya está confirmado — no "cualquiera menos Pagada". Las
+// tareas ya tienen fecha desde que se arman en Tareas (pestaña 1), mucho antes de que el
+// cliente apruebe la cotización o de que el Planificador confirme capacidad en el Gantt —
+// sin este filtro, una OT en 'Tratada'/'Planificada' (ni siquiera cotizada, menos aprobada)
+// ya le aparecía al supervisor en Mi día/Mi semana como si fuera trabajo real. 'Reprogramar'
+// también queda afuera: esa fecha ya no es la vigente, se está reemplazando. Mismo criterio
+// que miPanel usa para "Hoy en terreno" (Programada/En Ejecución) — acá se suma lo que ya
+// pasó por ejecución, para que la semana siga mostrando el trabajo hecho, no solo el futuro.
+const ESTADOS_TRABAJO_CONFIRMADO = ['Programada', 'En Ejecución', 'Trabajo Terminado', 'Con Informe'];
 async function otsSupervisadasPorRecurso(OT, recursoId) {
     if (!recursoId) return [];
-    return OT.find({ supervisorId: recursoId, estado: { $ne: 'Pagada' } }).lean();
+    return OT.find({ supervisorId: recursoId, estado: { $in: ESTADOS_TRABAJO_CONFIRMADO } }).lean();
 }
 
 // Igual que hoyEnTerreno (más abajo, para S1): la fecha de cabecera (ot.fechaEjecucion) no basta,
