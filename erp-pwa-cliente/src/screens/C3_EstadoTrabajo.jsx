@@ -13,7 +13,7 @@ const cotizacionVencida = (ot) => !!(
 // erp-web (duplicado ahí también, no importado de un módulo común — mismo criterio).
 // Las etiquetas acá son la traducción a lenguaje de cliente de esas mismas 8 posiciones.
 const ETAPAS_CLIENTE = [
-    'Solicitud recibida', 'En evaluación', 'Presupuesto aceptado', 'Visita programada',
+    'Solicitud recibida', 'En evaluación', 'Presupuesto aceptado', 'Inicio programado',
     'En ejecución', 'Trabajo terminado', 'Informe entregado', 'Pagado',
 ];
 const MAPA_ETAPA = {
