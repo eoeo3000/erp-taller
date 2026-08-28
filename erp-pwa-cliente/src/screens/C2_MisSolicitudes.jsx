@@ -27,10 +27,13 @@ function clasificar(t) {
         const fecha = (ot.tareas || []).map((tt) => tt.fecha).filter(Boolean).sort()[0];
         return { grupo: 'en_curso', color: COLOR.activo, linea: fecha ? `Llegamos el ${fmt(fecha)}` : 'Programado' };
     }
+    // Grupo propio, separado de 'en_curso' — antes "en ejecución ahora mismo" quedaba
+    // mezclado con "todavía en evaluación/programación", sin forma de filtrar solo lo que
+    // el equipo está trabajando en este momento (pedido explícito del usuario).
     if (ot.estado === 'En Ejecución') {
         const total = (ot.tareas || []).length;
         const ok = (ot.tareas || []).filter((tt) => tt.completada).length;
-        return { grupo: 'en_curso', color: COLOR.activo, linea: 'En ejecución', avance: total ? ok / total : 0 };
+        return { grupo: 'en_ejecucion', color: COLOR.activo, linea: 'En ejecución', avance: total ? ok / total : 0 };
     }
     if (['Trabajo Terminado', 'Con Informe'].includes(ot.estado)) {
         const saldo = (ot.granTotal || 0) - (ot.pago?.montoPagado || 0);
@@ -46,6 +49,7 @@ const CHIPS = [
     { id: 'todas', label: 'Todas' },
     { id: 'por_aprobar', label: 'Por aprobar' },
     { id: 'en_curso', label: 'En curso' },
+    { id: 'en_ejecucion', label: 'En ejecución' },
     { id: 'por_pagar', label: 'Por pagar' },
     { id: 'cerradas', label: 'Cerradas' },
 ];
