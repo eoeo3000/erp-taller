@@ -447,6 +447,38 @@ exports.asignarSupervisor = async (req, res) => {
 
         await ot.save();
 
+        // Empuja el informe inicial al supervisor recién asignado. Sin esto, asignar desde
+        // Antecedentes solo guardaba OT.supervisorId — el informe seguía siendo 100%
+        // autoservicio (S4/tomarSolicitud): el supervisor asignado nunca lo veía en
+        // "Informes iniciales míos sin enviar" a menos que él mismo fuera a S4 a tomarlo.
+        // misInformes/S7 resuelven todo por Asignacion(tipo:'evaluacion').solicitudId, no por
+        // OT.supervisorId — de ahí que asignar no "llegara" a la app del supervisor.
+        // Reasigna la Asignacion existente en vez de crear una segunda: el índice único de
+        // solicitudId (ver models/Asignacion.js) solo admite una por solicitud.
+        if (supervisorNuevo && !ot.informeEvaluacion?.completo) {
+            try {
+                const Usuario = getUsuario(req.db);
+                const Asignacion = getAsignacion(req.db);
+                const usuarioSupervisor = supervisorNuevo.usuarioId
+                    ? await Usuario.findById(supervisorNuevo.usuarioId)
+                    : null;
+                if (usuarioSupervisor && usuarioSupervisor.rol === 'supervisor' && usuarioSupervisor.estado === 'activo') {
+                    const solicitudIdParaEvaluacion = ot.solicitudId || ot._id;
+                    const existente = await Asignacion.findOne({ tipo: 'evaluacion', solicitudId: solicitudIdParaEvaluacion });
+                    if (existente) {
+                        if (String(existente.usuarioId) !== String(usuarioSupervisor._id)) {
+                            existente.usuarioId = usuarioSupervisor._id;
+                            await existente.save();
+                        }
+                    } else {
+                        await Asignacion.create({ tipo: 'evaluacion', usuarioId: usuarioSupervisor._id, solicitudId: solicitudIdParaEvaluacion });
+                    }
+                }
+            } catch (eAsignacion) {
+                console.warn('[Asignacion] No se pudo empujar el informe inicial al supervisor asignado:', eAsignacion.message);
+            }
+        }
+
         const otRespuesta = ot.toObject();
         otRespuesta.supervisor = supervisorNuevo
             ? { id: supervisorNuevo._id, nombre: supervisorNuevo.nombre, puesto: supervisorNuevo.puesto }
