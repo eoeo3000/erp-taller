@@ -16,6 +16,8 @@ function horasDesde(iso) {
 export default function TabPago({
     pago, setPago, granTotal, guardarPago, anularPago, restaurarPago,
     estadoOT, informeFinal, enviarInformeFinal, enviandoInforme,
+    notasInforme, setNotasInforme, guardarNotasInforme, guardandoNotasInforme,
+    verInformePDF, descargarInformePDF,
 }) {
     // El informe (Solicitud + Informe Inicial + plan + lo reportado en terreno) solo tiene
     // sentido una vez terminado el trabajo — antes de eso no hay nada completo que mostrarle
@@ -29,20 +31,36 @@ export default function TabPago({
                     <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.03em', textTransform: 'uppercase', color: informeFinal?.enviado ? t.verde : t.textoPrincipal }}>
                         {informeFinal?.enviado ? 'Informe enviado' : 'Informe al cliente'}
                     </div>
-                    {informeFinal?.enviado ? (
+                    {informeFinal?.enviado && (
                         <div style={{ fontSize: 11.5, color: t.textoSecundario2, marginTop: 4 }}>
                             El cliente ya puede ver el detalle completo de lo ejecutado en su Portal — {horasDesde(informeFinal.fechaEnvio)}.
                         </div>
-                    ) : (
-                        <>
-                            <div style={{ fontSize: 11.5, color: t.textoSecundario2, marginTop: 4, marginBottom: 8 }}>
-                                Todavía no se compartió con el cliente el detalle de lo ejecutado (plan, comentarios y fotos de terreno).
-                            </div>
-                            <button onClick={enviarInformeFinal} disabled={enviandoInforme} style={{ ...styles.btnSecundario, opacity: enviandoInforme ? .6 : 1 }}>
+                    )}
+                    {!informeFinal?.enviado && (
+                        <div style={{ fontSize: 11.5, color: t.textoSecundario2, marginTop: 4 }}>
+                            Todavía no se compartió con el cliente el detalle de lo ejecutado (plan, comentarios y fotos de terreno).
+                        </div>
+                    )}
+                    <label style={{ display: 'block', marginTop: 10 }}>
+                        <span style={{ fontSize: 10.5, color: t.textoSecundario3 }}>Notas del informe (opcional)</span>
+                        <textarea
+                            className="campo-ed" style={{ ...styles.inputPlano, minHeight: 50, marginTop: 3 }}
+                            value={notasInforme} onChange={e => setNotasInforme(e.target.value)}
+                            placeholder="Ej: un resumen o algo que aclarar al cliente"
+                        />
+                    </label>
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
+                        <button onClick={guardarNotasInforme} disabled={guardandoNotasInforme} style={{ ...styles.btnSecundario, opacity: guardandoNotasInforme ? .6 : 1 }}>
+                            {guardandoNotasInforme ? 'Guardando…' : 'Guardar notas'}
+                        </button>
+                        <button onClick={verInformePDF} style={styles.btnSecundario}>Ver informe</button>
+                        <button onClick={descargarInformePDF} style={styles.btnSecundario}>Descargar PDF</button>
+                        {!informeFinal?.enviado && (
+                            <button onClick={enviarInformeFinal} disabled={enviandoInforme} style={{ ...styles.btnPrimario, opacity: enviandoInforme ? .6 : 1 }}>
                                 {enviandoInforme ? 'Enviando…' : 'Enviar informe al cliente'}
                             </button>
-                        </>
-                    )}
+                        )}
+                    </div>
                 </div>
             )}
             <div style={styles.tituloSub}>Registro de pago</div>

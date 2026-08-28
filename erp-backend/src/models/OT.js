@@ -185,6 +185,10 @@ const OTSchema = new mongoose.Schema({
     informeFinal: {
         enviado: { type: Boolean, default: false },
         fechaEnvio: { type: Date, default: null },
+        // Texto libre que el Planificador agrega antes de enviar (ej. un resumen, algo que
+        // aclarar al cliente) — la única pieza del informe que se redacta a mano, el resto se
+        // arma solo con tareas/informeEvaluacion/reportes ya existentes.
+        notas: { type: String, default: '' },
     },
 
     // 6. Cotización y programación — respuesta del cliente ('Aprobada'/'Rechazada') dejó de

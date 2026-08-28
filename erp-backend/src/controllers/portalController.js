@@ -147,6 +147,7 @@ function otPublica(ot) {
         informeFinal: ot.informeFinal ? {
             enviado: ot.informeFinal.enviado,
             fechaEnvio: ot.informeFinal.fechaEnvio,
+            notas: ot.informeFinal.notas || '',
         } : null,
         // respuestaCliente + enviada: lo que C2/C3 necesitan para distinguir "presupuesto
         // rechazado" de "en preparación" de "cotización enviada, esperando tu respuesta"

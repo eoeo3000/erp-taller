@@ -345,6 +345,22 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
     // otPublica; esto solo marca que ya se compartió, mismo criterio que
     // marcarCotizacionEnviada (arriba) — un booleano + fecha, sin subdocumento propio.
     const [enviandoInforme, setEnviandoInforme] = useState(false);
+    // Único campo redactado a mano del informe — el resto (solicitud, informe inicial, plan y
+    // lo reportado en terreno) se arma solo a partir de datos que ya existen. Se guarda aparte
+    // (guardarNotasInforme) para no obligar a "enviar" solo para dejarlas escritas, y también
+    // viaja en el payload de enviarInformeFinal por si quedó sin guardar antes de enviar.
+    const [notasInforme, setNotasInforme] = useState(datosRecibidos?.informeFinal?.notas || '');
+    const [guardandoNotasInforme, setGuardandoNotasInforme] = useState(false);
+    const [previsualizarInforme, setPrevisualizarInforme] = useState(false);
+    const [pdfPreviewInformeUrl, setPdfPreviewInformeUrl] = useState(null);
+    const guardarNotasInforme = async () => {
+        setGuardandoNotasInforme(true);
+        const resultado = await actualizarOtGlobal(otSeleccionada._id, { 'informeFinal.notas': notasInforme });
+        setGuardandoNotasInforme(false);
+        if (!resultado?.exito) { notificar.error(resultado?.error || 'No se pudieron guardar las notas.'); return; }
+        notificar.exito('Notas del informe guardadas.');
+        if (resultado.otActualizada) setOtSeleccionada(resultado.otActualizada);
+    };
     const enviarInformeFinal = async () => {
         if (!(await confirmar(
             '¿Enviar el informe al cliente? Va a poder ver el detalle completo de lo ejecutado (plan, comentarios y fotos de terreno) en su Portal — asegurate de que sepa cómo entrar (teléfono + número de solicitud).',
@@ -354,6 +370,7 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
         const resultado = await actualizarOtGlobal(otSeleccionada._id, {
             'informeFinal.enviado': true,
             'informeFinal.fechaEnvio': new Date().toISOString(),
+            'informeFinal.notas': notasInforme,
         });
         setEnviandoInforme(false);
         if (!resultado?.exito) { notificar.error(resultado?.error || 'No se pudo enviar el informe.'); return; }
@@ -658,6 +675,92 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
         } catch (e) { console.warn('No se pudo registrar la carpeta en la OT:', e.message); }
     };
 
+    // Informe final para el cliente — mismo contenido que arma C4_AvanceFotos.jsx (PWA Cliente)
+    // a partir de otPublica: Solicitud + Evaluación inicial (hallazgos) + trabajo por tarea
+    // (desarrollo + lo reportado en terreno) + notas + evidencias generales (OT.reportes).
+    // `descargar=false` se usa para la vista previa (no dispara doc.save).
+    const generarInformePDF = (descargar = true) => {
+        const hallazgos = informeEvaluacion?.hallazgos || [];
+        const tareasConDetalle = tareas.filter(tt => (tt.desarrollo || '').trim() || tt.registro?.texto || tt.registro?.fotos?.length);
+        const reportes = otSeleccionada?.reportes || [];
+
+        const doc = new jsPDF();
+        const pageWidth = doc.internal.pageSize.getWidth();
+        let y = 20;
+        doc.setFontSize(16); doc.setTextColor(44, 62, 80); doc.setFont(undefined, 'bold');
+        doc.text('INFORME DE TRABAJO EJECUTADO', pageWidth / 2, y, { align: 'center' }); y += 8;
+        doc.setFontSize(9); doc.setTextColor(100); doc.setFont(undefined, 'normal');
+        doc.text(`OT N°: ${otSeleccionada?.numeroOT || datosRecibidos?.numeroOT || 'N/A'}`, 14, y);
+        doc.text(`Fecha: ${new Date().toLocaleDateString('es-CL')}`, pageWidth - 14, y, { align: 'right' }); y += 6;
+        doc.setDrawColor(200); doc.line(14, y, pageWidth - 14, y); y += 8;
+
+        const titulo = (texto) => {
+            if (y > 270) { doc.addPage(); y = 20; }
+            doc.setFontSize(11); doc.setFont(undefined, 'bold'); doc.setTextColor(20);
+            doc.text(texto, 14, y); y += 7;
+        };
+
+        titulo('Solicitud');
+        doc.setFontSize(9); doc.setFont(undefined, 'normal'); doc.setTextColor(70);
+        const desc = doc.splitTextToSize(`Descripción: ${datosRecibidos?.descripcion || '—'}`, pageWidth - 28);
+        doc.text(desc, 14, y); y += desc.length * 5 + 2;
+        doc.text(`Solicitante: ${datosRecibidos?.solicitante || '—'}   ·   N° solicitud: ${datosRecibidos?.numeroSolicitud || datosRecibidos?._id?.slice(-8) || '—'}`, 14, y); y += 9;
+
+        if (hallazgos.length > 0) {
+            titulo('Evaluación inicial');
+            doc.setFontSize(9); doc.setFont(undefined, 'normal'); doc.setTextColor(70);
+            hallazgos.forEach(h => {
+                if (y > 270) { doc.addPage(); y = 20; }
+                const fotos = h.fotos?.length ? ` (${h.fotos.length} foto${h.fotos.length === 1 ? '' : 's'})` : '';
+                const texto = doc.splitTextToSize(`• ${h.textoDescriptivo || h.textoGenerado || '—'}${fotos}`, pageWidth - 28);
+                doc.text(texto, 14, y); y += texto.length * 5 + 2;
+            });
+            y += 4;
+        }
+
+        if (tareasConDetalle.length > 0) {
+            titulo('Trabajo realizado, por tarea');
+            autoTable(doc, {
+                startY: y,
+                head: [['Tarea', 'Desarrollo', 'Reportado en terreno']],
+                body: tareasConDetalle.map(tt => [
+                    tt.descripcion || '—',
+                    tt.desarrollo || '—',
+                    [tt.registro?.texto, tt.registro?.fotos?.length ? `${tt.registro.fotos.length} foto${tt.registro.fotos.length === 1 ? '' : 's'}` : ''].filter(Boolean).join(' · ') || '—',
+                ]),
+                headStyles: { fillColor: [44, 62, 80] }, styles: { fontSize: 8, cellWidth: 'wrap' },
+                columnStyles: { 0: { cellWidth: 34 }, 1: { cellWidth: 70 }, 2: { cellWidth: 60 } },
+            });
+            y = doc.lastAutoTable.finalY + 10;
+        }
+
+        if ((notasInforme || '').trim()) {
+            titulo('Notas');
+            doc.setFontSize(9); doc.setFont(undefined, 'normal'); doc.setTextColor(70);
+            if (y > 260) { doc.addPage(); y = 20; }
+            const notas = doc.splitTextToSize(notasInforme, pageWidth - 28);
+            doc.text(notas, 14, y); y += notas.length * 5 + 6;
+        }
+
+        if (reportes.length > 0) {
+            titulo('Evidencias generales');
+            autoTable(doc, {
+                startY: y, head: [['Fecha', 'Usuario', 'Comentario', 'Foto']],
+                body: reportes.map(r => [new Date(r.fecha).toLocaleDateString('es-CL'), r.usuario || '—', r.comentario || '—', r.foto ? 'Sí' : 'No']),
+                headStyles: { fillColor: [44, 62, 80] }, styles: { fontSize: 8.5 },
+            });
+        }
+
+        if (descargar) doc.save(`Informe_OT_${otSeleccionada?.numeroOT || datosRecibidos?._id || 'nueva'}.pdf`);
+        return doc;
+    };
+
+    const verInformePDF = () => {
+        setPdfPreviewInformeUrl(generarInformePDF(false).output('datauristring'));
+        setPrevisualizarInforme(true);
+    };
+    const descargarInformePDF = () => generarInformePDF(true);
+
     // Pestaña Antecedentes: al agregar una tarea en una OT que ya tiene supervisor
     // asignado, se precarga su nombre como responsable por defecto (solo valor inicial,
     // el usuario puede cambiarlo). operarioId/operarioNombre son arreglos paralelos que
@@ -687,6 +790,7 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                     setExcepciones(data.excepciones || []);
                     if (data.pago) setPago(data.pago);
                     if (data.informeEvaluacion) setInformeEvaluacion({ ...informeEvaluacionVacio, ...data.informeEvaluacion });
+                    setNotasInforme(data.informeFinal?.notas || '');
                     if (data.logistica?.length > 0) setLogistica(data.logistica);
                     else setLogistica([{ id: Date.now(), descripcion: '', cantidad: 1, precio: 0 }]);
                 }
@@ -1735,6 +1839,9 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                             guardarPago={guardarPago} anularPago={anularPago} restaurarPago={restaurarPago}
                             estadoOT={otSeleccionada.estado} informeFinal={otSeleccionada.informeFinal}
                             enviarInformeFinal={enviarInformeFinal} enviandoInforme={enviandoInforme}
+                            notasInforme={notasInforme} setNotasInforme={setNotasInforme}
+                            guardarNotasInforme={guardarNotasInforme} guardandoNotasInforme={guardandoNotasInforme}
+                            verInformePDF={verInformePDF} descargarInformePDF={descargarInformePDF}
                         />
                     )}
 
@@ -1792,6 +1899,27 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
             <datalist id="lista-suministros-recursos">
                 {(suministrosDB || []).map((item, idx) => <option key={item._id || idx} value={item.codigo}>{item.descripcion} - {CLP(item.precio)}</option>)}
             </datalist>
+
+            {/* MODAL VISTA PREVIA DEL INFORME */}
+            {previsualizarInforme && (
+                <div style={styles.overlay}>
+                    <div style={{ ...styles.modal, width: 760, maxWidth: '95vw', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
+                        <div style={styles.modalHeader}>
+                            <span style={{ fontSize: 12.5, fontWeight: 700 }}>Vista previa del informe</span>
+                            <span onClick={() => { setPrevisualizarInforme(false); setPdfPreviewInformeUrl(null); }} style={styles.xModal}>×</span>
+                        </div>
+                        <div style={{ flex: 1, overflow: 'hidden', padding: 10 }}>
+                            {pdfPreviewInformeUrl && (
+                                <iframe title="Vista previa del informe" src={pdfPreviewInformeUrl} style={{ width: '100%', height: '100%', minHeight: '65vh', border: `1px solid ${t.bordeZona}` }} />
+                            )}
+                        </div>
+                        <div style={styles.modalFooter}>
+                            <button onClick={() => { setPrevisualizarInforme(false); setPdfPreviewInformeUrl(null); }} style={styles.btnSecundario}>Cerrar</button>
+                            <button onClick={descargarInformePDF} style={styles.btnPrimario}>Descargar PDF</button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* MODAL HOJA DE RUTA */}
             {modalPlantilla && (
