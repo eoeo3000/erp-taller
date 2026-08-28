@@ -249,6 +249,11 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
             ...(yaEnviada ? { 'cotizacion.enviada': false, 'cotizacion.capacidadVerificada': false } : {}),
         });
         if (!resultado?.exito) { notificar.error(resultado?.error || 'No se pudo volver a planificación.'); return; }
+        // Sin esto, otSeleccionada seguía con el estado viejo ('Planificada') hasta recargar la
+        // página — soloLecturaPlanificacion y el botón "4 · Cotización" leen otSeleccionada.estado
+        // directo, no el `ots` global de App.jsx, así que cargarDatos() solo no alcanza (mismo
+        // patrón que guardarPlanificacion, más arriba).
+        if (resultado.otActualizada) setOtSeleccionada(resultado.otActualizada);
         if (cargarDatos) await cargarDatos();
         setTabActiva('tareas');
     };
