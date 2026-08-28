@@ -159,6 +159,19 @@ export default function S3Trabajo({ nav, asignacion, persona }) {
         try { await actualizarOT(otId, { tareas: nuevasTareas }); setBorradores({}); await cargar(); } finally { setGuardando(false); }
     };
 
+    // Antes 'En Ejecución' solo se activaba solo al abrir O3 (la pantalla del ejecutor,
+    // ver claveInicio en ese archivo) — si el supervisor gestiona la OT desde acá sin pasar
+    // por O3 (por ejemplo, coordina el equipo pero no abre esa pantalla él mismo), la OT
+    // podía quedar en 'Programada' aunque el trabajo ya hubiera arrancado en terreno. Sin
+    // ese cambio de estado, ni el cliente (C3_EstadoTrabajo, erp-pwa-cliente) ni el
+    // Planificador (Panel de control, escritorio) se enteraban de que ya empezó.
+    const iniciarTrabajo = async () => {
+        if (bloqueada) return;
+        if (!window.confirm('¿Marcar el trabajo como iniciado? El cliente y la oficina lo van a ver en ejecución.')) return;
+        setGuardando(true);
+        try { await accionOT(otId, { accion: 'iniciar' }); await cargar(); } finally { setGuardando(false); }
+    };
+
     const terminarTrabajo = async () => {
         if (bloqueada) return;
         if (!window.confirm('¿Marcar el trabajo como finalizado? Queda lista para que la oficina facture.')) return;
@@ -227,7 +240,13 @@ export default function S3Trabajo({ nav, asignacion, persona }) {
                         <div style={{ marginTop: 8, fontSize: 12.5, color: 'var(--detenido)' }}>
                             Esta OT quedó marcada para reprogramar — solo se puede ver hasta que la oficina le asigne una fecha nueva.
                         </div>
-                    ) : accionEstado === null ? (
+                    ) : ot.estado === 'Programada' && (
+                        <button
+                            className="boton-primario" style={{ width: 'auto', minHeight: 40, padding: '0 14px', fontSize: 13, marginTop: 8, background: 'var(--en-curso)', borderColor: 'var(--en-curso)' }}
+                            disabled={guardando} onClick={iniciarTrabajo}
+                        >Marcar trabajo en ejecución</button>
+                    )}
+                    {!bloqueada && (accionEstado === null ? (
                         <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
                             <button className="boton-secundario" style={{ width: 'auto', minHeight: 40, padding: '0 12px', fontSize: 13 }} onClick={() => setAccionEstado('reprogramar')}>Reprogramar</button>
                             <button className="boton-secundario" style={{ width: 'auto', minHeight: 40, padding: '0 12px', fontSize: 13 }} onClick={() => setAccionEstado('replanificar')}>Replanificar</button>
@@ -259,7 +278,7 @@ export default function S3Trabajo({ nav, asignacion, persona }) {
                                 <button className="boton-secundario" style={{ width: 'auto', minHeight: 40, padding: '0 14px', fontSize: 13 }} onClick={cancelarAccionEstado}>Cancelar</button>
                             </div>
                         </div>
-                    )}
+                    ))}
                 </div>
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '16px 18px 6px' }}>
