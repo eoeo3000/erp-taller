@@ -1045,10 +1045,18 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                 {ETAPAS_VISUAL.map((label, i) => {
                     const marca = info.rechazada && i === info.idx ? '×' : i < info.idx ? '×' : i === info.idx ? '▪' : '·';
                     const tono = i < info.idx ? t.textoAtenuado1 : i === info.idx ? (info.rechazada ? t.rojo : t.textoPrincipal) : '#b5b3ab';
+                    // El casillero actual (i === info.idx) usa info.label si viene distinto del
+                    // fijo del array — "Rechazada"/"Reprogramar" son estados especiales que
+                    // ocupan el casillero de otra etapa (Planificada/Programada) pero necesitan
+                    // texto propio. Antes esto siempre mostraba el texto fijo del array
+                    // (ETAPAS_VISUAL[i]), así que "Reprogramar" nunca llegaba a verse — el
+                    // marcador y el color sí cambiaban (usan info.idx/info.rechazada), pero el
+                    // texto quedaba pegado en "Programada".
+                    const texto = i === info.idx ? info.label : label;
                     return (
                         <span key={label} style={styles.pipelineItem}>
                             <span style={{ fontFamily: t.fontMono, fontSize: '10px', color: tono }}>{marca}</span>
-                            <span style={{ fontSize: '11px', color: tono, fontWeight: i === info.idx ? 700 : 400 }}>{label}</span>
+                            <span style={{ fontSize: '11px', color: tono, fontWeight: i === info.idx ? 700 : 400 }}>{texto}</span>
                         </span>
                     );
                 })}

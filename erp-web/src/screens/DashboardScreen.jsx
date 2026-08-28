@@ -457,8 +457,13 @@ const DashboardScreen = ({ ots = [], solicitudes = [], eliminarOT, eliminarSolic
                 { label: 'Supervisor', valor: supervisor || '—' },
                 { label: 'Orden de compra', valor: ocsSel.length ? (ocsSel.length === 1 ? ocsSel[0].numeroOC : `${ocsSel.length} OC`) : '—' },
             ],
+            // El casillero actual (i === info.idx) usa info.label si viene distinto del fijo
+            // del array — "Rechazada"/"Reprogramar" ocupan el casillero de otra etapa
+            // (Planificada/Programada) pero necesitan texto propio. Antes esto siempre
+            // mostraba el texto fijo (ETAPAS_VISUAL[i]): el marcador y el color sí cambiaban
+            // (usan info.idx/info.rechazada), pero "Reprogramar" nunca llegaba a verse.
             etapas: ETAPAS_VISUAL.map((label, i) => ({
-                label,
+                label: i === info.idx ? info.label : label,
                 marca: info.rechazada && i === info.idx ? '×' : i < info.idx ? '×' : i === info.idx ? '▪' : '·',
                 tono: i < info.idx ? t.textoAtenuado1 : i === info.idx ? (info.rechazada ? t.pagoPendiente : t.textoPrincipal) : '#b5b3ab',
                 peso: i === info.idx ? '700' : '400',
