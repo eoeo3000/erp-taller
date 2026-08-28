@@ -254,7 +254,7 @@ export default function C3EstadoTrabajo({ nav, trabajo: trabajoProp }) {
             <div className="pie-accion" style={{ flexDirection: 'row' }}>
                 {ot?.granTotal > 0 && <button className="boton-secundario" onClick={() => nav.ir('c5', { trabajo })}>Cuenta y pago</button>}
                 {['En Ejecución', 'Trabajo Terminado', 'Con Informe'].includes(ot?.estado) && (
-                    <button className="boton-secundario" onClick={() => nav.ir('c4', { trabajo })}>Avance</button>
+                    <button className="boton-secundario" onClick={() => nav.ir('c4', { trabajo })}>{ot?.informeFinal?.enviado ? 'Informe' : 'Avance'}</button>
                 )}
             </div>
             <div className="pie-accion" style={{ borderTop: 'none', paddingTop: 0 }}>

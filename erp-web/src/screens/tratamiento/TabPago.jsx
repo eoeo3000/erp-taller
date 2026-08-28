@@ -3,9 +3,48 @@
 // componentes + logistica, que viven en TratamientoScreen.
 import { t, styles, CLP } from './comunTratamiento';
 
-export default function TabPago({ pago, setPago, granTotal, guardarPago, anularPago, restaurarPago }) {
+// Solo informativo (confirmado con el usuario) — sin vencimiento ni acción automática, a
+// diferencia del plazo de 12h de la cotización.
+function horasDesde(iso) {
+    if (!iso) return '';
+    const horas = (Date.now() - new Date(iso).getTime()) / 3600000;
+    if (horas < 1) return 'hace menos de 1 hora';
+    if (horas < 24) return `hace ${Math.floor(horas)} h`;
+    return `hace ${Math.floor(horas / 24)} día${Math.floor(horas / 24) === 1 ? '' : 's'}`;
+}
+
+export default function TabPago({
+    pago, setPago, granTotal, guardarPago, anularPago, restaurarPago,
+    estadoOT, informeFinal, enviarInformeFinal, enviandoInforme,
+}) {
+    // El informe (Solicitud + Informe Inicial + plan + lo reportado en terreno) solo tiene
+    // sentido una vez terminado el trabajo — antes de eso no hay nada completo que mostrarle
+    // al cliente. Ver plan/planificación con el usuario: el botón vive acá (Pago), no en
+    // Ejecución, aunque el contenido se arma a partir de datos que sí viven ahí.
+    const puedeEnviarInforme = ['Trabajo Terminado', 'Con Informe'].includes(estadoOT);
     return (
         <div style={{ maxWidth: 520, padding: 16 }}>
+            {puedeEnviarInforme && (
+                <div style={{ marginBottom: 16, padding: '10px 12px', background: t.barraFiltrosPie, borderLeft: `2px solid ${informeFinal?.enviado ? t.verde : t.acento}`, borderRadius: 2 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.03em', textTransform: 'uppercase', color: informeFinal?.enviado ? t.verde : t.textoPrincipal }}>
+                        {informeFinal?.enviado ? 'Informe enviado' : 'Informe al cliente'}
+                    </div>
+                    {informeFinal?.enviado ? (
+                        <div style={{ fontSize: 11.5, color: t.textoSecundario2, marginTop: 4 }}>
+                            El cliente ya puede ver el detalle completo de lo ejecutado en su Portal — {horasDesde(informeFinal.fechaEnvio)}.
+                        </div>
+                    ) : (
+                        <>
+                            <div style={{ fontSize: 11.5, color: t.textoSecundario2, marginTop: 4, marginBottom: 8 }}>
+                                Todavía no se compartió con el cliente el detalle de lo ejecutado (plan, comentarios y fotos de terreno).
+                            </div>
+                            <button onClick={enviarInformeFinal} disabled={enviandoInforme} style={{ ...styles.btnSecundario, opacity: enviandoInforme ? .6 : 1 }}>
+                                {enviandoInforme ? 'Enviando…' : 'Enviar informe al cliente'}
+                            </button>
+                        </>
+                    )}
+                </div>
+            )}
             <div style={styles.tituloSub}>Registro de pago</div>
             {pago.anulado && (
                 <div style={{ background: t.barraFiltrosPie, borderLeft: `2px solid ${t.rojo}`, padding: '8px 10px', marginBottom: 12, fontSize: 11.5 }}>

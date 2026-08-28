@@ -339,6 +339,29 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
         if (cargarDatos) await cargarDatos();
     };
 
+    // "Enviar informe al cliente" (pestaña Pago, no Ejecución — pedido explícito del usuario).
+    // El contenido del informe (Solicitud + Informe Inicial + plan + lo reportado en terreno
+    // por tarea/OT.reportes) se arma en el cliente a partir de campos que ya viajan en
+    // otPublica; esto solo marca que ya se compartió, mismo criterio que
+    // marcarCotizacionEnviada (arriba) — un booleano + fecha, sin subdocumento propio.
+    const [enviandoInforme, setEnviandoInforme] = useState(false);
+    const enviarInformeFinal = async () => {
+        if (!(await confirmar(
+            '¿Enviar el informe al cliente? Va a poder ver el detalle completo de lo ejecutado (plan, comentarios y fotos de terreno) en su Portal — asegurate de que sepa cómo entrar (teléfono + número de solicitud).',
+            { danger: false, textoConfirmar: 'Enviar informe' },
+        ))) return;
+        setEnviandoInforme(true);
+        const resultado = await actualizarOtGlobal(otSeleccionada._id, {
+            'informeFinal.enviado': true,
+            'informeFinal.fechaEnvio': new Date().toISOString(),
+        });
+        setEnviandoInforme(false);
+        if (!resultado?.exito) { notificar.error(resultado?.error || 'No se pudo enviar el informe.'); return; }
+        notificar.exito('Informe enviado — ya está disponible en el Portal Cliente.');
+        if (resultado.otActualizada) setOtSeleccionada(resultado.otActualizada);
+        if (cargarDatos) await cargarDatos();
+    };
+
     const limpiarIds = (lista) => (lista || []).map(item => {
         const { _id, id: _omitido, ...resto } = item;
         return (String(_id).length === 24) ? { _id, ...resto } : resto;
@@ -1710,6 +1733,8 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                         <TabPago
                             pago={pago} setPago={setPago} granTotal={granTotal}
                             guardarPago={guardarPago} anularPago={anularPago} restaurarPago={restaurarPago}
+                            estadoOT={otSeleccionada.estado} informeFinal={otSeleccionada.informeFinal}
+                            enviarInformeFinal={enviarInformeFinal} enviandoInforme={enviandoInforme}
                         />
                     )}
 

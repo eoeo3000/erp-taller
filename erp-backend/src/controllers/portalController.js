@@ -75,6 +75,13 @@ function otPublica(ot) {
             completada: t.completada,
             // El "cómo" de la cotización (ver C5_CuentaPago.jsx) — antes no viajaba al cliente.
             desarrollo: t.desarrollo,
+            // Lo que el supervisor reportó que se hizo en esta tarea puntual (comentario +
+            // fotos, ver S3_Trabajo.jsx "Guardar lo ingresado") — antes no viajaba al cliente
+            // en absoluto, así que el informe final no tenía forma de mostrar avance por
+            // tarea, solo el feed genérico de OT.reportes (sin vincular a una tarea).
+            registro: (t.registro?.texto || t.registro?.fotos?.length) ? {
+                texto: t.registro.texto, fotos: t.registro.fotos, hora: t.registro.hora, autor: t.registro.autor,
+            } : null,
         })),
         // Antes exponía {nombre, precioUnitario, subtotal} — campos que no existen en el
         // schema real de OT.componentes (models/OT.js: codigo/descripcion/cantidad/precio/
@@ -118,6 +125,29 @@ function otPublica(ot) {
             subtotal: (l.cantidad || 0) * (l.precio || 0),
         })),
         pago: ot.pago ? { estado: ot.pago.estado } : null,
+        // Informe inicial (evaluación previa a cotizar) — antes no viajaba al cliente en
+        // absoluto. Se expone completo (decisión explícita del usuario: sin filtrar el
+        // contenido) — se omiten sí tipoTrabajoId/tareaVinculadaId/valores porque son
+        // vinculación interna con el catálogo de formularios (plan-formulario-adaptativo.md),
+        // no contenido informativo; textoDescriptivo/textoGenerado ya traen la narrativa
+        // completa de cada hallazgo, valores es el dato crudo del que salió ese texto.
+        informeEvaluacion: ot.informeEvaluacion ? {
+            fecha: ot.informeEvaluacion.fecha,
+            completo: ot.informeEvaluacion.completo,
+            hallazgos: (ot.informeEvaluacion.hallazgos || []).map(h => ({
+                texto: h.textoDescriptivo || h.textoGenerado || '',
+                fotos: h.fotos || [],
+                fecha: h.fecha,
+            })),
+        } : null,
+        // Booleano + fecha nada más (igual que cotizacion.enviada) — el contenido del informe
+        // final se arma en el cliente a partir de tareas/informeEvaluacion/reportes, que ya
+        // viajan arriba; esto solo dice si ya se compartió. El botón que lo marca vive en la
+        // pestaña Pago del escritorio (TabPago.jsx), no en Ejecución — pedido del usuario.
+        informeFinal: ot.informeFinal ? {
+            enviado: ot.informeFinal.enviado,
+            fechaEnvio: ot.informeFinal.fechaEnvio,
+        } : null,
         // respuestaCliente + enviada: lo que C2/C3 necesitan para distinguir "presupuesto
         // rechazado" de "en preparación" de "cotización enviada, esperando tu respuesta"
         // (ver models/OT.js). fechaEnvio se suma para que la PWA pueda calcular el vencimiento

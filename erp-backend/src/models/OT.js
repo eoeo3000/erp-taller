@@ -176,6 +176,17 @@ const OTSchema = new mongoose.Schema({
         motivoAnulacion: { type: String, default: '' }
     },
 
+    // 5b. Informe final al cliente (Solicitud + Informe Inicial + plan + lo reportado en
+    // terreno, armado en la pestaña Ejecución) — el botón que lo marca como enviado vive en
+    // la pestaña Pago (TabPago.jsx), no en Ejecución: pedido explícito del usuario, mismo
+    // criterio que cotizacion.enviada más abajo (un booleano + fecha, sin subdocumento propio
+    // de contenido — el contenido se arma en caliente desde tareas/informeEvaluacion/reportes
+    // ya existentes, esto solo trackea si ya se compartió con el cliente).
+    informeFinal: {
+        enviado: { type: Boolean, default: false },
+        fechaEnvio: { type: Date, default: null },
+    },
+
     // 6. Cotización y programación — respuesta del cliente ('Aprobada'/'Rechazada') dejó de
     // ser un valor de OT.estado (mezclaba un sub-proceso con el pipeline principal, causaba
     // el bug de 'Aprobada' compartiendo casillero visual con 'Planificada' en el panel).
