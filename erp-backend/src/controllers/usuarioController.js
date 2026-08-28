@@ -138,13 +138,24 @@ exports.reactivar = async (req, res) => {
 // lo saca por completo de la tabla — pensado para limpiar pruebas/duplicados, no como
 // reemplazo de revocar en el uso normal. Limpia Recurso.usuarioId para no dejar una
 // referencia colgando (mismo criterio que la limpieza en cascada al eliminar una OT).
+//
+// También limpia las Asignacion de este usuarioId — si no, un supervisor con un informe
+// inicial tomado y sin enviar quedaba con esa Asignacion huérfana: un token nuevo (con un
+// _id distinto) nunca la vuelve a ver como propia, y la solicitud tampoco reaparece en la
+// bandeja compartida "Sin informe inicial" (esa vista excluye cualquier solicitud que ya
+// tenga una Asignacion, sin fijarse si el usuarioId sigue existiendo). Borrar la Asignacion
+// no pierde el trabajo ya cargado: los hallazgos viven en OT.informeEvaluacion, no en la
+// Asignacion — esto solo libera la "reserva" de vuelta al pool compartido. Mismo criterio
+// que otController.eliminarOT limpiando Asignacion al borrar una OT.
 exports.eliminar = async (req, res) => {
     const Usuario = getUsuario(req.db);
     const Recurso = getRecurso(req.db);
+    const Asignacion = require('../models/Asignacion')(req.db);
     try {
         const usuario = await Usuario.findByIdAndDelete(req.params.id);
         if (!usuario) return res.status(404).json({ error: 'Usuario no encontrado' });
         if (usuario.recursoId) await Recurso.updateOne({ _id: usuario.recursoId }, { usuarioId: null });
+        await Asignacion.deleteMany({ usuarioId: usuario._id });
         res.json({ ok: true });
     } catch (error) {
         res.status(500).json({ error: error.message });
