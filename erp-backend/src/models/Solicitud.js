@@ -4,6 +4,13 @@ const solicitudSchema = new mongoose.Schema({
     // --- Campos de Identificación y Contacto ---
     solicitante: { type: String, required: true }, // Nombre del contacto
     empresaSolicitante: { type: String, required: true },
+    // Referencia real a Cliente (resuelta/creada en solicitudController al guardar) — antes
+    // "Empresa" era solo texto libre repetido en cada Solicitud, sin ninguna relación real
+    // con el catálogo de Clientes. Se mantiene empresaSolicitante como el nombre tal cual se
+    // escribió en ese momento (documentos/correos ya emitidos siguen mostrando ESE texto);
+    // clienteId es lo que usan las pantallas de trabajo (Ingreso, Panel de control,
+    // Antecedentes) para mostrar el nombre ACTUAL del Cliente, aunque se haya renombrado.
+    clienteId: { type: mongoose.Schema.Types.ObjectId, ref: 'Cliente', default: null },
     correo: { type: String, lowercase: true, trim: true },
     numero: { type: String },
     direccion: { type: String },

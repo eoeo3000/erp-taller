@@ -139,7 +139,7 @@ function FilaVista({ etiqueta, valor }) {
 }
 
 // Recibimos 'solicitudes' como prop desde App.jsx para actualización automática
-const IngresoScreen = ({ solicitudes = [], liberarSolicitudManual, cargarDatos, API, crearSolicitudGlobal, actualizarSolicitudGlobal, ots = [], enviarPortalCliente, cargando, errorCarga, guardarDisposicionGlobal, eliminarDisposicionGlobal }) => {
+const IngresoScreen = ({ solicitudes = [], liberarSolicitudManual, cargarDatos, API, crearSolicitudGlobal, actualizarSolicitudGlobal, ots = [], clientes = [], enviarPortalCliente, cargando, errorCarga, guardarDisposicionGlobal, eliminarDisposicionGlobal }) => {
     const navigate = useNavigate();
     const [form, setForm] = useState(FORM_VACIO);
     const [archivo, setArchivo] = useState(null);
@@ -379,6 +379,11 @@ const IngresoScreen = ({ solicitudes = [], liberarSolicitudManual, cargarDatos, 
 
     const solicitudVista = viendoId ? solicitudes.find(s => s._id === viendoId) : null;
 
+    // Nombre ACTUAL del Cliente si la solicitud ya quedó vinculada (ver Solicitud.clienteId) —
+    // si se renombra el Cliente, esto lo refleja al toque; si todavía no tiene clienteId
+    // (solicitud vieja, o el Cliente se borró después) cae al texto libre de siempre.
+    const nombreEmpresa = (s) => clientes.find(c => String(c._id) === String(s.clienteId))?.empresa || s.empresaSolicitante || '—';
+
     const q = filtroTexto.trim().toLowerCase();
     const solicitudesFiltradas = solicitudes.filter(s => {
         const cumpleEstado = !filtroEstado || s.estado === filtroEstado;
@@ -409,7 +414,7 @@ const IngresoScreen = ({ solicitudes = [], liberarSolicitudManual, cargarDatos, 
                                 <div style={styles.tituloBloque}>Solicitud {solicitudVista.numeroSolicitud || ''}</div>
                                 <span onClick={cerrarVista} style={{ fontSize: '11px', color: t.textoAtenuado2, cursor: 'pointer' }}>Cerrar ×</span>
                             </div>
-                            <FilaVista etiqueta="Empresa" valor={solicitudVista.empresaSolicitante} />
+                            <FilaVista etiqueta="Empresa" valor={nombreEmpresa(solicitudVista)} />
                             <FilaVista etiqueta="Solicitante" valor={solicitudVista.solicitante} />
                             <FilaVista etiqueta="Correo" valor={solicitudVista.correo} />
                             <FilaVista etiqueta="Teléfono" valor={solicitudVista.numero} />
@@ -460,9 +465,16 @@ const IngresoScreen = ({ solicitudes = [], liberarSolicitudManual, cargarDatos, 
                                         onChange={set(c.key)}
                                         placeholder={c.placeholder}
                                         style={styles.input}
+                                        // Empresa: escribir un nombre existente lo vincula al mismo
+                                        // Cliente (resuelto en el backend al guardar, ver
+                                        // solicitudController.js); uno nuevo crea un Cliente.
+                                        list={c.key === 'empresaSolicitante' ? 'lista-clientes-ingreso' : undefined}
                                     />
                                 </label>
                             ))}
+                            <datalist id="lista-clientes-ingreso">
+                                {clientes.map(c => <option key={c._id} value={c.empresa} />)}
+                            </datalist>
 
                             <label style={styles.campoLabel}>
                                 <span style={styles.etiqueta}>Canal de origen</span>
@@ -648,7 +660,7 @@ const IngresoScreen = ({ solicitudes = [], liberarSolicitudManual, cargarDatos, 
                                     >
                                         {columnasVisiblesTabla.map(c => {
                                             if (c.key === 'empresa') return (
-                                                <span key={c.key} style={styles.celdaEmpresa}>{s.empresaSolicitante || '—'}</span>
+                                                <span key={c.key} style={styles.celdaEmpresa}>{nombreEmpresa(s)}</span>
                                             );
                                             if (c.key === 'numero') return (
                                                 <span key={c.key} style={styles.celdaMono} title="Número de solicitud — junto al teléfono, es lo que el cliente usa para entrar al Portal">{s.numeroSolicitud || String(index + 1).padStart(2, '0')}</span>

@@ -86,6 +86,10 @@ function App() {
   const { suministros, setSuministros, crearSuministro, eliminarSuministro, actualizarSuministro, ajustarStockSuministro, obtenerMovimientosStock } = useSuministros();
   const { puestosDB, setPuestosDB, crearPuesto, eliminarPuesto } = usePuestos();
   const { plantillas, setPlantillas, crearPlantilla, actualizarPlantilla, eliminarPlantilla } = usePlantillas();
+  // Solo lectura acá (CRUD propio en ClientesScreen) — se usa para resolver Solicitud.clienteId
+  // al nombre ACTUAL del Cliente en Ingreso/Panel de control/Antecedentes, en vez de mostrar
+  // el texto libre empresaSolicitante tal cual quedó escrito cuando se creó la solicitud.
+  const [clientes, setClientes] = useState([]);
 
   const cargarDatos = async () => {
     try {
@@ -105,6 +109,7 @@ function App() {
       // 🚩 NUEVO: Cargamos los puestos/especialidades configurados
       if (d.puestos) setPuestosDB(d.puestos);
       if (d.plantillas) setPlantillas(d.plantillas);
+      setClientes(d.clientes || []);
 
       setUltimaSync(new Date());
       setErrorCarga(null);
@@ -142,6 +147,7 @@ function App() {
         syncState(data.solicitudes, setSolicitudes);
         syncState(data.recursos, setRecursos);
         syncState(data.calendarios, setCalendarios);
+        syncState(data.clientes, setClientes);
         syncState(data.equipos, setComponentes);
         syncState(data.suministros, setSuministros);
 
@@ -368,9 +374,9 @@ function App() {
           <BannerDemo entorno={entornoActivo} onVolver={volverAProduccion} />
           <Routes>
             <Route path="/reporte" element={<ReporteTerreno ots={ots} actualizarOtGlobal={actualizarOtGlobal} />} />
-            <Route path="/" element={<IngresoScreen solicitudes={solicitudes} liberarSolicitudManual={liberarSolicitudManual} crearSolicitudGlobal={crearSolicitudGlobal} actualizarSolicitudGlobal={actualizarSolicitudGlobal} setSolicitudes={setSolicitudes} cargarDatos={cargarDatos} API={API} ots={ots} enviarPortalCliente={enviarPortalCliente} cargando={cargando} errorCarga={errorCarga} guardarDisposicionGlobal={guardarDisposicionGlobal} eliminarDisposicionGlobal={eliminarDisposicionGlobal} />} />
-            <Route path="/dashboard" element={<DashboardScreen solicitudes={solicitudes} ots={ots} eliminarOT={eliminarOT} eliminarSolicitud={eliminarSolicitud} actualizarEstadoSolicitud={actualizarEstadoSolicitud} aprobarYCrearOT={aprobarYCrearOT} recursos={recursos} API={API} cargando={cargando} errorCarga={errorCarga} cargarDatos={cargarDatos} guardarDisposicionGlobal={guardarDisposicionGlobal} eliminarDisposicionGlobal={eliminarDisposicionGlobal} />} />
-            <Route path="/tratamiento" element={<TratamientoScreen recurso={recursos} puestosDB={puestosDB} componentes={componentes} actualizarOtGlobal={actualizarOtGlobal} editarOtGlobal={editarOtGlobal} cargarDatos={cargarDatos} API={API} recursos={recursos} suministros={suministros} otSeleccionada={otSeleccionada} setOtSeleccionada={setOtSeleccionada} plantillas={plantillas} />} />
+            <Route path="/" element={<IngresoScreen solicitudes={solicitudes} liberarSolicitudManual={liberarSolicitudManual} crearSolicitudGlobal={crearSolicitudGlobal} actualizarSolicitudGlobal={actualizarSolicitudGlobal} setSolicitudes={setSolicitudes} cargarDatos={cargarDatos} API={API} ots={ots} clientes={clientes} enviarPortalCliente={enviarPortalCliente} cargando={cargando} errorCarga={errorCarga} guardarDisposicionGlobal={guardarDisposicionGlobal} eliminarDisposicionGlobal={eliminarDisposicionGlobal} />} />
+            <Route path="/dashboard" element={<DashboardScreen solicitudes={solicitudes} ots={ots} eliminarOT={eliminarOT} eliminarSolicitud={eliminarSolicitud} actualizarEstadoSolicitud={actualizarEstadoSolicitud} aprobarYCrearOT={aprobarYCrearOT} recursos={recursos} clientes={clientes} API={API} cargando={cargando} errorCarga={errorCarga} cargarDatos={cargarDatos} guardarDisposicionGlobal={guardarDisposicionGlobal} eliminarDisposicionGlobal={eliminarDisposicionGlobal} />} />
+            <Route path="/tratamiento" element={<TratamientoScreen recurso={recursos} puestosDB={puestosDB} componentes={componentes} actualizarOtGlobal={actualizarOtGlobal} editarOtGlobal={editarOtGlobal} cargarDatos={cargarDatos} API={API} recursos={recursos} suministros={suministros} otSeleccionada={otSeleccionada} setOtSeleccionada={setOtSeleccionada} plantillas={plantillas} clientes={clientes} />} />
             <Route path="/gantt" element={<GanttScreen ots={ots} recursos={recursos} calendarios={calendarios} obtenerHorasParaDia={obtenerHorasParaDia} actualizarOtGlobal={actualizarOtGlobal} cargarDatos={cargarDatos} />} />
             <Route path="/recursos" element={
               <RecursosScreen

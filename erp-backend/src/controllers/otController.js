@@ -341,12 +341,18 @@ exports.antecedentes = async (req, res) => {
     const OT = getOT(req.db);
     const Recurso = getRecurso(req.db);
     const Solicitud = require('../models/Solicitud')(req.db);
+    const Cliente = require('../models/Cliente')(req.db);
     try {
         const { id } = req.params;
         const ot = await OT.findById(id).lean();
         const solicitudId = ot?.solicitudId || id;
         const sol = await Solicitud.findById(solicitudId).lean();
         if (!sol) return res.status(404).json({ error: 'Solicitud no encontrada' });
+
+        // Nombre ACTUAL del Cliente si la solicitud ya quedó vinculada (Solicitud.clienteId) —
+        // si se renombra el Cliente, Antecedentes lo refleja al toque en vez de mostrar el
+        // texto que quedó escrito cuando se creó la solicitud.
+        const cliente = sol.clienteId ? await Cliente.findById(sol.clienteId).select('empresa').lean() : null;
 
         let supervisor = null;
         if (ot?.supervisorId) {
@@ -369,7 +375,7 @@ exports.antecedentes = async (req, res) => {
                 // entrar al Portal Cliente (design_handoff_pwa_movil §6, C1) — sin verlo acá,
                 // nadie en la oficina puede confirmárselo si lo pide.
                 telefono: sol.numero || '',
-                empresa: sol.empresaSolicitante,
+                empresa: cliente?.empresa || sol.empresaSolicitante,
                 solicitante: sol.solicitante,
                 fechaSolicitud: sol.fechaHoraSolicitud || sol.fechaCreacion,
                 origen: sol.origen,

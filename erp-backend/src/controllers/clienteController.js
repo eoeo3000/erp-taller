@@ -1,6 +1,21 @@
 const getCliente = require('../models/Cliente');
 const getSolicitud = require('../models/Solicitud');
 
+// Usado por solicitudController al crear/editar una Solicitud: resuelve el texto libre
+// "Empresa" a un Cliente real (mismo criterio de match que poblarDesdeSolicitudes más abajo
+// — nombre recortado, sin distinguir mayúsculas), creándolo si no existe todavía. Así toda
+// Solicitud nueva queda con un clienteId real, no solo con el texto que se tipeó.
+async function resolverOCrearClientePorNombre(conn, nombreEmpresa) {
+    const nombre = (nombreEmpresa || '').trim();
+    if (!nombre) return null;
+    const Cliente = getCliente(conn);
+    const existente = await Cliente.findOne({ empresa: { $regex: `^${nombre.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, $options: 'i' } });
+    if (existente) return existente._id;
+    const creado = await Cliente.create({ empresa: nombre });
+    return creado._id;
+}
+exports.resolverOCrearClientePorNombre = resolverOCrearClientePorNombre;
+
 exports.listar = async (req, res) => {
     const Cliente = getCliente(req.db);
     try {

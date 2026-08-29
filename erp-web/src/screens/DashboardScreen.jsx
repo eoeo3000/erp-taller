@@ -210,7 +210,11 @@ const valorCelda = (f, key, recursos = []) => {
     return '';
 };
 
-const DashboardScreen = ({ ots = [], solicitudes = [], eliminarOT, eliminarSolicitud, actualizarEstadoSolicitud, aprobarYCrearOT, recursos = [], API, cargando, errorCarga, cargarDatos, guardarDisposicionGlobal, eliminarDisposicionGlobal }) => {
+const DashboardScreen = ({ ots = [], solicitudes = [], eliminarOT, eliminarSolicitud, actualizarEstadoSolicitud, aprobarYCrearOT, recursos = [], clientes = [], API, cargando, errorCarga, cargarDatos, guardarDisposicionGlobal, eliminarDisposicionGlobal }) => {
+    // Nombre ACTUAL del Cliente si la solicitud ya quedó vinculada (Solicitud.clienteId) — si
+    // se renombra el Cliente, esto lo refleja al toque; sin vínculo cae al texto libre de
+    // siempre (solicitud vieja, o el Cliente se borró después).
+    const nombreEmpresa = (s, ot) => clientes.find(c => String(c._id) === String(s?.clienteId))?.empresa || s?.empresaSolicitante || ot?.solicitante || '—';
     const navigate = useNavigate();
     const [filtro, setFiltro] = useState('todos');
     const [consulta, setConsulta] = useState('');
@@ -479,7 +483,7 @@ const DashboardScreen = ({ ots = [], solicitudes = [], eliminarOT, eliminarSolic
         return {
             numero: ot?.numeroOT || (s ? 'SOL · sin OT' : '—'),
             fecha: `Ingresada ${fmtFecha(s?.fechaHoraSolicitud || s?.fechaCreacion || ot?.createdAt)}`,
-            empresa: s?.empresaSolicitante || ot?.solicitante || '—',
+            empresa: nombreEmpresa(s, ot),
             contacto: [s?.solicitante, s?.direccion].filter(Boolean).join(' · '),
             descripcion: s?.descripcion || ot?.descripcion || '',
             ficha: [
@@ -720,7 +724,7 @@ const DashboardScreen = ({ ots = [], solicitudes = [], eliminarOT, eliminarSolic
                                 const { ot, solicitud: s } = f;
                                 const info = etapaInfo(ot);
                                 const pago = etiquetaPago(ot);
-                                const empresa = s?.empresaSolicitante || ot?.solicitante || '—';
+                                const empresa = nombreEmpresa(s, ot);
                                 const secundario = s?.direccion || ot?.descripcion || '';
                                 return (
                                     <div

@@ -1,6 +1,7 @@
 const getSolicitud = require('../models/Solicitud');
 const getOT = require('../models/OT');
 const getAsignacion = require('../models/Asignacion');
+const { resolverOCrearClientePorNombre } = require('./clienteController');
 
 async function generarNumeroSolicitud(conn) {
     const Solicitud = getSolicitud(conn);
@@ -69,6 +70,12 @@ exports.crearSolicitud = async (req, res) => {
             data.numeroSolicitud = await generarNumeroSolicitud(req.db);
         }
 
+        // Ver models/Solicitud.js: clienteId es la referencia real al catálogo de Clientes,
+        // resuelta (o creada si es una empresa nueva) a partir del texto libre "Empresa".
+        if (data.empresaSolicitante) {
+            data.clienteId = await resolverOCrearClientePorNombre(req.db, data.empresaSolicitante);
+        }
+
         const nuevaSolicitud = new Solicitud(data);
         await nuevaSolicitud.save();
 
@@ -116,8 +123,14 @@ exports.actualizarEstado = async (req, res) => {
             }
         }
 
+        // Si se está editando el nombre de la empresa, se re-resuelve/crea el Cliente — así
+        // "Empresa" nunca queda con un clienteId viejo apuntando a un nombre distinto.
+        const clienteId = empresaSolicitante !== undefined
+            ? await resolverOCrearClientePorNombre(req.db, empresaSolicitante)
+            : undefined;
+
         const actualizada = await Solicitud.findByIdAndUpdate(id, {
-            estado, ...camposContenido,
+            estado, ...camposContenido, ...(clienteId !== undefined ? { clienteId } : {}),
         }, { new: true, runValidators: true });
         if (!actualizada) return res.status(404).json({ error: "Solicitud no encontrada" });
         res.json(actualizada);
