@@ -4,7 +4,12 @@ import axios from 'axios';
 import useIsMobile from '../hooks/useIsMobile';
 import autoTable from 'jspdf-autotable';
 import jsPDF from 'jspdf';
-import html2canvas from 'html2canvas';
+// html2canvas-pro (no el html2canvas original): la captura del Gantt para el PDF fallaba con
+// "Attempting to parse an unsupported color function 'oklch'" — los tokens de color de toda la
+// app (t.acento/verde/ambar/rojo, ver comunTratamiento.js y cada screen) usan oklch(), y el
+// html2canvas clásico (1.4.1, la última versión que tiene) nunca agregó soporte para eso. Este
+// fork sí lo soporta, es reemplazo directo (misma API).
+import html2canvas from 'html2canvas-pro';
 import { notificar, confirmar } from '../utils/notificar';
 import { subirFoto } from '../utils/fotos';
 import { t, styles, fmtFecha, CLP } from './tratamiento/comunTratamiento';
