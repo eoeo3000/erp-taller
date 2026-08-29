@@ -290,13 +290,6 @@ const OTSchema = new mongoose.Schema({
         plazoEjecucion: { type: String, default: '' },
         noIncluye: { type: String, default: '' },
     },
-    // Mejora v3 #5 (Carpeta de OT) — documento interno consolidado, no se envía al cliente.
-    carpetaOT: {
-        generadoEn: { type: Date, default: null },
-        generadoPor: { type: String, default: '' },
-        paginas: { type: Number, default: 0 },
-        secciones: [String],
-    },
     asignadaEn: { type: Date, default: null },
     // Sin sistema de login para el staff interno (ver CLAUDE.md) — no hay de dónde sacar
     // "quién" asignó de forma confiable hoy. Se deja el campo para cuando exista una sesión

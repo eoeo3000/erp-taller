@@ -9,7 +9,6 @@ import { notificar, confirmar } from '../utils/notificar';
 import { subirFoto } from '../utils/fotos';
 import { t, styles, fmtFecha, CLP } from './tratamiento/comunTratamiento';
 import TabAntecedentes from './tratamiento/TabAntecedentes';
-import TabDocumentosPdf from './tratamiento/TabDocumentosPdf';
 import TabTareas from './tratamiento/TabTareas';
 import TabEquiposMateriales from './tratamiento/TabEquiposMateriales';
 import TabSuministrosDirectos from './tratamiento/TabSuministrosDirectos';
@@ -21,8 +20,8 @@ import TabPago from './tratamiento/TabPago';
 // Sin emoji, sin clases de Bootstrap (había varias reales en el archivo anterior: mb-4, p-3,
 // border-start, bg-light, text-primary, text-muted — se retiran todas).
 // Tokens de estilo (`t`, `styles`) y `fmtFecha` viven en ./tratamiento/comunTratamiento —
-// compartidos con las pestañas ya extraídas a archivo propio (TabAntecedentes,
-// TabDocumentosPdf), ver plan de robustecimiento, punto 6.
+// compartidos con las pestañas ya extraídas a archivo propio (TabAntecedentes), ver plan de
+// robustecimiento, punto 6.
 
 const ETAPAS_VISUAL = ['Solicitud', 'Tratamiento', 'Planificada', 'Programada', 'Ejecución', 'Terminado', 'Con informe', 'Pagada'];
 const MAPA_ETAPA = {
@@ -506,7 +505,7 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
 
     // Mejora v3 #6 — Cotización ampliada. `secciones` controla qué bloques opcionales entran
     // (tareas/materiales/gantt/condiciones); encabezado y totales van siempre. "fotos" queda
-    // listado en el panel pero deshabilitado (sin implementar, ver TabDocumentosPdf).
+    // listado en el panel pero deshabilitado (sin implementar).
     const generarPDF = async (secciones = seccionesPdf) => {
         const doc = new jsPDF();
         const pageWidth = doc.internal.pageSize.getWidth();
@@ -622,135 +621,6 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
         return doc;
     };
 
-    // Mejora v3 #5 — genera el PDF consolidado de la carpeta de OT con las secciones
-    // marcadas y guarda solo el registro (fecha/autor/secciones) en la OT, no el archivo.
-    // Contenido real por sección (no solo el resumen de una línea), pedido explícito tras
-    // probar la primera versión: tareas completas con su metodología, materiales y
-    // suministros con montos, personal asignado, y un cronograma con quién hace qué día.
-    const generarCarpetaOT = async (seccionesElegidas, generadoPor, totalPags) => {
-        const doc = new jsPDF();
-        const pageWidth = doc.internal.pageSize.getWidth();
-        const marca = seccionesElegidas.map(s => s.k);
-        let numSeccion = 0;
-
-        doc.setFontSize(9); doc.setTextColor(120);
-        doc.text('CARPETA DE ORDEN DE TRABAJO', 14, 16);
-        doc.setFontSize(18); doc.setTextColor(20); doc.setFont(undefined, 'bold');
-        doc.text(otSeleccionada?.numeroOT || 'Sin número', 14, 26);
-        doc.setFontSize(10); doc.setFont(undefined, 'normal'); doc.setTextColor(80);
-        doc.text(`${otSeleccionada?.solicitante || 'Cliente'} · ${antecedentes?.solicitud?.direccion || 'sin faena registrada'} · Supervisor ${antecedentes?.ot?.supervisor?.nombre || 'sin asignar'}`, 14, 33);
-        doc.setDrawColor(20); doc.setLineWidth(0.6); doc.line(14, 37, pageWidth - 14, 37);
-        let y = 47;
-
-        const titulo = (texto) => {
-            numSeccion += 1;
-            if (y > 265) { doc.addPage(); y = 20; }
-            doc.setFontSize(12); doc.setFont(undefined, 'bold'); doc.setTextColor(20);
-            doc.text(`${String(numSeccion).padStart(2, '0')}. ${texto}`, 14, y);
-            y += 7;
-        };
-
-        // 1. Informe de evaluación
-        if (marca.includes('evaluacion')) {
-            titulo('Informe de evaluación');
-            const ie = otSeleccionada.informeEvaluacion || {};
-            doc.setFontSize(9); doc.setFont(undefined, 'normal'); doc.setTextColor(70);
-            const lineas = [
-                `Fecha de visita: ${ie.fecha || '—'}`, `Responsable: ${ie.responsable || '—'}`,
-                `Condiciones del sitio: ${ie.condicionesSitio || '—'}`, `Riesgos observados: ${ie.riesgos || '—'}`,
-                `Metodología propuesta: ${ie.metodologia || '—'}`, `Fotos de respaldo: ${ie.fotos?.length || 0}`,
-            ];
-            lineas.forEach(l => { doc.text(doc.splitTextToSize(l, pageWidth - 28), 14, y); y += 6; });
-            y += 6;
-        }
-
-        // 2. Tareas y metodología — tabla completa, no un conteo.
-        if (marca.includes('tareas') && tareas.length > 0) {
-            titulo('Tareas y metodología');
-            autoTable(doc, {
-                startY: y,
-                head: [['Tarea', 'Puesto', 'Responsable', 'Fecha', 'Hrs', 'Metodología']],
-                body: tareas.map(tt => [tt.descripcion || '—', tt.puesto || '—', (tt.operarioNombre || []).join(', ') || 'Sin asignar', tt.fecha || '—', String(tt.duracion || 0), tt.desarrollo || 'Sin desarrollo definido']),
-                headStyles: { fillColor: [44, 62, 80] }, styles: { fontSize: 8, cellWidth: 'wrap' },
-                columnStyles: { 0: { cellWidth: 34 }, 5: { cellWidth: 55 } },
-            });
-            y = doc.lastAutoTable.finalY + 10;
-        }
-
-        // 3. Recursos asignados — personal real (de las tareas), equipos/materiales y suministros.
-        if (marca.includes('recursos')) {
-            titulo('Recursos asignados');
-            const personal = [...new Map(
-                tareas.flatMap(tt => (tt.operarioNombre || []).map(nombre => [nombre, { nombre, puesto: tt.puesto || '—' }]))
-            ).values()];
-            if (personal.length > 0) {
-                autoTable(doc, { startY: y, head: [['Personal', 'Puesto']], body: personal.map(p => [p.nombre, p.puesto]), headStyles: { fillColor: [52, 73, 94] }, styles: { fontSize: 8.5 } });
-                y = doc.lastAutoTable.finalY + 8;
-            }
-            if (componentes.length > 0) {
-                autoTable(doc, { startY: y, head: [['Equipos y materiales', 'Cant.', 'Monto']], body: componentes.map(c => [c.descripcion || '—', String(c.cantidad || 0), `$ ${(Number(c.cantidad) * Number(c.precio)).toLocaleString()}`]), headStyles: { fillColor: [52, 73, 94] }, styles: { fontSize: 8.5 } });
-                y = doc.lastAutoTable.finalY + 8;
-            }
-            if (logistica.length > 0) {
-                autoTable(doc, { startY: y, head: [['Suministros directos', 'Cant.', 'Monto']], body: logistica.map(l => [l.descripcion || '—', String(l.cantidad || 0), `$ ${(Number(l.cantidad) * Number(l.precio)).toLocaleString()}`]), headStyles: { fillColor: [127, 140, 141] }, styles: { fontSize: 8.5 } });
-                y = doc.lastAutoTable.finalY + 8;
-            }
-            // Cronograma con personal: quién hace qué tarea, qué día — el detalle que faltaba
-            // en la primera versión (antes solo decía "Personal, equipos y materiales").
-            const conFecha = tareas.filter(tt => tt.fecha).sort((a, b) => (a.fecha || '').localeCompare(b.fecha || ''));
-            if (conFecha.length > 0) {
-                doc.setFontSize(10); doc.setFont(undefined, 'bold'); doc.setTextColor(20);
-                doc.text('Cronograma con personal', 14, y); y += 5;
-                autoTable(doc, {
-                    startY: y, head: [['Fecha', 'Hora', 'Tarea', 'Responsable', 'Hrs']],
-                    body: conFecha.map(tt => [tt.fecha, tt.hora || '—', tt.descripcion || '—', (tt.operarioNombre || []).join(', ') || 'Sin asignar', String(tt.duracion || 0)]),
-                    headStyles: { fillColor: [44, 62, 80] }, styles: { fontSize: 8 },
-                });
-                y = doc.lastAutoTable.finalY + 10;
-            }
-        }
-
-        // 4. Cotización aprobada
-        if (marca.includes('cotizacion')) {
-            titulo('Cotización aprobada');
-            doc.setFontSize(9); doc.setFont(undefined, 'normal'); doc.setTextColor(70);
-            [`Estado: ${otSeleccionada.estado}`, `Mano de obra: $ ${totalManoObra.toLocaleString()}`, `Materiales: $ ${totalMateriales.toLocaleString()}`, `Suministros: $ ${totalLogisticaFinal.toLocaleString()}`, `Total con IVA: $ ${(granTotal * 1.19).toLocaleString()}`]
-                .forEach(l => { doc.text(l, 14, y); y += 6; });
-            y += 6;
-        }
-
-        // 5. Informes de ejecución
-        if (marca.includes('ejecucion')) {
-            titulo('Informes de ejecución');
-            const reportes = otSeleccionada.reportes || [];
-            if (reportes.length > 0) {
-                autoTable(doc, {
-                    startY: y, head: [['Fecha', 'Usuario', 'Comentario', 'Foto']],
-                    body: reportes.map(r => [new Date(r.fecha).toLocaleDateString('es-CL'), r.usuario || '—', r.comentario || '—', r.foto ? 'Sí' : 'No']),
-                    headStyles: { fillColor: [44, 62, 80] }, styles: { fontSize: 8.5 },
-                });
-                y = doc.lastAutoTable.finalY + 10;
-            }
-        }
-
-        // 6. Órdenes de compra (solo referencia — el detalle vive en el módulo de compras).
-        if (marca.includes('ocs')) {
-            titulo('Órdenes de compra');
-            doc.setFontSize(9); doc.setTextColor(70);
-            doc.text(`${(otSeleccionada.ordenesCompra || []).length} OC asociadas a esta OT.`, 14, y);
-            y += 10;
-        }
-
-        doc.setFontSize(8.5); doc.setTextColor(140);
-        doc.text(`Generado el ${new Date().toLocaleDateString('es-CL')} por ${generadoPor} · ${totalPags} páginas`, 14, 290);
-        doc.save(`OT-${otSeleccionada?.numeroOT || 'nueva'}-carpeta.pdf`);
-
-        try {
-            await actualizarOtGlobal(otSeleccionada._id, {
-                carpetaOT: { generadoEn: new Date().toISOString(), generadoPor, paginas: totalPags, secciones: seccionesElegidas.map(s => s.k) },
-            });
-        } catch (e) { console.warn('No se pudo registrar la carpeta en la OT:', e.message); }
-    };
 
     // Convierte cualquier foto (base64 ya embebido o URL de /api/uploads/foto — ver
     // utils/fotos.js) a un data URI, que es lo único que jsPDF.addImage puede insertar. Sin
@@ -1348,7 +1218,6 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                         </button>
                     )}
                     <button onClick={() => setTabActiva('pago')} style={tabActiva === 'pago' ? styles.tabActivo : styles.tab}>Pago</button>
-                    <button onClick={() => setTabActiva('documentos')} style={tabActiva === 'documentos' ? styles.tabActivo : styles.tab}>Documentos de terreno</button>
                 </div>
                 <button onClick={() => setModalPlantilla(true)} style={styles.btnSecundario}>Cargar hoja de ruta</button>
             </div>
@@ -1970,14 +1839,6 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                             enviarInformeFinal={enviarInformeFinal} enviandoInforme={enviandoInforme}
                             verInformePDF={verInformePDF} descargarInformePDF={descargarInformePDF}
                             abrirEditorInforme={abrirEditorInforme}
-                        />
-                    )}
-
-                    {/* DOCUMENTOS DE TERRENO */}
-                    {tabActiva === 'documentos' && (
-                        <TabDocumentosPdf
-                            otSeleccionada={otSeleccionada} tareas={tareas} componentes={componentes}
-                            antecedentes={antecedentes} onGenerar={generarCarpetaOT}
                         />
                     )}
                 </section>
