@@ -219,6 +219,9 @@ const DashboardScreen = ({ ots = [], solicitudes = [], eliminarOT, eliminarSolic
     const [hoverId, setHoverId] = useState(null);
     const [asideOculta, setAsideOculta] = useState(false);
     const [ocsSel, setOcsSel] = useState([]);
+    // Eliminar OT/solicitud tarda un momento (cascada de limpieza en el backend, ver
+    // otController.eliminarOT) y antes no había ninguna señal de que ya se apretó el botón.
+    const [eliminando, setEliminando] = useState(false);
 
     // ---- Disposición: layout, variantes, menú de columnas ----
     // 'layout' y 'activa' son preferencia personal del navegador (qué estás mirando ahora mismo).
@@ -517,11 +520,30 @@ const DashboardScreen = ({ ots = [], solicitudes = [], eliminarOT, eliminarSolic
         if (!detalle) return [];
         const { ot, s } = detalle;
         if (!ot) {
-            const eliminar = { label: 'Eliminar solicitud', onClick: async () => { if (await confirmar('¿Eliminar esta solicitud?')) eliminarSolicitud?.(s._id); } };
+            const eliminar = {
+                label: 'Eliminar solicitud',
+                onClick: async () => {
+                    if (!(await confirmar('¿Eliminar esta solicitud?'))) return;
+                    setEliminando(true);
+                    try { await eliminarSolicitud?.(s._id); } finally { setEliminando(false); }
+                },
+            };
             if (s.estado === 'Rechazada') return [{ label: 'Reabrir', onClick: () => actualizarEstadoSolicitud?.(s._id, 'Pendiente') }, eliminar];
             return [{ label: 'Rechazar', onClick: async () => { if (await confirmar('¿Rechazar esta solicitud?')) actualizarEstadoSolicitud?.(s._id, 'Rechazada'); } }, eliminar];
         }
-        return [{ label: 'Eliminar OT', onClick: async () => { if (await confirmar('¿Eliminar esta OT? La solicitud vuelve a Pendiente.')) eliminarOT?.(ot._id); } }];
+        // eliminarOT (useOts.js) ya pide su propia confirmación y muestra el resultado —
+        // acá solo se agrega el spinner. Pagada queda sin la opción: es un registro
+        // financiero cerrado (el backend también lo rechaza, ver otController.eliminarOT).
+        if (ot.estado === 'Pagada') {
+            return [{ label: 'Eliminar OT', disabled: true, title: 'Una OT pagada no se puede eliminar — es un registro financiero cerrado.', onClick: () => {} }];
+        }
+        return [{
+            label: 'Eliminar OT',
+            onClick: async () => {
+                setEliminando(true);
+                try { await eliminarOT?.(ot._id); } finally { setEliminando(false); }
+            },
+        }];
     };
 
     // "Abrir OT" se eliminó de acá: el número de OT de la fila (columna 'ot' y encabezado del
@@ -862,7 +884,12 @@ const DashboardScreen = ({ ots = [], solicitudes = [], eliminarOT, eliminarSolic
                                         </div>
                                         <div style={styles.accionesGrid}>
                                             {accionesDetalle().map(a => (
-                                                <button key={a.label} onClick={a.onClick} style={styles.btnAccion}>{a.label}</button>
+                                                <button
+                                                    key={a.label} onClick={a.onClick} disabled={a.disabled || eliminando} title={a.title || ''}
+                                                    style={{ ...styles.btnAccion, opacity: (a.disabled || eliminando) ? .5 : 1, cursor: (a.disabled || eliminando) ? 'not-allowed' : 'pointer' }}
+                                                >
+                                                    {eliminando && a.label.startsWith('Eliminar') ? 'Eliminando…' : a.label}
+                                                </button>
                                             ))}
                                         </div>
                                         {primario && (

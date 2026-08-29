@@ -273,6 +273,13 @@ exports.eliminarOT = async (req, res) => {
         const { id } = req.params;
         const otAEliminar = await OT.findById(id);
         if (!otAEliminar) return res.status(404).json({ message: "OT no encontrada" });
+        // Una OT 'Pagada' es un registro financiero cerrado — borrarla resetea la Solicitud a
+        // 'Pendiente' y pierde para siempre el historial de ejecución/pago. Chequeo en el
+        // backend (no solo ocultar el botón en el frontend) porque es la única defensa real
+        // contra un DELETE directo a la API.
+        if (otAEliminar.estado === 'Pagada') {
+            return res.status(400).json({ error: 'No se puede eliminar una OT pagada — es un registro financiero cerrado.' });
+        }
 
         const idSolicitudVinculada = otAEliminar.solicitudId || otAEliminar._id;
         await OT.findByIdAndDelete(id);

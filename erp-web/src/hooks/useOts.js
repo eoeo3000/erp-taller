@@ -26,7 +26,7 @@ export default function useOts(cargarDatos) {
         notificar.exito("OT eliminada y solicitud liberada automáticamente.");
       } catch (error) {
         console.error("❌ ERROR AL ELIMINAR:", error.response?.data || error.message);
-        notificar.error("No se pudo completar la operación.");
+        notificar.error(error.response?.data?.error || "No se pudo completar la operación.");
       }
     }
   };

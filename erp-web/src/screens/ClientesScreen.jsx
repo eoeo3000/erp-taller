@@ -100,6 +100,16 @@ function FichaCliente({ cliente, API, onCambio }) {
         onCambio();
     };
 
+    // El backend ya tenía DELETE /api/clientes/:id (clienteController.eliminar) — solo faltaba
+    // conectarlo acá. Esto borra el registro de Cliente (empresa + contactos, catálogo para
+    // emitir acceso al portal) — no toca ninguna Solicitud/OT, que guardan su propio texto
+    // libre sin relación real (ver clienteController.poblarDesdeSolicitudes).
+    const eliminarCliente = async () => {
+        if (!(await confirmar(`¿Eliminar "${cliente.empresa}"? Se pierden sus contactos y accesos emitidos.`, { danger: true, textoConfirmar: 'Eliminar' }))) return;
+        await axios.delete(`${API}/clientes/${cliente._id}`, { headers: { ...headerEntorno(), ...headerApiKey() } });
+        onCambio();
+    };
+
     const guardarContactos = async (lista) => {
         setContactos(lista);
         await axios.put(`${API}/clientes/${cliente._id}`, { contactos: lista }, { headers: { ...headerEntorno(), ...headerApiKey() } });
@@ -138,7 +148,10 @@ function FichaCliente({ cliente, API, onCambio }) {
 
     return (
         <div style={{ maxWidth: 720 }}>
-            <div style={{ fontSize: 9.5, letterSpacing: '.1em', textTransform: 'uppercase', color: t.textoAtenuado2, marginBottom: 6 }}>Empresa</div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
+                <span style={{ fontSize: 9.5, letterSpacing: '.1em', textTransform: 'uppercase', color: t.textoAtenuado2 }}>Empresa</span>
+                <span onClick={eliminarCliente} style={{ fontSize: 10.5, color: t.rojo, cursor: 'pointer' }}>Eliminar cliente</span>
+            </div>
             <div style={{ background: '#fff', border: `1px solid ${t.bordeZona}`, padding: 12, marginBottom: 20 }}>
                 <div style={{ display: 'grid', gridTemplateColumns: '90px 1fr', gap: 9, alignItems: 'center' }}>
                     <span style={{ fontSize: 11, color: t.textoAtenuado1 }}>Nombre</span>

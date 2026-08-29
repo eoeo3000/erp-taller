@@ -1313,18 +1313,14 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                                 )}
                             </div>
 
+                            {/* Asignar/cambiar supervisor se sacó de acá — quedaba duplicado con
+                                Antecedentes (mismo campo, mismo guardarAsignacion). Se ve en Antecedentes,
+                                que es la pestaña de datos administrativos de la OT. */}
                             <div style={{ ...styles.campoLabel, marginBottom: 16 }}>
                                 <span style={styles.etiqueta}>Supervisor asignado</span>
-                                <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                                    <select style={styles.inputPlano} value={formAsignacion.supervisorId} onChange={e => campoAsignacion('supervisorId', e.target.value)} disabled={cargandoAntecedentes || soloLecturaPlanificacion}>
-                                        <option value="">Sin asignar</option>
-                                        {(antecedentes?.candidatos || []).map(c => <option key={c.id} value={c.id}>{c.nombre} · {c.puesto}</option>)}
-                                    </select>
-                                    <button onClick={guardarAsignacion} disabled={guardandoAsignacion || soloLecturaPlanificacion} style={{ ...styles.btnAccion, opacity: soloLecturaPlanificacion ? .5 : 1 }}>
-                                        {guardandoAsignacion ? 'Guardando…' : (antecedentes?.ot?.supervisor ? 'Cambiar' : 'Asignar')}
-                                    </button>
-                                    {avisoAsignacion && <span style={{ fontSize: 11, color: avisoAsignacion.tipo === 'ok' ? t.verde : t.rojo }}>{avisoAsignacion.texto}</span>}
-                                </div>
+                                <span style={{ fontSize: 12.5 }}>
+                                    {antecedentes?.ot?.supervisor ? `${antecedentes.ot.supervisor.nombre} · ${antecedentes.ot.supervisor.puesto}` : <span style={{ color: t.textoAtenuado3 }}>Sin asignar — ver pestaña Antecedentes</span>}
+                                </span>
                             </div>
 
                             <p style={{ fontSize: 11, color: t.textoAtenuado3, marginBottom: 16 }}>
