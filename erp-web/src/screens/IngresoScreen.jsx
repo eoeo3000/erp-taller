@@ -700,9 +700,12 @@ const styles = {
     // order: la tabla va primero (izquierda) y el panel del formulario segundo (derecha) —
     // pedido explícito del usuario; se resuelve con flex `order` en vez de reordenar el JSX
     // para no tocar el resto de la estructura de cada sección.
-    formSeccion: { width: '452px', flex: 'none', minWidth: 0, overflow: 'auto', background: t.superficie, borderLeft: `1px solid ${t.bordeZona}`, order: 2 },
+    formSeccion: { width: '300px', flex: 'none', minWidth: 0, overflow: 'auto', background: t.superficie, borderLeft: `1px solid ${t.bordeZona}`, order: 2 },
     tituloBloque: { fontSize: '9.5px', letterSpacing: '.11em', textTransform: 'uppercase', color: t.textoAtenuado3, marginBottom: '9px' },
-    formGrid: { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '9px 10px' },
+    // Un solo campo por fila (antes 4 columnas) — pedido explícito del usuario para poder
+    // achicar el panel y darle más ancho a la tabla. `gridColumn: span N` de cada campo (más
+    // abajo) queda sin efecto real en una sola columna, no hace falta tocarlo.
+    formGrid: { display: 'grid', gridTemplateColumns: '1fr', gap: '9px 10px' },
     campoLabel: { display: 'flex', flexDirection: 'column', gap: '3px', minWidth: 0 },
     etiqueta: { fontSize: '9.5px', letterSpacing: '.11em', textTransform: 'uppercase', color: t.textoAtenuado2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
     input: {
