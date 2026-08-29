@@ -140,7 +140,7 @@ export default function TabAntecedentes({ cargando, antecedentes, form, onCampo,
                 )}
                 {soloLectura && (
                     <div style={{ marginTop: 14, fontSize: '11px', color: t.textoAtenuado2 }}>
-                        La OT está pagada — Antecedentes queda en solo lectura.
+                        Antecedentes queda en solo lectura (OT pagada, o planificación ya terminada).
                     </div>
                 )}
 

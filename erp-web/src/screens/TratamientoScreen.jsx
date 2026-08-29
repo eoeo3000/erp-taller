@@ -1225,9 +1225,9 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
             <div style={styles.cuerpo}>
                 <section style={styles.contenido}>
 
-                    {soloLecturaPlanificacion && ['tareas', 'componentes', 'Logistica'].includes(tabActiva) && (
+                    {soloLecturaPlanificacion && ['tareas', 'componentes', 'Logistica', 'antecedentes', 'informe'].includes(tabActiva) && (
                         <div style={{ padding: '8px 16px', background: '#fdf3e7', borderBottom: `1px solid ${t.bordeZona}`, fontSize: 11.5, color: t.textoSecundario1 }}>
-                            Planificación terminada — esta pestaña quedó de solo lectura. Para cambiar fechas, reprograma la OT desde la PWA del supervisor.
+                            Planificación terminada — esta pestaña quedó de solo lectura. Para modificarla, reprograma la OT desde la PWA del supervisor o cancela la planificación desde Cotización.
                         </div>
                     )}
 
@@ -1241,7 +1241,7 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                             onGuardar={guardarAsignacion}
                             guardando={guardandoAsignacion}
                             aviso={avisoAsignacion}
-                            soloLectura={otSeleccionada?.estado === 'Pagada'}
+                            soloLectura={otSeleccionada?.estado === 'Pagada' || soloLecturaPlanificacion}
                         />
                     )}
 
@@ -1279,12 +1279,14 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                                     <>
                                         <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
                                             <button
+                                                disabled={soloLecturaPlanificacion}
                                                 onClick={() => setInformeEvaluacion(prev => ({ ...prev, revision: { ...prev.revision, estado: 'Aceptado' } }))}
-                                                style={informeEvaluacion.revision?.estado === 'Aceptado' ? styles.btnAccion : styles.btnSecundario}
+                                                style={{ ...(informeEvaluacion.revision?.estado === 'Aceptado' ? styles.btnAccion : styles.btnSecundario), opacity: soloLecturaPlanificacion ? .5 : 1 }}
                                             >Aceptado</button>
                                             <button
+                                                disabled={soloLecturaPlanificacion}
                                                 onClick={() => setInformeEvaluacion(prev => ({ ...prev, revision: { ...prev.revision, estado: 'ConObservaciones' } }))}
-                                                style={informeEvaluacion.revision?.estado === 'ConObservaciones' ? { ...styles.btnAccion, background: t.rojo, borderColor: t.rojo } : styles.btnSecundario}
+                                                style={{ ...(informeEvaluacion.revision?.estado === 'ConObservaciones' ? { ...styles.btnAccion, background: t.rojo, borderColor: t.rojo } : styles.btnSecundario), opacity: soloLecturaPlanificacion ? .5 : 1 }}
                                             >Con observaciones</button>
                                         </div>
                                         {informeEvaluacion.revision?.estado === 'ConObservaciones' && (
@@ -1292,10 +1294,11 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                                                 value={informeEvaluacion.revision?.comentario || ''}
                                                 onChange={e => setInformeEvaluacion(prev => ({ ...prev, revision: { ...prev.revision, comentario: e.target.value } }))}
                                                 placeholder="Qué le falta o hay que corregir…"
+                                                disabled={soloLecturaPlanificacion}
                                                 style={{ ...styles.inputPlano, width: '100%', minHeight: 60, marginTop: 8, resize: 'vertical' }}
                                             />
                                         )}
-                                        <button onClick={guardarRevisionInforme} style={{ ...styles.btnAccion, marginTop: 8 }}>Guardar revisión</button>
+                                        <button disabled={soloLecturaPlanificacion} onClick={guardarRevisionInforme} style={{ ...styles.btnAccion, marginTop: 8, opacity: soloLecturaPlanificacion ? .5 : 1 }}>Guardar revisión</button>
                                         {informeEvaluacion.revision?.fecha && (
                                             <div style={{ fontSize: 10.5, color: t.textoAtenuado3, marginTop: 6 }}>
                                                 Última revisión: {new Date(informeEvaluacion.revision.fecha).toLocaleDateString('es-CL')}
@@ -1308,11 +1311,11 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                             <div style={{ ...styles.campoLabel, marginBottom: 16 }}>
                                 <span style={styles.etiqueta}>Supervisor asignado</span>
                                 <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                                    <select style={styles.inputPlano} value={formAsignacion.supervisorId} onChange={e => campoAsignacion('supervisorId', e.target.value)} disabled={cargandoAntecedentes}>
+                                    <select style={styles.inputPlano} value={formAsignacion.supervisorId} onChange={e => campoAsignacion('supervisorId', e.target.value)} disabled={cargandoAntecedentes || soloLecturaPlanificacion}>
                                         <option value="">Sin asignar</option>
                                         {(antecedentes?.candidatos || []).map(c => <option key={c.id} value={c.id}>{c.nombre} · {c.puesto}</option>)}
                                     </select>
-                                    <button onClick={guardarAsignacion} disabled={guardandoAsignacion} style={styles.btnAccion}>
+                                    <button onClick={guardarAsignacion} disabled={guardandoAsignacion || soloLecturaPlanificacion} style={{ ...styles.btnAccion, opacity: soloLecturaPlanificacion ? .5 : 1 }}>
                                         {guardandoAsignacion ? 'Guardando…' : (antecedentes?.ot?.supervisor ? 'Cambiar' : 'Asignar')}
                                     </button>
                                     {avisoAsignacion && <span style={{ fontSize: 11, color: avisoAsignacion.tipo === 'ok' ? t.verde : t.rojo }}>{avisoAsignacion.texto}</span>}
@@ -1356,7 +1359,7 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                                         </>
                                     )}
                                     <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
-                                        <button onClick={aplicarInformeAOT} style={styles.btnPrimario}>Aplicar a la OT →</button>
+                                        <button disabled={soloLecturaPlanificacion} onClick={aplicarInformeAOT} style={{ ...styles.btnPrimario, opacity: soloLecturaPlanificacion ? .5 : 1 }}>Aplicar a la OT →</button>
                                     </div>
                                 </>
                             )}
