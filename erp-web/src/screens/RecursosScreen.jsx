@@ -478,7 +478,12 @@ const RecursosScreen = ({
                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                             <label style={{ fontSize: 11.5, display: 'flex', alignItems: 'center', gap: 5 }}>
                                                 <input type="checkbox" checked={dia.activo} onChange={e => setNuevoCal(prev => { const c = JSON.parse(JSON.stringify(prev)); c.config[diaIdx].activo = e.target.checked; return c; })} />
-                                                {dia.dia}
+                                                {/* En rotativo el día se identifica por posición en el ciclo (ver
+                                                    utils/calendario.js: cal.config[diaDelCiclo], no usa dia.dia), así
+                                                    que acá siempre se muestra "Día N" — dia.dia puede traer todavía
+                                                    una etiqueta de día de semana (ej. "lun") heredada de cuando este
+                                                    calendario nació semanal, y mostrarla tal cual confundía. */}
+                                                {nuevoCal.tipo === 'rotativo' ? `Día ${diaIdx + 1}` : dia.dia}
                                             </label>
                                             <span onClick={() => agregarBloque(diaIdx)} style={{ fontSize: 11, color: t.acento, cursor: 'pointer' }}>+ bloque</span>
                                         </div>
