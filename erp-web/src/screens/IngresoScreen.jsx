@@ -334,13 +334,13 @@ const IngresoScreen = ({ solicitudes = [], liberarSolicitudManual, cargarDatos, 
     };
 
     const campos = [
-        { key: 'empresaSolicitante', label: 'Empresa *', placeholder: 'Razón social', span: 2 },
-        { key: 'solicitante', label: 'Solicitante *', placeholder: 'Nombre y apellido', span: 2 },
-        { key: 'correo', label: 'Correo', placeholder: 'correo@empresa.cl', span: 2, type: 'email' },
-        { key: 'numero', label: 'Teléfono', placeholder: '+56 9…', span: 2 },
-        { key: 'direccion', label: 'Dirección del servicio', placeholder: 'Calle, ciudad, planta', span: 4 },
-        { key: 'fechaEjecucionSolicitada', label: 'Fecha de ejecución', span: 2, type: 'date' },
-        { key: 'plazoEjecucionSugerido', label: 'Plazo sugerido', placeholder: 'Ej: 5 días hábiles', span: 2 },
+        { key: 'empresaSolicitante', label: 'Empresa *', placeholder: 'Razón social' },
+        { key: 'solicitante', label: 'Solicitante *', placeholder: 'Nombre y apellido' },
+        { key: 'correo', label: 'Correo', placeholder: 'correo@empresa.cl', type: 'email' },
+        { key: 'numero', label: 'Teléfono', placeholder: '+56 9…' },
+        { key: 'direccion', label: 'Dirección del servicio', placeholder: 'Calle, ciudad, planta' },
+        { key: 'fechaEjecucionSolicitada', label: 'Fecha de ejecución', type: 'date' },
+        { key: 'plazoEjecucionSugerido', label: 'Plazo sugerido', placeholder: 'Ej: 5 días hábiles' },
     ];
 
     const estados = ['Pendiente', 'Aprobada', 'Rechazada', 'Tratada'];
@@ -424,7 +424,7 @@ const IngresoScreen = ({ solicitudes = [], liberarSolicitudManual, cargarDatos, 
                         <div style={styles.tituloBloque}>{editandoId ? 'Editar solicitud' : 'Nueva solicitud de servicio'}</div>
                         <div style={styles.formGrid}>
                             {campos.map(c => (
-                                <label key={c.key} style={{ ...styles.campoLabel, gridColumn: `span ${c.span}` }}>
+                                <label key={c.key} style={styles.campoLabel}>
                                     <span style={styles.etiqueta}>{c.label}</span>
                                     <input
                                         type={c.type || 'text'}
@@ -436,7 +436,7 @@ const IngresoScreen = ({ solicitudes = [], liberarSolicitudManual, cargarDatos, 
                                 </label>
                             ))}
 
-                            <label style={{ ...styles.campoLabel, gridColumn: 'span 2' }}>
+                            <label style={styles.campoLabel}>
                                 <span style={styles.etiqueta}>Canal de origen</span>
                                 <select value={form.origen} onChange={set('origen')} style={styles.input}>
                                     <option value="WhatsApp">WhatsApp</option>
@@ -446,7 +446,7 @@ const IngresoScreen = ({ solicitudes = [], liberarSolicitudManual, cargarDatos, 
                                 </select>
                             </label>
 
-                            <label style={{ ...styles.campoLabel, gridColumn: 'span 2' }}>
+                            <label style={styles.campoLabel}>
                                 <span style={styles.etiqueta}>Adjunto</span>
                                 <div style={{ display: 'flex', gap: 6 }}>
                                     <input
@@ -472,7 +472,7 @@ const IngresoScreen = ({ solicitudes = [], liberarSolicitudManual, cargarDatos, 
                                 )}
                             </label>
 
-                            <label style={{ ...styles.campoLabel, gridColumn: 'span 4' }}>
+                            <label style={styles.campoLabel}>
                                 <span style={styles.etiqueta}>Descripción detallada *</span>
                                 <textarea
                                     value={form.descripcion}
