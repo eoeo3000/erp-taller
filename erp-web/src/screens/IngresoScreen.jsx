@@ -697,7 +697,10 @@ const styles = {
     btnReintentar: { marginLeft: 'auto', height: 22, padding: '0 10px', background: 'rgba(255,255,255,.18)', border: '1px solid rgba(255,255,255,.4)', color: '#fff', fontSize: 11, fontWeight: 600, cursor: 'pointer', borderRadius: 2, fontFamily: t.fontUi, flex: 'none' },
     cuerpo: { flex: 1, minHeight: 0, display: 'flex' },
 
-    formSeccion: { width: '452px', flex: 'none', minWidth: 0, overflow: 'auto', background: t.superficie, borderRight: `1px solid ${t.bordeZona}` },
+    // order: la tabla va primero (izquierda) y el panel del formulario segundo (derecha) —
+    // pedido explícito del usuario; se resuelve con flex `order` en vez de reordenar el JSX
+    // para no tocar el resto de la estructura de cada sección.
+    formSeccion: { width: '452px', flex: 'none', minWidth: 0, overflow: 'auto', background: t.superficie, borderLeft: `1px solid ${t.bordeZona}`, order: 2 },
     tituloBloque: { fontSize: '9.5px', letterSpacing: '.11em', textTransform: 'uppercase', color: t.textoAtenuado3, marginBottom: '9px' },
     formGrid: { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '9px 10px' },
     campoLabel: { display: 'flex', flexDirection: 'column', gap: '3px', minWidth: 0 },
@@ -710,7 +713,7 @@ const styles = {
     btnPrimario: { height: '30px', padding: '0 14px', background: t.acento, border: `1px solid ${t.acento}`, color: '#fff', fontSize: '12px', fontWeight: 700, cursor: 'pointer', borderRadius: '2px', fontFamily: t.fontUi },
     btnSecundario: { height: '30px', padding: '0 12px', background: t.superficie, border: `1px solid ${t.bordeZona}`, fontSize: '12px', color: '#262622', cursor: 'pointer', borderRadius: '2px', whiteSpace: 'nowrap', fontFamily: t.fontUi },
 
-    tablaSeccion: { flex: 1, minWidth: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' },
+    tablaSeccion: { flex: 1, minWidth: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column', order: 1 },
     barraFiltros: { flex: 'none', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '4px 6px', padding: '7px 16px', background: t.barraFiltrosPie, borderBottom: `1px solid ${t.hairlineBloque}` },
     etiquetaBarra: { fontSize: '9.5px', letterSpacing: '.11em', textTransform: 'uppercase', color: t.textoAtenuado2, flex: 'none' },
     filtroInput: { height: '23px', width: '210px', padding: '0 8px', border: `1px solid ${t.bordeInput}`, background: t.superficie, fontFamily: 'inherit', fontSize: '11.5px', outline: 'none', borderRadius: '2px' },
