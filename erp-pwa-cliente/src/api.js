@@ -77,3 +77,12 @@ export function responderExcepcion(otId, excepcionId, estado, motivoRechazo) {
         method: 'POST', body: JSON.stringify({ estado, motivoRechazo }),
     });
 }
+
+// POST /api/portal/ot/:id/orden-compra?token= — el cliente carga su propio número de orden
+// de compra (Cuenta y Pago, C5)
+export function actualizarOrdenCompra(otId, ordenCompra) {
+    const { token } = getSesion();
+    return pedir(`/portal/ot/${otId}/orden-compra?token=${encodeURIComponent(token)}`, {
+        method: 'POST', body: JSON.stringify({ ordenCompra }),
+    });
+}

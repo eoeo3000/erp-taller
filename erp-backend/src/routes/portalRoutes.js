@@ -14,6 +14,7 @@ router.post('/emitir-token',      ctrl.emitirTokenContacto);
 router.get('/mis-solicitudes',    ctrl.misSolicitudes);
 router.post('/ot/:id/responder',  ctrl.responderCotizacion);
 router.post('/ot/:id/excepciones/:excepcionId/responder', ctrl.responderExcepcion);
+router.post('/ot/:id/orden-compra', ctrl.actualizarOrdenCompra);
 router.get('/sesiones',              ctrl.listarSesiones);
 router.get('/stock-tokens',              ctrl.stockTokens);
 router.post('/sesiones/lote',            ctrl.generarLote);

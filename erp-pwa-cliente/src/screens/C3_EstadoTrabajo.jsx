@@ -38,6 +38,18 @@ function etapaInfo(ot) {
     if (ot.estado === 'Reprogramar') {
         return { idx: 3, label: 'Coordinando nueva fecha', rechazada: false, porAprobar: false, reprogramando: true };
     }
+    // 'Con Informe' (OT.estado) es un concepto interno del supervisor — un reporte de campo
+    // agregado DESPUÉS de marcar el trabajo terminado (ver otController.aplicarAccionOT) — no
+    // tiene relación con informeFinal.enviado (la oficina compartiendo el informe con el
+    // cliente desde TabPago). Antes, MAPA_ETAPA['Con Informe']=6 hacía que el cliente viera
+    // "Informe entregado" apenas el supervisor agregaba cualquier reporte, sin que la oficina
+    // hubiera enviado nada — y al revés, un informe sí enviado con la OT todavía en 'Trabajo
+    // Terminado' seguía mostrando solo "Trabajo terminado".
+    if (['Trabajo Terminado', 'Con Informe'].includes(ot.estado)) {
+        return ot.informeFinal?.enviado
+            ? { idx: 6, label: 'Informe entregado', rechazada: false, porAprobar: false, reprogramando: false }
+            : { idx: 5, label: 'Trabajo terminado', rechazada: false, porAprobar: false, reprogramando: false };
+    }
     const idx = MAPA_ETAPA[ot.estado] ?? 0;
     return { idx, label: ETAPAS_CLIENTE[idx], rechazada: false, porAprobar: false, reprogramando: false };
 }
@@ -58,7 +70,9 @@ function lineaCliente(ot) {
         return fecha ? `Nuestro equipo llega el ${fmtLarga(fecha)}.` : 'Su trabajo está programado.';
     }
     if (ot.estado === 'En Ejecución') return 'Nuestro equipo está trabajando en su solicitud.';
-    if (['Trabajo Terminado', 'Con Informe'].includes(ot.estado)) return 'El trabajo en terreno está terminado.';
+    if (['Trabajo Terminado', 'Con Informe'].includes(ot.estado)) {
+        return ot.informeFinal?.enviado ? 'Ya puede ver y descargar el informe del trabajo realizado.' : 'El trabajo en terreno está terminado.';
+    }
     if (ot.estado === 'Pagada') return 'Trabajo completado y pagado.';
     return 'En preparación.';
 }

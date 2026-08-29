@@ -56,6 +56,11 @@ function otPublica(ot) {
         _id: ot._id,
         numeroOT: ot.numeroOT,
         estado: ot.estado,
+        // El cliente lo puede completar desde Cuenta y Pago (C5, PWA Cliente) — su propia
+        // orden de compra interna para que la oficina pueda facturar contra ella (ver
+        // actualizarOrdenCompra más abajo). También puede venir ya cargado desde Antecedentes
+        // (erp-web) si la oficina lo escribió primero.
+        ordenCompra: ot.ordenCompra || '',
         granTotal: ot.granTotal,
         // Igual que TratamientoScreen.granTotal/totalManoObra en erp-web — se suma acá y se
         // expone como un solo número porque tareas[] (abajo) NUNCA manda valorHora al cliente
@@ -756,6 +761,37 @@ exports.responderExcepcion = async (req, res) => {
         const otActualizada = await otController.aplicarRespuestaExcepcion({
             id, excepcionId, nuevoEstado: estado, motivoRechazo, conn: req.db,
         });
+
+        res.json({ ok: true, ot: otPublica(otActualizada) });
+    } catch (err) {
+        res.status(err.status || 500).json({ error: err.message });
+    }
+};
+
+// POST /api/portal/ot/:id/orden-compra?token= — el cliente carga/corrige su propio número de
+// orden de compra desde Cuenta y Pago (C5, PWA Cliente) para que la oficina pueda facturar
+// contra ella (aparece en erp-web, pestaña Antecedentes). Mismo esqueleto de validación de
+// sesión que responderCotizacion/responderExcepcion arriba.
+exports.actualizarOrdenCompra = async (req, res) => {
+    const OT = getOT(req.db);
+    const Solicitud = getSolicitud(req.db);
+    const SesionPortal = getSesionPortal(req.db);
+    try {
+        const sesion = await SesionPortal.findOne({ tokenHash: hashToken(req.query.token), estado: 'activo' });
+        if (!sesion || sesion.expira < new Date()) return res.status(403).json({ error: 'Sesión inválida o vencida' });
+
+        const { id } = req.params;
+        const { ordenCompra } = req.body;
+
+        const ot = await OT.findById(id).lean();
+        if (!ot) return res.status(404).json({ error: 'OT no encontrada' });
+
+        const solicitud = await Solicitud.findById(ot.solicitudId || ot._id).lean();
+        if (!solicitud || normalizarTelefono(solicitud.numero) !== sesion.telefono) {
+            return res.status(403).json({ error: 'Esta OT no pertenece a tu sesión.' });
+        }
+
+        const otActualizada = await OT.findByIdAndUpdate(id, { ordenCompra: ordenCompra || '' }, { new: true });
 
         res.json({ ok: true, ot: otPublica(otActualizada) });
     } catch (err) {

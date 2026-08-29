@@ -1,4 +1,5 @@
 import { useState, Fragment } from 'react';
+import { actualizarOrdenCompra } from '../api.js';
 
 const CLP = (n) => '$ ' + Math.round(n || 0).toLocaleString('es-CL');
 const MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
@@ -42,10 +43,28 @@ const ETIQUETAS_CONDICIONES = [
 // (qué/con quién/cuándo/cómo), Equipos y materiales, Suministros directos, Cronograma y
 // Condiciones comerciales — para que el cliente vea exactamente lo mismo que se cotizó en
 // el escritorio, no un resumen recortado.
-export default function C5CuentaPago({ nav, trabajo }) {
+export default function C5CuentaPago({ nav, trabajo: trabajoProp }) {
     const [verCotizacion, setVerCotizacion] = useState(false);
+    const [trabajo, setTrabajo] = useState(trabajoProp);
+    const [ordenCompra, setOrdenCompra] = useState(trabajoProp?.ot?.ordenCompra || '');
+    const [guardandoOC, setGuardandoOC] = useState(false);
+    const [guardadoOC, setGuardadoOC] = useState(false);
+    const [errorOC, setErrorOC] = useState('');
     if (!trabajo) return null;
     const ot = trabajo.ot;
+
+    const guardarOrdenCompra = async () => {
+        setGuardandoOC(true); setErrorOC(''); setGuardadoOC(false);
+        try {
+            const resultado = await actualizarOrdenCompra(ot._id, ordenCompra);
+            setTrabajo((t) => ({ ...t, ot: resultado.ot }));
+            setGuardadoOC(true);
+        } catch (e) {
+            setErrorOC(e.message);
+        } finally {
+            setGuardandoOC(false);
+        }
+    };
 
     const totalNeto = ot?.granTotal || 0;
     const iva = totalNeto * 0.19;
@@ -190,6 +209,29 @@ export default function C5CuentaPago({ nav, trabajo }) {
                 <div className="versalita">Saldo pendiente</div>
                 <div className="mono" style={{ fontSize: 26, fontWeight: 600, marginTop: 4 }}>{CLP(saldo)}</div>
                 {pagado > 0 && <div style={{ fontSize: 'var(--fs-secundario)', color: 'var(--texto-secundario-2)', marginTop: 4 }}>Anticipo pagado: {CLP(pagado)}</div>}
+            </div>
+
+            <div style={{ padding: '14px 16px' }}>
+                <div className="versalita" style={{ marginBottom: 6 }}>Orden de compra</div>
+                <div style={{ fontSize: 'var(--fs-secundario)', color: 'var(--texto-secundario-1)', marginBottom: 8 }}>
+                    Si su empresa exige una orden de compra para pagar, ingrésela acá — la oficina la ve de inmediato.
+                </div>
+                <input
+                    className="input-campo"
+                    style={{ width: '100%', boxSizing: 'border-box', marginBottom: 8 }}
+                    value={ordenCompra}
+                    onChange={(e) => { setOrdenCompra(e.target.value); setGuardadoOC(false); }}
+                    placeholder="Ej: OC-4821"
+                />
+                {errorOC && <div style={{ fontSize: 'var(--fs-secundario)', color: 'var(--detenido)', marginBottom: 8 }}>{errorOC}</div>}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <button
+                        className="boton-secundario" style={{ width: 'auto', padding: '0 20px' }}
+                        disabled={guardandoOC || ordenCompra === (ot?.ordenCompra || '')}
+                        onClick={guardarOrdenCompra}
+                    >{guardandoOC ? 'Guardando…' : 'Guardar'}</button>
+                    {guardadoOC && <span style={{ fontSize: 'var(--fs-secundario)', color: 'var(--listo)' }}>Guardado</span>}
+                </div>
             </div>
 
             <div style={{ padding: '14px 16px 4px' }} className="versalita">Detalle</div>

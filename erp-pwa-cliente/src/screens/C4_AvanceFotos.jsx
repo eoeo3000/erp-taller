@@ -54,30 +54,42 @@ export default function C4AvanceFotos({ nav, trabajo }) {
     const evidenciasInforme = contenido ? (contenido.evidencias || []) : null;
     const solicitudDescripcion = contenido ? contenido.solicitudDescripcion : trabajo.descripcion;
 
+    // Informe entregado: mismo patrón que "Ver PDF — Cotización" en C5_CuentaPago (documento
+    // imprimible + "Imprimir / Guardar PDF" con window.print(), sin generar un PDF aparte —
+    // no hay forma de compartir la lógica de jsPDF de erp-web con esta app, y este patrón ya
+    // existe acá). Antes de que se envíe el informe, la pantalla sigue siendo el feed en vivo
+    // de avance, sin nada que imprimir todavía.
     return (
         <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
-            <header style={{ height: 52, display: 'flex', alignItems: 'center', gap: 12, padding: '0 16px', borderBottom: '1px solid var(--linea-zona)' }}>
+            <header className="no-imprimir" style={{ height: 52, display: 'flex', alignItems: 'center', gap: 12, padding: '0 16px', borderBottom: '1px solid var(--linea-zona)' }}>
                 <button onClick={nav.volver} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', padding: 8, marginLeft: -8 }} className="mono">‹</button>
-                <span style={{ fontSize: 'var(--fs-card-titulo)', fontWeight: 600 }}>{informeEnviado ? 'Informe' : 'Avance'}</span>
+                <span style={{ flex: 1, fontSize: 'var(--fs-card-titulo)', fontWeight: 600 }}>{informeEnviado ? 'Informe' : 'Avance'}</span>
+                {informeEnviado && (
+                    <button className="boton-primario" style={{ width: 'auto', padding: '0 16px', height: 36 }} onClick={() => window.print()}>Imprimir / Guardar PDF</button>
+                )}
             </header>
 
-            <div className="franja">
-                <div style={{ fontSize: 'var(--fs-secundario)', fontWeight: 600 }}>
-                    {ot?.estado === 'En Ejecución' ? 'En ejecución' : ot?.estado} · {listas} de {total} tareas listas
-                </div>
-                <div style={{ height: 4, background: 'var(--linea-zona)', marginTop: 8 }}>
-                    <div style={{ height: 4, width: total ? `${Math.round((listas / total) * 100)}%` : '0%', background: 'var(--en-curso)' }} />
-                </div>
-                {informeEnviado && (
-                    <div style={{ fontSize: 'var(--fs-linea-mono)', color: 'var(--texto-atenuado-1)', marginTop: 8 }} className="mono">
-                        Informe enviado {horasDesde(ot.informeFinal.fechaEnvio)}
+            {!informeEnviado && (
+                <div className="franja">
+                    <div style={{ fontSize: 'var(--fs-secundario)', fontWeight: 600 }}>
+                        {ot?.estado === 'En Ejecución' ? 'En ejecución' : ot?.estado} · {listas} de {total} tareas listas
                     </div>
-                )}
-            </div>
+                    <div style={{ height: 4, background: 'var(--linea-zona)', marginTop: 8 }}>
+                        <div style={{ height: 4, width: total ? `${Math.round((listas / total) * 100)}%` : '0%', background: 'var(--en-curso)' }} />
+                    </div>
+                </div>
+            )}
 
             <div style={{ flex: 1, overflowY: 'auto' }}>
                 {informeEnviado && (
                     <>
+                        <div style={{ padding: 16, borderBottom: '1px solid var(--linea-zona)' }}>
+                            <div style={{ fontWeight: 700, fontSize: 18 }}>Informe — {ot?.numeroOT}</div>
+                            <div style={{ fontSize: 14, color: 'var(--texto-atenuado-1)', marginTop: 4 }}>
+                                {trabajo.numeroSolicitud} · Entregado {horasDesde(ot.informeFinal.fechaEnvio)}
+                            </div>
+                        </div>
+
                         <div style={{ padding: '16px 16px 4px' }} className="versalita">Su solicitud</div>
                         <div style={{ padding: '0 16px 14px' }}>
                             <div style={{ fontSize: 15, fontWeight: 600, lineHeight: 1.35 }}>{solicitudDescripcion}</div>
@@ -150,9 +162,11 @@ export default function C4AvanceFotos({ nav, trabajo }) {
                 )}
             </div>
 
-            <div style={{ padding: '14px 16px', fontSize: 'var(--fs-linea-mono)', color: 'var(--texto-atenuado-2)' }}>
-                Las fotos las sube el equipo en terreno. Se publican al momento, sin edición.
-            </div>
+            {!informeEnviado && (
+                <div style={{ padding: '14px 16px', fontSize: 'var(--fs-linea-mono)', color: 'var(--texto-atenuado-2)' }}>
+                    Las fotos las sube el equipo en terreno. Se publican al momento, sin edición.
+                </div>
+            )}
         </div>
     );
 }
