@@ -156,9 +156,23 @@ const IngresoScreen = ({ solicitudes = [], liberarSolicitudManual, cargarDatos, 
     const [menuColumnas, setMenuColumnas] = useState(false);
     const [errorVariantes, setErrorVariantes] = useState(null);
 
+    // Sin filtro de pantalla: se listan los nombres de las DOS pantallas (ingreso-solicitudes
+    // y panel-control) para que una variante creada en cualquiera de las dos aparezca también
+    // acá — pedido explícito del usuario. Cada pantalla igual aplica solo SU propia
+    // disposición de columnas (son tablas con campos distintos); layout queda null cuando el
+    // nombre existe solo del lado de Panel de control todavía (aplicarVarianteTabla lo maneja
+    // sin romper).
     const cargarVariantesTabla = () => {
-        axios.get(`${API}/disposiciones`, { params: { pantalla: 'ingreso-solicitudes' } })
-            .then(({ data }) => { setVariantesTabla(data.map(v => ({ id: v._id, nombre: v.nombre, layout: normalizarLayoutIngreso(v.layout) }))); setErrorVariantes(null); })
+        axios.get(`${API}/disposiciones`)
+            .then(({ data }) => {
+                const nombres = [...new Set(data.map(v => v.nombre))].sort();
+                setVariantesTabla(nombres.map(nombre => {
+                    const propia = data.find(v => v.nombre === nombre && v.pantalla === 'ingreso-solicitudes');
+                    const otra = data.find(v => v.nombre === nombre && v.pantalla === 'panel-control');
+                    return { nombre, layout: propia ? normalizarLayoutIngreso(propia.layout) : null, idIngreso: propia?._id, idPanel: otra?._id };
+                }));
+                setErrorVariantes(null);
+            })
             .catch(() => setErrorVariantes('No se pudieron cargar las variantes guardadas.'));
     };
 
@@ -243,15 +257,29 @@ const IngresoScreen = ({ solicitudes = [], liberarSolicitudManual, cargarDatos, 
         const nombre = (nombreNuevaVariante || '').trim() || `Variante ${variantesTabla.length + 1}`;
         const resultado = await guardarDisposicionGlobal?.({ nombre, pantalla: 'ingreso-solicitudes', layout: clonarLayoutIngreso(layoutTabla) });
         if (!resultado?.exito) { setErrorVariantes('No se pudo guardar la variante.'); return; }
+        // Se guarda también la disposición de Panel de control con el mismo nombre (si este
+        // navegador ya tiene una guardada — LS_KEY en DashboardScreen.jsx) para que la
+        // variante quede completa en las dos pantallas, no solo en la que la creó.
+        try {
+            const rawPanel = localStorage.getItem('erpTaller.disposicion.v2');
+            const layoutPanel = rawPanel ? JSON.parse(rawPanel)?.layout : null;
+            if (layoutPanel) await guardarDisposicionGlobal?.({ nombre, pantalla: 'panel-control', layout: layoutPanel });
+        } catch { /* best-effort: no bloquea el guardado de esta pantalla si esto falla */ }
         cargarVariantesTabla();
         setVarianteActiva(nombre);
         setGuardandoVariante(false);
         setNombreNuevaVariante('');
     };
-    const aplicarVarianteTabla = (v) => { setLayoutTablaState(normalizarLayoutIngreso(v.layout)); setVarianteActiva(v.nombre); };
+    const aplicarVarianteTabla = (v) => {
+        if (!v.layout) { setErrorVariantes(`"${v.nombre}" todavía no tiene columnas guardadas para Ingreso — ajustá y guardá con este mismo nombre para completarla.`); return; }
+        setLayoutTablaState(v.layout); setVarianteActiva(v.nombre);
+    };
     const eliminarVarianteTabla = async (v) => {
-        const ok = await eliminarDisposicionGlobal?.(v.id);
-        if (!ok) { setErrorVariantes('No se pudo eliminar la variante.'); return; }
+        // Se borra en las dos pantallas (si existe en ambas) para que "eliminar" saque la
+        // variante común, no solo la mitad que le tocaba a Ingreso.
+        const ids = [v.idIngreso, v.idPanel].filter(Boolean);
+        const resultados = await Promise.all(ids.map(id => eliminarDisposicionGlobal?.(id)));
+        if (resultados.some(r => !r)) { setErrorVariantes('No se pudo eliminar la variante.'); return; }
         setVariantesTabla(prev => prev.filter(x => x.nombre !== v.nombre));
         if (varianteActiva === v.nombre) setVarianteActiva('');
     };
