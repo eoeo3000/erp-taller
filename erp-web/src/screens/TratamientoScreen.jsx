@@ -1659,6 +1659,24 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                                 </div>
                             </div>
 
+                            {/* Con la OT pagada ya no tiene sentido seguir editando/anulando reportes —
+                                mismo criterio que TabAntecedentes.soloLectura (estado 'Pagada') — así que
+                                en vez de dejar todo el contenido interactivo visible pero congelado, se
+                                reemplaza por un resumen + el mismo PDF que ya se arma para el cliente
+                                (generarInformePDF/verInformePDF/descargarInformePDF, ver Pago). Pedido
+                                explícito del usuario. */}
+                            {otSeleccionada.estado === 'Pagada' ? (
+                                <div style={{ padding: '28px 16px', textAlign: 'center', border: `1px solid ${t.bordeZona}`, borderRadius: 2 }}>
+                                    <p style={{ fontSize: 12, color: t.textoSecundario2, margin: '0 0 12px' }}>
+                                        OT pagada — esta pestaña queda de solo lectura. El plan, la evaluación inicial y las evidencias de terreno quedan disponibles para descargar.
+                                    </p>
+                                    <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
+                                        <button onClick={verInformePDF} style={styles.btnSecundario}>Ver informe</button>
+                                        <button onClick={descargarInformePDF} style={styles.btnPrimario}>Descargar PDF</button>
+                                    </div>
+                                </div>
+                            ) : (
+                                <>
                             {/* Metodología por tarea (el plan) + registro (lo que el supervisor reportó que
                                 se hizo, con foto — TabTrabajo.jsx en la PWA Operativa, "Guardar lo
                                 ingresado") quedan juntos por tarea, para comparar plan contra lo
@@ -1752,6 +1770,8 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                                 </div>
                             ) : (
                                 <div style={{ textAlign: 'center', padding: 40, color: t.textoAtenuado3, fontSize: 12.5 }}>Sin reportes fotográficos aún. Aparecerán cuando el supervisor suba evidencias desde terreno.</div>
+                            )}
+                                </>
                             )}
                         </div>
                     )}
