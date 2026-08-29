@@ -157,6 +157,21 @@ const RecursosScreen = ({
 
     const guardarIntegrante = async () => {
         if (!formIntegrante.nombre) { notificar.advertencia('El nombre es obligatorio'); return; }
+        // El cálculo de horas usa fechaInicioCiclo como día 0 del ciclo (ver utils/calendario.js:
+        // diasTranscurridos % config.length) — en un calendario semanal (no rotativo) config[0]
+        // siempre es "lun" (el orden fijo con el que nace todo calendario semanal, ver
+        // estadoInicialCalendario más abajo), así que si la fecha de inicio no cae lunes, todo
+        // el patrón queda corrido respecto a los días reales — el "lunes" de la grilla deja de
+        // ser lunes de verdad. En un calendario rotativo no hay un día de semana "correcto"
+        // para empezar, así que ahí no aplica.
+        const calDelIntegrante = calendarios.find(c => String(c._id) === String(formIntegrante.calendarioId));
+        if (calDelIntegrante && calDelIntegrante.tipo !== 'rotativo' && formIntegrante.fechaInicioCiclo) {
+            const diaSemana = new Date(formIntegrante.fechaInicioCiclo + 'T00:00:00').getDay();
+            if (diaSemana !== 1) {
+                notificar.advertencia(`"${calDelIntegrante.nombre}" es un turno semanal — la fecha de inicio debe ser un lunes para que los días de la grilla coincidan con los días reales.`);
+                return;
+            }
+        }
         if (formIntegrante._id) {
             const r = await actualizarRecurso(formIntegrante._id, formIntegrante);
             if (!r.success) { notificar.error('Hubo un error al guardar los cambios.'); return; }
