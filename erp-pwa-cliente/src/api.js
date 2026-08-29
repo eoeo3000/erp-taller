@@ -78,11 +78,24 @@ export function responderExcepcion(otId, excepcionId, estado, motivoRechazo) {
     });
 }
 
-// POST /api/portal/ot/:id/orden-compra?token= — el cliente carga su propio número de orden
-// de compra (Cuenta y Pago, C5)
-export function actualizarOrdenCompra(otId, ordenCompra) {
+// POST /api/portal/ot/:id/orden-compra | /edp | /hes ?token= — los 3 documentos del flujo de
+// pago (Cuenta y Pago, C5): número + archivo (data-URI base64, el backend lo guarda como
+// archivo real). El mismo campo también es editable desde la oficina (TabPago, erp-web).
+export function actualizarOrdenCompra(otId, numero, archivo) {
     const { token } = getSesion();
     return pedir(`/portal/ot/${otId}/orden-compra?token=${encodeURIComponent(token)}`, {
-        method: 'POST', body: JSON.stringify({ ordenCompra }),
+        method: 'POST', body: JSON.stringify({ numero, archivo }),
+    });
+}
+export function actualizarEdp(otId, numero, archivo) {
+    const { token } = getSesion();
+    return pedir(`/portal/ot/${otId}/edp?token=${encodeURIComponent(token)}`, {
+        method: 'POST', body: JSON.stringify({ numero, archivo }),
+    });
+}
+export function actualizarHes(otId, numero, archivo) {
+    const { token } = getSesion();
+    return pedir(`/portal/ot/${otId}/hes?token=${encodeURIComponent(token)}`, {
+        method: 'POST', body: JSON.stringify({ numero, archivo }),
     });
 }

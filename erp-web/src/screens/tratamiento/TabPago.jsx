@@ -13,8 +13,45 @@ function horasDesde(iso) {
     return `hace ${Math.floor(horas / 24)} día${Math.floor(horas / 24) === 1 ? '' : 's'}`;
 }
 
+// Se convierte a data-URI en el navegador (igual que las fotos del editor de informe en
+// TratamientoScreen) — el backend lo guarda como archivo real en uploads/ recién al guardar
+// (otController.actualizarOT), no hace falta un endpoint de subida aparte.
+function archivoADataUri(archivo) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(archivo);
+    });
+}
+
+// Bloque repetido para cada uno de los 3 documentos del flujo chileno de pago (Orden de
+// Compra → Estado de Pago/EDP → Hoja de Entrada de Servicio/HES) — número + adjuntar archivo.
+// Cualquiera de los dos lados (oficina acá, cliente desde Cuenta y Pago) puede completarlo.
+function DocumentoPago({ titulo, numero, archivo, onNumero, onArchivo }) {
+    return (
+        <div style={{ marginBottom: 10 }}>
+            <span style={styles.etiqueta}>{titulo}</span>
+            <div style={{ display: 'flex', gap: 8, marginTop: 3 }}>
+                <input className="campo-ed" style={{ ...styles.inputPlano, flex: 1 }} value={numero} onChange={e => onNumero(e.target.value)} placeholder="Número" />
+                <label style={{ ...styles.btnSecundario, cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+                    {archivo ? 'Reemplazar' : 'Adjuntar'}
+                    <input
+                        type="file" accept="application/pdf,image/*" style={{ display: 'none' }}
+                        onChange={async e => { const f = e.target.files?.[0]; if (f) onArchivo(await archivoADataUri(f)); e.target.value = ''; }}
+                    />
+                </label>
+                {archivo && (
+                    <a href={archivo} target="_blank" rel="noreferrer" style={{ ...styles.btnSecundario, textDecoration: 'none', display: 'flex', alignItems: 'center' }}>Ver</a>
+                )}
+            </div>
+        </div>
+    );
+}
+
 export default function TabPago({
     pago, setPago, granTotal, guardarPago, anularPago, restaurarPago,
+    ordenCompra, setOrdenCompra, ordenCompraArchivo, setOrdenCompraArchivo,
     estadoOT, informeFinal, enviarInformeFinal, enviandoInforme,
     verInformePDF, descargarInformePDF, abrirEditorInforme,
 }) {
@@ -23,6 +60,13 @@ export default function TabPago({
     // al cliente. Ver plan/planificación con el usuario: el botón vive acá (Pago), no en
     // Ejecución, aunque el contenido se arma a partir de datos que sí viven ahí.
     const puedeEnviarInforme = ['Trabajo Terminado', 'Con Informe'].includes(estadoOT);
+
+    // "Pagado" ya no es un selector manual (Pendiente/Parcial/Pagado) — se considera pagado
+    // solo cuando los 3 documentos están completos, ver TratamientoScreen.documentosPagoCompletos
+    // (mismo criterio, recalculado también en el backend). Acá solo se muestra el estado
+    // guardado; el cálculo en vivo para decidir qué guardar vive en guardarPago.
+    const pagado = pago.estado === 'Pagado' && !pago.anulado;
+
     return (
         <div style={{ maxWidth: 520, padding: 16 }}>
             {puedeEnviarInforme && (
@@ -74,30 +118,41 @@ export default function TabPago({
                     </div>
                 ))}
             </div>
-            <div style={{ marginBottom: 12, display: 'flex', gap: 2 }}>
-                {['Pendiente', 'Parcial', 'Pagado'].map(e => (
-                    <button key={e} onClick={() => setPago(p => ({ ...p, estado: e }))} style={pago.estado === e ? styles.chipActivo : styles.chip}>{pago.estado === e ? '▪ ' : ''}{e}</button>
-                ))}
+
+            <div style={{ marginBottom: 14, padding: '10px 12px', background: t.barraFiltrosPie, borderLeft: `2px solid ${pagado ? t.verde : t.acento}`, borderRadius: 2 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.03em', textTransform: 'uppercase', color: pagado ? t.verde : t.textoPrincipal }}>
+                    {pagado ? 'Pagado' : 'Pendiente'}
+                </div>
+                <div style={{ fontSize: 11.5, color: t.textoSecundario2, marginTop: 4 }}>
+                    Se considera pagado cuando estén los 3 documentos: Orden de Compra, Estado de Pago y Hoja de Entrada de Servicio.
+                </div>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '130px 1fr', gap: '8px 12px', alignItems: 'center', marginBottom: 12 }}>
+
+            <DocumentoPago
+                titulo="Orden de Compra (OC)" numero={ordenCompra} archivo={ordenCompraArchivo}
+                onNumero={setOrdenCompra} onArchivo={setOrdenCompraArchivo}
+            />
+            <DocumentoPago
+                titulo="Estado de Pago (EDP)" numero={pago.estadoPago?.numero || ''} archivo={pago.estadoPago?.archivo || ''}
+                onNumero={v => setPago(p => ({ ...p, estadoPago: { ...(p.estadoPago || {}), numero: v } }))}
+                onArchivo={v => setPago(p => ({ ...p, estadoPago: { ...(p.estadoPago || {}), archivo: v } }))}
+            />
+            <DocumentoPago
+                titulo="Hoja de Entrada de Servicio (HES)" numero={pago.hes?.numero || ''} archivo={pago.hes?.archivo || ''}
+                onNumero={v => setPago(p => ({ ...p, hes: { ...(p.hes || {}), numero: v } }))}
+                onArchivo={v => setPago(p => ({ ...p, hes: { ...(p.hes || {}), archivo: v } }))}
+            />
+
+            <div style={{ display: 'grid', gridTemplateColumns: '130px 1fr', gap: '8px 12px', alignItems: 'center', margin: '12px 0' }}>
                 <span style={{ fontSize: 11.5, color: t.textoSecundario3 }}>Monto pagado</span>
                 <input type="number" className="campo-ed" style={styles.inputPlano} value={pago.montoPagado} onChange={e => setPago(p => ({ ...p, montoPagado: Number(e.target.value) }))} />
                 <span style={{ fontSize: 11.5, color: t.textoSecundario3 }}>Fecha de pago</span>
                 <input type="date" className="campo-ed" style={styles.inputPlano} value={pago.fechaPago} onChange={e => setPago(p => ({ ...p, fechaPago: e.target.value }))} />
-                <span style={{ fontSize: 11.5, color: t.textoSecundario3 }}>Método</span>
-                <select className="campo-ed" style={styles.inputPlano} value={pago.metodoPago} onChange={e => setPago(p => ({ ...p, metodoPago: e.target.value }))}>
-                    {['Transferencia', 'Efectivo', 'Cheque', 'Débito', 'Crédito', 'Otro'].map(m => <option key={m}>{m}</option>)}
-                </select>
-                <span style={{ fontSize: 11.5, color: t.textoSecundario3 }}>N° referencia</span>
-                <input className="campo-ed" style={styles.inputPlano} value={pago.referencia} onChange={e => setPago(p => ({ ...p, referencia: e.target.value }))} placeholder="Ej: TRF-20260817-001" />
             </div>
-            <label style={styles.campoLabel}>
-                <span style={styles.etiqueta}>Notas</span>
-                <textarea className="campo-ed" style={{ ...styles.inputPlano, minHeight: 60 }} value={pago.notas} onChange={e => setPago(p => ({ ...p, notas: e.target.value }))} />
-            </label>
+
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 14 }}>
                 <button onClick={guardarPago} style={styles.btnPrimario}>Guardar información de pago</button>
-                {!pago.anulado && pago.estado !== 'Pendiente' && <button onClick={anularPago} style={{ ...styles.btnSecundario, color: t.rojo }}>Anular pago</button>}
+                {!pago.anulado && pago.estado === 'Pagado' && <button onClick={anularPago} style={{ ...styles.btnSecundario, color: t.rojo }}>Anular pago</button>}
                 {pago.anulado && <button onClick={restaurarPago} style={styles.btnSecundario}>Restaurar pago</button>}
             </div>
         </div>

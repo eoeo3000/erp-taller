@@ -1,6 +1,5 @@
 const crypto = require('crypto');
-const fs = require('fs');
-const path = require('path');
+const { guardarAdjuntoSiEsBase64 } = require('../utils/adjuntos');
 const getSolicitud = require('../models/Solicitud');
 const getOT = require('../models/OT');
 const getSesionPortal = require('../models/SesionPortal');
@@ -56,11 +55,13 @@ function otPublica(ot) {
         _id: ot._id,
         numeroOT: ot.numeroOT,
         estado: ot.estado,
-        // El cliente lo puede completar desde Cuenta y Pago (C5, PWA Cliente) — su propia
-        // orden de compra interna para que la oficina pueda facturar contra ella (ver
-        // actualizarOrdenCompra más abajo). También puede venir ya cargado desde Antecedentes
-        // (erp-web) si la oficina lo escribió primero.
+        // Documentos del flujo de pago (Chile): Orden de Compra → Estado de Pago (EDP) → Hoja
+        // de Entrada de Servicio (HES). Editables desde ambos lados — Cuenta y Pago (C5, PWA
+        // Cliente) y la pestaña Pago (erp-web) — ver actualizarOrdenCompra/actualizarEdp/
+        // actualizarHes más abajo. Con los 3 completos el pago se considera Pagado, sin
+        // selector manual (ver otController.actualizarOT).
         ordenCompra: ot.ordenCompra || '',
+        ordenCompraArchivo: ot.ordenCompraArchivo || '',
         granTotal: ot.granTotal,
         // Igual que TratamientoScreen.granTotal/totalManoObra en erp-web — se suma acá y se
         // expone como un solo número porque tareas[] (abajo) NUNCA manda valorHora al cliente
@@ -129,7 +130,12 @@ function otPublica(ot) {
             precio: l.precio,
             subtotal: (l.cantidad || 0) * (l.precio || 0),
         })),
-        pago: ot.pago ? { estado: ot.pago.estado } : null,
+        pago: ot.pago ? {
+            estado: ot.pago.estado,
+            montoPagado: ot.pago.montoPagado || 0,
+            estadoPago: { numero: ot.pago.estadoPago?.numero || '', archivo: ot.pago.estadoPago?.archivo || '' },
+            hes: { numero: ot.pago.hes?.numero || '', archivo: ot.pago.hes?.archivo || '' },
+        } : null,
         // Informe inicial (evaluación previa a cotizar) — antes no viajaba al cliente en
         // absoluto. Se expone completo (decisión explícita del usuario: sin filtrar el
         // contenido) — se omiten sí tipoTrabajoId/tareaVinculadaId/valores porque son
@@ -265,16 +271,8 @@ exports.detalle = async (req, res) => {
 // del Cliente) arrastra ese peso — confirmado: una sola solicitud así hizo que /api/data
 // tardara casi un minuto en producción. Se decodifica acá y se guarda en uploads/, igual
 // que ya hace multer para el formulario de escritorio, dejando en el campo solo la ruta.
-function guardarAdjuntoSiEsBase64(valor) {
-    const match = /^data:([\w/+.-]+);base64,(.+)$/.exec(valor || '');
-    if (!match) return valor; // ya es una ruta/URL (o está vacío) — se deja igual
-    const [, mime, contenido] = match;
-    const ext = (mime.split('/')[1] || 'jpg').replace('jpeg', 'jpg');
-    const nombre = `${Date.now()}-${crypto.randomBytes(6).toString('hex')}.${ext}`;
-    const destino = path.join(__dirname, '..', '..', 'uploads', nombre);
-    fs.writeFileSync(destino, Buffer.from(contenido, 'base64'));
-    return `/uploads/${nombre}`;
-}
+// (guardarAdjuntoSiEsBase64 ahora vive en utils/adjuntos.js — otController también la usa
+// para los documentos de pago.)
 
 // POST /api/portal/solicitud  — crear nueva solicitud desde el portal del cliente
 exports.crearSolicitud = async (req, res) => {
@@ -768,31 +766,73 @@ exports.responderExcepcion = async (req, res) => {
     }
 };
 
-// POST /api/portal/ot/:id/orden-compra?token= — el cliente carga/corrige su propio número de
-// orden de compra desde Cuenta y Pago (C5, PWA Cliente) para que la oficina pueda facturar
-// contra ella (aparece en erp-web, pestaña Antecedentes). Mismo esqueleto de validación de
-// sesión que responderCotizacion/responderExcepcion arriba.
+// Valida que la sesión del portal (token) le pertenezca a esta OT — mismo chequeo repetido
+// en responderCotizacion/responderExcepcion/actualizarOrdenCompra/actualizarEdp/actualizarHes.
+async function otDeLaSesion(OT, Solicitud, SesionPortal, id, token) {
+    const sesion = await SesionPortal.findOne({ tokenHash: hashToken(token), estado: 'activo' });
+    if (!sesion || sesion.expira < new Date()) { const e = new Error('Sesión inválida o vencida'); e.status = 403; throw e; }
+    const ot = await OT.findById(id).lean();
+    if (!ot) { const e = new Error('OT no encontrada'); e.status = 404; throw e; }
+    const solicitud = await Solicitud.findById(ot.solicitudId || ot._id).lean();
+    if (!solicitud || normalizarTelefono(solicitud.numero) !== sesion.telefono) {
+        const e = new Error('Esta OT no pertenece a tu sesión.'); e.status = 403; throw e;
+    }
+    return ot;
+}
+
+// POST /api/portal/ot/:id/orden-compra?token= — carga/corrige número y archivo de la Orden de
+// Compra desde Cuenta y Pago (C5, PWA Cliente) — también editable desde la oficina (TabPago,
+// erp-web). Con OC + EDP + HES completos el pago se considera Pagado (otController.actualizarOT
+// hace el mismo cálculo cuando la oficina guarda desde el escritorio).
 exports.actualizarOrdenCompra = async (req, res) => {
     const OT = getOT(req.db);
     const Solicitud = getSolicitud(req.db);
     const SesionPortal = getSesionPortal(req.db);
     try {
-        const sesion = await SesionPortal.findOne({ tokenHash: hashToken(req.query.token), estado: 'activo' });
-        if (!sesion || sesion.expira < new Date()) return res.status(403).json({ error: 'Sesión inválida o vencida' });
-
         const { id } = req.params;
-        const { ordenCompra } = req.body;
+        await otDeLaSesion(OT, Solicitud, SesionPortal, id, req.query.token);
+        const { numero, archivo } = req.body;
+        const otActualizada = await OT.findByIdAndUpdate(id, {
+            ordenCompra: numero || '',
+            ordenCompraArchivo: guardarAdjuntoSiEsBase64(archivo) || '',
+        }, { new: true });
+        res.json({ ok: true, ot: otPublica(otActualizada) });
+    } catch (err) {
+        res.status(err.status || 500).json({ error: err.message });
+    }
+};
 
-        const ot = await OT.findById(id).lean();
-        if (!ot) return res.status(404).json({ error: 'OT no encontrada' });
+// POST /api/portal/ot/:id/edp?token= — Estado de Pago. Mismo esqueleto que actualizarOrdenCompra.
+exports.actualizarEdp = async (req, res) => {
+    const OT = getOT(req.db);
+    const Solicitud = getSolicitud(req.db);
+    const SesionPortal = getSesionPortal(req.db);
+    try {
+        const { id } = req.params;
+        await otDeLaSesion(OT, Solicitud, SesionPortal, id, req.query.token);
+        const { numero, archivo } = req.body;
+        const otActualizada = await OT.findByIdAndUpdate(id, {
+            'pago.estadoPago': { numero: numero || '', archivo: guardarAdjuntoSiEsBase64(archivo) || '' },
+        }, { new: true });
+        res.json({ ok: true, ot: otPublica(otActualizada) });
+    } catch (err) {
+        res.status(err.status || 500).json({ error: err.message });
+    }
+};
 
-        const solicitud = await Solicitud.findById(ot.solicitudId || ot._id).lean();
-        if (!solicitud || normalizarTelefono(solicitud.numero) !== sesion.telefono) {
-            return res.status(403).json({ error: 'Esta OT no pertenece a tu sesión.' });
-        }
-
-        const otActualizada = await OT.findByIdAndUpdate(id, { ordenCompra: ordenCompra || '' }, { new: true });
-
+// POST /api/portal/ot/:id/hes?token= — Hoja de Entrada de Servicio. Mismo esqueleto que
+// actualizarOrdenCompra.
+exports.actualizarHes = async (req, res) => {
+    const OT = getOT(req.db);
+    const Solicitud = getSolicitud(req.db);
+    const SesionPortal = getSesionPortal(req.db);
+    try {
+        const { id } = req.params;
+        await otDeLaSesion(OT, Solicitud, SesionPortal, id, req.query.token);
+        const { numero, archivo } = req.body;
+        const otActualizada = await OT.findByIdAndUpdate(id, {
+            'pago.hes': { numero: numero || '', archivo: guardarAdjuntoSiEsBase64(archivo) || '' },
+        }, { new: true });
         res.json({ ok: true, ot: otPublica(otActualizada) });
     } catch (err) {
         res.status(err.status || 500).json({ error: err.message });

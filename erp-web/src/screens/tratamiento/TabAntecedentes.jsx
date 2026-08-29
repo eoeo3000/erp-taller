@@ -94,13 +94,6 @@ export default function TabAntecedentes({ cargando, antecedentes, form, onCampo,
                         onChange={e => onCampo('fechaEjecucion', e.target.value)}
                     />
 
-                    <span style={etiquetaAnte}>Orden de compra</span>
-                    <input
-                        style={controlAnte} disabled={soloLectura}
-                        placeholder="Sin OC del cliente" value={form.ordenCompra}
-                        onChange={e => onCampo('ordenCompra', e.target.value)}
-                    />
-
                     <span style={etiquetaAnte}>Prioridad</span>
                     <div style={{ display: 'flex', gap: 4 }}>
                         {PRIORIDADES.map(p => (

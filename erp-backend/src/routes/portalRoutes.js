@@ -15,6 +15,8 @@ router.get('/mis-solicitudes',    ctrl.misSolicitudes);
 router.post('/ot/:id/responder',  ctrl.responderCotizacion);
 router.post('/ot/:id/excepciones/:excepcionId/responder', ctrl.responderExcepcion);
 router.post('/ot/:id/orden-compra', ctrl.actualizarOrdenCompra);
+router.post('/ot/:id/edp', ctrl.actualizarEdp);
+router.post('/ot/:id/hes', ctrl.actualizarHes);
 router.get('/sesiones',              ctrl.listarSesiones);
 router.get('/stock-tokens',              ctrl.stockTokens);
 router.post('/sesiones/lote',            ctrl.generarLote);

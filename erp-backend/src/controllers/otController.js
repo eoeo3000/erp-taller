@@ -2,6 +2,16 @@ const getOT = require('../models/OT');
 const getRecurso = require('../models/Recurso');
 const getUsuario = require('../models/Usuario');
 const getAsignacion = require('../models/Asignacion');
+const { guardarAdjuntoSiEsBase64 } = require('../utils/adjuntos');
+
+// Los 3 documentos del flujo chileno de pago (Orden de Compra → Estado de Pago/EDP → Hoja de
+// Entrada de Servicio/HES) reemplazan el selector manual Pendiente/Parcial/Pagado (TabPago.jsx,
+// erp-web) — con los 3 completos (número o archivo, no hace falta ambos) el pago se considera
+// Pagado. `anulado` sigue pudiendo forzarlo de vuelta a Pendiente aunque estén completos.
+function documentosPagoCompletos(ordenCompra, ordenCompraArchivo, pago) {
+    const hayDoc = (d) => !!(d?.numero || d?.archivo);
+    return !!(ordenCompra || ordenCompraArchivo) && hayDoc(pago?.estadoPago) && hayDoc(pago?.hes);
+}
 
 // La aprobación del cliente queda abierta un máximo de 12h desde que se envía la cotización
 // (o hasta que el planificador la cancele desde Tratamiento, ver actualizarOT) — pasado eso,
@@ -368,7 +378,6 @@ exports.antecedentes = async (req, res) => {
                 supervisorId: ot?.supervisorId || null,
                 supervisor,
                 fechaEjecucion: ot?.fechaEjecucion || null,
-                ordenCompra: ot?.ordenCompra || '',
                 prioridad: ot?.prioridad || 'Normal',
                 instruccionesTerreno: ot?.instruccionesTerreno || '',
                 asignadaEn: ot?.asignadaEn || null,
@@ -390,7 +399,7 @@ exports.asignarSupervisor = async (req, res) => {
     const Solicitud = require('../models/Solicitud')(req.db);
     try {
         const { id } = req.params;
-        const { supervisorId, fechaEjecucion, ordenCompra, prioridad, instruccionesTerreno } = req.body;
+        const { supervisorId, fechaEjecucion, prioridad, instruccionesTerreno } = req.body;
 
         let ot = await OT.findById(id);
         if (!ot) {
@@ -440,7 +449,6 @@ exports.asignarSupervisor = async (req, res) => {
             ? await Recurso.findById(supervisorAnteriorId).select('nombre puesto').lean()
             : null;
 
-        if (ordenCompra !== undefined) ot.ordenCompra = ordenCompra;
         if (prioridad) ot.prioridad = prioridad;
         if (instruccionesTerreno !== undefined) ot.instruccionesTerreno = instruccionesTerreno;
 
@@ -546,6 +554,34 @@ exports.actualizarOT = async (req, res) => {
         if (Array.isArray(datosCuerpo.tareas) && !('fechaEjecucion' in datosCuerpo)) {
             const fechasTareas = datosCuerpo.tareas.map(t => t.fecha).filter(Boolean).sort();
             if (fechasTareas.length > 0) datosCuerpo.fechaEjecucion = fechasTareas[0];
+        }
+
+        // Documentos de pago (OC/EDP/HES): un archivo nuevo llega como data-URI base64 (mismo
+        // criterio que Solicitud.adjuntos) — se guarda como archivo real antes de tocar Mongo.
+        if ('ordenCompraArchivo' in datosCuerpo) {
+            datosCuerpo.ordenCompraArchivo = guardarAdjuntoSiEsBase64(datosCuerpo.ordenCompraArchivo);
+        }
+        if (datosCuerpo.pago?.estadoPago?.archivo) {
+            datosCuerpo.pago.estadoPago.archivo = guardarAdjuntoSiEsBase64(datosCuerpo.pago.estadoPago.archivo);
+        }
+        if (datosCuerpo.pago?.hes?.archivo) {
+            datosCuerpo.pago.hes.archivo = guardarAdjuntoSiEsBase64(datosCuerpo.pago.hes.archivo);
+        }
+        // pago.estado ya no es un selector manual (TabPago.jsx quitó Pendiente/Parcial/Pagado)
+        // — se recalcula acá a partir de si los 3 documentos están completos, sin confiar en
+        // lo que mande el llamador. Si el llamador no vino ya con `estado` propio (TabPago sí
+        // manda el suyo, calculado igual), se refleja también en el pipeline de la OT.
+        if ('pago' in datosCuerpo || 'ordenCompra' in datosCuerpo || 'ordenCompraArchivo' in datosCuerpo) {
+            const ordenCompra = ('ordenCompra' in datosCuerpo) ? datosCuerpo.ordenCompra : otAnterior?.ordenCompra;
+            const ordenCompraArchivo = ('ordenCompraArchivo' in datosCuerpo) ? datosCuerpo.ordenCompraArchivo : otAnterior?.ordenCompraArchivo;
+            const pagoMerge = { ...(otAnterior?.pago || {}), ...(datosCuerpo.pago || {}) };
+            const completos = documentosPagoCompletos(ordenCompra, ordenCompraArchivo, pagoMerge);
+            pagoMerge.estado = (completos && !pagoMerge.anulado) ? 'Pagado' : 'Pendiente';
+            datosCuerpo.pago = pagoMerge;
+            if (!('estado' in datosCuerpo)) {
+                if (pagoMerge.estado === 'Pagado') datosCuerpo.estado = 'Pagada';
+                else if (otAnterior?.estado === 'Pagada') datosCuerpo.estado = 'Con Informe';
+            }
         }
 
         // 1. Intentar actualizar (Usamos $set para campos normales y nos aseguramos de traer la OT nueva)

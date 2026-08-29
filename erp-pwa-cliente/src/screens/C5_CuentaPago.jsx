@@ -1,5 +1,60 @@
 import { useState, Fragment } from 'react';
-import { actualizarOrdenCompra } from '../api.js';
+import { actualizarOrdenCompra, actualizarEdp, actualizarHes } from '../api.js';
+
+// Se convierte a data-URI en el navegador — el backend lo guarda como archivo real recién al
+// guardar (portalController.actualizarOrdenCompra/actualizarEdp/actualizarHes), no hace falta
+// un endpoint de subida aparte. Mismo criterio que TabPago.jsx en erp-web (duplicado acá
+// porque no hay forma de compartir código entre erp-web y las PWA).
+function archivoADataUri(archivo) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(archivo);
+    });
+}
+
+// Bloque repetido para cada uno de los 3 documentos del flujo chileno de pago (Orden de
+// Compra → Estado de Pago/EDP → Hoja de Entrada de Servicio/HES) — número + adjuntar archivo +
+// guardar. La oficina también puede completarlos desde su lado (TabPago, erp-web).
+function BloqueDocumento({ titulo, estado, setEstado, onGuardar }) {
+    return (
+        <div style={{ marginBottom: 18 }}>
+            <div className="versalita" style={{ marginBottom: 6 }}>{titulo}</div>
+            <input
+                className="input-campo"
+                style={{ width: '100%', boxSizing: 'border-box', marginBottom: 8 }}
+                value={estado.numero}
+                onChange={(e) => setEstado((s) => ({ ...s, numero: e.target.value, guardado: false }))}
+                placeholder="Número"
+            />
+            {estado.error && <div style={{ fontSize: 'var(--fs-secundario)', color: 'var(--detenido)', marginBottom: 8 }}>{estado.error}</div>}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                <label className="boton-secundario" style={{ width: 'auto', padding: '0 16px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center' }}>
+                    {estado.archivo ? 'Reemplazar archivo' : 'Adjuntar archivo'}
+                    <input
+                        type="file" accept="application/pdf,image/*" style={{ display: 'none' }}
+                        onChange={async (e) => {
+                            const f = e.target.files?.[0];
+                            if (f) {
+                                const dataUri = await archivoADataUri(f);
+                                setEstado((s) => ({ ...s, archivo: dataUri, guardado: false }));
+                            }
+                            e.target.value = '';
+                        }}
+                    />
+                </label>
+                {estado.archivo && (
+                    <a href={estado.archivo} target="_blank" rel="noreferrer" style={{ fontSize: 'var(--fs-secundario)', color: 'var(--en-curso)' }}>Ver archivo</a>
+                )}
+                <button className="boton-secundario" style={{ width: 'auto', padding: '0 20px' }} disabled={estado.guardando} onClick={onGuardar}>
+                    {estado.guardando ? 'Guardando…' : 'Guardar'}
+                </button>
+                {estado.guardado && <span style={{ fontSize: 'var(--fs-secundario)', color: 'var(--listo)' }}>Guardado</span>}
+            </div>
+        </div>
+    );
+}
 
 const CLP = (n) => '$ ' + Math.round(n || 0).toLocaleString('es-CL');
 const MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
@@ -46,23 +101,20 @@ const ETIQUETAS_CONDICIONES = [
 export default function C5CuentaPago({ nav, trabajo: trabajoProp }) {
     const [verCotizacion, setVerCotizacion] = useState(false);
     const [trabajo, setTrabajo] = useState(trabajoProp);
-    const [ordenCompra, setOrdenCompra] = useState(trabajoProp?.ot?.ordenCompra || '');
-    const [guardandoOC, setGuardandoOC] = useState(false);
-    const [guardadoOC, setGuardadoOC] = useState(false);
-    const [errorOC, setErrorOC] = useState('');
+    const [oc, setOc] = useState({ numero: trabajoProp?.ot?.ordenCompra || '', archivo: trabajoProp?.ot?.ordenCompraArchivo || '', guardando: false, guardado: false, error: '' });
+    const [edp, setEdp] = useState({ numero: trabajoProp?.ot?.pago?.estadoPago?.numero || '', archivo: trabajoProp?.ot?.pago?.estadoPago?.archivo || '', guardando: false, guardado: false, error: '' });
+    const [hes, setHes] = useState({ numero: trabajoProp?.ot?.pago?.hes?.numero || '', archivo: trabajoProp?.ot?.pago?.hes?.archivo || '', guardando: false, guardado: false, error: '' });
     if (!trabajo) return null;
     const ot = trabajo.ot;
 
-    const guardarOrdenCompra = async () => {
-        setGuardandoOC(true); setErrorOC(''); setGuardadoOC(false);
+    const guardarDocumento = async (estado, setEstado, accion) => {
+        setEstado((s) => ({ ...s, guardando: true, error: '', guardado: false }));
         try {
-            const resultado = await actualizarOrdenCompra(ot._id, ordenCompra);
+            const resultado = await accion(ot._id, estado.numero, estado.archivo);
             setTrabajo((t) => ({ ...t, ot: resultado.ot }));
-            setGuardadoOC(true);
+            setEstado((s) => ({ ...s, guardando: false, guardado: true }));
         } catch (e) {
-            setErrorOC(e.message);
-        } finally {
-            setGuardandoOC(false);
+            setEstado((s) => ({ ...s, guardando: false, error: e.message }));
         }
     };
 
@@ -212,26 +264,13 @@ export default function C5CuentaPago({ nav, trabajo: trabajoProp }) {
             </div>
 
             <div style={{ padding: '14px 16px' }}>
-                <div className="versalita" style={{ marginBottom: 6 }}>Orden de compra</div>
-                <div style={{ fontSize: 'var(--fs-secundario)', color: 'var(--texto-secundario-1)', marginBottom: 8 }}>
-                    Si su empresa exige una orden de compra para pagar, ingrésela acá — la oficina la ve de inmediato.
+                <div className="versalita" style={{ marginBottom: 4 }}>Documentos de pago</div>
+                <div style={{ fontSize: 'var(--fs-secundario)', color: 'var(--texto-secundario-1)', marginBottom: 14 }}>
+                    Con estos 3 documentos completos el pago queda registrado — la oficina también puede completarlos por su cuenta.
                 </div>
-                <input
-                    className="input-campo"
-                    style={{ width: '100%', boxSizing: 'border-box', marginBottom: 8 }}
-                    value={ordenCompra}
-                    onChange={(e) => { setOrdenCompra(e.target.value); setGuardadoOC(false); }}
-                    placeholder="Ej: OC-4821"
-                />
-                {errorOC && <div style={{ fontSize: 'var(--fs-secundario)', color: 'var(--detenido)', marginBottom: 8 }}>{errorOC}</div>}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <button
-                        className="boton-secundario" style={{ width: 'auto', padding: '0 20px' }}
-                        disabled={guardandoOC || ordenCompra === (ot?.ordenCompra || '')}
-                        onClick={guardarOrdenCompra}
-                    >{guardandoOC ? 'Guardando…' : 'Guardar'}</button>
-                    {guardadoOC && <span style={{ fontSize: 'var(--fs-secundario)', color: 'var(--listo)' }}>Guardado</span>}
-                </div>
+                <BloqueDocumento titulo="Orden de Compra (OC)" estado={oc} setEstado={setOc} onGuardar={() => guardarDocumento(oc, setOc, actualizarOrdenCompra)} />
+                <BloqueDocumento titulo="Estado de Pago (EDP)" estado={edp} setEstado={setEdp} onGuardar={() => guardarDocumento(edp, setEdp, actualizarEdp)} />
+                <BloqueDocumento titulo="Hoja de Entrada de Servicio (HES)" estado={hes} setEstado={setHes} onGuardar={() => guardarDocumento(hes, setHes, actualizarHes)} />
             </div>
 
             <div style={{ padding: '14px 16px 4px' }} className="versalita">Detalle</div>

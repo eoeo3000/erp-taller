@@ -163,7 +163,12 @@ const OTSchema = new mongoose.Schema({
     // 4. Totales Financieros
     granTotal: { type: Number, default: 0 },
 
-    // 5. Control de Pago
+    // 5. Control de Pago — "Pagado" ya no es un selector manual (Pendiente/Parcial/Pagado):
+    // se calcula solo cuando los 3 documentos del flujo chileno de pago están completos
+    // (Orden de Compra → Estado de Pago/EDP → Hoja de Entrada de Servicio/HES), ver
+    // otController.actualizarOT y portalController.actualizarEdp/actualizarHes. `estado` se
+    // mantiene en el schema (otras pantallas/reportes ya lo leen — finanzasController,
+    // DashboardScreen, importExportController) pero ahora es de solo lectura desde TabPago.jsx.
     pago: {
         estado: { type: String, enum: ['Pendiente', 'Parcial', 'Pagado'], default: 'Pendiente' },
         montoPagado: { type: Number, default: 0 },
@@ -173,7 +178,18 @@ const OTSchema = new mongoose.Schema({
         notas: { type: String, default: '' },
         anulado: { type: Boolean, default: false },
         fechaAnulacion: { type: String, default: '' },
-        motivoAnulacion: { type: String, default: '' }
+        motivoAnulacion: { type: String, default: '' },
+        // Estado de Pago (EDP) — lo emite la oficina, pero el cliente también puede adjuntarlo
+        // desde Cuenta y Pago si lo recibió por otro canal.
+        estadoPago: {
+            numero: { type: String, default: '' },
+            archivo: { type: String, default: '' },
+        },
+        // Hoja de Entrada de Servicio (HES) — confirma que el cliente recibió el trabajo.
+        hes: {
+            numero: { type: String, default: '' },
+            archivo: { type: String, default: '' },
+        },
     },
 
     // 5b. Informe final al cliente (Solicitud + Informe Inicial + plan + lo reportado en
@@ -259,8 +275,11 @@ const OTSchema = new mongoose.Schema({
     // existían sin uso claro en el frontend — este es el campo que la pestaña edita).
     fechaEjecucion: { type: Date, default: null },
     // OC del CLIENTE (texto libre) — no confundir con ordenesCompra de abajo, que son las
-    // Ordenes de Compra propias generadas para cubrir faltantes de stock (Gap 3).
+    // Ordenes de Compra propias generadas para cubrir faltantes de stock (Gap 3). Editable
+    // desde la pestaña Pago (erp-web) y desde Cuenta y Pago (PWA Cliente) — es uno de los 3
+    // documentos que completan el pago, ver pago.estadoPago/pago.hes más arriba.
     ordenCompra: { type: String, default: '' },
+    ordenCompraArchivo: { type: String, default: '' },
     instruccionesTerreno: { type: String, default: '' },
     // Mejora v3 #6 (Cotización ampliada) — sección "Condiciones comerciales" del PDF.
     condicionesComerciales: {

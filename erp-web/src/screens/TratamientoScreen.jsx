@@ -77,6 +77,13 @@ const informeEvaluacionVacio = {
     revision: { estado: 'Pendiente', comentario: '', fecha: null, autor: '' },
 };
 
+// estadoPago/hes con default acá porque un pago guardado antes de que existiera este campo
+// puede no traerlos — el spread en los usos de abajo los completa sin pisar valores ya guardados.
+const pagoVacio = {
+    estado: 'Pendiente', montoPagado: 0, fechaPago: '', metodoPago: 'Transferencia', referencia: '', notas: '',
+    estadoPago: { numero: '', archivo: '' }, hes: { numero: '', archivo: '' },
+};
+
 // Mismo criterio y mismo límite que otController.cotizacionVencida/GanttScreen.cotizacionVencida
 // — duplicado acá porque no hay forma de compartir código entre el backend y el frontend, y
 // entre pantallas del frontend, en este repo.
@@ -132,10 +139,11 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
     const [nuevoEmail, setNuevoEmail] = useState('');
     const [modalPlantilla, setModalPlantilla] = useState(false);
     const [plantillaPreview, setPlantillaPreview] = useState(null);
-    const [pago, setPago] = useState(() => {
-        const p = datosRecibidos?.pago;
-        return p || { estado: 'Pendiente', montoPagado: 0, fechaPago: '', metodoPago: 'Transferencia', referencia: '', notas: '' };
-    });
+    const [pago, setPago] = useState(() => ({ ...pagoVacio, ...(datosRecibidos?.pago || {}) }));
+    // Documentos de pago — Orden de Compra vive en la propia OT (no en pago), también editable
+    // desde Cuenta y Pago (PWA Cliente, ver actualizarOrdenCompra).
+    const [ordenCompra, setOrdenCompra] = useState(datosRecibidos?.ordenCompra || '');
+    const [ordenCompraArchivo, setOrdenCompraArchivo] = useState(datosRecibidos?.ordenCompraArchivo || '');
     const [logistica, setLogistica] = useState([{ id: Date.now(), descripcion: '', cantidad: 1, precio: 0 }]);
     // Mejora v3 #6 — Cotización ampliada: condiciones comerciales editables y secciones a
     // incluir en el PDF (el detalle por tarea/materiales-suministros/totales van siempre).
@@ -896,7 +904,9 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                     setTareas(data.tareas || []);
                     setComponentes(data.componentes || []);
                     setExcepciones(data.excepciones || []);
-                    if (data.pago) setPago(data.pago);
+                    if (data.pago) setPago({ ...pagoVacio, ...data.pago });
+                    setOrdenCompra(data.ordenCompra || '');
+                    setOrdenCompraArchivo(data.ordenCompraArchivo || '');
                     if (data.informeEvaluacion) setInformeEvaluacion({ ...informeEvaluacionVacio, ...data.informeEvaluacion });
                     setContenidoInforme(data.informeFinal?.contenido || null);
                     if (data.logistica?.length > 0) setLogistica(data.logistica);
@@ -914,7 +924,7 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
     const [antecedentes, setAntecedentes] = useState(null);
     const [cargandoAntecedentes, setCargandoAntecedentes] = useState(true);
     const [formAsignacion, setFormAsignacion] = useState({
-        supervisorId: '', fechaEjecucion: '', ordenCompra: '', prioridad: 'Normal', instruccionesTerreno: '',
+        supervisorId: '', fechaEjecucion: '', prioridad: 'Normal', instruccionesTerreno: '',
     });
     const [avisoAsignacion, setAvisoAsignacion] = useState(null); // { tipo: 'ok'|'error', texto }
     const [guardandoAsignacion, setGuardandoAsignacion] = useState(false);
@@ -935,7 +945,6 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                 setFormAsignacion({
                     supervisorId: data.ot.supervisorId || '',
                     fechaEjecucion: dmy(data.ot.fechaEjecucion),
-                    ordenCompra: data.ot.ordenCompra || '',
                     prioridad: data.ot.prioridad || 'Normal',
                     instruccionesTerreno: data.ot.instruccionesTerreno || '',
                 });
@@ -958,7 +967,6 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
             const { data } = await axios.patch(`${API}/ots/${id}/asignacion`, {
                 supervisorId: formAsignacion.supervisorId || null,
                 fechaEjecucion: formAsignacion.fechaEjecucion ? ymd(formAsignacion.fechaEjecucion) : null,
-                ordenCompra: formAsignacion.ordenCompra,
                 prioridad: formAsignacion.prioridad,
                 instruccionesTerreno: formAsignacion.instruccionesTerreno,
             });
@@ -1121,16 +1129,26 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
         } catch (e) { notificar.error('Error al restaurar: ' + e.message); }
     };
 
+    // "Pagado" ya no es un selector manual — se calcula solo cuando los 3 documentos del flujo
+    // de pago (Orden de Compra, Estado de Pago/EDP, Hoja de Entrada de Servicio/HES) están
+    // completos (número o archivo, no hace falta ambos). El backend recalcula lo mismo en
+    // actualizarOT (defensa en profundidad); esto es lo que decide qué mostrar/enviar ya.
+    const hayDocumentoPago = (d) => !!(d?.numero || d?.archivo);
+    const documentosPagoCompletos = () => !!(ordenCompra || ordenCompraArchivo) && hayDocumentoPago(pago.estadoPago) && hayDocumentoPago(pago.hes);
+
     const guardarPago = async () => {
         try {
             const id = otSeleccionada?._id || datosRecibidos?._id;
             if (!id) return notificar.advertencia('Sin OT seleccionada');
             const estadoActual = otSeleccionada?.estado || datosRecibidos?.estado || 'Con Informe';
-            const nuevoEstadoOT = pago.estado === 'Pagado' ? 'Pagada' : estadoActual;
-            const pagoAGuardar = { ...pago, anulado: false, fechaAnulacion: '', motivoAnulacion: '' };
-            const { data } = await axios.put(`${API}/ots/${id}`, { pago: pagoAGuardar, estado: nuevoEstadoOT });
-            setOtSeleccionada(prev => ({ ...prev, pago: pagoAGuardar, estado: nuevoEstadoOT }));
+            const estadoPagoCalculado = documentosPagoCompletos() ? 'Pagado' : 'Pendiente';
+            const nuevoEstadoOT = estadoPagoCalculado === 'Pagado' ? 'Pagada' : estadoActual;
+            const pagoAGuardar = { ...pago, estado: estadoPagoCalculado, anulado: false, fechaAnulacion: '', motivoAnulacion: '' };
+            const { data } = await axios.put(`${API}/ots/${id}`, { pago: pagoAGuardar, ordenCompra, ordenCompraArchivo, estado: nuevoEstadoOT });
+            setOtSeleccionada(prev => ({ ...prev, pago: pagoAGuardar, ordenCompra, ordenCompraArchivo, estado: nuevoEstadoOT }));
             setPago(data.pago || pagoAGuardar);
+            if (data.ordenCompra !== undefined) setOrdenCompra(data.ordenCompra);
+            if (data.ordenCompraArchivo !== undefined) setOrdenCompraArchivo(data.ordenCompraArchivo);
             if (cargarDatos) cargarDatos();
             notificar.exito('Información de pago guardada');
         } catch (e) { notificar.error('Error al guardar pago: ' + e.message); }
@@ -1141,7 +1159,7 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
         try {
             const id = otSeleccionada?._id || datosRecibidos?._id;
             if (!id) return;
-            const pagoAnulado = { ...pago, anulado: true, fechaAnulacion: new Date().toISOString().slice(0, 10), motivoAnulacion: motivo };
+            const pagoAnulado = { ...pago, estado: 'Pendiente', anulado: true, fechaAnulacion: new Date().toISOString().slice(0, 10), motivoAnulacion: motivo };
             const nuevoEstadoOT = otSeleccionada.estado === 'Pagada' ? 'Con Informe' : otSeleccionada.estado;
             await axios.put(`${API}/ots/${id}`, { pago: pagoAnulado, estado: nuevoEstadoOT });
             setOtSeleccionada(prev => ({ ...prev, pago: pagoAnulado, estado: nuevoEstadoOT }));
@@ -1150,12 +1168,13 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
         } catch (e) { notificar.error('Error al anular pago: ' + e.message); }
     };
     const restaurarPago = async () => {
-        if (!(await confirmar('¿Restaurar el pago y volver al estado "Pagada"?', { danger: false }))) return;
+        if (!(await confirmar('¿Restaurar el pago?', { danger: false }))) return;
         try {
             const id = otSeleccionada?._id || datosRecibidos?._id;
             if (!id) return;
-            const pagoRestaurado = { ...pago, anulado: false, fechaAnulacion: '', motivoAnulacion: '' };
-            const nuevoEstadoOT = pagoRestaurado.estado === 'Pagado' ? 'Pagada' : otSeleccionada.estado;
+            const estadoPagoCalculado = documentosPagoCompletos() ? 'Pagado' : 'Pendiente';
+            const pagoRestaurado = { ...pago, estado: estadoPagoCalculado, anulado: false, fechaAnulacion: '', motivoAnulacion: '' };
+            const nuevoEstadoOT = estadoPagoCalculado === 'Pagado' ? 'Pagada' : otSeleccionada.estado;
             await axios.put(`${API}/ots/${id}`, { pago: pagoRestaurado, estado: nuevoEstadoOT });
             setOtSeleccionada(prev => ({ ...prev, pago: pagoRestaurado, estado: nuevoEstadoOT }));
             setPago(pagoRestaurado);
@@ -1944,6 +1963,8 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                     {tabActiva === 'pago' && (
                         <TabPago
                             pago={pago} setPago={setPago} granTotal={granTotal}
+                            ordenCompra={ordenCompra} setOrdenCompra={setOrdenCompra}
+                            ordenCompraArchivo={ordenCompraArchivo} setOrdenCompraArchivo={setOrdenCompraArchivo}
                             guardarPago={guardarPago} anularPago={anularPago} restaurarPago={restaurarPago}
                             estadoOT={otSeleccionada.estado} informeFinal={otSeleccionada.informeFinal}
                             enviarInformeFinal={enviarInformeFinal} enviandoInforme={enviandoInforme}
