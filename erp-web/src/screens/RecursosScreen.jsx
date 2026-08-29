@@ -366,15 +366,24 @@ const RecursosScreen = ({
                     {tabActiva === 'Calendarios' && (
                         <div>
                             <div style={styles.tablaHeader('3px minmax(200px,1fr) 150px 196px 72px')}>
-                                <span /><span>Calendario</span><span>Tipo</span><span>Semana · horas por día</span><span style={{ textAlign: 'right' }}>Ciclo</span>
+                                <span /><span>Calendario</span><span>Tipo</span><span>Semana/ciclo · horas por día</span><span style={{ textAlign: 'right' }}>Total</span>
                             </div>
                             {calendarios.map(c => {
-                                const semana = ['lun', 'mar', 'mié', 'jue', 'vie', 'sáb', 'dom'].map(d => {
-                                    const cfg = c.config?.find(x => String(x.dia).toLowerCase().trim() === d);
-                                    return { letra: d[0].toUpperCase(), valor: cfg?.activo ? calcularHorasBloques(cfg.bloques) : 0 };
-                                });
+                                const esRotativo = c.tipo === 'rotativo';
+                                // Rotativo se identifica por posición en el ciclo, no por nombre de día
+                                // (ver utils/calendario.js: cal.config[diaDelCiclo]) — proyectarlo sobre
+                                // L-M-M-J-V-S-D como si fuera semanal dejaba esta columna siempre en 0
+                                // (dia.dia nunca calza con 'lun'/'mar'/...). Se listan todos los días del
+                                // ciclo (con scroll horizontal si no entran) para poder revisar uno largo
+                                // como un 7x7 completo, no solo los primeros 7.
+                                const dias = esRotativo
+                                    ? (c.config || []).map((cfg, i) => ({ letra: String(i + 1), valor: cfg?.activo ? calcularHorasBloques(cfg.bloques) : 0 }))
+                                    : ['lun', 'mar', 'mié', 'jue', 'vie', 'sáb', 'dom'].map(d => {
+                                        const cfg = c.config?.find(x => String(x.dia).toLowerCase().trim() === d);
+                                        return { letra: d[0].toUpperCase(), valor: cfg?.activo ? calcularHorasBloques(cfg.bloques) : 0 };
+                                    });
                                 const bloquesResumen = (c.config || []).filter(x => x.activo && x.bloques?.length).map(x => x.bloques.map(b => `${b.inicio}–${b.fin}`).join(' · ')).slice(0, 1).join('') || '—';
-                                const totalSemana = semana.reduce((s, d) => s + d.valor, 0);
+                                const totalCiclo = dias.reduce((s, d) => s + d.valor, 0);
                                 return (
                                     <div key={c._id} onClick={() => prepararEdicionCal(c)} style={{ ...styles.tablaFila('3px minmax(200px,1fr) 150px 196px 72px'), cursor: 'pointer', minHeight: 40 }}>
                                         <span style={{ width: 3, alignSelf: 'stretch', background: calSeleccionado === c._id ? t.textoPrincipal : 'transparent' }} />
@@ -382,16 +391,16 @@ const RecursosScreen = ({
                                             <span style={{ display: 'block', fontSize: 12.5, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.nombre}</span>
                                             <span style={{ display: 'block', fontSize: 10.5, color: t.textoAtenuado3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{bloquesResumen}</span>
                                         </span>
-                                        <span style={{ fontSize: 11.5, color: t.textoAtenuado1 }}>{c.tipo === 'rotativo' ? `Rotativo · ciclo ${c.cicloDias}` : 'Semanal'}</span>
-                                        <span style={{ display: 'flex', gap: 2 }}>
-                                            {semana.map((d, i) => (
-                                                <span key={i} style={{ width: 26, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
+                                        <span style={{ fontSize: 11.5, color: t.textoAtenuado1 }}>{esRotativo ? `Rotativo · ciclo ${c.cicloDias}` : 'Semanal'}</span>
+                                        <span style={{ display: 'flex', gap: 2, overflowX: 'auto' }}>
+                                            {dias.map((d, i) => (
+                                                <span key={i} style={{ width: 26, flex: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
                                                     <span style={{ fontSize: 8.5, color: t.textoDeshabilitado }}>{d.letra}</span>
                                                     <span style={{ fontFamily: t.fontMono, fontSize: 11, color: d.valor > 0 ? t.textoSecundario1 : t.textoDeshabilitado }}>{d.valor || '·'}</span>
                                                 </span>
                                             ))}
                                         </span>
-                                        <span style={{ fontFamily: t.fontMono, fontSize: 11.5, textAlign: 'right', color: t.textoSecundario1 }}>{totalSemana}h</span>
+                                        <span style={{ fontFamily: t.fontMono, fontSize: 11.5, textAlign: 'right', color: t.textoSecundario1 }}>{totalCiclo}h</span>
                                     </div>
                                 );
                             })}
