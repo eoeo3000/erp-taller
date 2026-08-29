@@ -386,7 +386,12 @@ const GanttScreen = ({ recursos = [], ots = [], calendarios = [], obtenerHorasPa
                                         })}
                                     </div>
 
-                                    {(ot.tareas || []).filter(tt => diasSemana.includes(tt.fecha)).sort((a, b) => (a.fecha || '').localeCompare(b.fecha || '')).map((tarea, tIdx) => (
+                                    {/* Todas las tareas de la OT, no solo las de esta semana (antes el
+                                        filtro por diasSemana dejaba la OT sin ninguna tarea visible
+                                        debajo cuando sus fechas caían fuera de la semana mostrada,
+                                        pedido explícito del usuario). La barra de días más abajo sigue
+                                        marcando solo si tarea.fecha cae en la semana visible. */}
+                                    {(ot.tareas || []).slice().sort((a, b) => (a.fecha || '').localeCompare(b.fecha || '')).map((tarea, tIdx) => (
                                         <div key={`${ot._id}-${tIdx}`} style={styles.filaTarea}>
                                             <span style={{ ...styles.celda, paddingLeft: 24, fontFamily: t.fontMono, fontSize: 10.5, color: t.textoDeshabilitado }}>{tIdx + 1}</span>
                                             <span style={{ ...styles.celda, fontSize: 11.5, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{tarea.descripcion}</span>
