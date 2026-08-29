@@ -564,7 +564,7 @@ exports.listarSesiones = async (req, res) => {
             .filter(r => !idsConUsuario.has(String(r._id)))
             .map(r => ({
                 _id: r._id, tipo: 'operativo', pendiente: true, recursoId: r._id, puesto: r.puesto,
-                nombre: r.nombre, correo: r.email || '',
+                nombre: r.nombre, correo: r.email || '', telefono: r.telefono || '',
                 origen: `Recursos · ${r.puesto}`,
                 tokenPreview: '', emitidoEn: null, ultimoAcceso: null,
                 estadoDisplay: 'Sin emitir',

@@ -62,18 +62,35 @@ export default function BodegaTokensScreen({ API }) {
 }
 
 const ETIQUETAS_ACCION = { revocar: 'Revocar', regenerar: 'Regenerar', reenviar: 'Reenviar', reactivar: 'Reactivar', eliminar: 'Eliminar' };
+// Para 'operativo' (Usuario/Recurso), regenerar/reenviar ahora devuelven { correoEnviado,
+// telefono, link } — si no hubo correo, el mensaje debe decir explícitamente que hay que
+// mandarlo a mano (ver botón "Copiar link"/"WhatsApp" en TokensActivos), no dar a entender
+// que ya se envió solo. Para 'cliente' se mantiene el mensaje de siempre (esa emisión sigue
+// siendo solo por correo).
 const MENSAJES_ACCION = {
     revocar: (tok) => `Acceso de ${tok.nombre} revocado.`,
-    regenerar: (tok) => `Token de ${tok.nombre} regenerado — el link anterior ya no sirve. Correo reenviado a ${tok.correo || 'su casilla registrada'}.`,
-    reenviar: (tok) => `Nuevo link enviado por correo a ${tok.correo || 'su casilla registrada'} (el token en claro no se guarda, así que reenviar equivale a regenerar).`,
+    regenerar: (tok, resp) => tok.tipo === 'operativo'
+        ? (resp?.correoEnviado ? `Token de ${tok.nombre} regenerado — el link anterior ya no sirve. Correo enviado a ${tok.correo}.` : `Token de ${tok.nombre} regenerado — el link anterior ya no sirve. Sin correo registrado: copiá el link de abajo para enviárselo a mano.`)
+        : `Token de ${tok.nombre} regenerado — el link anterior ya no sirve. Correo reenviado a ${tok.correo || 'su casilla registrada'}.`,
+    reenviar: (tok, resp) => tok.tipo === 'operativo'
+        ? (resp?.correoEnviado ? `Nuevo link enviado por correo a ${tok.correo}.` : `Nuevo link generado — sin correo registrado: copiá el link de abajo para enviárselo a mano.`)
+        : `Nuevo link enviado por correo a ${tok.correo || 'su casilla registrada'} (el token en claro no se guarda, así que reenviar equivale a regenerar).`,
     reactivar: (tok) => `Acceso de ${tok.nombre} reactivado.`,
     eliminar: (tok) => `Acceso de ${tok.nombre} eliminado — no queda registro de esta fila.`,
 };
+
+// wa.me: mismo patrón que enviarASupervisor (App.jsx) para la cotización — deep link plano,
+// sin API de WhatsApp. limpiarTelefono saca todo lo que no sea dígito (wa.me no acepta '+'/espacios).
+const linkWhatsApp = (telefono, texto) => `https://wa.me/${(telefono || '').replace(/\D/g, '')}?text=${encodeURIComponent(texto)}`;
 
 function TokensActivos({ API }) {
     const [tokens, setTokens] = useState(null);
     const [error, setError] = useState('');
     const [aviso, setAviso] = useState(null); // { tipo: 'ok'|'error', texto }
+    // Cuando no hubo correo (Recurso sin email), el link solo se puede compartir a mano una
+    // vez — el token en claro no se vuelve a mostrar después de esta respuesta (ver
+    // usuarioController.js). { nombre, link, telefono }.
+    const [avisoLink, setAvisoLink] = useState(null);
     const [procesando, setProcesando] = useState(null); // _id de la fila en curso
 
     const cargar = () => axios.get(`${API}/portal/sesiones`, { headers: { ...headerEntorno(), ...headerApiKey() } })
@@ -94,14 +111,19 @@ function TokensActivos({ API }) {
             { danger: true, textoConfirmar: 'Eliminar' },
         ))) return;
         setAviso(null);
+        setAvisoLink(null);
         setProcesando(tok._id);
         try {
             if (tipoAccion === 'eliminar') {
                 await axios.delete(base, { headers: { ...headerEntorno(), ...headerApiKey() } });
+                setAviso({ tipo: 'ok', texto: MENSAJES_ACCION[tipoAccion](tok) });
             } else {
-                await axios.post(`${base}/${rutas[tipoAccion]}`, { correo: tok.correo }, { headers: { ...headerEntorno(), ...headerApiKey() } });
+                const { data } = await axios.post(`${base}/${rutas[tipoAccion]}`, { correo: tok.correo }, { headers: { ...headerEntorno(), ...headerApiKey() } });
+                setAviso({ tipo: 'ok', texto: MENSAJES_ACCION[tipoAccion](tok, data) });
+                if (tok.tipo === 'operativo' && !data.correoEnviado && data.link) {
+                    setAvisoLink({ nombre: tok.nombre, link: data.link, telefono: data.telefono });
+                }
             }
-            setAviso({ tipo: 'ok', texto: MENSAJES_ACCION[tipoAccion](tok) });
             await cargar();
         } catch (e) {
             setAviso({ tipo: 'error', texto: e.response?.data?.error || 'No se pudo completar la acción.' });
@@ -114,10 +136,12 @@ function TokensActivos({ API }) {
     // el token acá mismo, sin tener que ir a la ficha de Recursos.
     const emitirParaRecurso = async (tok) => {
         setAviso(null);
+        setAvisoLink(null);
         setProcesando(tok._id);
         try {
-            await axios.post(`${API}/usuarios`, { nombre: tok.nombre, puesto: tok.puesto, rol: 'supervisor', recursoId: tok.recursoId }, { headers: { ...headerEntorno(), ...headerApiKey() } });
-            setAviso({ tipo: 'ok', texto: `Acceso operativo emitido para ${tok.nombre}${tok.correo ? ` — correo enviado a ${tok.correo}` : ' — sin correo registrado en Recursos, no se pudo avisar por mail'}.` });
+            const { data } = await axios.post(`${API}/usuarios`, { nombre: tok.nombre, puesto: tok.puesto, rol: 'supervisor', recursoId: tok.recursoId }, { headers: { ...headerEntorno(), ...headerApiKey() } });
+            setAviso({ tipo: 'ok', texto: `Acceso operativo emitido para ${tok.nombre}${data.correoEnviado ? ` — correo enviado a ${tok.correo}` : ' — sin correo registrado, copiá el link de abajo para enviárselo a mano'}.` });
+            if (!data.correoEnviado && data.link) setAvisoLink({ nombre: tok.nombre, link: data.link, telefono: data.telefono });
             await cargar();
         } catch (e) {
             setAviso({ tipo: 'error', texto: e.response?.data?.error || 'No se pudo emitir el acceso.' });
@@ -132,8 +156,25 @@ function TokensActivos({ API }) {
     return (
         <div style={{ maxWidth: 1080 }}>
             {aviso && (
-                <div style={{ marginBottom: 8, padding: '7px 10px', fontSize: 11.5, color: aviso.tipo === 'ok' ? t.verde : t.rojo, background: aviso.tipo === 'ok' ? 'rgba(76,122,76,.08)' : 'rgba(168,65,47,.08)', border: `1px solid ${aviso.tipo === 'ok' ? t.verde : t.rojo}` }}>
+                <div style={{ marginBottom: avisoLink ? 0 : 8, padding: '7px 10px', fontSize: 11.5, color: aviso.tipo === 'ok' ? t.verde : t.rojo, background: aviso.tipo === 'ok' ? 'rgba(76,122,76,.08)' : 'rgba(168,65,47,.08)', border: `1px solid ${aviso.tipo === 'ok' ? t.verde : t.rojo}` }}>
                     {aviso.texto}
+                </div>
+            )}
+            {avisoLink && (
+                <div style={{ marginBottom: 8, padding: '8px 10px', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', fontSize: 11, background: 'rgba(184,134,47,.08)', border: `1px solid ${t.ambar}` }}>
+                    <span style={{ fontFamily: t.fontMono, color: t.textoSecundario2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 340 }}>{avisoLink.link}</span>
+                    <button
+                        onClick={() => navigator.clipboard?.writeText(avisoLink.link)}
+                        style={{ height: 22, padding: '0 8px', background: '#fff', border: `1px solid ${t.bordeInput}`, fontSize: 10.5, cursor: 'pointer', borderRadius: 2 }}
+                    >Copiar link</button>
+                    {avisoLink.telefono && (
+                        <a
+                            href={linkWhatsApp(avisoLink.telefono, `Hola ${avisoLink.nombre}, este es tu acceso a la app de trabajo: ${avisoLink.link}`)}
+                            target="_blank" rel="noreferrer"
+                            style={{ height: 22, padding: '0 8px', display: 'inline-flex', alignItems: 'center', background: '#fff', border: `1px solid ${t.bordeInput}`, fontSize: 10.5, color: t.textoSecundario2, textDecoration: 'none', borderRadius: 2 }}
+                        >Enviar por WhatsApp</a>
+                    )}
+                    <span onClick={() => setAvisoLink(null)} style={{ marginLeft: 'auto', fontSize: 13, color: t.textoAtenuado2, cursor: 'pointer' }}>×</span>
                 </div>
             )}
             <div style={{ background: '#fff', border: `1px solid ${t.bordeZona}` }}>
@@ -152,7 +193,7 @@ function TokensActivos({ API }) {
                     <div key={tok._id} style={{ display: 'grid', gridTemplateColumns: GRID_TOKENS, gap: 10, alignItems: 'center', padding: '8px 12px', borderBottom: `1px solid ${t.hairline}` }}>
                         <div style={{ minWidth: 0 }}>
                             <div style={{ fontSize: 12, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{tok.nombre}</div>
-                            <div style={{ fontSize: 10.5, color: t.textoAtenuado2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{tok.correo}</div>
+                            <div style={{ fontSize: 10.5, color: t.textoAtenuado2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{tok.correo || tok.telefono || <span style={{ color: t.rojo }}>Sin correo ni teléfono</span>}</div>
                         </div>
                         <div>
                             <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.05em', textTransform: 'uppercase', color: tok.tipo === 'cliente' ? t.ambar : t.acento }}>{tok.tipo}</div>
@@ -164,7 +205,19 @@ function TokensActivos({ API }) {
                         <span style={{ justifySelf: 'start', fontSize: 10, fontWeight: 700, letterSpacing: '.05em', textTransform: 'uppercase', padding: '2px 7px', borderRadius: 2, background: estFondo, color: estTono }}>{tok.estadoDisplay}</span>
                         <div style={{ justifySelf: 'end', display: 'flex', gap: 4 }}>
                             {tok.pendiente ? (
-                                <button onClick={() => emitirParaRecurso(tok)} disabled={enCurso} style={{ height: 23, padding: '0 8px', background: t.acento, border: `1px solid ${t.acento}`, fontSize: 10.5, fontWeight: 700, color: '#fff', cursor: enCurso ? 'default' : 'pointer', borderRadius: 2, opacity: enCurso ? .6 : 1 }}>{enCurso ? '…' : 'Emitir acceso'}</button>
+                                // Sin correo NI teléfono en Recursos no hay forma de hacerle llegar
+                                // el link a la persona (ver usuarioController.crear) — se deshabilita
+                                // acá también para no hacer esperar el viaje al backend.
+                                (() => {
+                                    const sinContacto = !tok.correo && !tok.telefono;
+                                    return (
+                                        <button
+                                            onClick={() => emitirParaRecurso(tok)} disabled={enCurso || sinContacto}
+                                            title={sinContacto ? 'Agrega correo o teléfono en Recursos antes de emitir el acceso.' : ''}
+                                            style={{ height: 23, padding: '0 8px', background: sinContacto ? '#fff' : t.acento, border: `1px solid ${sinContacto ? t.bordeInput : t.acento}`, fontSize: 10.5, fontWeight: 700, color: sinContacto ? t.textoAtenuado2 : '#fff', cursor: (enCurso || sinContacto) ? 'not-allowed' : 'pointer', borderRadius: 2, opacity: enCurso ? .6 : 1 }}
+                                        >{enCurso ? '…' : 'Emitir acceso'}</button>
+                                    );
+                                })()
                             ) : acciones.map(a => (
                                 <button key={a} onClick={() => accion(tok, a)} disabled={enCurso} style={{ height: 23, padding: '0 8px', background: '#fff', border: '1px solid rgba(0,0,0,.22)', fontSize: 10.5, color: (a === 'revocar' || a === 'eliminar') ? t.rojo : t.textoSecundario2, cursor: enCurso ? 'default' : 'pointer', borderRadius: 2, opacity: enCurso ? .5 : 1 }}>{enCurso ? '…' : ETIQUETAS_ACCION[a]}</button>
                             ))}

@@ -15,9 +15,16 @@ function generarToken() {
 // El link apunta a PWA_OPERATIVA_URL (su propio host, ver config/urls.js) — NO a este
 // backend. Antes usaba `${API_URL}/operativo`, un bug real: la PWA Operativa es un Render
 // Static Site aparte, ese path nunca existió en el backend (ver base:'/' en su vite.config).
-async function enviarCorreoToken(usuario, recurso, entorno) {
-    if (!recurso?.email) return; // sin Recurso o sin correo, no hay a quién avisar
-    const link = `${PWA_OPERATIVA_URL}/?token=${usuario.token}&entorno=${entorno}`;
+// El token en claro nunca se vuelve a mostrar después de esta respuesta (listar() lo oculta
+// con select('-token')) — devolver el link acá es la ÚNICA oportunidad de entregarlo si no
+// hay correo para mandarlo solo. Sin esto, un Recurso sin correo quedaba con un token creado
+// pero irrecuperable: nadie podía compartírselo por ningún otro medio.
+function armarLink(usuario, entorno) {
+    return `${PWA_OPERATIVA_URL}/?token=${usuario.token}&entorno=${entorno}`;
+}
+
+async function enviarCorreoToken(usuario, recurso, link) {
+    if (!recurso?.email) return false; // sin Recurso o sin correo, no hay a quién avisar
     await transporter.sendMail({
         from: `"ERP - Gestión de Trabajo" <${process.env.EMAIL_FROM}>`,
         to: recurso.email,
@@ -27,6 +34,7 @@ async function enviarCorreoToken(usuario, recurso, entorno) {
             + `${link}\n\n`
             + `Si pierdes el teléfono, avisa a la oficina para que revoquen este acceso.`,
     });
+    return true;
 }
 
 // POST /api/usuarios — crear usuario y emitir su primer token
@@ -38,6 +46,13 @@ exports.crear = async (req, res) => {
         if (!nombre || !rol) return res.status(400).json({ error: 'nombre y rol son requeridos' });
         if (!['supervisor', 'ejecutor'].includes(rol)) return res.status(400).json({ error: "rol debe ser 'supervisor' o 'ejecutor'" });
 
+        const recurso = recursoId ? await Recurso.findById(recursoId) : null;
+        // Sin correo NI teléfono no hay forma de hacerle llegar el link a la persona (ver
+        // armarLink más arriba) — pedido explícito del usuario: uno de los dos es obligatorio.
+        if (recursoId && !recurso?.email && !recurso?.telefono) {
+            return res.status(400).json({ error: 'Este integrante no tiene correo ni teléfono registrado en Recursos — agrega al menos uno antes de emitir el acceso.' });
+        }
+
         const usuario = await Usuario.create({
             nombre, puesto: puesto || '', rol,
             recursoId: recursoId || undefined,
@@ -46,14 +61,15 @@ exports.crear = async (req, res) => {
 
         if (recursoId) await Recurso.findByIdAndUpdate(recursoId, { usuarioId: usuario._id });
 
-        const recurso = recursoId ? await Recurso.findById(recursoId) : null;
+        const link = armarLink(usuario, req.entorno);
+        let correoEnviado = false;
         try {
-            await enviarCorreoToken(usuario, recurso, req.entorno);
+            correoEnviado = await enviarCorreoToken(usuario, recurso, link);
         } catch (eCorreo) {
             console.warn('[usuarios] no se pudo enviar el correo de acceso:', eCorreo.message);
         }
 
-        res.status(201).json(usuario);
+        res.status(201).json({ ...usuario.toObject(), link, correoEnviado, telefono: recurso?.telefono || '' });
     } catch (error) {
         res.status(400).json({ error: error.message });
     }
@@ -90,19 +106,25 @@ exports.reemitirToken = async (req, res) => {
         const usuario = await Usuario.findById(req.params.id);
         if (!usuario) return res.status(404).json({ error: 'Usuario no encontrado' });
 
+        const recurso = usuario.recursoId ? await Recurso.findById(usuario.recursoId) : null;
+        if (usuario.recursoId && !recurso?.email && !recurso?.telefono) {
+            return res.status(400).json({ error: 'Este integrante no tiene correo ni teléfono registrado en Recursos — agrega al menos uno antes de reemitir el acceso.' });
+        }
+
         usuario.token = generarToken();
         usuario.fechaEmision = new Date();
         usuario.estado = 'activo';
         await usuario.save();
 
-        const recurso = usuario.recursoId ? await Recurso.findById(usuario.recursoId) : null;
+        const link = armarLink(usuario, req.entorno);
+        let correoEnviado = false;
         try {
-            await enviarCorreoToken(usuario, recurso, req.entorno);
+            correoEnviado = await enviarCorreoToken(usuario, recurso, link);
         } catch (eCorreo) {
             console.warn('[usuarios] no se pudo enviar el correo de reemisión:', eCorreo.message);
         }
 
-        res.json({ mensaje: 'Token reemitido', usuario });
+        res.json({ mensaje: 'Token reemitido', usuario, link, correoEnviado, telefono: recurso?.telefono || '' });
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
