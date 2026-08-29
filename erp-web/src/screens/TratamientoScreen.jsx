@@ -40,9 +40,17 @@ const MAPA_ETAPA = {
 // caer la etapa a "Solicitud", como si la OT hubiera retrocedido al principio del todo. Se
 // deja en el mismo casillero que 'Programada' (idx 3, mismo criterio que erp-pwa-cliente/
 // C3_EstadoTrabajo.jsx) — conceptualmente ya estaba programada, solo necesita fecha nueva.
+// 'Cancelada' (el cliente cancela desde la PWA Cliente, hasta antes de 'En Ejecución') es un
+// flag encima del estado (OT.cancelada), no un valor de estado nuevo — mismo criterio que
+// 'Reprogramar': se conserva ot.estado para saber hasta dónde había llegado, y acá solo se
+// pisa el label/rechazada.
 const etapaInfo = (ot) => {
     const estado = ot?.estado;
     if (!estado) return { idx: 0, label: ETAPAS_VISUAL[0], rechazada: false };
+    if (ot?.cancelada?.activa) {
+        const idx = estado === 'Reprogramar' ? 3 : (MAPA_ETAPA[estado] ?? 0);
+        return { idx, label: 'Cancelada', rechazada: true };
+    }
     if (estado === 'Planificada' && ot?.cotizacion?.respuestaCliente === 'Rechazada') {
         return { idx: 2, label: 'Rechazada', rechazada: true };
     }
@@ -1131,13 +1139,24 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
     // dé false y destrabe 1-3 acá, y para deshabilitar la pestaña Cotización (ver el botón de la
     // barra de tabs, más abajo). Un solo interruptor (estado), sin duplicar la regla en dos
     // lados — es el mismo bucle Tratada <-> Planificada que ya usa Terminar planificación.
-    const soloLecturaPlanificacion = planificacionTerminada && otSeleccionada?.estado !== 'Reprogramar';
+    // Una OT cancelada por el cliente (OT.cancelada, ver models/OT.js) se suma acá con el
+    // mismo interruptor — Antecedentes/Informe Inicial/Tareas/Equipos/Suministros no tienen
+    // por qué seguir editándose si el cliente ya canceló. Pago queda afuera a propósito
+    // (pedido explícito del usuario): tiene que poder emitirse un cobro igual por lo ya
+    // ejecutado (ej. una visita de evaluación), aunque el resto del trabajo se haya cancelado.
+    const otCancelada = !!otSeleccionada?.cancelada?.activa;
+    const soloLecturaPlanificacion = (planificacionTerminada && otSeleccionada?.estado !== 'Reprogramar') || otCancelada;
 
     // Único condicionante bloqueante de la pestaña Cotización, en el orden en que se resuelven
     // (tareas -> costos -> terminar planificación -> programar). Se muestra solo ese recuadro,
     // sin el resto del contenido de la pestaña — para que quede claro que es un paso obligatorio,
     // no un aviso más al lado de una cotización que en realidad todavía no se puede ver/enviar.
-    const bloqueoCotizacion = !todasTareasCompletas
+    // Cancelada primero, antes que cualquier otro chequeo — no tiene sentido pedir completar
+    // tareas/costos de un trabajo que el cliente ya canceló. Mismo patrón "un solo recuadro,
+    // sin el resto de la pestaña" que los demás bloqueos de acá abajo.
+    const bloqueoCotizacion = otSeleccionada?.cancelada?.activa
+        ? { mensaje: `Esta OT fue cancelada por el cliente${otSeleccionada.cancelada.motivo ? `: ${otSeleccionada.cancelada.motivo}` : ''}.`, boton: 'Volver al panel', accion: () => navigate('/dashboard') }
+        : !todasTareasCompletas
         ? { mensaje: 'Faltan datos en Tareas: descripción, puesto, responsable, horas, fecha, hora o $/hora de alguna tarea.', boton: 'Ir a Tareas', accion: () => irATab('tareas') }
         : !equiposHerramientasConCosto
             ? { mensaje: 'Todo equipo o herramienta debe tener un costo mayor a $0.', boton: 'Ir a Equipos y materiales', accion: () => irATab('componentes') }
@@ -1231,8 +1250,10 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                 <section style={styles.contenido}>
 
                     {soloLecturaPlanificacion && ['tareas', 'componentes', 'Logistica', 'antecedentes', 'informe'].includes(tabActiva) && (
-                        <div style={{ padding: '8px 16px', background: '#fdf3e7', borderBottom: `1px solid ${t.bordeZona}`, fontSize: 11.5, color: t.textoSecundario1 }}>
-                            Planificación terminada — esta pestaña quedó de solo lectura. Para modificarla, reprograma la OT desde la PWA del supervisor o cancela la planificación desde Cotización.
+                        <div style={{ padding: '8px 16px', background: otCancelada ? '#fbeceb' : '#fdf3e7', borderBottom: `1px solid ${t.bordeZona}`, fontSize: 11.5, color: t.textoSecundario1 }}>
+                            {otCancelada
+                                ? `Esta OT fue cancelada por el cliente${otSeleccionada.cancelada.motivo ? `: ${otSeleccionada.cancelada.motivo}` : ''} — esta pestaña quedó de solo lectura. Todavía se puede registrar un cobro desde Pago.`
+                                : 'Planificación terminada — esta pestaña quedó de solo lectura. Para modificarla, reprograma la OT desde la PWA del supervisor o cancela la planificación desde Cotización.'}
                         </div>
                     )}
 

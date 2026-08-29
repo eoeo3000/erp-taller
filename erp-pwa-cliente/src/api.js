@@ -99,3 +99,20 @@ export function actualizarHes(otId, numero, archivo) {
         method: 'POST', body: JSON.stringify({ numero, archivo }),
     });
 }
+
+// POST /api/portal/solicitudes/:id/cancelar?token= — 'id' es siempre el _id de la Solicitud
+// de origen, exista o no una OT todavía (misma OT reutiliza ese _id, ver otController).
+export function cancelarSolicitud(solicitudId, motivo) {
+    const { token } = getSesion();
+    return pedir(`/portal/solicitudes/${solicitudId}/cancelar?token=${encodeURIComponent(token)}`, {
+        method: 'POST', body: JSON.stringify({ motivo }),
+    });
+}
+
+// POST /api/portal/solicitudes/:id/descripcion?token= — corregir/ampliar el alcance pedido
+export function editarDescripcionSolicitud(solicitudId, descripcion) {
+    const { token } = getSesion();
+    return pedir(`/portal/solicitudes/${solicitudId}/descripcion?token=${encodeURIComponent(token)}`, {
+        method: 'POST', body: JSON.stringify({ descripcion }),
+    });
+}

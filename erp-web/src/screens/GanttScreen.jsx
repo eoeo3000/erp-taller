@@ -51,9 +51,13 @@ const cotizacionVencida = (ot) => !!(
 // después de que venza o el planificador la cancele (Tratamiento, pestaña Cotización), deja
 // el slot libre. 'Reprogramar' queda fuera igual que antes: necesita fecha nueva, sus tareas
 // con la fecha vieja no deben seguir contando (ver el badge clickeable más abajo).
-const otBloqueaCapacidad = (ot) =>
+// Cancelada por el cliente (OT.cancelada, flag encima de ot.estado — ver models/OT.js) nunca
+// debe seguir ocupando un cupo de capacidad ni poder programarse, aunque ot.estado en sí
+// (Tratada/Planificada/Programada/Reprogramar) se conserve tal cual iba.
+const otBloqueaCapacidad = (ot) => !ot.cancelada?.activa && (
     ['Programada', 'En Ejecución'].includes(ot.estado)
-    || (ot.estado === 'Planificada' && ot.cotizacion?.enviada && ot.cotizacion?.respuestaCliente === 'Pendiente' && !cotizacionVencida(ot));
+    || (ot.estado === 'Planificada' && ot.cotizacion?.enviada && ot.cotizacion?.respuestaCliente === 'Pendiente' && !cotizacionVencida(ot))
+);
 
 const colorEstadoOT = (estado) => {
     if (ESTADOS_EJECUTADOS.includes(estado)) return t.textoAtenuado1;
@@ -329,13 +333,17 @@ const GanttScreen = ({ recursos = [], ots = [], calendarios = [], obtenerHorasPa
                             // por tarea, así que una tarea con fecha pero 0 HH "confirmaría"
                             // trivialmente sin comprometer ninguna capacidad real.
                             const tieneTareasConFecha = (ot.tareas || []).some(tt => tt.fecha && Number(tt.duracion) > 0);
-                            const puedeProgramar = estadoValido && tieneTareasConFecha;
+                            // Cancelada por el cliente: nunca programable, aunque ot.estado siga
+                            // siendo uno de los "válidos" de arriba (ver otBloqueaCapacidad).
+                            const puedeProgramar = estadoValido && tieneTareasConFecha && !ot.cancelada?.activa;
                             const capacidadVerificada = !!ot.cotizacion?.capacidadVerificada;
                             const fechasTareas = (ot.tareas || []).filter(tt => tt.fecha).map(tt => tt.fecha).sort();
                             const fmtFecha = iso => iso ? new Date(iso + 'T00:00:00').toLocaleDateString('es-CL', { day: '2-digit', month: 'short' }) : '—';
                             const enSemana = diasSemana.some(d => fechasTareas.includes(d));
-                            const accionLabel = !puedeProgramar ? 'No disponible' : ot.estado === 'Reprogramar' ? 'Confirmar fecha nueva' : capacidadVerificada ? 'Reconfirmar programación' : 'Aceptar programación';
-                            const tituloAccion = !estadoValido
+                            const accionLabel = ot.cancelada?.activa ? 'Cancelada' : !puedeProgramar ? 'No disponible' : ot.estado === 'Reprogramar' ? 'Confirmar fecha nueva' : capacidadVerificada ? 'Reconfirmar programación' : 'Aceptar programación';
+                            const tituloAccion = ot.cancelada?.activa
+                                ? 'Esta OT fue cancelada por el cliente.'
+                                : !estadoValido
                                 ? 'La OT debe estar Planificada, Programada o Reprogramar'
                                 : !tieneTareasConFecha
                                     ? 'Agrega tareas con fecha y horas asignadas en Tratamiento antes de verificar capacidad'

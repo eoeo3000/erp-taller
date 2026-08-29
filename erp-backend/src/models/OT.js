@@ -33,6 +33,19 @@ const OTSchema = new mongoose.Schema({
     // extensión de cotización correspondiente (ver excepciones más abajo), momento en que se limpia.
     subEstado: { type: String, default: '' },
 
+    // El cliente puede cancelar su propia solicitud desde la PWA Cliente, hasta antes de que
+    // el trabajo empiece en terreno (estado 'En Ejecución' en adelante — ver
+    // portalController.ESTADOS_OT_CANCELABLE). No se borra nada ni se reemplaza ot.estado
+    // (mismo criterio que cotizacion.respuestaCliente/subEstado: un flag encima del estado,
+    // no un valor nuevo de estado) — así se conserva el registro completo y se puede seguir
+    // facturando lo ya ejecutado (ej. una visita de evaluación) aunque el cliente haya
+    // cancelado el resto del trabajo.
+    cancelada: {
+        activa: { type: Boolean, default: false },
+        motivo: { type: String, default: '' },
+        fecha: { type: Date, default: null },
+    },
+
     // Informe de Evaluación: levantamiento en terreno previo a cotizar (ver docs/funcionalidades-v2.md)
     informeEvaluacion: {
         fecha: String,

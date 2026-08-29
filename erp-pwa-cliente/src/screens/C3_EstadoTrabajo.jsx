@@ -1,5 +1,10 @@
 import { useState } from 'react';
-import { responderCotizacion, responderExcepcion } from '../api.js';
+import { responderCotizacion, responderExcepcion, cancelarSolicitud, editarDescripcionSolicitud } from '../api.js';
+
+// Mismo corte que portalController.ESTADOS_OT_CANCELABLE (erp-backend) — duplicado acá
+// porque no hay forma de compartir código entre apps. El cliente puede cancelar/editar el
+// alcance hasta antes de que el trabajo empiece en terreno ('En Ejecución' en adelante).
+const ESTADOS_OT_CANCELABLE = ['Tratada', 'Planificada', 'Programada', 'Reprogramar'];
 
 // Mismo criterio y mismo límite que otController.cotizacionVencida/GanttScreen.cotizacionVencida
 // (erp-backend, erp-web) — duplicado acá porque no hay forma de compartir código entre apps.
@@ -23,8 +28,20 @@ const MAPA_ETAPA = {
 
 // 'Aprobada'/'Rechazada' ya no son valores de OT.estado — un rechazo se detecta por
 // cotizacion.respuestaCliente sin sacar a la OT de 'Planificada' (ver erp-backend/src/models/OT.js).
-function etapaInfo(ot) {
-    if (!ot) return { idx: 0, label: ETAPAS_CLIENTE[0], rechazada: false, porAprobar: false, reprogramando: false };
+// solicitudEstado (Solicitud.estado) solo importa cuando todavía no hay OT: es lo único que
+// distingue una solicitud cancelada de una recién recibida en ese punto.
+function etapaInfo(ot, solicitudEstado) {
+    if (!ot) {
+        if (solicitudEstado === 'Cancelada') return { idx: 0, label: 'Solicitud cancelada', rechazada: true, porAprobar: false, reprogramando: false };
+        return { idx: 0, label: ETAPAS_CLIENTE[0], rechazada: false, porAprobar: false, reprogramando: false };
+    }
+    // Cancelada es un flag encima del estado (OT.cancelada), no un valor de estado nuevo —
+    // ot.estado se conserva tal cual iba (Tratada/Planificada/Programada/Reprogramar) para
+    // que el recorrido siga mostrando hasta dónde había llegado antes de cancelarse.
+    if (ot.cancelada?.activa) {
+        const idx = ot.estado === 'Reprogramar' ? 3 : (MAPA_ETAPA[ot.estado] ?? 0);
+        return { idx, label: 'Solicitud cancelada', rechazada: true, porAprobar: false, reprogramando: false };
+    }
     if (ot.estado === 'Planificada' && ot.cotizacion?.enviada && ot.cotizacion?.respuestaCliente === 'Pendiente') {
         return { idx: 2, label: 'Cotización por aprobar', rechazada: false, porAprobar: true, reprogramando: false };
     }
@@ -58,8 +75,12 @@ const CLP = (n) => '$ ' + Math.round(n || 0).toLocaleString('es-CL');
 const fmtLarga = (iso) => iso ? new Date((iso + '').split('T')[0] + 'T00:00:00').toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit', year: 'numeric' }) : null;
 const fmtCorta = (iso) => iso ? new Date((iso + '').split('T')[0] + 'T00:00:00').toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit' }) : '';
 
-function lineaCliente(ot) {
-    if (!ot) return 'Su solicitud está siendo evaluada.';
+function lineaCliente(ot, solicitudEstado, motivoCancelacion) {
+    if (!ot) {
+        if (solicitudEstado === 'Cancelada') return 'Usted canceló esta solicitud.';
+        return 'Su solicitud está siendo evaluada.';
+    }
+    if (ot.cancelada?.activa) return motivoCancelacion ? `Usted canceló esta solicitud: ${motivoCancelacion}` : 'Usted canceló esta solicitud.';
     if (ot.estado === 'Planificada' && ot.cotizacion?.enviada && ot.cotizacion?.respuestaCliente === 'Pendiente') {
         return 'Revise el detalle y responda a la cotización.';
     }
@@ -91,10 +112,24 @@ export default function C3EstadoTrabajo({ nav, trabajo: trabajoProp }) {
     const [enviandoExc, setEnviandoExc] = useState(null);
     const [errorExc, setErrorExc] = useState({});
 
+    // Ver el detalle completo de lo pedido, editar el alcance, y cancelar — pedido explícito
+    // del usuario: antes el cliente no tenía forma de ver ni tocar nada de su propia solicitud.
+    const [verDetalle, setVerDetalle] = useState(false);
+    const [editandoDescripcion, setEditandoDescripcion] = useState(false);
+    const [descripcionEdit, setDescripcionEdit] = useState('');
+    const [guardandoDescripcion, setGuardandoDescripcion] = useState(false);
+    const [errorDescripcion, setErrorDescripcion] = useState('');
+    const [cancelando, setCancelando] = useState(false);
+    const [motivoCancelacion, setMotivoCancelacion] = useState('');
+    const [enviandoCancelacion, setEnviandoCancelacion] = useState(false);
+    const [errorCancelacion, setErrorCancelacion] = useState('');
+
     if (!trabajo) return null;
     const ot = trabajo.ot;
-    const info = etapaInfo(ot);
+    const info = etapaInfo(ot, trabajo.estado);
     const color = info.rechazada ? 'var(--detenido)' : (info.porAprobar || info.reprogramando) ? 'var(--atencion)' : 'var(--en-curso)';
+    const yaCancelada = ot ? !!ot.cancelada?.activa : trabajo.estado === 'Cancelada';
+    const puedeCancelar = !yaCancelada && (ot ? ESTADOS_OT_CANCELABLE.includes(ot.estado) : trabajo.estado !== 'Rechazada');
 
     const responder = async (estado) => {
         setEnviando(true); setError('');
@@ -125,6 +160,39 @@ export default function C3EstadoTrabajo({ nav, trabajo: trabajoProp }) {
         }
     };
 
+    const abrirEdicionDescripcion = () => {
+        setDescripcionEdit(trabajo.descripcion || '');
+        setErrorDescripcion('');
+        setEditandoDescripcion(true);
+    };
+
+    const guardarDescripcion = async () => {
+        if (!descripcionEdit.trim()) { setErrorDescripcion('La descripción no puede quedar vacía.'); return; }
+        setGuardandoDescripcion(true); setErrorDescripcion('');
+        try {
+            const resultado = await editarDescripcionSolicitud(trabajo._id, descripcionEdit.trim());
+            setTrabajo((t) => ({ ...t, descripcion: descripcionEdit.trim(), ot: resultado.ot || t.ot }));
+            setEditandoDescripcion(false);
+        } catch (e) {
+            setErrorDescripcion(e.message);
+        } finally {
+            setGuardandoDescripcion(false);
+        }
+    };
+
+    const confirmarCancelacion = async () => {
+        setEnviandoCancelacion(true); setErrorCancelacion('');
+        try {
+            const resultado = await cancelarSolicitud(trabajo._id, motivoCancelacion.trim());
+            setTrabajo((t) => ({ ...t, estado: resultado.ot ? t.estado : 'Cancelada', ot: resultado.ot || t.ot }));
+            setCancelando(false);
+        } catch (e) {
+            setErrorCancelacion(e.message);
+        } finally {
+            setEnviandoCancelacion(false);
+        }
+    };
+
     return (
         <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
             <header style={{ height: 52, display: 'flex', alignItems: 'center', gap: 12, padding: '0 16px', borderBottom: '1px solid var(--linea-zona)' }}>
@@ -133,12 +201,59 @@ export default function C3EstadoTrabajo({ nav, trabajo: trabajoProp }) {
             </header>
 
             <div style={{ padding: 16 }}>
-                <div style={{ fontSize: 'var(--fs-card-titulo)', fontWeight: 600 }}>{trabajo.descripcion}</div>
+                {editandoDescripcion ? (
+                    <div>
+                        <textarea
+                            className="input-campo"
+                            value={descripcionEdit}
+                            onChange={(e) => setDescripcionEdit(e.target.value)}
+                            style={{ width: '100%', minHeight: 80, boxSizing: 'border-box', marginBottom: 8, resize: 'vertical' }}
+                        />
+                        {errorDescripcion && <div style={{ fontSize: 'var(--fs-secundario)', color: 'var(--detenido)', marginBottom: 8 }}>{errorDescripcion}</div>}
+                        <div style={{ display: 'flex', gap: 8 }}>
+                            <button className="boton-primario" disabled={guardandoDescripcion} onClick={guardarDescripcion}>{guardandoDescripcion ? 'Guardando…' : 'Guardar cambios'}</button>
+                            <button className="boton-secundario" disabled={guardandoDescripcion} onClick={() => setEditandoDescripcion(false)}>Cancelar</button>
+                        </div>
+                    </div>
+                ) : (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
+                        <div style={{ fontSize: 'var(--fs-card-titulo)', fontWeight: 600 }}>{trabajo.descripcion}</div>
+                        {puedeCancelar && (
+                            <button onClick={abrirEdicionDescripcion} style={{ flex: 'none', background: 'none', border: 'none', padding: 0, fontSize: 'var(--fs-secundario)', color: 'var(--en-curso)', textDecoration: 'underline', cursor: 'pointer' }}>Editar</button>
+                        )}
+                    </div>
+                )}
+                <button onClick={() => setVerDetalle((v) => !v)} style={{ background: 'none', border: 'none', padding: 0, marginTop: 8, fontSize: 'var(--fs-secundario)', color: 'var(--en-curso)', textDecoration: 'underline', cursor: 'pointer' }}>
+                    {verDetalle ? 'Ocultar detalle de la solicitud' : 'Ver detalle de la solicitud'}
+                </button>
+                {verDetalle && (
+                    <div style={{ marginTop: 10, padding: 12, background: 'var(--fondo-pantalla)', borderRadius: 'var(--radio)' }}>
+                        {[
+                            ['Empresa', trabajo.empresaSolicitante],
+                            ['Solicitante', trabajo.solicitante],
+                            ['Correo', trabajo.correo],
+                            ['Dirección', trabajo.direccion],
+                            ['Origen', trabajo.origen],
+                            ['Fecha de ejecución solicitada', fmtLarga(trabajo.fechaEjecucionSolicitada)],
+                            ['Plazo sugerido', trabajo.plazoEjecucionSugerido],
+                        ].filter(([, v]) => v).map(([label, valor]) => (
+                            <div key={label} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, padding: '4px 0', fontSize: 'var(--fs-secundario)' }}>
+                                <span style={{ color: 'var(--texto-atenuado-1)' }}>{label}</span>
+                                <span style={{ textAlign: 'right' }}>{valor}</span>
+                            </div>
+                        ))}
+                        {trabajo.adjuntos && (
+                            <div style={{ marginTop: 6 }}>
+                                <a href={trabajo.adjuntos} target="_blank" rel="noreferrer" style={{ fontSize: 'var(--fs-secundario)', color: 'var(--en-curso)' }}>Ver adjunto</a>
+                            </div>
+                        )}
+                    </div>
+                )}
             </div>
 
             <div className="franja">
                 <div style={{ fontSize: 'var(--fs-titulo)', fontWeight: 700, color }}>{info.label}</div>
-                <div style={{ fontSize: 'var(--fs-secundario)', color: 'var(--texto-secundario-1)', marginTop: 4 }}>{lineaCliente(ot)}</div>
+                <div style={{ fontSize: 'var(--fs-secundario)', color: 'var(--texto-secundario-1)', marginTop: 4 }}>{lineaCliente(ot, trabajo.estado, ot?.cancelada?.motivo)}</div>
             </div>
 
             <div style={{ padding: '14px 16px 4px' }} className="versalita">Recorrido</div>
@@ -263,6 +378,34 @@ export default function C3EstadoTrabajo({ nav, trabajo: trabajoProp }) {
                     )}
                 </div>
             ))}
+
+            {puedeCancelar && (
+                <div style={{ padding: '0 16px 16px' }}>
+                    {!cancelando ? (
+                        <button onClick={() => setCancelando(true)} style={{ background: 'none', border: 'none', padding: 0, fontSize: 'var(--fs-secundario)', color: 'var(--detenido)', textDecoration: 'underline', cursor: 'pointer' }}>
+                            Cancelar esta solicitud
+                        </button>
+                    ) : (
+                        <div>
+                            <div style={{ fontSize: 'var(--fs-secundario)', color: 'var(--texto-secundario-1)', marginBottom: 8 }}>
+                                ¿Confirma que quiere cancelar? Puede quedar sujeto a un cobro por el trabajo ya realizado hasta ahora (ej. una visita de evaluación).
+                            </div>
+                            <textarea
+                                className="input-campo"
+                                placeholder="Motivo (opcional)"
+                                value={motivoCancelacion}
+                                onChange={(e) => setMotivoCancelacion(e.target.value)}
+                                style={{ width: '100%', minHeight: 70, boxSizing: 'border-box', marginBottom: 8, resize: 'vertical' }}
+                            />
+                            {errorCancelacion && <div style={{ fontSize: 'var(--fs-secundario)', color: 'var(--detenido)', marginBottom: 8 }}>{errorCancelacion}</div>}
+                            <div style={{ display: 'flex', gap: 8 }}>
+                                <button className="boton-primario" style={{ background: 'var(--detenido)', borderColor: 'var(--detenido)' }} disabled={enviandoCancelacion} onClick={confirmarCancelacion}>{enviandoCancelacion ? 'Enviando…' : 'Confirmar cancelación'}</button>
+                                <button className="boton-secundario" disabled={enviandoCancelacion} onClick={() => setCancelando(false)}>Volver</button>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            )}
 
             <div style={{ flex: 1 }} />
             <div className="pie-accion" style={{ flexDirection: 'row' }}>

@@ -58,8 +58,20 @@ const MAPA_ETAPA = {
 // la etapa a "Solicitud", como si la OT hubiera retrocedido al principio del todo en vez de
 // necesitar solo una fecha nueva. Se deja en el mismo casillero que 'Programada' (idx 3,
 // mismo criterio que erp-pwa-cliente/C3_EstadoTrabajo.jsx).
-const etapaInfo = (ot) => {
-    if (!ot) return { idx: 0, label: ETAPAS_VISUAL[0], rechazada: false };
+// 'Cancelada' (el cliente la cancela desde la PWA Cliente, hasta antes de 'En Ejecución') se
+// maneja igual que 'Reprogramar' cuando ya hay OT: no reemplaza ot.estado (queda como flag en
+// OT.cancelada, ver models/OT.js) para conservar hasta dónde había llegado, así que acá se
+// calcula el idx real y solo se pisa el label/rechazada. Sin OT todavía, es Solicitud.estado
+// el que vale (ver s más abajo) — recibir 's' es nuevo, antes esta función solo miraba la OT.
+const etapaInfo = (ot, s) => {
+    if (!ot) {
+        if (s?.estado === 'Cancelada') return { idx: 0, label: 'Solicitud cancelada', rechazada: true };
+        return { idx: 0, label: ETAPAS_VISUAL[0], rechazada: false };
+    }
+    if (ot.cancelada?.activa) {
+        const idx = ot.estado === 'Reprogramar' ? 3 : (MAPA_ETAPA[ot.estado] ?? 0);
+        return { idx, label: 'Cancelada', rechazada: true };
+    }
     if (ot.estado === 'Planificada' && ot.cotizacion?.respuestaCliente === 'Rechazada') {
         return { idx: 2, label: 'Rechazada', rechazada: true };
     }
@@ -81,7 +93,11 @@ const etapaInfo = (ot) => {
 // de OT.estado; Planificada mezcla "esperando verificar capacidad", "esperando al Cliente" y
 // "rechazada, esperando corrección". El resto de las etapas son de un solo actor.
 const subEstadoDe = (ot, s) => {
-    if (!ot) return s?.estado === 'Rechazada' ? '—' : 'Esperando revisión (Planificador)';
+    if (ot?.cancelada?.activa) return `Cancelada por el cliente${ot.cancelada.motivo ? `: ${ot.cancelada.motivo}` : ''}`;
+    if (!ot) {
+        if (s?.estado === 'Cancelada') return 'Cancelada por el cliente';
+        return s?.estado === 'Rechazada' ? '—' : 'Esperando revisión (Planificador)';
+    }
     if (ot.estado === 'Tratada') {
         if (ot.informeEvaluacion?.revision?.estado === 'ConObservaciones') return 'Con observaciones (Supervisor)';
         if (!ot.informeEvaluacion?.completo) return 'Esperando informe (Supervisor)';
@@ -473,7 +489,7 @@ const DashboardScreen = ({ ots = [], solicitudes = [], eliminarOT, eliminarSolic
     const detalle = (() => {
         if (!filaSel) return null;
         const { ot, solicitud: s } = filaSel;
-        const info = etapaInfo(ot);
+        const info = etapaInfo(ot, s);
         const supervisor = recursos.find(r => String(r._id) === String(ot?.supervisorId))?.nombre || '';
         const totalComponentes = (ot?.componentes || []).reduce((sum, c) => sum + Number(c.cantidad || 0) * Number(c.precio || 0), 0);
         const totalLogistica = (ot?.logistica || []).reduce((sum, l) => sum + Number(l.cantidad || 0) * Number(l.precio || 0), 0);
@@ -722,7 +738,7 @@ const DashboardScreen = ({ ots = [], solicitudes = [], eliminarOT, eliminarSolic
 
                             {!cargando && visibles.map(f => {
                                 const { ot, solicitud: s } = f;
-                                const info = etapaInfo(ot);
+                                const info = etapaInfo(ot, s);
                                 const pago = etiquetaPago(ot);
                                 const empresa = nombreEmpresa(s, ot);
                                 const secundario = s?.direccion || ot?.descripcion || '';

@@ -55,6 +55,7 @@ function otPublica(ot) {
         _id: ot._id,
         numeroOT: ot.numeroOT,
         estado: ot.estado,
+        cancelada: ot.cancelada?.activa ? { motivo: ot.cancelada.motivo || '', fecha: ot.cancelada.fecha } : null,
         // Documentos del flujo de pago (Chile): Orden de Compra → Estado de Pago (EDP) → Hoja
         // de Entrada de Servicio (HES). Editables desde ambos lados — Cuenta y Pago (C5, PWA
         // Cliente) y la pestaña Pago (erp-web) — ver actualizarOrdenCompra/actualizarEdp/
@@ -322,6 +323,13 @@ async function trabajosPorTelefono(conn, telefonoNormalizado) {
             estado: sol.estado,
             fechaCreacion: sol.fechaCreacion || sol.createdAt,
             fechaEjecucionSolicitada: sol.fechaEjecucionSolicitada,
+            // El resto del detalle de "lo que pedimos" (antes solo viajaban los campos de
+            // arriba) — para que el cliente pueda ver la solicitud completa, no un resumen.
+            correo: sol.correo || '',
+            direccion: sol.direccion || '',
+            origen: sol.origen || '',
+            plazoEjecucionSugerido: sol.plazoEjecucionSugerido || '',
+            adjuntos: sol.adjuntos || '',
             ot: otPublica(ot),
         };
     }));
@@ -761,6 +769,91 @@ exports.responderExcepcion = async (req, res) => {
         });
 
         res.json({ ok: true, ot: otPublica(otActualizada) });
+    } catch (err) {
+        res.status(err.status || 500).json({ error: err.message });
+    }
+};
+
+// La OT (cuando existe) reutiliza el _id de la Solicitud que la originó (ver
+// otController.convertirOT), así que 'id' siempre identifica primero a la Solicitud —
+// cancelarSolicitud/editarDescripcionSolicitud necesitan funcionar aunque todavía no haya OT
+// (mismo criterio "híbrido" que otController.antecedentes/actualizarOT).
+async function solicitudDeLaSesion(Solicitud, SesionPortal, id, token) {
+    const sesion = await SesionPortal.findOne({ tokenHash: hashToken(token), estado: 'activo' });
+    if (!sesion || sesion.expira < new Date()) { const e = new Error('Sesión inválida o vencida'); e.status = 403; throw e; }
+    const solicitud = await Solicitud.findById(id);
+    if (!solicitud) { const e = new Error('Solicitud no encontrada'); e.status = 404; throw e; }
+    if (normalizarTelefono(solicitud.numero) !== sesion.telefono) {
+        const e = new Error('Esta solicitud no pertenece a tu sesión.'); e.status = 403; throw e;
+    }
+    return solicitud;
+}
+
+// Estados de OT en los que todavía no arrancó el trabajo en terreno — el corte para poder
+// cancelar/editar es "antes de 'En Ejecución'" (pedido explícito del usuario). 'Reprogramar'
+// entra: el supervisor la marcó porque necesita fecha nueva, el trabajo real no empezó.
+const ESTADOS_OT_CANCELABLE = ['Tratada', 'Planificada', 'Programada', 'Reprogramar'];
+
+// POST /api/portal/solicitudes/:id/cancelar?token= — el cliente cancela su propia solicitud.
+// Con OT ya creada no se borra nada (a diferencia de eliminarSolicitud/eliminarOT en el
+// escritorio): se marca OT.cancelada para poder seguir facturando lo ya ejecutado (ej. una
+// visita de evaluación) sin reabrir el flujo normal ni perder el historial.
+exports.cancelarSolicitud = async (req, res) => {
+    const Solicitud = getSolicitud(req.db);
+    const OT = getOT(req.db);
+    const SesionPortal = getSesionPortal(req.db);
+    try {
+        const { id } = req.params;
+        const solicitud = await solicitudDeLaSesion(Solicitud, SesionPortal, id, req.query.token);
+
+        const ot = await OT.findById(id);
+        if (ot) {
+            if (ot.cancelada?.activa) return res.status(409).json({ error: 'Esta OT ya está cancelada.' });
+            if (!ESTADOS_OT_CANCELABLE.includes(ot.estado)) {
+                return res.status(409).json({ error: 'Ya no se puede cancelar: el trabajo está en ejecución o ya terminó.' });
+            }
+            ot.cancelada = { activa: true, motivo: (req.body.motivo || '').trim(), fecha: new Date() };
+            await ot.save();
+            return res.json({ ok: true, ot: otPublica(ot) });
+        }
+
+        if (solicitud.estado === 'Cancelada') return res.status(409).json({ error: 'Esta solicitud ya está cancelada.' });
+        solicitud.estado = 'Cancelada';
+        await solicitud.save();
+        res.json({ ok: true });
+    } catch (err) {
+        res.status(err.status || 500).json({ error: err.message });
+    }
+};
+
+// POST /api/portal/solicitudes/:id/descripcion?token= — el cliente corrige/amplía el alcance
+// de lo pedido. Mismo corte que cancelar; si ya hay OT, se actualiza también su descripcion
+// (copia hecha al convertir la Solicitud, ver otController.convertirOT) para que no quede
+// desincronizada de lo que ve la oficina en Tratamiento.
+exports.editarDescripcionSolicitud = async (req, res) => {
+    const Solicitud = getSolicitud(req.db);
+    const OT = getOT(req.db);
+    const SesionPortal = getSesionPortal(req.db);
+    try {
+        const { id } = req.params;
+        const descripcion = (req.body.descripcion || '').trim();
+        if (!descripcion) return res.status(400).json({ error: 'La descripción no puede quedar vacía.' });
+        const solicitud = await solicitudDeLaSesion(Solicitud, SesionPortal, id, req.query.token);
+
+        const ot = await OT.findById(id);
+        if (ot) {
+            if (ot.cancelada?.activa || !ESTADOS_OT_CANCELABLE.includes(ot.estado)) {
+                return res.status(409).json({ error: 'Ya no se puede editar: el trabajo está en ejecución, ya terminó, o la solicitud está cancelada.' });
+            }
+            ot.descripcion = descripcion;
+            await ot.save();
+        } else if (solicitud.estado === 'Cancelada') {
+            return res.status(409).json({ error: 'Esta solicitud está cancelada.' });
+        }
+
+        solicitud.descripcion = descripcion;
+        await solicitud.save();
+        res.json({ ok: true, ot: ot ? otPublica(ot) : null });
     } catch (err) {
         res.status(err.status || 500).json({ error: err.message });
     }
