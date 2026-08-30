@@ -1,19 +1,13 @@
 // src/App.jsx
-import { BrowserRouter as Router, Routes, Route, NavLink, useLocation } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, NavLink } from 'react-router-dom';
 import { obtenerHorasParaDia as obtenerHorasParaDiaPura } from './utils/calendario';
 
-function NavPortalGuard({ children }) {
-  const loc = useLocation();
-  if (loc.pathname.startsWith('/portal')) return null;
-  return children;
-}
-
 // Franja ámbar persistente del modo demostración (§9.2 del README de rediseño): visible en
-// todas las pantallas internas mientras el entorno activo sea 'demo', nunca en el portal
-// cliente (esa pantalla la ve un cliente externo, no el staff que alterna de entorno).
+// todas las pantallas internas mientras el entorno activo sea 'demo'. El Portal Cliente
+// vivía embebido en esta SPA (ruta /portal, PortalClienteScreen.jsx) — eliminado: era un
+// portal viejo, sin la autenticación real de erp-pwa-cliente (ver enviarPortalCliente),
+// reemplazado hace tiempo por esa app aparte.
 function BannerDemo({ entorno, onVolver }) {
-  const loc = useLocation();
-  if (loc.pathname.startsWith('/portal')) return null;
   if (entorno !== 'demo') return null;
   return (
     <div style={stylesBannerDemo.franja}>
@@ -42,7 +36,6 @@ import FinanzasScreen from './screens/FinanzasScreen';
 import ComprasScreen from './screens/ComprasScreen';
 import ContabilidadScreen from './screens/ContabilidadScreen';
 import ImportExportScreen from './screens/ImportExportScreen';
-import PortalClienteScreen from './screens/PortalClienteScreen';
 import ClientesScreen from './screens/ClientesScreen';
 import BodegaTokensScreen from './screens/BodegaTokensScreen';
 import TableroSupervisoresScreen from './screens/TableroSupervisoresScreen';
@@ -283,23 +276,31 @@ function App() {
     }
   };
 
-  const enviarPortalCliente = (solicitud) => {
+  // Antes armaba un link a /portal (window.location.origin) — el Portal Cliente VIEJO,
+  // embebido en esta misma SPA (erp-web, la app de escritorio), reemplazado hace tiempo por
+  // erp-pwa-cliente (app aparte, con login por teléfono + token). El bug real: el cliente
+  // terminaba en un portal sin autenticación real (busca solo por número de solicitud,
+  // correlativo y adivinable — el mismo hueco de privacidad que erp-pwa-cliente corrige
+  // exigiendo teléfono) y sin ninguna de las funciones nuevas (ver/editar/cancelar solicitud,
+  // cuenta y pago, informe). Ahora se emite una sesión real (mismo endpoint que "Emitir
+  // acceso" en Clientes) y se comparte ESE link.
+  const enviarPortalCliente = async (solicitud) => {
     if (!solicitud) return;
     const telefono = (solicitud.numero || '').replace(/\D/g, '');
     if (!telefono) {
       notificar.advertencia('Esta solicitud no tiene un número de contacto registrado.');
       return;
     }
-
-    const urlBase = window.location.origin.trim();
-    const codigo = solicitud.numeroSolicitud || solicitud._id;
-    // tab=estado + q= precarga la búsqueda en el Portal del Cliente para que no tenga que tipear el código
-    const linkPortal = `${urlBase}/portal?tab=estado&q=${encodeURIComponent(codigo)}`;
-
-    const mensaje = `Hola ${solicitud.solicitante || ''}, puede seguir el estado de su solicitud *${codigo}* desde nuestro portal:\n\n${linkPortal}`;
-
-    const urlFinal = `https://wa.me/${telefono}?text=${encodeURIComponent(mensaje)}`;
-    window.open(urlFinal, '_blank');
+    try {
+      const { data } = await axios.post(`${API}/portal/emitir-token`, {
+        telefono: solicitud.numero, entorno: obtenerEntorno(),
+      });
+      const codigo = solicitud.numeroSolicitud || solicitud._id;
+      const mensaje = `Hola ${solicitud.solicitante || ''}, puede seguir el estado de su solicitud *${codigo}* desde nuestro portal:\n\n${data.link}`;
+      window.open(`https://wa.me/${telefono}?text=${encodeURIComponent(mensaje)}`, '_blank');
+    } catch (error) {
+      notificar.error(error.response?.data?.error || 'No se pudo generar el acceso al portal.');
+    }
   };
 
   // Contadores reales del nav (nada de placeholders) — ver §1 del handoff.
@@ -320,13 +321,13 @@ function App() {
     { to: '/importexport', label: 'Importar / exportar' },
   ];
   // Fuera del nav por decisión del cliente (siguen existiendo y accesibles por URL directa):
-  // Compras (/compras), Finanzas (/finanzas), Contabilidad (/contabilidad), Portal cliente (/portal).
+  // Compras (/compras), Finanzas (/finanzas), Contabilidad (/contabilidad).
 
   return (
     <Router>
       <div style={styles.raiz}>
         <NotificacionesHost />
-        <NavPortalGuard>
+        <>
           {!navOculta && (
             <>
               <nav style={{ ...styles.nav, width: navW }}>
@@ -368,7 +369,7 @@ function App() {
           >
             {navOculta ? '›' : '‹'}
           </div>
-        </NavPortalGuard>
+        </>
 
         <main style={styles.main}>
           <BannerDemo entorno={entornoActivo} onVolver={volverAProduccion} />
@@ -415,7 +416,6 @@ function App() {
             <Route path="/finanzas" element={<FinanzasScreen recursos={recursos} API={API} />} />
             <Route path="/contabilidad" element={<ContabilidadScreen API={API} />} />
             <Route path="/importexport" element={<ImportExportScreen API={API} cargarDatos={cargarDatos} />} />
-            <Route path="/portal" element={<PortalClienteScreen API={API} />} />
             <Route path="/clientes" element={<ClientesScreen API={API} />} />
             <Route path="/tokens" element={<BodegaTokensScreen API={API} />} />
             <Route path="/tablero-supervisores" element={<TableroSupervisoresScreen API={API} recursos={recursos} />} />

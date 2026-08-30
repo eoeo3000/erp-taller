@@ -1,5 +1,4 @@
 import { useSyncExternalStore } from 'react';
-import { useLocation } from 'react-router-dom';
 import { _suscribirNotificaciones, _estadoNotificaciones, _resolverConfirm, _quitarToast } from '../utils/notificar';
 
 // Mismos tokens que ya usan TratamientoScreen/GanttScreen/DashboardScreen (valores oklch
@@ -21,13 +20,9 @@ const COLOR_TOAST = { exito: t.exito, advertencia: t.advertencia, error: t.error
 
 // Host de notificaciones (toasts + modal de confirmación), montado una sola vez en App.jsx —
 // reemplazo con el estilo del ERP para window.alert()/window.confirm(), llamado desde
-// cualquier pantalla vía src/utils/notificar.js. Oculto en /portal: el Portal Cliente ya
-// tiene su propio toast (estética redondeada distinta, otro mundo visual).
+// cualquier pantalla vía src/utils/notificar.js.
 export default function NotificacionesHost() {
-    const location = useLocation();
     const snap = useSyncExternalStore(_suscribirNotificaciones, _estadoNotificaciones);
-
-    if (location.pathname.startsWith('/portal')) return null;
 
     return (
         <>

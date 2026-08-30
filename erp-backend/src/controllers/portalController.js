@@ -396,12 +396,19 @@ exports.emitirSesionParaTelefono = async function emitirSesionParaTelefono(conn,
     return token;
 };
 
-// Construye el link del portal y despacha el correo de acceso — reutilizado por emisión,
-// regeneración y reenvío. Texto plano, sin HTML decorativo (mismo criterio que el resto
-// de los correos del sistema, ver config/mailer.js).
-async function enviarCorreoAcceso({ correo, nombre, empresa, token, entorno }) {
+// El token en claro nunca se vuelve a mostrar después de la respuesta de emisión/regeneración
+// (tokenHash es lo único que se guarda) — devolver `link` en esa respuesta es la única forma
+// de poder compartirlo por otro medio (WhatsApp, etc.) cuando no hay correo, o simplemente
+// porque el llamador (ej. enviarPortalCliente, App.jsx) prefiere WhatsApp antes que el correo.
+function armarLinkPortalCliente(token, entorno) {
+    return `${PWA_CLIENTE_URL}/?token=${token}${entorno ? `&entorno=${entorno}` : ''}`;
+}
+
+// Despacha el correo de acceso — reutilizado por emisión, regeneración y reenvío. Texto
+// plano, sin HTML decorativo (mismo criterio que el resto de los correos del sistema, ver
+// config/mailer.js).
+async function enviarCorreoAcceso({ correo, nombre, empresa, link }) {
     if (!correo) return false;
-    const link = `${PWA_CLIENTE_URL}/?token=${token}${entorno ? `&entorno=${entorno}` : ''}`;
     await transporter.sendMail({
         from: `"ERP - Gestión de Trabajo" <${process.env.EMAIL_FROM}>`,
         to: correo,
@@ -468,9 +475,10 @@ exports.emitirTokenContacto = async (req, res) => {
             emitidoEn: new Date(), emitidoPor: req.body.emitidoPor || '',
         });
 
-        const correoEnviado = await enviarCorreoAcceso({ correo, nombre: nombreContacto, empresa: empresaSolicitante, token, entorno });
+        const link = armarLinkPortalCliente(token, entorno);
+        const correoEnviado = await enviarCorreoAcceso({ correo, nombre: nombreContacto, empresa: empresaSolicitante, link });
 
-        res.json({ token, expira, empresaSolicitante, sesionId: sesion._id, correoEnviado });
+        res.json({ token, link, expira, empresaSolicitante, sesionId: sesion._id, correoEnviado });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
@@ -492,11 +500,12 @@ exports.regenerarToken = async (req, res) => {
         anterior.ultimoAcceso = null;
         await anterior.save();
 
+        const link = armarLinkPortalCliente(token, req.body.entorno);
         const correoEnviado = await enviarCorreoAcceso({
-            correo: req.body.correo, empresa: anterior.empresaSolicitante, token, entorno: req.body.entorno,
+            correo: req.body.correo, empresa: anterior.empresaSolicitante, link,
         });
 
-        res.json({ token, expira: anterior.expira, correoEnviado });
+        res.json({ token, link, expira: anterior.expira, correoEnviado });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
