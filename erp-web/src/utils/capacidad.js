@@ -14,13 +14,16 @@ export function cotizacionVencida(ot) {
 // Antes cualquier OT 'Planificada' ocupaba capacidad, se hubiera enviado la cotización o no;
 // después se acotó a "cotización enviada y pendiente" para no reservar un cupo por un
 // borrador sin tareas reales. Eso dejaba a la OT que se está planificando ahora mismo
-// (todavía sin enviar) sin sus propias horas contadas — ahora basta con tener tareas reales
-// (fecha + horas > 0) asignadas, sin esperar el envío. Se libera el slot si el cliente
-// rechaza, la cotización vence, o el cliente cancela (OT.cancelada).
+// (todavía sin enviar, incluso todavía 'Tratada' — las tareas se cargan ahí, antes de
+// "Terminar planificación") sin sus propias horas contadas, ni en la carga de personal ni en
+// la de supervisores (otsActivasDe/diasOcupadosPorSupervisor en GanttScreen usan esta misma
+// función). Ahora basta con tener tareas reales (fecha + horas > 0) asignadas, sin esperar el
+// envío ni el paso a 'Planificada'. Se libera el slot si el cliente rechaza, la cotización
+// vence, o el cliente cancela (OT.cancelada).
 export function otBloqueaCapacidad(ot) {
     if (ot.cancelada?.activa) return false;
     if (['Programada', 'En Ejecución'].includes(ot.estado)) return true;
-    if (ot.estado === 'Planificada' && ot.cotizacion?.respuestaCliente !== 'Rechazada' && !cotizacionVencida(ot)) {
+    if (['Tratada', 'Planificada'].includes(ot.estado) && ot.cotizacion?.respuestaCliente !== 'Rechazada' && !cotizacionVencida(ot)) {
         return (ot.tareas || []).some(tt => tt.fecha && Number(tt.duracion) > 0);
     }
     return false;
