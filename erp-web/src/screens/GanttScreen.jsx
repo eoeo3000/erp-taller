@@ -307,7 +307,11 @@ const GanttScreen = ({ recursos = [], ots = [], calendarios = [], obtenerHorasPa
                             de acá abajo, pedido explícito del usuario; "Por operario" deja de ser una
                             vista aparte porque su contenido es exactamente este. */}
                         {modoVista === 'todo' && <>
-                        <div style={styles.filaSeccion}>OT y tareas</div>
+                        {/* marginTop:0 acá — es la primera fila justo debajo del encabezado
+                            sticky; el marginTop normal de filaSeccion (para separarla de las
+                            filas de la sección anterior) dejaba un hueco en blanco sin nada que
+                            separar todavía. */}
+                        <div style={{ ...styles.filaSeccion, marginTop: 0 }}>OT y tareas</div>
                         {ots.map(ot => {
                             const estaEjecutado = ESTADOS_EJECUTADOS.includes(ot.estado);
                             // 'Reprogramar' entra acá también: sus tareas se editaron con fecha
