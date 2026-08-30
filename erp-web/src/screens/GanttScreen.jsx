@@ -45,18 +45,24 @@ const cotizacionVencida = (ot) => !!(
     && (Date.now() - new Date(ot.cotizacion.fechaEnvio).getTime()) > HORAS_LIMITE_APROBACION_COTIZACION * 3600 * 1000
 );
 
-// Antes cualquier OT 'Planificada' ocupaba capacidad, se hubiera enviado la cotización o no.
-// Ahora una 'Planificada' solo bloquea capacidad MIENTRAS hay una aprobación del cliente
-// realmente en curso (enviada, todavía Pendiente, dentro de las 12h) — antes de enviar, o
-// después de que venza o el planificador la cancele (Tratamiento, pestaña Cotización), deja
-// el slot libre. 'Reprogramar' queda fuera igual que antes: necesita fecha nueva, sus tareas
-// con la fecha vieja no deben seguir contando (ver el badge clickeable más abajo).
+// Antes cualquier OT 'Planificada' ocupaba capacidad, se hubiera enviado la cotización o no;
+// después se acotó a "cotización enviada y pendiente" para no reservar un cupo por un
+// borrador sin tareas reales. Pero eso dejaba a la OT que se está planificando AHORA MISMO
+// (todavía sin enviar) sin sus propias horas contadas en "Disponibilidad de personal", justo
+// cuando el Planificador más necesita verlas para juzgar si la fecha elegida alcanza — pedido
+// explícito del usuario. Ahora basta con tener tareas reales (fecha + horas > 0) asignadas,
+// sin esperar el envío; se sigue liberando el slot si el cliente rechaza o la cotización
+// vence sin respuesta. 'Reprogramar' queda fuera igual que antes: necesita fecha nueva, sus
+// tareas con la fecha vieja no deben seguir contando (ver el badge clickeable más abajo).
 // Cancelada por el cliente (OT.cancelada, flag encima de ot.estado — ver models/OT.js) nunca
 // debe seguir ocupando un cupo de capacidad ni poder programarse, aunque ot.estado en sí
 // (Tratada/Planificada/Programada/Reprogramar) se conserve tal cual iba.
 const otBloqueaCapacidad = (ot) => !ot.cancelada?.activa && (
     ['Programada', 'En Ejecución'].includes(ot.estado)
-    || (ot.estado === 'Planificada' && ot.cotizacion?.enviada && ot.cotizacion?.respuestaCliente === 'Pendiente' && !cotizacionVencida(ot))
+    || (
+        ot.estado === 'Planificada' && ot.cotizacion?.respuestaCliente !== 'Rechazada' && !cotizacionVencida(ot)
+        && (ot.tareas || []).some(tt => tt.fecha && Number(tt.duracion) > 0)
+    )
 );
 
 const colorEstadoOT = (estado) => {
@@ -120,7 +126,22 @@ const GanttScreen = ({ recursos = [], ots = [], calendarios = [], obtenerHorasPa
     const semanas = obtenerSemanas();
     const hoyISO = new Date().toISOString().split('T')[0];
     const semanaHoyIdx = semanas.findIndex(s => s.dias.includes(hoyISO));
-    const [idxSemana, setIdxSemana] = useState(Math.max(0, semanaHoyIdx));
+    // Al volver de "Ir a Programación" (bloqueoCotizacion, Tratamiento) con una OT recién
+    // planificada (location.state._volverAOT), esa OT normalmente tiene tareas en una semana
+    // FUTURA — abrir en la semana de hoy dejaba la fila de la OT en "0 h" (horasSemana se
+    // filtra por diasSemana) hasta que alguien se acordara de tocar "Semana siguiente". Se
+    // arranca directo en la semana de la primera tarea de esa OT si existe.
+    const idxSemanaInicial = () => {
+        const idDestino = location.state?._volverAOT;
+        const otDestino = idDestino && ots.find(o => String(o._id) === String(idDestino));
+        const primeraFecha = otDestino && (otDestino.tareas || []).map(tt => tt.fecha).filter(Boolean).sort()[0];
+        if (primeraFecha) {
+            const idx = semanas.findIndex(s => s.dias.includes(primeraFecha));
+            if (idx >= 0) return idx;
+        }
+        return Math.max(0, semanaHoyIdx);
+    };
+    const [idxSemana, setIdxSemana] = useState(idxSemanaInicial);
     const semanaActual = semanas[idxSemana] || null;
     const diasSemana = semanaActual?.dias || [];
 
