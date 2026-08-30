@@ -8,6 +8,7 @@
 // valorHora juntos) — juntarlos en una sola llamada de actualizarTarea encadenada perdería
 // el primer cambio por el closure obsoleto de `tareas` dentro de actualizarTarea.
 import { t, styles, CLP } from './comunTratamiento';
+import { construirMapaCarga } from '../../utils/capacidad';
 
 // Grilla fija de esta tabla (README §6 del handoff de rediseño).
 const GRID_TAREAS = 'minmax(200px,1fr) 160px 118px 132px 52px 68px 62px 84px 96px 40px';
@@ -28,7 +29,34 @@ export default function TabTareas({
     tareas, setTareas, actualizarTarea, agregarTarea, eliminarTarea,
     tareaExpandida, setTareaExpandida,
     puestosDB, recursos, soloLecturaPlanificacion, setTabActiva,
+    otsGlobal = [], obtenerHorasParaDia, otId,
 }) {
+    // Un puesto puede tener varias personas con calendarios distintos — la disponibilidad es
+    // siempre por persona, nunca "del puesto". mapaCargaOtras es la carga YA comprometida en
+    // el resto del sistema (otras OTs que ocupan capacidad, ver utils/capacidad.js); se excluye
+    // esta misma OT porque su borrador en memoria (tareas, más abajo) puede tener cambios
+    // todavía no guardados que esa lista no reflejaría.
+    const mapaCargaOtras = construirMapaCarga(otsGlobal, otId);
+
+    // Disponibilidad de UN responsable para una tarea puntual — combina lo que ya tiene
+    // comprometido en otras OTs con lo que ya tiene comprometido en OTRAS tareas de esta misma
+    // OT (mismo día), antes de sumarle las horas de la tarea que se está mirando. Sin fecha u
+    // horas todavía no hay nada que chequear (null = "no se puede evaluar todavía").
+    const disponibilidadDe = (recursoId, fecha, horasTarea, idxTareaActual) => {
+        if (!fecha || !horasTarea || !obtenerHorasParaDia) return null;
+        const recurso = recursos.find(r => String(r._id) === String(recursoId));
+        if (!recurso) return null;
+        const capacidad = obtenerHorasParaDia(recurso, { fechaCompleta: new Date(fecha + 'T00:00:00') });
+        const cargaOtrasOts = mapaCargaOtras[`${String(recursoId)}-${fecha}`] || 0;
+        const cargaEstaOT = tareas.reduce((acc, t2, i2) => {
+            if (i2 === idxTareaActual || t2.fecha !== fecha) return acc;
+            const ids2 = (t2.operarioId || []).map(String);
+            return ids2.includes(String(recursoId)) ? acc + (Number(t2.duracion) || 0) : acc;
+        }, 0);
+        const totalConEstaTarea = cargaOtrasOts + cargaEstaOT + Number(horasTarea);
+        return { capacidad, totalConEstaTarea, sobreCapacidad: totalConEstaTarea > capacidad };
+    };
+
     return (
         // pointerEvents/opacity (no fieldset+disabled): varios controles de esta pestaña son
         // <span onClick> (los "×" de eliminar, el backspace del responsable), no
@@ -54,6 +82,13 @@ export default function TabTareas({
                 const sub = horas * precioHora * (personas > 0 ? personas : 1);
                 const idKey = tt._id || tt.id || `tarea-${idx}`;
                 const tieneDesarrollo = !!(tt.desarrollo || '').trim();
+                // Quiénes de los YA asignados a esta tarea quedan sobre su capacidad ese día —
+                // se recalcula en cada edición (cambiar fecha/horas puede volver a poner en
+                // conflicto a alguien que antes calzaba). Pedido explícito del usuario: al
+                // elegir dos personas, se espera que las dos estén realmente disponibles.
+                const conflictosAsignados = (tt.operarioId || [])
+                    .map(id => ({ id, nombre: recursos.find(r => String(r._id) === String(id))?.nombre || '?', disp: disponibilidadDe(id, tt.fecha, tt.duracion, idx) }))
+                    .filter(x => x.disp?.sobreCapacidad);
                 return (
                     <div key={idKey}>
                     <div style={{ ...styles.tablaFila(GRID_TAREAS), minWidth: GRID_TAREAS_MIN_W }}>
@@ -84,7 +119,11 @@ export default function TabTareas({
                                 }
                             }}
                         >
-                            <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            <span
+                                style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                                title={conflictosAsignados.length > 0 ? `Sobre su capacidad ese día: ${conflictosAsignados.map(c => c.nombre).join(', ')}` : ''}
+                            >
+                                {conflictosAsignados.length > 0 && <span style={{ color: t.rojo }}>⚠ </span>}
                                 {Array.isArray(tt.operarioNombre) && tt.operarioNombre.length > 0 ? tt.operarioNombre.join(', ') : <span style={{ color: t.textoDeshabilitado }}>Sin asignar</span>}
                             </span>
                             <select
@@ -102,7 +141,16 @@ export default function TabTareas({
                                 }}
                             >
                                 <option value="">+</option>
-                                {recursos.map(r => <option key={r._id} value={r._id}>{r.nombre}</option>)}
+                                {recursos.map(r => {
+                                    // Disponibilidad de CADA candidato para esta tarea puntual — nunca
+                                    // "del puesto": dos personas con el mismo puesto pueden tener
+                                    // calendarios distintos (turnos, días libres) y cargas distintas.
+                                    const disp = disponibilidadDe(r._id, tt.fecha, tt.duracion, idx);
+                                    const etiqueta = disp
+                                        ? disp.sobreCapacidad ? ` ⚠ ${disp.totalConEstaTarea}/${disp.capacidad}h` : ` (${disp.totalConEstaTarea}/${disp.capacidad}h)`
+                                        : '';
+                                    return <option key={r._id} value={r._id}>{r.nombre}{etiqueta}</option>;
+                                })}
                             </select>
                         </div>
                         <input type="number" className="campo-ed" style={{ ...styles.inputCelda, textAlign: 'right' }} value={tt.duracion} onChange={e => actualizarTarea(idx, 'duracion', e.target.value)} />

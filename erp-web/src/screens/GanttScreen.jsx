@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { notificar, confirmar } from '../utils/notificar';
+import { cotizacionVencida, otBloqueaCapacidad, construirMapaCarga } from '../utils/capacidad';
 
 // Paso 6 del rediseño (ver docs/rediseno/design_handoff_panel_control/README.md §8):
 // una sola grilla continua OT → tareas → capacidad (mismo grid-template-columns en las tres),
@@ -37,33 +38,9 @@ const DIAS_L = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
 const GRID = '118px minmax(180px,1fr) 132px 104px 52px 62px 62px repeat(7, minmax(0,1fr))';
 const ESTADOS_EJECUTADOS = ['Trabajo Terminado', 'Con Informe', 'Pagada'];
 
-// Mismo criterio y mismo límite que otController.cotizacionVencida — duplicado acá porque no
-// hay forma de compartir código entre el backend y el frontend en este repo.
-const HORAS_LIMITE_APROBACION_COTIZACION = 12;
-const cotizacionVencida = (ot) => !!(
-    ot.cotizacion?.enviada && ot.cotizacion?.respuestaCliente === 'Pendiente' && ot.cotizacion?.fechaEnvio
-    && (Date.now() - new Date(ot.cotizacion.fechaEnvio).getTime()) > HORAS_LIMITE_APROBACION_COTIZACION * 3600 * 1000
-);
-
-// Antes cualquier OT 'Planificada' ocupaba capacidad, se hubiera enviado la cotización o no;
-// después se acotó a "cotización enviada y pendiente" para no reservar un cupo por un
-// borrador sin tareas reales. Pero eso dejaba a la OT que se está planificando AHORA MISMO
-// (todavía sin enviar) sin sus propias horas contadas en "Disponibilidad de personal", justo
-// cuando el Planificador más necesita verlas para juzgar si la fecha elegida alcanza — pedido
-// explícito del usuario. Ahora basta con tener tareas reales (fecha + horas > 0) asignadas,
-// sin esperar el envío; se sigue liberando el slot si el cliente rechaza o la cotización
-// vence sin respuesta. 'Reprogramar' queda fuera igual que antes: necesita fecha nueva, sus
-// tareas con la fecha vieja no deben seguir contando (ver el badge clickeable más abajo).
-// Cancelada por el cliente (OT.cancelada, flag encima de ot.estado — ver models/OT.js) nunca
-// debe seguir ocupando un cupo de capacidad ni poder programarse, aunque ot.estado en sí
-// (Tratada/Planificada/Programada/Reprogramar) se conserve tal cual iba.
-const otBloqueaCapacidad = (ot) => !ot.cancelada?.activa && (
-    ['Programada', 'En Ejecución'].includes(ot.estado)
-    || (
-        ot.estado === 'Planificada' && ot.cotizacion?.respuestaCliente !== 'Rechazada' && !cotizacionVencida(ot)
-        && (ot.tareas || []).some(tt => tt.fecha && Number(tt.duracion) > 0)
-    )
-);
+// cotizacionVencida/otBloqueaCapacidad viven en utils/capacidad.js — compartidas con
+// TabTareas (Tratamiento), que ahora avisa de conflictos de disponibilidad al elegir
+// responsables con el mismo criterio, en vez de que solo se note acá en Programación.
 
 const colorEstadoOT = (estado) => {
     if (ESTADOS_EJECUTADOS.includes(estado)) return t.textoAtenuado1;
@@ -81,19 +58,7 @@ const GanttScreen = ({ recursos = [], ots = [], calendarios = [], obtenerHorasPa
     const diasConTareas = [];
     ots.forEach(ot => ot.tareas?.forEach(tt => { if (tt.fecha) diasConTareas.push(tt.fecha); }));
 
-    const mapaCarga = {};
-    ots.filter(otBloqueaCapacidad).forEach(ot => {
-        ot.tareas?.forEach(tt => {
-            if (tt.fecha && tt.operarioId) {
-                const ids = Array.isArray(tt.operarioId) ? tt.operarioId : [tt.operarioId];
-                const horas = Number(tt.duracion) || 0;
-                ids.forEach(id => {
-                    const key = `${String(id)}-${tt.fecha}`;
-                    mapaCarga[key] = (mapaCarga[key] || 0) + horas;
-                });
-            }
-        });
-    });
+    const mapaCarga = construirMapaCarga(ots);
 
     // Semanas disponibles: las que tienen tareas + la semana actual (siempre visible, aunque esté vacía).
     const obtenerSemanas = () => {

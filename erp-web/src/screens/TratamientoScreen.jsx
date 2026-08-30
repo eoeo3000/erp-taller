@@ -129,7 +129,9 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
     componentes: componentesDB = [],
     suministros: suministrosDB = [],
     puestosDB: puestosDB = [],
-    plantillas = [] }) => {
+    plantillas = [],
+    ots: otsGlobal = [],
+    obtenerHorasParaDia }) => {
     const isMobile = useIsMobile();
     const { state: datosRecibidos } = useLocation();
     const navigate = useNavigate();
@@ -1402,6 +1404,8 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                             tareaExpandida={tareaExpandida} setTareaExpandida={setTareaExpandida}
                             puestosDB={puestosDB} recursos={recursos}
                             soloLecturaPlanificacion={soloLecturaPlanificacion} setTabActiva={setTabActiva}
+                            otsGlobal={otsGlobal} obtenerHorasParaDia={obtenerHorasParaDia}
+                            otId={otSeleccionada?._id || datosRecibidos?._id}
                         />
                     )}
 
