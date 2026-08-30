@@ -138,8 +138,15 @@ const GanttScreen = ({ recursos = [], ots = [], calendarios = [], obtenerHorasPa
     // Mejora v3 #3 — datos agregados para "Por OT" / "Por supervisor". Se apoyan en
     // OT.supervisorId (Recurso), no en Asignacion: es simplificación deliberada — cuenta
     // supervisión de OT ya creadas, no evaluaciones que todavía son solo Solicitud.
+    // "Asignaciones" es por semana (pedido explícito del usuario) — antes contaba TODAS las OT
+    // activas del supervisor sin importar la semana que se estuviera mirando, lo que se veía
+    // contradictorio: "1 de 5 asignaciones" en una semana donde ninguna tarea suya caía (0h,
+    // sin celdas marcadas). Ahora solo cuenta si la OT tiene al menos una tarea en diasSemana.
     const supervisoresRecursos = recursos.filter(esSupervisor);
-    const otsActivasDe = (recursoId) => ots.filter(ot => String(ot.supervisorId) === String(recursoId) && otBloqueaCapacidad(ot));
+    const otsActivasDe = (recursoId) => ots.filter(ot =>
+        String(ot.supervisorId) === String(recursoId) && otBloqueaCapacidad(ot)
+        && (ot.tareas || []).some(tt => diasSemana.includes(tt.fecha))
+    );
     const diasOcupadosPorSupervisor = (recursoId) => {
         const mapa = {};
         otsActivasDe(recursoId).forEach(ot => {
