@@ -1443,7 +1443,21 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                             // más al lado de una cotización que en realidad todavía no se puede ver.
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, padding: '10px 14px', background: '#fbeceb', border: `1px solid ${t.rojo}`, borderRadius: 2 }}>
                                 <span style={{ fontSize: 12, color: t.textoPrincipal }}>{bloqueoCotizacion.mensaje}</span>
-                                <button onClick={bloqueoCotizacion.accion} style={{ ...styles.btnPrimario, flex: 'none' }}>{bloqueoCotizacion.boton}</button>
+                                <div style={{ display: 'flex', gap: 8, flex: 'none' }}>
+                                    {/* Antes había que salir de este recuadro (a Tareas u otra pestaña)
+                                        para encontrar "Cancelar y volver a planificación" — quedaba
+                                        oculto detrás de este bloqueo junto con el resto de Cotización.
+                                        Pedido explícito del usuario: poder elegir acá mismo entre
+                                        programar o volver a planificación, sin ir y volver de pestaña. */}
+                                    {!otCancelada && otSeleccionada.estado === 'Planificada' && (
+                                        <button
+                                            onClick={volverAPlanificacion}
+                                            disabled={volviendoAPlanificacion}
+                                            style={{ ...styles.btnSecundario, color: t.rojo, opacity: volviendoAPlanificacion ? .6 : 1 }}
+                                        >{volviendoAPlanificacion ? 'Volviendo…' : 'Cancelar y volver a planificación'}</button>
+                                    )}
+                                    <button onClick={bloqueoCotizacion.accion} style={styles.btnPrimario}>{bloqueoCotizacion.boton}</button>
+                                </div>
                             </div>
                         ) : (
                         <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start', flexWrap: 'wrap' }}>
