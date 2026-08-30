@@ -116,8 +116,9 @@ const GanttScreen = ({ recursos = [], ots = [], calendarios = [], obtenerHorasPa
     // sin ningún indicador, el clic pareciera no haber hecho nada.
     const [confirmandoCapacidad, setConfirmandoCapacidad] = useState(false);
     const [asideOculta, setAsideOculta] = useState(false);
-    // Mejora v3 #3 — "Por operario" es exactamente lo que ya existía (sin cambios); "Por OT"
-    // y "Por supervisor" son vistas nuevas, agregadas por OT/persona en vez de por tarea.
+    // "Ver todo"/"Por OT" — "Por operario" y "Por supervisor" existieron como vistas aparte y
+    // se sacaron: su contenido quedó cubierto por "Ver todo" (OT+tareas+disponibilidad de
+    // personal) y por "Carga de supervisores" (visible en ambas vistas restantes).
     const [modoVista, setModoVista] = useState('ot');
     const esSupervisor = (r) => /supervisor/i.test(r.puesto || ''); // mismo criterio que otController.antecedentes
     const LIMITE_ASIGNACIONES = (r) => (r.senior ? 6 : 5); // confirmado con el usuario
@@ -135,8 +136,8 @@ const GanttScreen = ({ recursos = [], ots = [], calendarios = [], obtenerHorasPa
 
     const capacidadDia = (recurso, dia) => obtenerHorasParaDia ? obtenerHorasParaDia(recurso, { fechaCompleta: new Date(dia + 'T00:00:00') }) : 8;
 
-    // Mejora v3 #3 — datos agregados para "Por OT" / "Por supervisor". Se apoyan en
-    // OT.supervisorId (Recurso), no en Asignacion: es simplificación deliberada — cuenta
+    // Datos agregados de "Carga de supervisores" (visible en "Ver todo" y "Por OT"). Se apoyan
+    // en OT.supervisorId (Recurso), no en Asignacion: es simplificación deliberada — cuenta
     // supervisión de OT ya creadas, no evaluaciones que todavía son solo Solicitud.
     // "Asignaciones" es por semana (pedido explícito del usuario) — antes contaba TODAS las OT
     // activas del supervisor sin importar la semana que se estuviera mirando, lo que se veía
@@ -279,7 +280,7 @@ const GanttScreen = ({ recursos = [], ots = [], calendarios = [], obtenerHorasPa
                 <span style={{ fontFamily: t.fontMono, fontSize: 11.5, fontWeight: 600, whiteSpace: 'nowrap' }}>{semanaActual ? `Semana ${semanaActual.num} · ${semanaActual.label}` : '—'}</span>
                 <button onClick={() => setIdxSemana(i => Math.min(semanas.length - 1, i + 1))} disabled={idxSemana >= semanas.length - 1} style={{ ...styles.btnSecundario, opacity: idxSemana >= semanas.length - 1 ? .5 : 1 }}>Semana siguiente</button>
                 <div style={{ display: 'flex', gap: 4, marginLeft: 14 }}>
-                    {[['todo', 'Ver todo'], ['ot', 'Por OT'], ['supervisor', 'Por supervisor']].map(([m, label]) => (
+                    {[['todo', 'Ver todo'], ['ot', 'Por OT']].map(([m, label]) => (
                         <button key={m} onClick={() => setModoVista(m)} style={modoVista === m ? styles.segActivo : styles.segInactivo}>{label}</button>
                     ))}
                 </div>
@@ -290,9 +291,9 @@ const GanttScreen = ({ recursos = [], ots = [], calendarios = [], obtenerHorasPa
                 <section style={styles.scrollTabla}>
                     <div style={{ minWidth: 1228 }}>
                         <div style={styles.filaHeader}>
-                            <span style={styles.thCol}>{modoVista === 'supervisor' ? 'Supervisor' : 'OT · N°'}</span>
+                            <span style={styles.thCol}>OT · N°</span>
                             <span style={styles.thCol}>{modoVista === 'todo' ? 'Tarea / descripción' : 'Detalle'}</span>
-                            <span style={styles.thCol}>{modoVista === 'ot' ? 'Supervisor' : modoVista === 'supervisor' ? 'Carga' : 'Responsable'}</span>
+                            <span style={styles.thCol}>{modoVista === 'ot' ? 'Supervisor' : 'Responsable'}</span>
                             <span style={styles.thCol}>Estado</span>
                             <span style={{ ...styles.thCol, textAlign: 'right' }}>Hrs</span>
                             <span style={{ ...styles.thCol, textAlign: 'right' }}>Inicio</span>
@@ -310,9 +311,10 @@ const GanttScreen = ({ recursos = [], ots = [], calendarios = [], obtenerHorasPa
                         </div>
 
                         {/* "Ver todo" queda con solo esto (OT + tareas + disponibilidad de personal,
-                            antes era la vista "Por operario") — se sacan "Por OT" y "Por supervisor"
-                            de acá abajo, pedido explícito del usuario; "Por operario" deja de ser una
-                            vista aparte porque su contenido es exactamente este. */}
+                            antes era la vista "Por operario") + "Carga de supervisores" más abajo —
+                            no repite el detalle fila-por-fila de "Por OT". "Por operario" y "Por
+                            supervisor" dejaron de existir como vistas aparte: su contenido quedó
+                            cubierto acá y en "Carga de supervisores". */}
                         {modoVista === 'todo' && <>
                         {/* marginTop:0 acá — es la primera fila justo debajo del encabezado
                             sticky; el marginTop normal de filaSeccion (para separarla de las
@@ -440,7 +442,13 @@ const GanttScreen = ({ recursos = [], ots = [], calendarios = [], obtenerHorasPa
 
                         <div style={styles.filaSeccion}>Disponibilidad de personal · carga / capacidad</div>
 
-                        {recursos.map(recurso => {
+                        {/* Un supervisor no recibe horas por tarea (operarioId) — se asigna a
+                            nivel de OT completa (OT.supervisorId), así que acá siempre salía en
+                            0/52.5h · 0%, sin decir nada real. Su carga real (cuántas OT tiene
+                            activas) ya se ve abajo, en "Carga de supervisores" — pedido
+                            explícito del usuario para no mostrar el mismo dato dos veces, uno
+                            de ellos sin sentido. */}
+                        {recursos.filter(r => !esSupervisor(r)).map(recurso => {
                             const cal = calendarios.find(c => String(c._id) === String(recurso.calendarioId));
                             const sumaCarga = diasSemana.reduce((acc, dia) => acc + (mapaCarga[`${String(recurso._id)}-${dia}`] || 0), 0);
                             const sumaCapacidad = diasSemana.reduce((acc, dia) => acc + capacidadDia(recurso, dia), 0);
@@ -545,42 +553,6 @@ const GanttScreen = ({ recursos = [], ots = [], calendarios = [], obtenerHorasPa
                         </>}
                         </>}
 
-                        {modoVista === 'supervisor' && <>
-                        {supervisoresRecursos.map(r => {
-                            const activas = otsActivasDe(r._id);
-                            const ocupados = diasOcupadosPorSupervisor(r._id);
-                            const horasSemana = activas.reduce((acc, ot) => acc + (ot.tareas || []).filter(tt => diasSemana.includes(tt.fecha)).reduce((a, tt) => a + (Number(tt.duracion) || 0), 0), 0);
-                            const fechas = activas.flatMap(ot => (ot.tareas || []).filter(tt => tt.fecha).map(tt => tt.fecha)).sort();
-                            const fmtFecha = iso => iso ? new Date(iso + 'T00:00:00').toLocaleDateString('es-CL', { day: '2-digit', month: 'short' }) : '—';
-                            return (
-                                <div key={r._id} style={{ ...styles.filaOT, cursor: 'default' }}>
-                                    <span style={styles.celda}><span style={{ fontSize: 12, fontWeight: 700 }}>{r.nombre}</span></span>
-                                    <span style={{ ...styles.celda, flexDirection: 'column', alignItems: 'flex-start', justifyContent: 'center', gap: 0 }}>
-                                        <span style={{ fontSize: 11, color: t.textoSecundario1 }}>{r.puesto}{r.senior ? ' · senior' : ''}</span>
-                                        <span style={{ fontSize: 10, color: t.textoDeshabilitado }}>{activas.length} de {LIMITE_ASIGNACIONES(r)} asignaciones</span>
-                                    </span>
-                                    <span style={{ ...styles.celda, fontFamily: t.fontMono, fontSize: 11, fontWeight: 600, color: activas.length > LIMITE_ASIGNACIONES(r) ? t.rojo : t.acento }}>{Math.round((activas.length / LIMITE_ASIGNACIONES(r)) * 100)}%</span>
-                                    <span style={{ ...styles.celda, fontSize: 10.5, fontWeight: 600, color: activas.length > LIMITE_ASIGNACIONES(r) ? t.rojo : t.textoSecundario1 }}>{activas.length > LIMITE_ASIGNACIONES(r) ? 'Sobrecarga' : activas.length > 0 ? 'Al día' : 'Disponible'}</span>
-                                    <span style={{ ...styles.celda, justifyContent: 'flex-end', fontFamily: t.fontMono, fontSize: 11 }}>{`${horasSemana} h`}</span>
-                                    <span style={{ ...styles.celda, justifyContent: 'flex-end', fontFamily: t.fontMono, fontSize: 10.5, color: t.textoSecundario1 }}>{fmtFecha(fechas[0])}</span>
-                                    <span style={{ ...styles.celda, justifyContent: 'flex-end', fontFamily: t.fontMono, fontSize: 10.5, color: t.textoSecundario1, borderRight: `1px solid ${t.hairlineBloque}` }}>{fmtFecha(fechas[fechas.length - 1])}</span>
-                                    {diasSemana.map(dia => {
-                                        const n = ocupados[dia] || 0;
-                                        const f = new Date(dia + 'T00:00:00');
-                                        const esFinde = f.getDay() === 0 || f.getDay() === 6;
-                                        const sobre = n > LIMITE_ASIGNACIONES(r);
-                                        return (
-                                            <span key={dia} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 34, minWidth: 0, overflow: 'hidden', padding: 4, borderLeft: `1px solid ${t.hairlineFila}`, background: sobre ? t.cargaExceso : esFinde ? '#f4f3ef' : 'transparent' }}>
-                                                {n > 0 && <span style={{ fontFamily: t.fontMono, fontSize: 10.5, fontWeight: 600, color: sobre ? t.rojo : t.textoPrincipal }}>{n}</span>}
-                                            </span>
-                                        );
-                                    })}
-                                </div>
-                            );
-                        })}
-                        <div style={styles.filaSeccion}>Carga de supervisores · asignaciones / capacidad</div>
-                        {supervisoresRecursos.map(r => <FilaCargaSupervisor key={r._id} recurso={r} diasSemana={diasSemana} otsActivasDe={otsActivasDe} diasOcupadosPorSupervisor={diasOcupadosPorSupervisor} limite={LIMITE_ASIGNACIONES(r)} />)}
-                        </>}
                     </div>
                 </section>
 
