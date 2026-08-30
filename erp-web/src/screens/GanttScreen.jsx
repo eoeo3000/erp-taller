@@ -478,6 +478,12 @@ const GanttScreen = ({ recursos = [], ots = [], calendarios = [], obtenerHorasPa
                                 </div>
                             );
                         })}
+
+                        {/* Faltaba en "Ver todo" — pedido explícito del usuario, la capacidad de
+                            los supervisores no se veía usada acá aunque sí en "Por OT"/"Por
+                            supervisor". Mismo componente que las otras dos vistas. */}
+                        <div style={styles.filaSeccion}>Carga de supervisores · asignaciones / capacidad</div>
+                        {supervisoresRecursos.map(r => <FilaCargaSupervisor key={r._id} recurso={r} diasSemana={diasSemana} otsActivasDe={otsActivasDe} diasOcupadosPorSupervisor={diasOcupadosPorSupervisor} limite={LIMITE_ASIGNACIONES(r)} />)}
                         </>}
 
                         {modoVista === 'ot' && <>
