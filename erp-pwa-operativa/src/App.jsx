@@ -80,7 +80,7 @@ export default function App() {
         case 'o4':
             return <O4ReporteTerreno nav={nav} asignacion={actual.contexto?.asignacion} modo={actual.contexto?.modo} />;
         case 'o5':
-            return <O5InformeEvaluacion nav={nav} asignacion={actual.contexto?.asignacion} />;
+            return <O5InformeEvaluacion nav={nav} asignacion={actual.contexto?.asignacion} persona={persona} />;
         case 'o6':
             return <O6MiSemana nav={nav} />;
         case 's1':

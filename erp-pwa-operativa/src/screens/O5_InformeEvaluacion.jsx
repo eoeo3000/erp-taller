@@ -7,7 +7,7 @@ import EditorHallazgo from './EditorHallazgo.jsx';
 // "+ Agregar hallazgo", sin lista, sin modal aparte) — un hallazgo por informe. EditorHallazgo
 // es un componente controlado acá (hallazgo + onCambiar); esta pantalla es la que manda los
 // botones de abajo y decide cuándo se persiste.
-export default function O5InformeEvaluacion({ nav, asignacion }) {
+export default function O5InformeEvaluacion({ nav, asignacion, persona }) {
     // El _id de la Solicitud es también el que va a tener la OT una vez creada (mismo
     // upsert que ya usa otController.actualizarOT) — por eso alcanza con un solo id para
     // leer y guardar, exista o no la OT todavía. otId es el respaldo para cuando la
@@ -51,9 +51,15 @@ export default function O5InformeEvaluacion({ nav, asignacion }) {
         // Regrabar (ej. corrigiendo un informe "Con observaciones") vuelve la revisión a
         // 'Pendiente' — el Planificador tiene que volver a mirarlo, ver S5_MisInformes.jsx.
         const revisionReseteada = { estado: 'Pendiente', comentario: '', fecha: null, autor: '' };
+        // Queda registrado quién hizo el levantamiento — pedido explícito del usuario (antes
+        // el campo existía en el modelo, hasta se mostraba en el PDF interno, pero nunca se
+        // completaba en ningún lado). Se pisa con la persona logueada en cada guardado, así
+        // que si alguien más regraba un informe "Con observaciones" queda como el responsable
+        // más reciente, no el original — es lo mismo que ya pasa con revision.autor.
+        const responsable = persona?.nombre || ot.informeEvaluacion?.responsable || '';
         const nuevo = hallazgo.textoDescriptivo?.trim()
-            ? { ...guardarHallazgoEnInforme(informeBase, hallazgo), completo: true, revision: revisionReseteada }
-            : { ...(hallazgo._id ? eliminarHallazgoDeInforme(informeBase, hallazgo._id) : informeBase), completo: true, revision: revisionReseteada };
+            ? { ...guardarHallazgoEnInforme(informeBase, hallazgo), completo: true, revision: revisionReseteada, responsable }
+            : { ...(hallazgo._id ? eliminarHallazgoDeInforme(informeBase, hallazgo._id) : informeBase), completo: true, revision: revisionReseteada, responsable };
         try {
             await actualizarOT(targetId, { informeEvaluacion: nuevo });
             if (asignacion?._id) await cerrarAsignacion(asignacion._id).catch(() => {});

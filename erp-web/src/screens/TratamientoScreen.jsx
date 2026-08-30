@@ -1295,6 +1295,12 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                                             : ''}
                                     </span>
                                 </div>
+                                <div style={styles.campoLabel}>
+                                    <span style={styles.etiqueta}>Levantado por</span>
+                                    <span style={{ fontSize: 13, color: informeEvaluacion.responsable ? t.textoPrincipal : t.textoAtenuado3 }}>
+                                        {informeEvaluacion.responsable || 'Sin registrar'}
+                                    </span>
+                                </div>
                             </div>
 
                             <div style={{ ...styles.campoLabel, marginBottom: 16 }}>
