@@ -1159,6 +1159,11 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
     // sin el resto de la pestaña" que los demás bloqueos de acá abajo.
     const bloqueoCotizacion = otSeleccionada?.cancelada?.activa
         ? { mensaje: `Esta OT fue cancelada por el cliente${otSeleccionada.cancelada.motivo ? `: ${otSeleccionada.cancelada.motivo}` : ''}.`, boton: 'Volver al panel', accion: () => navigate('/dashboard') }
+        // El trabajo ya se hizo — la cotización que se envió/aceptó queda fija, no tiene
+        // sentido seguir editándola. Pedido explícito del usuario: de acá en adelante el
+        // seguimiento pasa por Ejecución (ver el informe) y Pago (registrar el cobro).
+        : ['Trabajo Terminado', 'Con Informe', 'Pagada'].includes(otSeleccionada.estado)
+        ? { mensaje: 'El trabajo ya está terminado — la cotización queda fija. Revisa el informe en Ejecución o registra el cobro en Pago.', boton: 'Ir a Ejecución', accion: () => irATab('reportes') }
         : !todasTareasCompletas
         ? { mensaje: 'Faltan datos en Tareas: descripción, puesto, responsable, horas, fecha, hora o $/hora de alguna tarea.', boton: 'Ir a Tareas', accion: () => irATab('tareas') }
         : !equiposHerramientasConCosto
@@ -1705,6 +1710,23 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                                     </p>
                                 </div>
                             </div>
+
+                            {/* Trabajo terminado (todavía no pagado): el seguimiento pasa a ser
+                                "revisar el informe y cobrar", no seguir tocando tareas — pedido
+                                explícito del usuario. Si al mirar el informe falta algo, la forma
+                                de corregirlo es "Reabrir OT" desde la app del supervisor (S3,
+                                vuelve a 'En Ejecución' y deja editar tareas/registro de nuevo). */}
+                            {['Trabajo Terminado', 'Con Informe'].includes(otSeleccionada.estado) && (
+                                <div style={{ marginBottom: 20, padding: '10px 14px', background: t.barraFiltrosPie, borderLeft: `2px solid ${t.acento}`, borderRadius: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+                                    <span style={{ fontSize: 11.5, color: t.textoSecundario1 }}>
+                                        Trabajo terminado — revisa el informe y, cuando esté todo bien, registra el cobro en Pago. Si falta una foto o comentario, se corrige reabriendo la OT desde la app del supervisor.
+                                    </span>
+                                    <div style={{ display: 'flex', gap: 8, flex: 'none' }}>
+                                        <button onClick={verInformePDF} style={styles.btnSecundario}>Ver informe</button>
+                                        <button onClick={() => setTabActiva('pago')} style={styles.btnPrimario}>Ir a Pago</button>
+                                    </div>
+                                </div>
+                            )}
 
                             {/* Con la OT pagada ya no tiene sentido seguir editando/anulando reportes —
                                 mismo criterio que TabAntecedentes.soloLectura (estado 'Pagada') — así que
