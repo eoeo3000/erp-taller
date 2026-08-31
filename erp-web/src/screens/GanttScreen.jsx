@@ -38,6 +38,14 @@ const DIAS_L = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
 const GRID = '118px minmax(180px,1fr) 132px 104px 52px 62px 62px repeat(7, minmax(0,1fr))';
 const ESTADOS_EJECUTADOS = ['Trabajo Terminado', 'Con Informe', 'Pagada'];
 
+// "Hoy" en fecha LOCAL, no UTC — bug real: `new Date().toISOString()` convierte primero a
+// UTC, y Chile va atrás de UTC, así que de noche la semana/día "actual" ya saltaba al
+// siguiente (mismo bug encontrado y corregido en erp-pwa-operativa, ver src/fecha.js ahí).
+const hoyISO = () => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+
 // cotizacionVencida/otBloqueaCapacidad viven en utils/capacidad.js — compartidas con
 // TabTareas (Tratamiento), que ahora avisa de conflictos de disponibilidad al elegir
 // responsables con el mismo criterio, en vez de que solo se note acá en Programación.
@@ -62,9 +70,8 @@ const GanttScreen = ({ recursos = [], ots = [], calendarios = [], obtenerHorasPa
 
     // Semanas disponibles: las que tienen tareas + la semana actual (siempre visible, aunque esté vacía).
     const obtenerSemanas = () => {
-        const hoyISO = new Date().toISOString().split('T')[0];
         const vistas = new Map();
-        [...diasConTareas, hoyISO].forEach(d => {
+        [...diasConTareas, hoyISO()].forEach(d => {
             const fecha = new Date(d + 'T00:00:00');
             const diaSemana = fecha.getDay();
             const diffLunes = diaSemana === 0 ? -6 : 1 - diaSemana;
@@ -89,8 +96,7 @@ const GanttScreen = ({ recursos = [], ots = [], calendarios = [], obtenerHorasPa
     };
 
     const semanas = obtenerSemanas();
-    const hoyISO = new Date().toISOString().split('T')[0];
-    const semanaHoyIdx = semanas.findIndex(s => s.dias.includes(hoyISO));
+    const semanaHoyIdx = semanas.findIndex(s => s.dias.includes(hoyISO()));
     // Al volver de "Ir a Programación" (bloqueoCotizacion, Tratamiento) con una OT recién
     // planificada (location.state._volverAOT), esa OT normalmente tiene tareas en una semana
     // FUTURA — abrir en la semana de hoy dejaba la fila de la OT en "0 h" (horasSemana se
@@ -374,7 +380,14 @@ const GanttScreen = ({ recursos = [], ots = [], calendarios = [], obtenerHorasPa
                                             )}
                                         </span>
                                         <span style={styles.celda}>
-                                            {estaEjecutado ? null : (
+                                            {estaEjecutado ? null : ot.estado === 'Programada' && capacidadVerificada && !ot.cancelada?.activa ? (
+                                                // Programada y ya verificada: guardarPlanificacion resetea
+                                                // capacidadVerificada apenas cambia algo real (tareas/
+                                                // componentes/logística), así que si sigue en true acá es
+                                                // porque de verdad no cambió nada — no hay nada que
+                                                // "reconfirmar", solo falta que el supervisor arranque.
+                                                <span style={{ fontSize: 10.5, color: t.textoAtenuado1 }}>A espera de inicio (Supervisor)</span>
+                                            ) : (
                                                 <button
                                                     onClick={(e) => { e.stopPropagation(); if (puedeProgramar) confirmarCapacidad(ot); }}
                                                     disabled={!puedeProgramar}

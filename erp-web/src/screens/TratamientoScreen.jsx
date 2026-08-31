@@ -1090,7 +1090,8 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
             'informeEvaluacion.revision.comentario': informeEvaluacion.revision?.comentario || '',
             'informeEvaluacion.revision.fecha': new Date().toISOString(),
         });
-        if (!resultado?.exito) notificar.error(resultado?.error || 'No se pudo guardar la revisión del informe.');
+        if (!resultado?.exito) { notificar.error(resultado?.error || 'No se pudo guardar la revisión del informe.'); return; }
+        notificar.exito('Revisión guardada.');
     };
 
     if (!datosRecibidos) return <div style={{ padding: '50px', fontFamily: t.fontUi }}>No hay datos.</div>;
@@ -1668,7 +1669,7 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                                 disabled={!otSeleccionada.cotizacion?.capacidadVerificada || marcandoEnviada}
                                 title={otSeleccionada.cotizacion?.capacidadVerificada ? 'El cliente entra con teléfono + número de solicitud, sin necesitar un link' : 'Verifica la capacidad en Programación antes de enviar'}
                                 style={{ ...styles.btnSecundario, width: '100%', marginTop: 6, opacity: (otSeleccionada.cotizacion?.capacidadVerificada && !marcandoEnviada) ? 1 : .5 }}
-                            >{marcandoEnviada ? 'Marcando…' : 'Marcar como enviada (sin correo/WhatsApp)'}</button>
+                            >{marcandoEnviada ? 'Marcando…' : 'Habilitar en la app del cliente (sin correo/WhatsApp)'}</button>
                             {otSeleccionada.estado === 'Planificada' && (
                                 <button
                                     onClick={volverAPlanificacion}

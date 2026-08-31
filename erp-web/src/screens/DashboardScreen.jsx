@@ -113,6 +113,9 @@ const subEstadoDe = (ot, s) => {
     // se resuelve reconfirmando capacidad en el Gantt (GanttScreen.confirmarCapacidad). Sin
     // este caso, caía al '—' genérico de abajo, igual que una etapa sin nada pendiente.
     if (ot.estado === 'Reprogramar') return 'Necesita fecha nueva (Planificador)';
+    // Programada y verificada — ya no hay nada pendiente de la oficina ni del cliente, solo
+    // falta que el supervisor arranque el trabajo en terreno (pedido explícito del usuario).
+    if (ot.estado === 'Programada') return 'A espera de inicio (Supervisor)';
     return '—';
 };
 
