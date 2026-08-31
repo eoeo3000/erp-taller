@@ -218,6 +218,24 @@ export default function S3Trabajo({ nav, asignacion, persona }) {
             {cabecera}
 
             <div style={{ flex: 1, overflowY: 'auto' }}>
+                {/* El informe de evaluación es previo/independiente del ciclo de ejecución (no
+                    bloquea tareas ni Guardar/Terminar — ver OT.js, informeEvaluacion.revision),
+                    pero antes solo se veía en S5_MisInformes (lista aparte) — la propia OT no
+                    daba ninguna pista de que la oficina lo rechazó. Se muestra acá arriba de
+                    todo, apenas se entra a la OT. */}
+                {ot.informeEvaluacion?.revision?.estado === 'ConObservaciones' && (
+                    <div style={{ padding: '12px 18px', background: 'oklch(0.52 0.13 25 / .08)', borderLeft: '3px solid var(--detenido)' }}>
+                        <div className="versalita" style={{ color: 'var(--detenido)' }}>Informe pendiente de corrección</div>
+                        {ot.informeEvaluacion.revision.comentario && (
+                            <div style={{ marginTop: 6, fontSize: 13, color: 'var(--texto-secundario-2)' }}>{ot.informeEvaluacion.revision.comentario}</div>
+                        )}
+                        <button
+                            className="boton-primario" style={{ width: 'auto', minHeight: 40, padding: '0 14px', fontSize: 13, marginTop: 10 }}
+                            onClick={() => nav.ir('o5', { asignacion: { otId } })}
+                        >Corregir informe</button>
+                    </div>
+                )}
+
                 <div style={{ padding: '16px 18px', background: 'var(--superficie)', borderBottom: '1px solid var(--linea-fina)' }}>
                     <div style={{ fontSize: 17, fontWeight: 600, lineHeight: 1.35 }}>{ot.descripcion}</div>
                     <div style={{ marginTop: 6, fontSize: 13.5, color: 'var(--texto-secundario-2)' }}>{ot.solicitante}</div>
