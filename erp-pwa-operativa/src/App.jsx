@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { setSesion, haySesion, accionOT, whoami, subirDataURL } from './api.js';
 import { reintentarCola } from './db.js';
+import ConfirmHost from './screens/ConfirmHost.jsx';
 import O1PrimerAcceso from './screens/O1_PrimerAcceso.jsx';
 import O2MiDia from './screens/O2_MiDia.jsx';
 import O3TrabajoEnCurso from './screens/O3_TrabajoEnCurso.jsx';
@@ -62,6 +63,18 @@ export default function App() {
     const actual = pila[pila.length - 1];
     const nav = { ir, reemplazar, volver };
 
+    // ConfirmHost (confirmar.js) montado una sola vez acá, fuera del switch de pantallas, para
+    // que la confirmación estilizada (reemplazo de window.confirm/alert) esté disponible sin
+    // importar en qué pantalla esté la persona.
+    return (
+        <>
+            <ConfirmHost />
+            {renderPantalla(actual, nav, persona, reemplazar)}
+        </>
+    );
+}
+
+function renderPantalla(actual, nav, persona, reemplazar) {
     switch (actual.pantalla) {
         case 'cargando':
             return null;

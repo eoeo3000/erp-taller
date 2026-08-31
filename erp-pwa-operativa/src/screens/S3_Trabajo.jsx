@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { obtenerOT, actualizarOT, accionOT, miSemana, subirFoto } from '../api.js';
 import { detectarCruces } from '../cruces.js';
 import { hoyISO } from '../fecha.js';
+import { confirmar, avisar } from '../confirmar.js';
 import Cargando from './Cargando.jsx';
 
 const COLOR_ESTADO = { 'En Ejecución': 'var(--en-curso)', 'Trabajo Terminado': 'var(--listo)', 'Con Informe': 'var(--listo)', 'Pagada': 'var(--listo)', 'Reprogramar': 'var(--atencion)' };
@@ -145,7 +146,7 @@ export default function S3Trabajo({ nav, asignacion, persona }) {
                 return { ...b, [idx]: { ...previo, fotos: [...previo.fotos, url] } };
             });
         } catch {
-            window.alert('No se pudo subir la foto — revisa la señal e intenta de nuevo.');
+            avisar.error('No se pudo subir la foto — revisa la señal e intenta de nuevo.');
         }
     };
 
@@ -172,14 +173,14 @@ export default function S3Trabajo({ nav, asignacion, persona }) {
     // Planificador (Panel de control, escritorio) se enteraban de que ya empezó.
     const iniciarTrabajo = async () => {
         if (soloLectura) return;
-        if (!window.confirm('¿Marcar el trabajo como iniciado? El cliente y la oficina lo van a ver en ejecución.')) return;
+        if (!(await confirmar('¿Marcar el trabajo como iniciado? El cliente y la oficina lo van a ver en ejecución.', { danger: false, textoConfirmar: 'Marcar en ejecución' }))) return;
         setGuardando(true);
         try { await accionOT(otId, { accion: 'iniciar' }); await cargar(); } finally { setGuardando(false); }
     };
 
     const terminarTrabajo = async () => {
         if (soloLectura) return;
-        if (!window.confirm('¿Marcar el trabajo como finalizado? Queda lista para que la oficina facture.')) return;
+        if (!(await confirmar('¿Marcar el trabajo como finalizado? Queda lista para que la oficina facture.', { danger: false, textoConfirmar: 'Marcar finalizado' }))) return;
         setGuardando(true);
         try { await accionOT(otId, { accion: 'terminar' }); await cargar(); } finally { setGuardando(false); }
     };
@@ -187,7 +188,7 @@ export default function S3Trabajo({ nav, asignacion, persona }) {
     const agregarFotoEstado = async (archivo) => {
         setSubiendoFotoEstado(true);
         try { setFotoEstado(await subirFoto(archivo)); }
-        catch { window.alert('No se pudo subir la foto — revisa la señal e intenta de nuevo.'); }
+        catch { avisar.error('No se pudo subir la foto — revisa la señal e intenta de nuevo.'); }
         finally { setSubiendoFotoEstado(false); }
     };
 
