@@ -196,7 +196,16 @@ export default function C5CuentaPago({ nav, trabajo: trabajoProp }) {
                     {dias.length > 0 && (
                         <div style={{ marginTop: 18, overflowX: 'auto' }}>
                             <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: 'var(--texto-atenuado-2)' }}>Cronograma</div>
-                            <table style={{ borderCollapse: 'collapse', fontSize: 12, width: '100%', marginTop: 6 }}>
+                            {/* Tarea/Responsables con ancho tope + elipsis — antes sin límite, con
+                                varios responsables en una tarea empujaban las columnas de días
+                                bien afuera de pantalla (pedido explícito del usuario: "el
+                                cronograma se desborda con los responsables"). El nombre completo
+                                sigue disponible en la tabla de Tareas más arriba. */}
+                            <table style={{ borderCollapse: 'collapse', fontSize: 12, width: '100%', marginTop: 6, tableLayout: 'fixed' }}>
+                                <colgroup>
+                                    <col style={{ width: 110 }} /><col style={{ width: 90 }} />
+                                    {dias.map((dia) => <col key={dia} />)}
+                                </colgroup>
                                 <thead>
                                     <tr>
                                         <ThDoc>Tarea</ThDoc><ThDoc>Responsables</ThDoc>
@@ -206,8 +215,8 @@ export default function C5CuentaPago({ nav, trabajo: trabajoProp }) {
                                 <tbody>
                                     {ot.tareas.map((t, i) => (
                                         <tr key={i}>
-                                            <TdDoc>{t.descripcion}</TdDoc>
-                                            <TdDoc>{(t.operarioNombre || []).join(', ') || '—'}</TdDoc>
+                                            <TdDoc style={estiloTruncado}>{t.descripcion}</TdDoc>
+                                            <TdDoc style={estiloTruncado}>{(t.operarioNombre || []).join(', ') || '—'}</TdDoc>
                                             {dias.map((dia) => (
                                                 <td key={dia} style={{ ...estiloTd, textAlign: 'center' }}>
                                                     {t.fecha === dia && (
@@ -328,12 +337,15 @@ function FilaDetalle({ concepto, subtitulo, monto }) {
 
 const estiloTd = { padding: '5px 8px', borderBottom: '1px solid var(--linea-fina)', whiteSpace: 'nowrap' };
 const estiloTh = { ...estiloTd, textAlign: 'left', fontWeight: 700, fontSize: 10.5, textTransform: 'uppercase', color: 'var(--texto-atenuado-2)', background: 'var(--fondo-pantalla)' };
+// Solo para Tarea/Responsables del Cronograma — corta con "…" en vez de empujar las columnas
+// de días fuera de pantalla (ver tableLayout:'fixed' + colgroup en esa tabla).
+const estiloTruncado = { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' };
 
 function ThDoc({ children, alinDerecha }) {
     return <th style={{ ...estiloTh, textAlign: alinDerecha ? 'right' : 'left' }}>{children}</th>;
 }
-function TdDoc({ children, alinDerecha }) {
-    return <td style={{ ...estiloTd, textAlign: alinDerecha ? 'right' : 'left' }}>{children}</td>;
+function TdDoc({ children, alinDerecha, style }) {
+    return <td style={{ ...estiloTd, textAlign: alinDerecha ? 'right' : 'left', ...style }}>{children}</td>;
 }
 
 function TablaDoc({ titulo, columnas, filas }) {

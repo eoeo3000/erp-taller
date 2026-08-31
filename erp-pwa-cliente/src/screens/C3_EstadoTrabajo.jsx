@@ -265,6 +265,15 @@ export default function C3EstadoTrabajo({ nav, trabajo: trabajoProp }) {
                         : info.porAprobar && esActual ? 'Cotización por aprobar'
                         : info.reprogramando && esActual ? 'Coordinando nueva fecha'
                         : label;
+                    // Fecha y horas al lado de "Inicio programado" — antes solo se veía como
+                    // mensaje aparte (lineaCliente) al volver a entrar; pedido explícito del
+                    // usuario para no tener que buscarlo más abajo.
+                    const fechasProgramadas = label === 'Inicio programado' && esActual && ot?.estado === 'Programada'
+                        ? (ot.tareas || []).map((tt) => tt.fecha).filter(Boolean).sort()
+                        : null;
+                    const horasProgramadas = fechasProgramadas
+                        ? (ot.tareas || []).reduce((acc, tt) => acc + (Number(tt.duracion) || 0), 0)
+                        : 0;
                     return (
                         <div key={i} style={{
                             minHeight: 48, display: 'flex', alignItems: 'center', gap: 10, padding: '0 16px',
@@ -275,6 +284,11 @@ export default function C3EstadoTrabajo({ nav, trabajo: trabajoProp }) {
                             </span>
                             <span style={{ flex: 1, fontSize: 'var(--fs-secundario)', fontWeight: esActual ? 700 : 400, color: info.rechazada && esActual ? 'var(--detenido)' : 'var(--texto-principal)' }}>
                                 {texto}
+                                {fechasProgramadas?.length > 0 && (
+                                    <span className="mono" style={{ display: 'block', fontWeight: 400, fontSize: 'var(--fs-linea-mono)', color: 'var(--texto-secundario-1)', marginTop: 2 }}>
+                                        {fmtLarga(fechasProgramadas[0])}{fechasProgramadas.length > 1 ? ` – ${fmtLarga(fechasProgramadas[fechasProgramadas.length - 1])}` : ''} · {horasProgramadas} h
+                                    </span>
+                                )}
                             </span>
                         </div>
                     );
