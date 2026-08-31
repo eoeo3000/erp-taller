@@ -423,7 +423,12 @@ export default function C3EstadoTrabajo({ nav, trabajo: trabajoProp }) {
 
             <div style={{ flex: 1 }} />
             <div className="pie-accion" style={{ flexDirection: 'row' }}>
-                {ot?.granTotal > 0 && <button className="boton-secundario" onClick={() => nav.ir('c5', { trabajo })}>Cuenta y pago</button>}
+                {/* Antes se habilitaba con solo granTotal > 0 (desde que hay cotización) —
+                    pedido explícito del usuario: no mostrar cobro hasta que el trabajo esté
+                    realmente terminado, no mientras todavía se está ejecutando. */}
+                {ot?.granTotal > 0 && ['Trabajo Terminado', 'Con Informe', 'Pagada'].includes(ot?.estado) && (
+                    <button className="boton-secundario" onClick={() => nav.ir('c5', { trabajo })}>Cuenta y pago</button>
+                )}
                 {['En Ejecución', 'Trabajo Terminado', 'Con Informe'].includes(ot?.estado) && (
                     <button className="boton-secundario" onClick={() => nav.ir('c4', { trabajo })}>{ot?.informeFinal?.enviado ? 'Informe' : 'Avance'}</button>
                 )}

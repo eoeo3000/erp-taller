@@ -234,6 +234,47 @@ export default function S3Trabajo({ nav, asignacion, persona }) {
                     </div>
                 </div>
 
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '16px 18px 6px' }}>
+                    <span className="versalita">Tareas de la OT</span>
+                    <span className="mono" style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--texto-secundario-2)' }}>{dias.length} día{dias.length !== 1 ? 's' : ''} · {tareas.length} tarea{tareas.length !== 1 ? 's' : ''} · {horasTotal} h</span>
+                </div>
+
+                <div style={{ background: 'var(--superficie)', borderTop: '1px solid var(--linea-fina)', borderBottom: '1px solid var(--linea-fina)' }}>
+                    {dias.length > 0 && (
+                        <div style={{ display: 'flex', padding: '0 18px 0 60px', borderBottom: '1px solid var(--linea-fina)' }}>
+                            {dias.map((d) => (
+                                <div key={d} style={{ flex: 1, minWidth: 0, textAlign: 'center', padding: '5px 0 6px', background: d === hoy ? '#f2f1ec' : 'none' }}>
+                                    <span className="mono" style={{ fontSize: 10.5, fontWeight: 700, color: d === hoy ? 'var(--texto-principal)' : 'var(--texto-atenuado-3)' }}>
+                                        {NOMBRE_DIA[new Date(d + 'T12:00:00').getDay()]} {Number(d.slice(-2))}
+                                    </span>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                    {tareas.map((t, idx) => (
+                        <FilaTarea
+                            key={t._id || idx} t={t} idx={idx} dias={dias} totalUnidades={totalUnidades} hoy={hoy}
+                            otEnEjecucion={ot.estado === 'En Ejecución'}
+                            cruce={cruces.find((c) => c.a.tareaId === String(t._id) || c.b.tareaId === String(t._id))}
+                            borrador={borradores[idx]}
+                            motivoAbierto={motivoAbierto === idx}
+                            motivoTexto={motivoTexto}
+                            guardando={guardando}
+                            bloqueada={soloLectura}
+                            onMarcarRealizada={() => toggleRealizada(idx)}
+                            onAbrirMotivo={() => { setMotivoAbierto(idx); setMotivoTexto(''); }}
+                            onCancelarMotivo={() => setMotivoAbierto(null)}
+                            onCambiarMotivoTexto={setMotivoTexto}
+                            onConfirmarMotivo={() => confirmarNoRealizada(idx)}
+                            onCambiarTexto={(v) => actualizarBorrador(idx, 'texto', v)}
+                            onAgregarFoto={(archivo) => agregarFotoBorrador(idx, archivo)}
+                        />
+                    ))}
+                </div>
+
+                {/* Se movió acá abajo (antes iba arriba, entre Avance y Tareas) — pedido
+                    explícito del usuario: primero ver el plan completo de la OT, recién
+                    después decidir si arrancar, reprogramar o replanificar. */}
                 <div style={{ padding: '12px 18px', borderBottom: '1px solid var(--linea-fina)' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                         <span className="versalita">Estado de la OT</span>
@@ -296,44 +337,6 @@ export default function S3Trabajo({ nav, asignacion, persona }) {
                             </div>
                         </div>
                     )}
-                </div>
-
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '16px 18px 6px' }}>
-                    <span className="versalita">Tareas de la OT</span>
-                    <span className="mono" style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--texto-secundario-2)' }}>{dias.length} día{dias.length !== 1 ? 's' : ''} · {tareas.length} tarea{tareas.length !== 1 ? 's' : ''} · {horasTotal} h</span>
-                </div>
-
-                <div style={{ background: 'var(--superficie)', borderTop: '1px solid var(--linea-fina)', borderBottom: '1px solid var(--linea-fina)' }}>
-                    {dias.length > 0 && (
-                        <div style={{ display: 'flex', padding: '0 18px 0 60px', borderBottom: '1px solid var(--linea-fina)' }}>
-                            {dias.map((d) => (
-                                <div key={d} style={{ flex: 1, minWidth: 0, textAlign: 'center', padding: '5px 0 6px', background: d === hoy ? '#f2f1ec' : 'none' }}>
-                                    <span className="mono" style={{ fontSize: 10.5, fontWeight: 700, color: d === hoy ? 'var(--texto-principal)' : 'var(--texto-atenuado-3)' }}>
-                                        {NOMBRE_DIA[new Date(d + 'T12:00:00').getDay()]} {Number(d.slice(-2))}
-                                    </span>
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                    {tareas.map((t, idx) => (
-                        <FilaTarea
-                            key={t._id || idx} t={t} idx={idx} dias={dias} totalUnidades={totalUnidades} hoy={hoy}
-                            otEnEjecucion={ot.estado === 'En Ejecución'}
-                            cruce={cruces.find((c) => c.a.tareaId === String(t._id) || c.b.tareaId === String(t._id))}
-                            borrador={borradores[idx]}
-                            motivoAbierto={motivoAbierto === idx}
-                            motivoTexto={motivoTexto}
-                            guardando={guardando}
-                            bloqueada={soloLectura}
-                            onMarcarRealizada={() => toggleRealizada(idx)}
-                            onAbrirMotivo={() => { setMotivoAbierto(idx); setMotivoTexto(''); }}
-                            onCancelarMotivo={() => setMotivoAbierto(null)}
-                            onCambiarMotivoTexto={setMotivoTexto}
-                            onConfirmarMotivo={() => confirmarNoRealizada(idx)}
-                            onCambiarTexto={(v) => actualizarBorrador(idx, 'texto', v)}
-                            onAgregarFoto={(archivo) => agregarFotoBorrador(idx, archivo)}
-                        />
-                    ))}
                 </div>
 
                 <div style={{ height: 16 }} />
