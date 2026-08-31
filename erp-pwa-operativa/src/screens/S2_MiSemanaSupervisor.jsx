@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
 import { miSemana } from '../api.js';
 import { detectarCruces, agruparPorOtYDia } from '../cruces.js';
+import { hoyISO } from '../fecha.js';
 import Cargando from './Cargando.jsx';
 
 const NOMBRE_DIA = ['LUN', 'MAR', 'MIÉ', 'JUE', 'VIE', 'SÁB', 'DOM'];
-const hoyISO = () => new Date().toISOString().slice(0, 10);
 const fechaMono = (iso) => new Date(iso + 'T12:00:00').toLocaleDateString('es-CL', { day: '2-digit', month: 'short' });
 
 function horas(hhmm) {

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { miSemana, obtenerOT } from '../api.js';
+import { hoyISO } from '../fecha.js';
 
 // No hay endpoint que exponga la capacidad diaria real de una persona (vendría de
 // Recurso.calendarioId + Calendario, hoy solo calculado en erp-web/src/App.jsx sobre
@@ -8,7 +9,6 @@ import { miSemana, obtenerOT } from '../api.js';
 const CAPACIDAD_DIARIA = 8;
 
 const NOMBRE_DIA = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
-const hoyISO = () => new Date().toISOString().slice(0, 10);
 
 export default function O6MiSemana({ nav }) {
     const [datos, setDatos] = useState(null);

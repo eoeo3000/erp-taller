@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { obtenerOT, actualizarOT, accionOT, miSemana, subirFoto } from '../api.js';
 import { detectarCruces } from '../cruces.js';
+import { hoyISO } from '../fecha.js';
 import Cargando from './Cargando.jsx';
 
 const COLOR_ESTADO = { 'En Ejecución': 'var(--en-curso)', 'Trabajo Terminado': 'var(--listo)', 'Con Informe': 'var(--listo)', 'Pagada': 'var(--listo)', 'Reprogramar': 'var(--atencion)' };
@@ -20,8 +21,6 @@ function diasEntre(desdeISO, hastaISO) {
     while (d <= fin) { dias.push(d.toISOString().slice(0, 10)); d.setDate(d.getDate() + 1); }
     return dias;
 }
-
-const hoyISO = () => new Date().toISOString().slice(0, 10);
 
 export default function S3Trabajo({ nav, asignacion, persona }) {
     const otId = asignacion?.otId;

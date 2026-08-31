@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { solicitudesSinInforme, tomarSolicitud, miSemana } from '../api.js';
+import { hoyISO } from '../fecha.js';
 import Cargando from './Cargando.jsx';
 
 const CAPACIDAD_DIARIA = 8; // mismo placeholder documentado que O6MiSemana — no hay endpoint de capacidad real.
@@ -18,7 +19,6 @@ function lunesDe(iso) {
     return d.toISOString().slice(0, 10);
 }
 
-const hoyISO = () => new Date().toISOString().slice(0, 10);
 
 export default function S4SinInformeInicial({ nav }) {
     const [lista, setLista] = useState(null);

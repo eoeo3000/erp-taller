@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 import { misInformes } from '../api.js';
+import { hoyISO } from '../fecha.js';
 import Cargando from './Cargando.jsx';
 
 const fechaCorta = (iso) => new Date(iso + 'T12:00:00').toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit' });
-const hoyISO = () => new Date().toISOString().slice(0, 10);
 
 // Informes iniciales todavía sin enviar — separado de S5_MisInformes.jsx (que ahora es solo
 // enviados) a pedido explícito, mismo motivo: dos listas mezcladas en una pantalla llamada
