@@ -3,10 +3,12 @@
 // de reportes sin señal la maneja IndexedDB desde la app (ver src/db.js), no este SW.
 // Sin offline completo (ver design_handoff_pwa_movil/README.md §8) — esto es solo la
 // diferencia entre "la app carga" y "pantalla en blanco" con mala señal.
-// v2: la versión anterior dejaba a la gente "pegada" en builds viejos — ver el fetch
-// handler más abajo. Subir este nombre fuerza a purgar el caché viejo en el activate de
-// quien ya tenía la v1 instalada.
-const CACHE = 'operativo-shell-v2';
+// v3: subir este nombre purga el caché de quien haya quedado con una build vieja. Es un
+// parche de una sola vez, no la solución: este archivo no cambia entre deploys, así que el
+// navegador no reinstala el SW y nadie se entera de que hay algo nuevo publicado. Lo que de
+// verdad lo resuelve es el sello de build (/version.json + src/main.jsx), que la app consulta
+// al abrir y al volver del segundo plano.
+const CACHE = 'operativo-shell-v3';
 const SHELL = ['/', '/manifest.json'];
 
 self.addEventListener('install', (event) => {
@@ -25,6 +27,10 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
   if (event.request.method !== 'GET') return; // nunca cachear POST/PUT (acciones, reportes)
   if (url.pathname.startsWith('/api/')) return; // datos siempre en vivo, nunca desde el SW
+  // El sello de build tiene que salir siempre de la red: es justamente con lo que la app
+  // decide si está corriendo una versión vieja (ver src/main.jsx). Cacheado, contestaría
+  // "estás al día" para siempre, que es el bug que viene a resolver.
+  if (url.pathname === '/version.json') return;
 
   // El HTML de entrada (navegación) va SIEMPRE a la red primero, cache solo como respaldo
   // sin señal: es el que referencia los nombres (con hash) del JS/CSS de la build actual —
