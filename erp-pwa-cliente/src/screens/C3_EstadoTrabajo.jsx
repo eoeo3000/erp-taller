@@ -310,7 +310,7 @@ export default function C3EstadoTrabajo({ nav, trabajo: trabajoProp }) {
             {info.porAprobar && (
                 <div style={{ padding: '0 16px 16px' }}>
                     <button
-                        onClick={() => nav.ir('c5', { trabajo })}
+                        onClick={() => nav.ir('c5', { trabajo, verCotizacion: true })}
                         style={{ background: 'none', border: 'none', padding: 0, marginBottom: 10, fontSize: 'var(--fs-secundario)', color: 'var(--en-curso)', textDecoration: 'underline', cursor: 'pointer' }}
                     >Ver detalle de la cotización</button>
                     {error && <div style={{ fontSize: 'var(--fs-secundario)', color: 'var(--detenido)', marginBottom: 8 }}>{error}</div>}

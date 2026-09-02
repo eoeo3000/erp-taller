@@ -98,8 +98,8 @@ const ETIQUETAS_CONDICIONES = [
 // (qué/con quién/cuándo/cómo), Equipos y materiales, Suministros directos, Cronograma y
 // Condiciones comerciales — para que el cliente vea exactamente lo mismo que se cotizó en
 // el escritorio, no un resumen recortado.
-export default function C5CuentaPago({ nav, trabajo: trabajoProp }) {
-    const [verCotizacion, setVerCotizacion] = useState(false);
+export default function C5CuentaPago({ nav, trabajo: trabajoProp, verCotizacionInicial }) {
+    const [verCotizacion, setVerCotizacion] = useState(!!verCotizacionInicial);
     const [trabajo, setTrabajo] = useState(trabajoProp);
     const [oc, setOc] = useState({ numero: trabajoProp?.ot?.ordenCompra || '', archivo: trabajoProp?.ot?.ordenCompraArchivo || '', guardando: false, guardado: false, error: '' });
     const [edp, setEdp] = useState({ numero: trabajoProp?.ot?.pago?.estadoPago?.numero || '', archivo: trabajoProp?.ot?.pago?.estadoPago?.archivo || '', guardando: false, guardado: false, error: '' });
@@ -135,7 +135,11 @@ export default function C5CuentaPago({ nav, trabajo: trabajoProp }) {
         return (
             <div style={{ minHeight: '100vh' }}>
                 <div className="no-imprimir" style={{ display: 'flex', gap: 8, padding: 16 }}>
-                    <button className="boton-secundario" onClick={() => setVerCotizacion(false)}>‹ Volver</button>
+                    {/* "Ver detalle de la cotización" (C3) manda directo acá, sin pasar por la
+                        pantalla de Cuenta y pago — pedido explícito del usuario. Volver en ese
+                        caso tiene que salir de C5 entero, no aterrizar en la pantalla intermedia
+                        que la persona nunca pidió ver. */}
+                    <button className="boton-secundario" onClick={() => (verCotizacionInicial ? nav.volver() : setVerCotizacion(false))}>‹ Volver</button>
                     <button className="boton-primario" style={{ width: 'auto', padding: '0 20px' }} onClick={() => window.print()}>Imprimir / Guardar PDF</button>
                 </div>
                 <div style={{ padding: 16 }}>

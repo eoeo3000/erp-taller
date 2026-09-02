@@ -44,7 +44,7 @@ export default function App() {
         case 'c4':
             return <C4AvanceFotos nav={nav} trabajo={actual.contexto?.trabajo} />;
         case 'c5':
-            return <C5CuentaPago nav={nav} trabajo={actual.contexto?.trabajo} />;
+            return <C5CuentaPago nav={nav} trabajo={actual.contexto?.trabajo} verCotizacionInicial={actual.contexto?.verCotizacion} />;
         case 'c6':
             return <C6PedirServicio nav={nav} />;
         default:
