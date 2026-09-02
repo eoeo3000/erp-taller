@@ -134,7 +134,14 @@ export function misInformes() {
     return pedir(`/asignaciones/mis-informes?token=${encodeURIComponent(token)}`);
 }
 
-// S6 · Solicitudes ejecutadas (solo rol supervisor).
+// S5 · Mis trabajos (solo rol supervisor): todo lo que queda por ejecutar, sin recortar a una
+// semana — a diferencia de miSemana(), que trae una semana por llamada.
+export function misTrabajos() {
+    const { token } = getSesion();
+    return pedir(`/asignaciones/mis-trabajos?token=${encodeURIComponent(token)}`);
+}
+
+// S4 · Solicitudes, filtro "Ejecutadas" (solo rol supervisor).
 export function ejecutadas() {
     const { token } = getSesion();
     return pedir(`/asignaciones/ejecutadas?token=${encodeURIComponent(token)}`);

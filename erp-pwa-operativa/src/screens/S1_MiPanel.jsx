@@ -61,15 +61,19 @@ export default function S1MiPanel({ nav }) {
                         colorExtra="var(--detenido)"
                         onClick={() => nav.ir('s2')}
                     />
+                    {/* Antes acá iba "Hoy en terreno", que solo contaba el día de hoy y entraba
+                        directo a la primera OT. Para saber qué venía después había que ir a Mi
+                        semana y pasar semana por semana, sin ver nunca el total. Ahora entra a
+                        "Mis trabajos" (S5), donde hoy es un filtro más y están todas las semanas
+                        con trabajo. */}
                     <Entrada
-                        conteo={panel.hoyEnTerreno.count} borde="var(--en-curso)"
-                        titulo="Hoy en terreno"
-                        lineas={panel.hoyEnTerreno.contexto.length ? panel.hoyEnTerreno.contexto : ['Sin trabajos en terreno hoy']}
-                        colorUltima={panel.hoyEnTerreno.contexto.some((c) => c.includes('no inicia')) ? 'var(--detenido)' : 'var(--texto-secundario-2)'}
-                        // S3 (Trabajo) todavía no tiene un listado propio de "OT de hoy" — con más de
-                        // una OT activa, esto entra a la primera; ir a las demás queda para cuando
-                        // exista esa pantalla intermedia.
-                        onClick={panel.hoyEnTerreno.items?.[0] ? () => nav.ir('s3', { asignacion: { otId: panel.hoyEnTerreno.items[0].otId } }) : null}
+                        conteo={panel.misTrabajos.count} borde="var(--en-curso)"
+                        titulo="Mis trabajos"
+                        lineas={[panel.misTrabajos.count === 0
+                            ? 'Sin trabajos asignados por ejecutar'
+                            : `${panel.misTrabajos.hoy || 'ninguno'} hoy · en ${panel.misTrabajos.semanas} semana${panel.misTrabajos.semanas === 1 ? '' : 's'}`]}
+                        colorUltima={panel.misTrabajos.hoy > 0 ? 'var(--en-curso)' : 'var(--texto-secundario-2)'}
+                        onClick={() => nav.ir('s5')}
                     />
                     {/* Una sola entrada para todo el ciclo de la solicitud — antes eran cuatro
                         ("sin informe inicial", "míos sin enviar", "enviados este mes",

@@ -90,7 +90,16 @@ async function otsSupervisadasPorRecurso(OT, recursoId) {
     return OT.find({ supervisorId: recursoId, estado: { $in: ESTADOS_TRABAJO_CONFIRMADO } }).lean();
 }
 
-// Igual que hoyEnTerreno (más abajo, para S1): la fecha de cabecera (ot.fechaEjecucion) no basta,
+// Los días en los que una OT tiene trabajo. Las tareas mandan: ot.fechaEjecucion es la fecha
+// de cabecera y se desincroniza en cuanto el Gantt reprograma (mismo motivo que
+// supervisionesDesdeOTs), así que solo se usa cuando no hay ninguna tarea con fecha.
+function fechasDeTrabajo(ot) {
+    const deTareas = [...new Set((ot.tareas || []).map(t => t.fecha).filter(Boolean))].sort();
+    if (deTareas.length) return deTareas;
+    return ot.fechaEjecucion ? [aISO(new Date(ot.fechaEjecucion))] : [];
+}
+
+// Igual que fechasDeTrabajo (más arriba): la fecha de cabecera (ot.fechaEjecucion) no basta,
 // porque se desincroniza de las tareas reales una vez que el Gantt se reprograma — hay que
 // considerar también tareas[].fecha, o el supervisor deja de ver en su día/semana un OT que
 // sí tiene trabajo programado ese día.
@@ -394,18 +403,17 @@ exports.miPanel = async (req, res) => {
             }),
         ]);
 
-        const hoyEnTerreno = otsActivas.filter(ot =>
-            (ot.fechaEjecucion && aISO(new Date(ot.fechaEjecucion)) === hoy) || (ot.tareas || []).some(t => t.fecha === hoy)
-        );
-        const contextoHoy = hoyEnTerreno.slice(0, 2).map(ot => {
-            if (ot.estado === 'En Ejecución') return `${ot.numeroOT} en ejecución`;
-            const tHoy = (ot.tareas || []).find(t => t.fecha === hoy);
-            const hora = tHoy?.horaInicio || tHoy?.hora;
-            return `${ot.numeroOT}${hora ? ` a las ${hora}` : ''} · aún no inicia`;
-        });
-        // IDs para que S1 pueda enlazar directo a S3 (Trabajo) sin una pantalla de listado
-        // intermedia que el handoff no especifica.
-        const itemsHoy = hoyEnTerreno.map(ot => ({ otId: ot._id, numeroOT: ot.numeroOT }));
+        // Antes esto era "Hoy en terreno" y de todas las OT activas se usaban solo las de hoy,
+        // tirando el resto. Ahora el panel entra a "Mis trabajos" (S5), que necesita el
+        // horizonte completo: acá va el resumen para la entrada — total, cuántos hoy y en
+        // cuántas semanas distintas hay trabajo — y el detalle lo pide S5 por su cuenta.
+        const trabajaHoy = (ot) => (ot.fechaEjecucion && aISO(new Date(ot.fechaEjecucion)) === hoy)
+            || (ot.tareas || []).some(t => t.fecha === hoy);
+        const hoyEnTerreno = otsActivas.filter(trabajaHoy);
+        const semanasConTrabajo = new Set();
+        for (const ot of otsActivas) {
+            for (const fecha of fechasDeTrabajo(ot)) semanasConTrabajo.add(aISO(lunesDeLaSemana(new Date(`${fecha}T12:00:00`))));
+        }
 
         const masAntigua = solicitudesSinInforme[0] || null;
 
@@ -422,7 +430,7 @@ exports.miPanel = async (req, res) => {
 
         res.json({
             usuario: { nombre: usuario.nombre, puesto: usuario.puesto },
-            hoyEnTerreno: { count: hoyEnTerreno.length, contexto: contextoHoy, items: itemsHoy },
+            misTrabajos: { count: otsActivas.length, hoy: hoyEnTerreno.length, semanas: semanasConTrabajo.size },
             solicitudesSinInforme: { count: solicitudesSinInforme.length, diasMasAntigua: diasDesde(masAntigua?.fechaCreacion) },
             informesMiosSinEnviar: { count: misEvaluaciones.length, numeroMasAntigua, diasMasAntigua: misEvaluaciones[0] ? diasDesde(misEvaluaciones[0].createdAt) : null },
             solicitudesEjecutadas: { count: ejecutadas },
@@ -560,6 +568,49 @@ exports.misInformes = async (req, res) => {
         }
 
         res.json({ pendientes, enviados });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+};
+
+// GET /api/asignaciones/mis-trabajos?token=&entorno= — S5 · Mis trabajos (solo supervisor).
+// Todo lo que este supervisor tiene por ejecutar, sin recortar a una semana: "Mi semana" (S2)
+// obliga a ir semana por semana y el panel solo mostraba lo de hoy, así que un trabajo
+// agendado para dentro de dos semanas no aparecía en ningún lado sin salir a buscarlo.
+// Solo trabajo pendiente ('Programada'/'En Ejecución'), no todo ESTADOS_TRABAJO_CONFIRMADO:
+// lo ya terminado tiene su propio lugar (Solicitudes · filtro Ejecutadas) y acá solo
+// engordaría el conteo de "lo que me queda por hacer".
+exports.misTrabajos = async (req, res) => {
+    const Usuario = getUsuario(req.db);
+    const OT = getOT(req.db);
+    try {
+        const usuario = await resolverUsuarioPorToken(Usuario, req.query.token);
+        if (!usuario) return res.status(403).json({ error: 'Token inválido o revocado' });
+        if (usuario.rol !== 'supervisor') return res.status(403).json({ error: 'Solo para supervisores' });
+
+        const ots = usuario.recursoId
+            ? await OT.find({ supervisorId: usuario.recursoId, estado: { $in: ['Programada', 'En Ejecución'] } }).lean()
+            : [];
+
+        const trabajos = ots.map((ot) => {
+            const fechas = fechasDeTrabajo(ot);
+            const primera = (ot.tareas || [])
+                .filter(t => t.fecha === fechas[0])
+                .sort((a, b) => (a.horaInicio || a.hora || '').localeCompare(b.horaInicio || b.hora || ''))[0] || null;
+            return {
+                otId: ot._id,
+                numeroOT: ot.numeroOT,
+                descripcion: ot.descripcion,
+                solicitante: ot.solicitante,
+                estado: ot.estado,
+                fechas,
+                horaInicio: primera?.horaInicio || primera?.hora || '',
+                horas: (ot.tareas || []).reduce((a, t) => a + (Number(t.duracion) || 0), 0),
+                tareas: (ot.tareas || []).length,
+            };
+        });
+
+        res.json({ trabajos });
     } catch (error) {
         res.status(500).json({ error: error.message });
     }

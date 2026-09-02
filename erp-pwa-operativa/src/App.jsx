@@ -12,6 +12,7 @@ import S1MiPanel from './screens/S1_MiPanel.jsx';
 import S2MiSemanaSupervisor from './screens/S2_MiSemanaSupervisor.jsx';
 import S3Trabajo from './screens/S3_Trabajo.jsx';
 import S4Solicitudes from './screens/S4_Solicitudes.jsx';
+import S5MisTrabajos from './screens/S5_MisTrabajos.jsx';
 
 export default function App() {
     const [pila, setPila] = useState([{ pantalla: 'cargando' }]);
@@ -103,6 +104,8 @@ function renderPantalla(actual, nav, persona, reemplazar) {
         // ahora es una sola con filtros adentro, ver S4_Solicitudes.jsx.
         case 's4':
             return <S4Solicitudes nav={nav} />;
+        case 's5':
+            return <S5MisTrabajos nav={nav} />;
         default:
             return null;
     }
