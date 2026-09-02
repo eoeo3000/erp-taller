@@ -148,6 +148,14 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
     const [componentes, setComponentes] = useState([]);
     const [excepciones, setExcepciones] = useState([]);
     const [informeEvaluacion, setInformeEvaluacion] = useState({ ...informeEvaluacionVacio, ...(datosRecibidos?.informeEvaluacion || {}) });
+    // Una vez guardada, la revisión se muestra como tarjeta fija (estado + fecha + comentario)
+    // en vez de dejar los botones/textarea editables como si nada se hubiera guardado —
+    // "Cambiar revisión" la reabre en blanco para dejar una observación nueva.
+    const [editandoRevision, setEditandoRevision] = useState(false);
+    // Snapshot de la revisión guardada antes de vaciar el comentario para "Cambiar revisión" —
+    // así "Cancelar" puede devolver exactamente lo que había, en vez de dejar el comentario
+    // vacío si la persona abrió el formulario de nuevo por error.
+    const [revisionAntesDeEditar, setRevisionAntesDeEditar] = useState(null);
     const [isModalEnvioOpen, setIsModalEnvioOpen] = useState(false);
     const [emailsEnvio, setEmailsEnvio] = useState([]);
     const [nuevoEmail, setNuevoEmail] = useState('');
@@ -1085,12 +1093,19 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
     const guardarRevisionInforme = async () => {
         const estado = informeEvaluacion.revision?.estado;
         if (estado !== 'Aceptado' && estado !== 'ConObservaciones') return;
+        const fecha = new Date().toISOString();
         const resultado = await actualizarOtGlobal(otSeleccionada._id, {
             'informeEvaluacion.revision.estado': estado,
             'informeEvaluacion.revision.comentario': informeEvaluacion.revision?.comentario || '',
-            'informeEvaluacion.revision.fecha': new Date().toISOString(),
+            'informeEvaluacion.revision.fecha': fecha,
         });
         if (!resultado?.exito) { notificar.error(resultado?.error || 'No se pudo guardar la revisión del informe.'); return; }
+        // Antes esto se guardaba solo en el backend — el estado local (informeEvaluacion,
+        // useState propio de esta pantalla) nunca se enteraba de la fecha, así que "Última
+        // revisión" nunca llegaba a mostrarse y la revisión guardada parecía no haber
+        // pasado nada. Con la fecha en el estado local, colapsa a la tarjeta de resumen.
+        setInformeEvaluacion(prev => ({ ...prev, revision: { ...prev.revision, fecha } }));
+        setEditandoRevision(false);
         notificar.exito('Revisión guardada.');
     };
 
@@ -1315,6 +1330,29 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                                 <span style={styles.etiqueta}>Revisión del Planificador</span>
                                 {!informeEvaluacion.completo ? (
                                     <span style={{ fontSize: 11.5, color: t.textoAtenuado3 }}>Disponible cuando el supervisor entregue el informe.</span>
+                                ) : informeEvaluacion.revision?.fecha && !editandoRevision ? (
+                                    <div style={{ marginTop: 4 }}>
+                                        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+                                            <span style={{ fontSize: 13, fontWeight: 700, color: informeEvaluacion.revision.estado === 'Aceptado' ? t.verde : t.rojo }}>
+                                                {informeEvaluacion.revision.estado === 'Aceptado' ? 'Aceptado' : 'Con observaciones'}
+                                            </span>
+                                            <span style={{ fontSize: 10.5, color: t.textoAtenuado3 }}>
+                                                {new Date(informeEvaluacion.revision.fecha).toLocaleDateString('es-CL')}
+                                            </span>
+                                        </div>
+                                        {informeEvaluacion.revision.comentario && (
+                                            <div style={{ fontSize: 12.5, color: t.textoSecundario1, marginTop: 4 }}>{informeEvaluacion.revision.comentario}</div>
+                                        )}
+                                        <button
+                                            disabled={soloLecturaPlanificacion}
+                                            onClick={() => {
+                                                setRevisionAntesDeEditar(informeEvaluacion.revision);
+                                                setInformeEvaluacion(prev => ({ ...prev, revision: { ...prev.revision, comentario: '' } }));
+                                                setEditandoRevision(true);
+                                            }}
+                                            style={{ ...styles.btnSecundario, marginTop: 8, opacity: soloLecturaPlanificacion ? .5 : 1 }}
+                                        >Cambiar revisión</button>
+                                    </div>
                                 ) : (
                                     <>
                                         <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
@@ -1338,12 +1376,18 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                                                 style={{ ...styles.inputPlano, width: '100%', minHeight: 60, marginTop: 8, resize: 'vertical' }}
                                             />
                                         )}
-                                        <button disabled={soloLecturaPlanificacion} onClick={guardarRevisionInforme} style={{ ...styles.btnAccion, marginTop: 8, opacity: soloLecturaPlanificacion ? .5 : 1 }}>Guardar revisión</button>
-                                        {informeEvaluacion.revision?.fecha && (
-                                            <div style={{ fontSize: 10.5, color: t.textoAtenuado3, marginTop: 6 }}>
-                                                Última revisión: {new Date(informeEvaluacion.revision.fecha).toLocaleDateString('es-CL')}
-                                            </div>
-                                        )}
+                                        <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                                            <button disabled={soloLecturaPlanificacion} onClick={guardarRevisionInforme} style={{ ...styles.btnAccion, opacity: soloLecturaPlanificacion ? .5 : 1 }}>Guardar revisión</button>
+                                            {informeEvaluacion.revision?.fecha && (
+                                                <button
+                                                    onClick={() => {
+                                                        if (revisionAntesDeEditar) setInformeEvaluacion(prev => ({ ...prev, revision: revisionAntesDeEditar }));
+                                                        setEditandoRevision(false);
+                                                    }}
+                                                    style={styles.btnSecundario}
+                                                >Cancelar</button>
+                                            )}
+                                        </div>
                                     </>
                                 )}
                             </div>

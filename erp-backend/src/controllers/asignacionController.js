@@ -544,9 +544,14 @@ exports.misInformes = async (req, res) => {
                 fechaPlanificada: a.fechaPlanificada, horaPlanificada: a.horaPlanificada,
             };
             if (a.estado === 'completada') {
-                if (new Date(a.updatedAt) >= inicioMes) {
+                const revision = ot?.informeEvaluacion?.revision || null;
+                // 'ConObservaciones' tiene que verse sin importar el mes en que se envió el
+                // informe originalmente — si el Planificador lo rechaza recién en septiembre
+                // pero el supervisor lo mandó en agosto, el corte por mes lo hacía desaparecer
+                // de "Mis informes" antes de que la persona llegara a corregirlo.
+                if (revision?.estado === 'ConObservaciones' || new Date(a.updatedAt) >= inicioMes) {
                     const desenlace = (ot && !['Pendiente', 'Tratada'].includes(ot.estado)) ? 'Cotizada' : 'En oficina';
-                    enviados.push({ ...base, numeroOT: ot?.numeroOT || null, fechaEnvio: a.updatedAt, desenlace, revision: ot?.informeEvaluacion?.revision || null });
+                    enviados.push({ ...base, numeroOT: ot?.numeroOT || null, fechaEnvio: a.updatedAt, desenlace, revision });
                 }
             } else {
                 pendientes.push({ ...base, hallazgos: hallazgosRegistrados(ot?.informeEvaluacion), diasDesdeVisita: diasDesde(a.fechaPlanificada) });
