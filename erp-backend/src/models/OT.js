@@ -48,8 +48,25 @@ const OTSchema = new mongoose.Schema({
 
     // Informe de Evaluación: levantamiento en terreno previo a cotizar (ver docs/funcionalidades-v2.md)
     informeEvaluacion: {
+        // Día del levantamiento (YYYY-MM-DD): se estampa la primera vez que se completa y no
+        // se vuelve a pisar al corregir — para "cuándo se tocó por última vez" está
+        // actualizadoEn. También viaja al portal del cliente (portalController).
         fecha: String,
+        // Quién hizo el levantamiento en terreno. No tiene por qué ser el supervisor asignado
+        // a la OT en Antecedentes (OT.supervisorId): cualquier supervisor puede tomar una
+        // solicitud del pool y levantarla, y una corrección posterior puede quedar a nombre de
+        // otro. Se guarda el nombre + puesto de quien grabó, no una referencia a Recurso,
+        // porque es un registro histórico de autoría: si después cambia de puesto o se le
+        // reasigna la OT, el informe tiene que seguir diciendo quién lo levantó ese día.
         responsable: String,
+        responsablePuesto: String,
+        // Recurso de quien levantó, para poder compararlo con OT.supervisorId sin depender de
+        // que el nombre esté escrito igual en Usuario y en Recurso. String (no ref) por lo
+        // mismo que el nombre: es un registro histórico, no una relación viva.
+        responsableRecursoId: String,
+        // Última vez que el supervisor grabó el informe (incluye correcciones). Distinto de
+        // `fecha`: un informe levantado el lunes y corregido el jueves muestra ambas.
+        actualizadoEn: { type: Date, default: null },
         condicionesSitio: String,
         fotos: [String],
         recursosObservados: String,

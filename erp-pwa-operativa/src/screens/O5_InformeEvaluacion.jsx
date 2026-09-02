@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { obtenerOT, actualizarOT, cerrarAsignacion, obtenerTiposTrabajo, obtenerCatalogosTransversales } from '../api.js';
 import { nuevoHallazgo, guardarHallazgoEnInforme, eliminarHallazgoDeInforme } from '../hallazgos.js';
+import { hoyISO } from '../fecha.js';
 import EditorHallazgo from './EditorHallazgo.jsx';
 
 // El informe de evaluación ES un solo cuadro para escribir (a pedido explícito: sin botón
@@ -58,9 +59,20 @@ export default function O5InformeEvaluacion({ nav, asignacion, persona }) {
         // que si alguien más regraba un informe "Con observaciones" queda como el responsable
         // más reciente, no el original — es lo mismo que ya pasa con revision.autor.
         const responsable = persona?.nombre || ot.informeEvaluacion?.responsable || '';
+        const responsablePuesto = persona?.puesto || ot.informeEvaluacion?.responsablePuesto || '';
+        // La oficina necesita saber de cuándo es lo que está leyendo (pedido explícito): el día
+        // del levantamiento se estampa una sola vez y no se pisa al corregir; actualizadoEn sí
+        // se pisa en cada grabado, así se ve "levantado el lunes, corregido el jueves".
+        const sello = {
+            fecha: ot.informeEvaluacion?.fecha || hoyISO(),
+            actualizadoEn: new Date().toISOString(),
+            responsable,
+            responsablePuesto,
+            responsableRecursoId: persona?.recursoId || ot.informeEvaluacion?.responsableRecursoId || '',
+        };
         const nuevo = hallazgo.textoDescriptivo?.trim()
-            ? { ...guardarHallazgoEnInforme(informeBase, hallazgo), completo: true, revision: revisionReseteada, responsable }
-            : { ...(hallazgo._id ? eliminarHallazgoDeInforme(informeBase, hallazgo._id) : informeBase), completo: true, revision: revisionReseteada, responsable };
+            ? { ...guardarHallazgoEnInforme(informeBase, hallazgo), completo: true, revision: revisionReseteada, ...sello }
+            : { ...(hallazgo._id ? eliminarHallazgoDeInforme(informeBase, hallazgo._id) : informeBase), completo: true, revision: revisionReseteada, ...sello };
         try {
             await actualizarOT(targetId, { informeEvaluacion: nuevo });
             if (asignacion?._id) await cerrarAsignacion(asignacion._id).catch(() => {});

@@ -81,7 +81,11 @@ exports.whoami = async (req, res) => {
     try {
         const usuario = await Usuario.findOne({ token: req.query.token, estado: 'activo' });
         if (!usuario) return res.status(403).json({ error: 'Token inválido o revocado' });
-        res.json({ nombre: usuario.nombre, puesto: usuario.puesto, rol: usuario.rol, fechaEmision: usuario.fechaEmision });
+        // recursoId viaja para que el informe de evaluación pueda registrar a QUIÉN se le
+        // atribuye el levantamiento por id y no solo por nombre — así el escritorio puede
+        // comparar contra OT.supervisorId sin depender de que los nombres de Usuario y Recurso
+        // estén escritos igual (ver O5_InformeEvaluacion / pestaña Informe inicial).
+        res.json({ nombre: usuario.nombre, puesto: usuario.puesto, rol: usuario.rol, recursoId: usuario.recursoId || null, fechaEmision: usuario.fechaEmision });
     } catch (error) {
         res.status(500).json({ error: error.message });
     }

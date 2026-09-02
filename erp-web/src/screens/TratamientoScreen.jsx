@@ -83,7 +83,8 @@ function GaleriaFotos({ fotos = [], onAgregar, onQuitar }) {
 }
 
 const informeEvaluacionVacio = {
-    fecha: '', responsable: '', condicionesSitio: '', recursosObservados: '',
+    fecha: '', responsable: '', responsablePuesto: '', actualizadoEn: null,
+    condicionesSitio: '', recursosObservados: '',
     riesgos: '', metodologia: '', fotos: [], completo: false,
     tareas: [], componentes: [], logistica: [], hallazgos: [],
     revision: { estado: 'Pendiente', comentario: '', fecha: null, autor: '' },
@@ -1306,8 +1307,23 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                                 <div style={styles.campoLabel}>
                                     <span style={styles.etiqueta}>Estado</span>
                                     <span style={{ fontSize: 13, fontWeight: 700, color: informeEvaluacion.completo ? t.verde : t.ambar }}>
-                                        {informeEvaluacion.completo ? `Completo${informeEvaluacion.fecha ? ` · ${informeEvaluacion.fecha}` : ''}` : 'Pendiente — a la espera de la visita del supervisor'}
+                                        {informeEvaluacion.completo ? 'Completo' : 'Pendiente — a la espera de la visita del supervisor'}
                                     </span>
+                                </div>
+                                {/* Fecha en su propia celda y con la última actualización aparte: antes
+                                    solo colgaba del "Completo · fecha", y al corregir un informe con
+                                    observaciones no había forma de saber si lo que se estaba leyendo
+                                    era la versión corregida o la vieja. */}
+                                <div style={styles.campoLabel}>
+                                    <span style={styles.etiqueta}>Fecha del levantamiento</span>
+                                    <span style={{ fontSize: 13, color: informeEvaluacion.fecha ? t.textoPrincipal : t.textoAtenuado3 }}>
+                                        {informeEvaluacion.fecha || 'Sin registrar'}
+                                    </span>
+                                    {informeEvaluacion.actualizadoEn && (
+                                        <span style={{ fontSize: 11, color: t.textoAtenuado3 }}>
+                                            Última actualización: {new Date(informeEvaluacion.actualizadoEn).toLocaleString('es-CL', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                        </span>
+                                    )}
                                 </div>
                                 <div style={styles.campoLabel}>
                                     <span style={styles.etiqueta}>Hallazgos registrados</span>
@@ -1318,11 +1334,28 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                                             : ''}
                                     </span>
                                 </div>
+                                {/* Quien levantó el informe no es necesariamente el supervisor asignado
+                                    (cualquiera puede tomar una solicitud del pool, y una corrección
+                                    posterior puede quedar a nombre de otro) — cuando no coinciden se
+                                    dice explícito, para no leer el informe atribuyéndoselo a quien no fue. */}
                                 <div style={styles.campoLabel}>
                                     <span style={styles.etiqueta}>Levantado por</span>
                                     <span style={{ fontSize: 13, color: informeEvaluacion.responsable ? t.textoPrincipal : t.textoAtenuado3 }}>
-                                        {informeEvaluacion.responsable || 'Sin registrar'}
+                                        {informeEvaluacion.responsable
+                                            ? `${informeEvaluacion.responsable}${informeEvaluacion.responsablePuesto ? ` · ${informeEvaluacion.responsablePuesto}` : ''}`
+                                            : 'Sin registrar'}
                                     </span>
+                                    {/* Por id, no por nombre: Usuario (con el que se firma el informe en
+                                        terreno) y Recurso (el supervisor asignado acá) son colecciones
+                                        distintas y el mismo nombre puede estar escrito distinto. Si el
+                                        informe es viejo y no trae el id, no se dice nada — mejor callar
+                                        que marcar una diferencia que no se puede comprobar. */}
+                                    {informeEvaluacion.responsableRecursoId && antecedentes?.ot?.supervisorId
+                                        && String(informeEvaluacion.responsableRecursoId) !== String(antecedentes.ot.supervisorId) && (
+                                        <span style={{ fontSize: 11, color: t.ambar }}>
+                                            Distinto del supervisor asignado{antecedentes?.ot?.supervisor?.nombre ? ` (${antecedentes.ot.supervisor.nombre})` : ''}
+                                        </span>
+                                    )}
                                 </div>
                             </div>
 
