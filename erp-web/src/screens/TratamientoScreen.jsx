@@ -865,7 +865,11 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                 instruccionesTerreno: formAsignacion.instruccionesTerreno,
             });
             setOtSeleccionada(prev => ({ ...prev, ...data }));
-            setAvisoAsignacion({ tipo: 'ok', texto: data.supervisor ? `Asignada a ${data.supervisor.nombre}` : 'Guardado' });
+            // El formulario se resincroniza con lo que el servidor guardó de verdad: antes se
+            // quedaba con lo elegido a mano, así que el selector podía decir "Sin asignar" y el
+            // aviso de al lado "Asignada a X" al mismo tiempo, sin forma de saber cuál valía.
+            setFormAsignacion(prev => ({ ...prev, supervisorId: data.supervisorId || '' }));
+            setAvisoAsignacion({ tipo: 'ok', texto: data.supervisor ? `Asignada a ${data.supervisor.nombre}` : 'Guardado · sin supervisor a cargo' });
             setAntecedentes(prev => prev ? { ...prev, ot: { ...prev.ot, ...data, supervisor: data.supervisor } } : prev);
         } catch (error) {
             setAvisoAsignacion({ tipo: 'error', texto: error.response?.data?.error || 'No se pudo guardar.' });

@@ -13,6 +13,11 @@ function documentosPagoCompletos(ordenCompra, ordenCompraArchivo, pago) {
     return !!(ordenCompra || ordenCompraArchivo) && hayDoc(pago?.estadoPago) && hayDoc(pago?.hes);
 }
 
+// Desde que el cliente aprueba, la OT tiene fecha comprometida y el supervisor la ve en su
+// app: se puede reasignar, pero no dejarla sin nadie a cargo (ver asignarSupervisor). Antes de
+// eso desasignar es legítimo — es la etapa en la que la oficina todavía está decidiendo.
+const ESTADOS_QUE_EXIGEN_SUPERVISOR = ['Programada', 'En Ejecución', 'Trabajo Terminado', 'Con Informe', 'Pagada'];
+
 // La aprobación del cliente queda abierta un máximo de 12h desde que se envía la cotización
 // (o hasta que el planificador la cancele desde Tratamiento, ver actualizarOT) — pasado eso,
 // deja de poder aprobarse y de bloquear capacidad en el Gantt (GanttScreen.jsx duplica este
@@ -462,8 +467,29 @@ exports.asignarSupervisor = async (req, res) => {
             ? await Recurso.findById(supervisorAnteriorId).select('nombre puesto').lean()
             : null;
 
+        // Desasignar es una acción real, no la ausencia de una: el selector de Antecedentes
+        // ofrece "Sin asignar" y hasta acá no hacía nada — se guardaba, respondía "Asignada a
+        // X" y la OT seguía igual de asignada. Solo se permite mientras la OT no esté
+        // comprometida: desde 'Programada' hay trabajo agendado y el supervisor la tiene en su
+        // app, así que ahí se puede cambiar de supervisor pero no dejarla sin nadie a cargo.
+        const quiereDesasignar = !supervisorId && 'supervisorId' in req.body && !!supervisorAnteriorId;
+        if (quiereDesasignar && ESTADOS_QUE_EXIGEN_SUPERVISOR.includes(ot.estado)) {
+            return res.status(409).json({ error: `La OT está ${ot.estado}: se puede cambiar de supervisor, pero no dejarla sin nadie a cargo.` });
+        }
+
         if (prioridad) ot.prioridad = prioridad;
         if (instruccionesTerreno !== undefined) ot.instruccionesTerreno = instruccionesTerreno;
+
+        if (quiereDesasignar) {
+            ot.supervisorId = null;
+            ot.asignadaEn = null;
+            ot.bitacora = ot.bitacora || [];
+            // supervisorAnterior puede venir null si el Recurso se eliminó y la OT quedó
+            // apuntando a un id muerto — igual hay que poder desasignarla, es justamente uno
+            // de los casos en que hace falta.
+            const quienEra = supervisorAnterior ? `${supervisorAnterior.nombre} (${supervisorAnterior.puesto})` : 'un supervisor que ya no existe en Recursos';
+            ot.bitacora.push({ fecha: new Date(), texto: `OT desasignada de ${quienEra}` });
+        }
 
         if (supervisorNuevo) {
             ot.supervisorId = supervisorNuevo._id;
@@ -511,10 +537,14 @@ exports.asignarSupervisor = async (req, res) => {
             }
         }
 
+        // Se responde quién quedó a cargo DE VERDAD (ot.supervisorId ya guardado), no quién
+        // había antes: con el fallback ciego a supervisorAnterior, desasignar contestaba
+        // "Asignada a <el de antes>" y el selector de la pantalla y este aviso decían cosas
+        // distintas al mismo tiempo.
         const otRespuesta = ot.toObject();
         otRespuesta.supervisor = supervisorNuevo
             ? { id: supervisorNuevo._id, nombre: supervisorNuevo.nombre, puesto: supervisorNuevo.puesto }
-            : supervisorAnterior
+            : (ot.supervisorId && supervisorAnterior)
                 ? { id: supervisorAnteriorId, nombre: supervisorAnterior.nombre, puesto: supervisorAnterior.puesto }
                 : null;
         res.json(otRespuesta);
