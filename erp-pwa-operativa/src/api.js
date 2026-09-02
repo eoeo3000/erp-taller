@@ -127,7 +127,8 @@ export function tomarSolicitud(solicitudId, { fecha, hora }) {
     });
 }
 
-// S5 · Mis informes (solo rol supervisor).
+// S4 · Solicitudes, filtros "Asignadas a mí" / "Enviados" / "Con observaciones" (solo rol
+// supervisor). Devuelve {pendientes, enviados} en una sola llamada.
 export function misInformes() {
     const { token } = getSesion();
     return pedir(`/asignaciones/mis-informes?token=${encodeURIComponent(token)}`);

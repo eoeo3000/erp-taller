@@ -49,7 +49,8 @@ export default function O5InformeEvaluacion({ nav, asignacion, persona }) {
         setError('');
         const informeBase = { hallazgos: [], tareas: [], fotos: [], ...ot.informeEvaluacion };
         // Regrabar (ej. corrigiendo un informe "Con observaciones") vuelve la revisión a
-        // 'Pendiente' — el Planificador tiene que volver a mirarlo, ver S5_MisInformes.jsx.
+        // 'Pendiente' — el Planificador tiene que volver a mirarlo (S4_Solicitudes.jsx,
+        // filtro "Con observaciones").
         const revisionReseteada = { estado: 'Pendiente', comentario: '', fecha: null, autor: '' };
         // Queda registrado quién hizo el levantamiento — pedido explícito del usuario (antes
         // el campo existía en el modelo, hasta se mostraba en el PDF interno, pero nunca se

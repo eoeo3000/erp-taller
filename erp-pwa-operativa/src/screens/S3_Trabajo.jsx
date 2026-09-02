@@ -220,7 +220,8 @@ export default function S3Trabajo({ nav, asignacion, persona }) {
             <div style={{ flex: 1, overflowY: 'auto' }}>
                 {/* El informe de evaluación es previo/independiente del ciclo de ejecución (no
                     bloquea tareas ni Guardar/Terminar — ver OT.js, informeEvaluacion.revision),
-                    pero antes solo se veía en S5_MisInformes (lista aparte) — la propia OT no
+                    pero antes solo se veía en la lista de informes aparte (hoy S4_Solicitudes,
+                    filtro "Con observaciones") — la propia OT no
                     daba ninguna pista de que la oficina lo rechazó. Se muestra acá arriba de
                     todo, apenas se entra a la OT. */}
                 {ot.informeEvaluacion?.revision?.estado === 'ConObservaciones' && (

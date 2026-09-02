@@ -11,10 +11,7 @@ import O6MiSemana from './screens/O6_MiSemana.jsx';
 import S1MiPanel from './screens/S1_MiPanel.jsx';
 import S2MiSemanaSupervisor from './screens/S2_MiSemanaSupervisor.jsx';
 import S3Trabajo from './screens/S3_Trabajo.jsx';
-import S4SinInformeInicial from './screens/S4_SinInformeInicial.jsx';
-import S5MisInformes from './screens/S5_MisInformes.jsx';
-import S6Ejecutadas from './screens/S6_Ejecutadas.jsx';
-import S7InformesPendientes from './screens/S7_InformesPendientes.jsx';
+import S4Solicitudes from './screens/S4_Solicitudes.jsx';
 
 export default function App() {
     const [pila, setPila] = useState([{ pantalla: 'cargando' }]);
@@ -102,14 +99,10 @@ function renderPantalla(actual, nav, persona, reemplazar) {
             return <S2MiSemanaSupervisor nav={nav} contexto={actual.contexto} />;
         case 's3':
             return <S3Trabajo nav={nav} asignacion={actual.contexto?.asignacion} persona={persona} />;
+        // s4 reemplazó a las cuatro pantallas separadas de solicitudes (antes s4/s5/s6/s7):
+        // ahora es una sola con filtros adentro, ver S4_Solicitudes.jsx.
         case 's4':
-            return <S4SinInformeInicial nav={nav} />;
-        case 's5':
-            return <S5MisInformes nav={nav} />;
-        case 's6':
-            return <S6Ejecutadas nav={nav} />;
-        case 's7':
-            return <S7InformesPendientes nav={nav} />;
+            return <S4Solicitudes nav={nav} />;
         default:
             return null;
     }

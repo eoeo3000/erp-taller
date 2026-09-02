@@ -481,9 +481,9 @@ exports.asignarSupervisor = async (req, res) => {
 
         // Empuja el informe inicial al supervisor recién asignado. Sin esto, asignar desde
         // Antecedentes solo guardaba OT.supervisorId — el informe seguía siendo 100%
-        // autoservicio (S4/tomarSolicitud): el supervisor asignado nunca lo veía en
-        // "Informes iniciales míos sin enviar" a menos que él mismo fuera a S4 a tomarlo.
-        // misInformes/S7 resuelven todo por Asignacion(tipo:'evaluacion').solicitudId, no por
+        // autoservicio (tomarSolicitud): el supervisor asignado nunca lo veía en sus
+        // solicitudes "Asignadas a mí" a menos que él mismo fuera a tomarla del pool.
+        // misInformes resuelve todo por Asignacion(tipo:'evaluacion').solicitudId, no por
         // OT.supervisorId — de ahí que asignar no "llegara" a la app del supervisor.
         // Reasigna la Asignacion existente en vez de crear una segunda: el índice único de
         // solicitudId (ver models/Asignacion.js) solo admite una por solicitud.

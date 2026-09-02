@@ -507,7 +507,8 @@ function hallazgosRegistrados(informeEvaluacion) {
     return (informeEvaluacion?.hallazgos || []).length;
 }
 
-// GET /api/asignaciones/mis-informes?token=&entorno= — S5 · Mis informes.
+// GET /api/asignaciones/mis-informes?token=&entorno= — S4 · Solicitudes (filtros "Asignadas
+// a mí" / "Enviados" / "Con observaciones" en la PWA Operativa).
 // El informe vive en OT.informeEvaluacion, no en Solicitud — pero antes de guardarlo por
 // primera vez la OT todavía no existe como documento propio. Se busca en OT usando el MISMO
 // _id de la Solicitud, porque ese es el _id que va a tener la OT una vez creada (ver

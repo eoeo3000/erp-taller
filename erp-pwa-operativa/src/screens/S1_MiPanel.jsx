@@ -16,14 +16,18 @@ export default function S1MiPanel({ nav }) {
     useEffect(() => {
         miPanel().then(setPanel).catch((e) => setError(e.message));
         miSemana().then(setSemana).catch(() => {});
-        // "Enviados este mes" (S5) quedaba enterrado: había que entrar a "Informes iniciales
-        // míos sin enviar" y encima bajar más allá de los pendientes para verlo — se pide acá
-        // también, como una entrada más de "Por dónde entrar", igual que el resto.
+        // miPanel no trae ni los enviados del mes ni cuáles volvieron "con observaciones" —
+        // eso solo está en misInformes, y es justo lo que la entrada de Solicitudes necesita
+        // para avisar de una corrección pendiente sin obligar a entrar a mirar.
         misInformes().then(setInformes).catch(() => {});
     }, []);
 
     const enviados = informes?.enviados || [];
-    const ultimoEnviado = enviados[0] || null;
+    const conObservaciones = enviados.filter((e) => e.revision?.estado === 'ConObservaciones');
+    // Lo que efectivamente le queda por hacer al supervisor: lo que puede tomar, lo que ya es
+    // suyo y no ha enviado, y lo que la oficina le devolvió con observaciones. Lo enviado y lo
+    // ejecutado son consulta, no cuentan acá (van igual en la segunda línea de la entrada).
+    const porHacer = (panel?.solicitudesSinInforme.count || 0) + (panel?.informesMiosSinEnviar.count || 0) + conObservaciones.length;
 
     const grupos = semana ? agruparPorOtYDia(semana.tareasSupervisadas || []) : [];
     const cruces = semana ? detectarCruces(semana.tareasSupervisadas || []) : [];
@@ -67,36 +71,22 @@ export default function S1MiPanel({ nav }) {
                         // exista esa pantalla intermedia.
                         onClick={panel.hoyEnTerreno.items?.[0] ? () => nav.ir('s3', { asignacion: { otId: panel.hoyEnTerreno.items[0].otId } }) : null}
                     />
+                    {/* Una sola entrada para todo el ciclo de la solicitud — antes eran cuatro
+                        ("sin informe inicial", "míos sin enviar", "enviados este mes",
+                        "ejecutadas"), y la misma solicitud saltaba de un acceso a otro según
+                        en qué punto estuviera. Los cuatro cortes siguen existiendo, ahora como
+                        filtros dentro de S4_Solicitudes. */}
                     <Entrada
-                        conteo={panel.solicitudesSinInforme.count} borde="var(--atencion)"
-                        titulo="Solicitudes sin informe inicial"
-                        lineas={['sin supervisor · puedo asignármelas']}
-                        extra={panel.solicitudesSinInforme.diasMasAntigua != null ? `la más antigua lleva ${panel.solicitudesSinInforme.diasMasAntigua} día(s)` : null}
-                        colorExtra="var(--atencion)"
-                        onClick={() => nav.ir('s4')}
-                    />
-                    <Entrada
-                        conteo={panel.informesMiosSinEnviar.count} borde="var(--detenido)"
-                        titulo="Informes iniciales míos sin enviar"
-                        lineas={['pendientes de completar y enviar']}
-                        extra={panel.informesMiosSinEnviar.diasMasAntigua != null ? `${panel.informesMiosSinEnviar.numeroMasAntigua || 'el más antiguo'} lleva ${panel.informesMiosSinEnviar.diasMasAntigua} día(s)` : null}
-                        colorExtra="var(--detenido)"
-                        onClick={() => nav.ir('s7')}
-                    />
-                    <Entrada
-                        conteo={enviados.length} borde="var(--listo)" colorConteo="var(--listo)"
-                        titulo="Informes enviados este mes"
-                        lineas={ultimoEnviado ? [ultimoEnviado.descripcion] : ['Aún no envías ninguno este mes']}
-                        extra={ultimoEnviado ? `${ultimoEnviado.numeroSolicitud} · enviado ${fechaMono(ultimoEnviado.fechaEnvio.slice(0, 10))}${ultimoEnviado.numeroOT ? ` · ya es ${ultimoEnviado.numeroOT}` : ''}` : null}
-                        colorExtra="var(--texto-secundario-2)"
-                        onClick={() => nav.ir('s5')}
-                    />
-                    <Entrada
-                        conteo={panel.solicitudesEjecutadas.count} borde="var(--deshabilitado-2)" colorConteo="var(--texto-secundario-2)"
-                        titulo="Solicitudes ejecutadas"
-                        lineas={['solo para revisar · últimos 30 días']}
+                        conteo={porHacer} borde={conObservaciones.length > 0 ? 'var(--detenido)' : 'var(--atencion)'}
+                        titulo="Solicitudes"
+                        lineas={[
+                            `${panel.solicitudesSinInforme.count} sin informe inicial · ${panel.informesMiosSinEnviar.count} asignadas a mí`,
+                            `${enviados.length} enviadas este mes · ${panel.solicitudesEjecutadas.count} ejecutadas`,
+                        ]}
                         colorUltima="var(--texto-atenuado-3)"
-                        onClick={() => nav.ir('s6')}
+                        extra={conObservaciones.length > 0 ? `${conObservaciones.length} con observaciones por corregir` : null}
+                        colorExtra="var(--detenido)"
+                        onClick={() => nav.ir('s4')}
                         ultima
                     />
                 </div>
