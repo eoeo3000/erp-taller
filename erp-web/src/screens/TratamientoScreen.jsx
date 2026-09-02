@@ -1334,10 +1334,11 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                                             : ''}
                                     </span>
                                 </div>
-                                {/* Quien levantó el informe no es necesariamente el supervisor asignado
-                                    (cualquiera puede tomar una solicitud del pool, y una corrección
-                                    posterior puede quedar a nombre de otro) — cuando no coinciden se
-                                    dice explícito, para no leer el informe atribuyéndoselo a quien no fue. */}
+                                {/* Quien levantó el informe, que no tiene por qué ser el supervisor
+                                    asignado a la OT: cualquiera puede tomar una solicitud del pool y
+                                    una corrección posterior puede quedar a nombre de otro. El supervisor
+                                    asignado se sacó de esta pestaña (pedido explícito: acá no es
+                                    relevante) — se ve en Antecedentes, que es donde se asigna. */}
                                 <div style={styles.campoLabel}>
                                     <span style={styles.etiqueta}>Levantado por</span>
                                     <span style={{ fontSize: 13, color: informeEvaluacion.responsable ? t.textoPrincipal : t.textoAtenuado3 }}>
@@ -1345,17 +1346,6 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                                             ? `${informeEvaluacion.responsable}${informeEvaluacion.responsablePuesto ? ` · ${informeEvaluacion.responsablePuesto}` : ''}`
                                             : 'Sin registrar'}
                                     </span>
-                                    {/* Por id, no por nombre: Usuario (con el que se firma el informe en
-                                        terreno) y Recurso (el supervisor asignado acá) son colecciones
-                                        distintas y el mismo nombre puede estar escrito distinto. Si el
-                                        informe es viejo y no trae el id, no se dice nada — mejor callar
-                                        que marcar una diferencia que no se puede comprobar. */}
-                                    {informeEvaluacion.responsableRecursoId && antecedentes?.ot?.supervisorId
-                                        && String(informeEvaluacion.responsableRecursoId) !== String(antecedentes.ot.supervisorId) && (
-                                        <span style={{ fontSize: 11, color: t.ambar }}>
-                                            Distinto del supervisor asignado{antecedentes?.ot?.supervisor?.nombre ? ` (${antecedentes.ot.supervisor.nombre})` : ''}
-                                        </span>
-                                    )}
                                 </div>
                             </div>
 
@@ -1425,16 +1415,10 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                                 )}
                             </div>
 
-                            {/* Asignar/cambiar supervisor se sacó de acá — quedaba duplicado con
-                                Antecedentes (mismo campo, mismo guardarAsignacion). Se ve en Antecedentes,
-                                que es la pestaña de datos administrativos de la OT. */}
-                            <div style={{ ...styles.campoLabel, marginBottom: 16 }}>
-                                <span style={styles.etiqueta}>Supervisor asignado</span>
-                                <span style={{ fontSize: 12.5 }}>
-                                    {antecedentes?.ot?.supervisor ? `${antecedentes.ot.supervisor.nombre} · ${antecedentes.ot.supervisor.puesto}` : <span style={{ color: t.textoAtenuado3 }}>Sin asignar — ver pestaña Antecedentes</span>}
-                                </span>
-                            </div>
-
+                            {/* El supervisor asignado ya no se muestra acá: primero se sacó de esta
+                                pestaña la acción de asignarlo (quedaba duplicada con Antecedentes) y
+                                después el dato mismo, por no ser relevante para leer el informe — lo
+                                que importa acá es quién lo levantó, arriba. Vive en Antecedentes. */}
                             <p style={{ fontSize: 11, color: t.textoAtenuado3, marginBottom: 16 }}>
                                 El detalle del informe (condiciones del sitio, riesgos, hallazgos y fotos) se completa desde la aplicación del supervisor en terreno.
                             </p>

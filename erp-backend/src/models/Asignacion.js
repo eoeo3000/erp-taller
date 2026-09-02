@@ -13,7 +13,7 @@ const AsignacionSchema = new mongoose.Schema({
     solicitudId: { type: mongoose.Schema.Types.ObjectId, ref: 'Solicitud' },
     tareaId: { type: String, default: '' },
     fechaPlanificada: { type: String, default: '' },
-    // Solo la usa tipo 'evaluacion' (S4 · Sin informe inicial): la visita agendada lleva
+    // Solo la usa tipo 'evaluacion' (S4 · Solicitudes, filtro "Sin informe inicial"): la visita agendada lleva
     // hora además de fecha, a diferencia de 'ejecucion'/'supervision' que ya tienen su hora
     // real en OT.tareas[].horaInicio.
     horaPlanificada: { type: String, default: '' },
@@ -27,7 +27,7 @@ AsignacionSchema.pre('validate', function () {
     }
 });
 
-// "Tomar solicitud" (S4) tiene que ser un solo PUT atómico y sin confirmación de oficina:
+// "Tomar solicitud" (S4 · Solicitudes) tiene que ser un solo PUT atómico y sin confirmación de oficina:
 // si dos supervisores la abren a la vez, el segundo debe chocar contra esto (código 11000)
 // y no crear una segunda Asignacion de evaluación para la misma Solicitud. sparse porque
 // 'ejecucion'/'supervision' no usan solicitudId — no deben competir por este índice.
