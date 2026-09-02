@@ -1,8 +1,11 @@
 // Service worker de assets — mismo criterio que erp-pwa-operativa/public/sw.js: solo
 // cachea el shell estático, nunca /api/, nunca POST/PUT.
-// v2: sube el nombre para purgar el caché de quien ya tenía la v1 — ver el fetch handler
-// más abajo, que corrige quedar pegado en una build vieja.
-const CACHE = 'cliente-shell-v2';
+// v3: sube el nombre para purgar el caché de quien haya quedado con una build vieja. Subirlo
+// es un parche de una sola vez, no la solución: este archivo no cambia entre deploys, así que
+// el navegador no reinstala el SW y nadie se entera de que hay algo nuevo publicado. Lo que
+// de verdad lo resuelve es el sello de build (/version.json + src/main.jsx), que la app
+// consulta al abrir y al volver del segundo plano.
+const CACHE = 'cliente-shell-v3';
 const SHELL = ['/', '/manifest.json'];
 
 self.addEventListener('install', (event) => {
@@ -21,6 +24,10 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
   if (event.request.method !== 'GET') return;
   if (url.pathname.startsWith('/api/')) return;
+  // El sello de build tiene que salir siempre de la red: es justamente con lo que la app
+  // decide si está corriendo una versión vieja (ver src/main.jsx). Cacheado, contestaría
+  // "estás al día" para siempre, que es el bug que viene a resolver.
+  if (url.pathname === '/version.json') return;
 
   // El HTML de entrada va siempre a la red primero (cache solo como respaldo sin señal):
   // es el que referencia los nombres con hash del JS/CSS de la build actual — servirlo
