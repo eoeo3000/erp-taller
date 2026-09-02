@@ -74,13 +74,29 @@ function etapaInfo(ot, solicitudEstado) {
 const CLP = (n) => '$ ' + Math.round(n || 0).toLocaleString('es-CL');
 const fmtLarga = (iso) => iso ? new Date((iso + '').split('T')[0] + 'T00:00:00').toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit', year: 'numeric' }) : null;
 const fmtCorta = (iso) => iso ? new Date((iso + '').split('T')[0] + 'T00:00:00').toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit' }) : '';
+// Por componentes locales, no toISOString(): en Chile (detrás de UTC) el ISO en UTC ya está
+// en el día siguiente durante la tarde, y el mínimo del selector de fecha quedaba corrido.
+const hoyISO = () => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
 
-function lineaCliente(ot, solicitudEstado, motivoCancelacion) {
+// Le devuelve al cliente lo que dejó dicho al cancelar: el motivo y, sobre todo, si quedó una
+// fecha propuesta para retomarlo o si quedó en pausa hasta nuevo aviso.
+function textoCancelacion(motivo, fechaPropuesta) {
+    const base = motivo ? `Usted canceló esta solicitud: ${motivo}` : 'Usted canceló esta solicitud';
+    const cierre = fechaPropuesta
+        ? ` Propuso retomarla el ${fmtLarga(fechaPropuesta)}.`
+        : ' Queda en pausa hasta que usted avise.';
+    return `${base}.${cierre}`;
+}
+
+function lineaCliente(ot, solicitudEstado, motivoCancelacion, fechaPropuesta) {
     if (!ot) {
-        if (solicitudEstado === 'Cancelada') return 'Usted canceló esta solicitud.';
+        if (solicitudEstado === 'Cancelada') return textoCancelacion(motivoCancelacion, fechaPropuesta);
         return 'Su solicitud está siendo evaluada.';
     }
-    if (ot.cancelada?.activa) return motivoCancelacion ? `Usted canceló esta solicitud: ${motivoCancelacion}` : 'Usted canceló esta solicitud.';
+    if (ot.cancelada?.activa) return textoCancelacion(motivoCancelacion, fechaPropuesta);
     if (ot.estado === 'Planificada' && ot.cotizacion?.enviada && ot.cotizacion?.respuestaCliente === 'Pendiente') {
         return 'Revise el detalle y responda a la cotización.';
     }
@@ -121,6 +137,8 @@ export default function C3EstadoTrabajo({ nav, trabajo: trabajoProp }) {
     const [errorDescripcion, setErrorDescripcion] = useState('');
     const [cancelando, setCancelando] = useState(false);
     const [motivoCancelacion, setMotivoCancelacion] = useState('');
+    // '' = sin fecha propuesta, hasta nuevo aviso (ver el formulario de cancelación más abajo).
+    const [fechaPropuesta, setFechaPropuesta] = useState('');
     const [enviandoCancelacion, setEnviandoCancelacion] = useState(false);
     const [errorCancelacion, setErrorCancelacion] = useState('');
 
@@ -183,8 +201,15 @@ export default function C3EstadoTrabajo({ nav, trabajo: trabajoProp }) {
     const confirmarCancelacion = async () => {
         setEnviandoCancelacion(true); setErrorCancelacion('');
         try {
-            const resultado = await cancelarSolicitud(trabajo._id, motivoCancelacion.trim());
-            setTrabajo((t) => ({ ...t, estado: resultado.ot ? t.estado : 'Cancelada', ot: resultado.ot || t.ot }));
+            const resultado = await cancelarSolicitud(trabajo._id, motivoCancelacion.trim(), fechaPropuesta);
+            setTrabajo((t) => ({
+                ...t,
+                estado: resultado.ot ? t.estado : 'Cancelada',
+                ot: resultado.ot || t.ot,
+                // Sin OT la cancelación vive en la Solicitud: se refleja acá mismo para no
+                // depender de recargar la lista para ver lo que uno acaba de dejar dicho.
+                cancelacion: resultado.ot ? t.cancelacion : (resultado.cancelacion || null),
+            }));
             setCancelando(false);
         } catch (e) {
             setErrorCancelacion(e.message);
@@ -253,7 +278,12 @@ export default function C3EstadoTrabajo({ nav, trabajo: trabajoProp }) {
 
             <div className="franja">
                 <div style={{ fontSize: 'var(--fs-titulo)', fontWeight: 700, color }}>{info.label}</div>
-                <div style={{ fontSize: 'var(--fs-secundario)', color: 'var(--texto-secundario-1)', marginTop: 4 }}>{lineaCliente(ot, trabajo.estado, ot?.cancelada?.motivo)}</div>
+                <div style={{ fontSize: 'var(--fs-secundario)', color: 'var(--texto-secundario-1)', marginTop: 4 }}>{lineaCliente(
+                    ot, trabajo.estado,
+                    // Con OT el detalle vive en ot.cancelada; sin OT, en la Solicitud.
+                    ot?.cancelada?.motivo ?? trabajo.cancelacion?.motivo,
+                    ot?.cancelada?.fechaPropuesta ?? trabajo.cancelacion?.fechaPropuesta,
+                )}</div>
             </div>
 
             <div style={{ padding: '14px 16px 4px' }} className="versalita">Recorrido</div>
@@ -411,6 +441,46 @@ export default function C3EstadoTrabajo({ nav, trabajo: trabajoProp }) {
                                 onChange={(e) => setMotivoCancelacion(e.target.value)}
                                 style={{ width: '100%', minHeight: 70, boxSizing: 'border-box', marginBottom: 8, resize: 'vertical' }}
                             />
+
+                            {/* Cancelar rara vez es dar de baja el trabajo: casi siempre es
+                                correrlo. Sin esto, la oficina recibía la cancelación sin saber
+                                si tenía que volver a llamar en dos semanas o archivarla. "Sin
+                                fecha" es una respuesta explícita, no dejar el campo vacío. */}
+                            <div className="versalita" style={{ marginBottom: 6 }}>¿Cuándo lo retomamos?</div>
+                            <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+                                <button
+                                    onClick={() => setFechaPropuesta('')}
+                                    style={{
+                                        flex: 1, minHeight: 44, cursor: 'pointer', fontSize: 'var(--fs-secundario)', fontWeight: 600,
+                                        background: fechaPropuesta ? 'var(--superficie)' : 'var(--accion-primaria)',
+                                        color: fechaPropuesta ? 'var(--texto-secundario-1)' : 'var(--accion-primaria-texto)',
+                                        border: `1px solid ${fechaPropuesta ? 'rgba(0,0,0,.18)' : 'var(--accion-primaria)'}`,
+                                        borderRadius: 'var(--radio)',
+                                    }}
+                                >Sin fecha por ahora</button>
+                                <button
+                                    onClick={() => setFechaPropuesta(fechaPropuesta || hoyISO())}
+                                    style={{
+                                        flex: 1, minHeight: 44, cursor: 'pointer', fontSize: 'var(--fs-secundario)', fontWeight: 600,
+                                        background: fechaPropuesta ? 'var(--accion-primaria)' : 'var(--superficie)',
+                                        color: fechaPropuesta ? 'var(--accion-primaria-texto)' : 'var(--texto-secundario-1)',
+                                        border: `1px solid ${fechaPropuesta ? 'var(--accion-primaria)' : 'rgba(0,0,0,.18)'}`,
+                                        borderRadius: 'var(--radio)',
+                                    }}
+                                >Propongo una fecha</button>
+                            </div>
+                            {fechaPropuesta ? (
+                                <input
+                                    type="date" className="input-campo mono" value={fechaPropuesta} min={hoyISO()}
+                                    onChange={(e) => setFechaPropuesta(e.target.value)}
+                                    style={{ width: '100%', boxSizing: 'border-box', marginBottom: 8 }}
+                                />
+                            ) : (
+                                <div style={{ fontSize: 'var(--fs-linea-mono)', color: 'var(--texto-atenuado-2)', marginBottom: 8 }}>
+                                    Queda en pausa y la oficina espera su aviso para retomarla.
+                                </div>
+                            )}
+
                             {errorCancelacion && <div style={{ fontSize: 'var(--fs-secundario)', color: 'var(--detenido)', marginBottom: 8 }}>{errorCancelacion}</div>}
                             <div style={{ display: 'flex', gap: 8 }}>
                                 <button className="boton-primario" style={{ background: 'var(--detenido)', borderColor: 'var(--detenido)' }} disabled={enviandoCancelacion} onClick={confirmarCancelacion}>{enviandoCancelacion ? 'Enviando…' : 'Confirmar cancelación'}</button>

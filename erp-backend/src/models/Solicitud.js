@@ -19,6 +19,15 @@ const solicitudSchema = new mongoose.Schema({
     descripcion: { type: String, required: true },
     origen: { type: String, default: 'WhatsApp' },
     estado: { type: String, default: 'Pendiente' },
+    // Detalle de la cancelación hecha por el cliente desde su app, cuando la solicitud todavía
+    // no llegó a ser OT (con OT el detalle vive en OT.cancelada, ver portalController.
+    // cancelarSolicitud). Antes de esto, cancelar sin OT solo dejaba estado:'Cancelada' y el
+    // motivo se perdía. fechaPropuesta vacía = "sin fecha, hasta nuevo aviso".
+    cancelacion: {
+        motivo: { type: String, default: '' },
+        fecha: { type: Date, default: null },
+        fechaPropuesta: { type: String, default: '' },
+    },
 
     // --- Tiempos y Plazos ---
     fechaHoraSolicitud: { type: Date, default: Date.now }, // Cuándo entró el pedido

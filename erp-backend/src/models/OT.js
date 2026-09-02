@@ -44,6 +44,11 @@ const OTSchema = new mongoose.Schema({
         activa: { type: Boolean, default: false },
         motivo: { type: String, default: '' },
         fecha: { type: Date, default: null },
+        // Para cuándo propone el cliente retomarlo (YYYY-MM-DD). Vacío = "sin fecha, hasta
+        // nuevo aviso", que es una respuesta distinta de no haber preguntado: cancelar no
+        // siempre es dar de baja el trabajo, muchas veces es correrlo. Se guarda como texto
+        // (no Date) porque es un día suelto sin hora, igual que tareas[].fecha.
+        fechaPropuesta: { type: String, default: '' },
     },
 
     // Informe de Evaluación: levantamiento en terreno previo a cotizar (ver docs/funcionalidades-v2.md)

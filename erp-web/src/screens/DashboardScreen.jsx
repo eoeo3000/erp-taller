@@ -92,10 +92,17 @@ const etapaInfo = (ot, s) => {
 // Tratada mezcla "esperando al Supervisor" y "esperando al Planificador" bajo el mismo valor
 // de OT.estado; Planificada mezcla "esperando verificar capacidad", "esperando al Cliente" y
 // "rechazada, esperando corrección". El resto de las etapas son de un solo actor.
+// Al cancelar, el cliente puede proponer una fecha para retomarlo o dejarlo "hasta nuevo
+// aviso" (portalController.cancelarSolicitud) — la diferencia entre volver a llamarlo en dos
+// semanas o archivar la solicitud, así que va en el sub-estado y no escondida en la ficha.
+const colaCancelacion = (fechaPropuesta) => (fechaPropuesta
+    ? ` · propone retomar el ${new Date(fechaPropuesta + 'T00:00:00').toLocaleDateString('es-CL')}`
+    : ' · sin fecha, hasta nuevo aviso');
+
 const subEstadoDe = (ot, s) => {
-    if (ot?.cancelada?.activa) return `Cancelada por el cliente${ot.cancelada.motivo ? `: ${ot.cancelada.motivo}` : ''}`;
+    if (ot?.cancelada?.activa) return `Cancelada por el cliente${ot.cancelada.motivo ? `: ${ot.cancelada.motivo}` : ''}${colaCancelacion(ot.cancelada.fechaPropuesta)}`;
     if (!ot) {
-        if (s?.estado === 'Cancelada') return 'Cancelada por el cliente';
+        if (s?.estado === 'Cancelada') return `Cancelada por el cliente${s.cancelacion?.motivo ? `: ${s.cancelacion.motivo}` : ''}${colaCancelacion(s.cancelacion?.fechaPropuesta)}`;
         return s?.estado === 'Rechazada' ? '—' : 'Esperando revisión (Planificador)';
     }
     if (ot.estado === 'Tratada') {

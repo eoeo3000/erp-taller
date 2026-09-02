@@ -55,7 +55,13 @@ function otPublica(ot) {
         _id: ot._id,
         numeroOT: ot.numeroOT,
         estado: ot.estado,
-        cancelada: ot.cancelada?.activa ? { motivo: ot.cancelada.motivo || '', fecha: ot.cancelada.fecha } : null,
+        // `activa` viaja aunque acá el objeto ya sea null cuando no está cancelada: la PWA
+        // Cliente pregunta por cancelada?.activa igual que el escritorio (que lee la OT cruda),
+        // y sin este campo la app del cliente nunca se enteraba de la cancelación — se quedaba
+        // mostrando el mismo estado de antes después de cancelar.
+        cancelada: ot.cancelada?.activa
+            ? { activa: true, motivo: ot.cancelada.motivo || '', fecha: ot.cancelada.fecha, fechaPropuesta: ot.cancelada.fechaPropuesta || '' }
+            : null,
         // Documentos del flujo de pago (Chile): Orden de Compra → Estado de Pago (EDP) → Hoja
         // de Entrada de Servicio (HES). Editables desde ambos lados — Cuenta y Pago (C5, PWA
         // Cliente) y la pestaña Pago (erp-web) — ver actualizarOrdenCompra/actualizarEdp/
@@ -321,6 +327,11 @@ async function trabajosPorTelefono(conn, telefonoNormalizado) {
             solicitante: sol.solicitante,
             descripcion: sol.descripcion,
             estado: sol.estado,
+            // Solo tiene contenido en las canceladas sin OT (con OT el detalle va en
+            // ot.cancelada) — el cliente necesita ver de vuelta lo que dejó dicho al cancelar.
+            cancelacion: sol.estado === 'Cancelada' && sol.cancelacion
+                ? { motivo: sol.cancelacion.motivo || '', fechaPropuesta: sol.cancelacion.fechaPropuesta || '' }
+                : null,
             fechaCreacion: sol.fechaCreacion || sol.createdAt,
             fechaEjecucionSolicitada: sol.fechaEjecucionSolicitada,
             // El resto del detalle de "lo que pedimos" (antes solo viajaban los campos de
@@ -815,21 +826,33 @@ exports.cancelarSolicitud = async (req, res) => {
         const { id } = req.params;
         const solicitud = await solicitudDeLaSesion(Solicitud, SesionPortal, id, req.query.token);
 
+        // Cancelar no siempre es dar de baja el trabajo: muchas veces es correrlo. Se acepta
+        // una fecha propuesta para retomarlo, y vacío significa "sin fecha, hasta nuevo aviso"
+        // — que es una respuesta explícita del cliente, no un dato faltante.
+        const fechaPropuesta = (req.body.fechaPropuesta || '').trim();
+        if (fechaPropuesta && !/^\d{4}-\d{2}-\d{2}$/.test(fechaPropuesta)) {
+            return res.status(422).json({ error: 'La fecha propuesta debe venir como YYYY-MM-DD.' });
+        }
+        const motivo = (req.body.motivo || '').trim();
+
         const ot = await OT.findById(id);
         if (ot) {
             if (ot.cancelada?.activa) return res.status(409).json({ error: 'Esta OT ya está cancelada.' });
             if (!ESTADOS_OT_CANCELABLE.includes(ot.estado)) {
                 return res.status(409).json({ error: 'Ya no se puede cancelar: el trabajo está en ejecución o ya terminó.' });
             }
-            ot.cancelada = { activa: true, motivo: (req.body.motivo || '').trim(), fecha: new Date() };
+            ot.cancelada = { activa: true, motivo, fecha: new Date(), fechaPropuesta };
             await ot.save();
             return res.json({ ok: true, ot: otPublica(ot) });
         }
 
         if (solicitud.estado === 'Cancelada') return res.status(409).json({ error: 'Esta solicitud ya está cancelada.' });
         solicitud.estado = 'Cancelada';
+        // Sin OT el detalle no tenía dónde guardarse y el motivo se perdía en silencio (ver
+        // Solicitud.cancelacion) — ahora se conserva igual que en la OT.
+        solicitud.cancelacion = { motivo, fecha: new Date(), fechaPropuesta };
         await solicitud.save();
-        res.json({ ok: true });
+        res.json({ ok: true, cancelacion: { motivo, fechaPropuesta } });
     } catch (err) {
         res.status(err.status || 500).json({ error: err.message });
     }

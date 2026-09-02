@@ -82,6 +82,13 @@ function GaleriaFotos({ fotos = [], onAgregar, onQuitar }) {
     );
 }
 
+// Al cancelar desde su app, el cliente deja una fecha propuesta para retomarlo o lo deja "hasta
+// nuevo aviso" (portalController.cancelarSolicitud). Es la diferencia entre volver a llamarlo
+// en dos semanas o archivar la OT, así que se dice siempre, incluso cuando no dejó fecha.
+const textoRetomar = (fechaPropuesta) => (fechaPropuesta
+    ? `El cliente propone retomarlo el ${new Date(fechaPropuesta + 'T00:00:00').toLocaleDateString('es-CL')}.`
+    : 'El cliente no dejó fecha: queda en pausa hasta que avise.');
+
 const informeEvaluacionVacio = {
     fecha: '', responsable: '', responsablePuesto: '', actualizadoEn: null,
     condicionesSitio: '', recursosObservados: '',
@@ -1197,7 +1204,7 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
     // tareas/costos de un trabajo que el cliente ya canceló. Mismo patrón "un solo recuadro,
     // sin el resto de la pestaña" que los demás bloqueos de acá abajo.
     const bloqueoCotizacion = otSeleccionada?.cancelada?.activa
-        ? { mensaje: `Esta OT fue cancelada por el cliente${otSeleccionada.cancelada.motivo ? `: ${otSeleccionada.cancelada.motivo}` : ''}.`, boton: 'Volver al panel', accion: () => navigate('/dashboard') }
+        ? { mensaje: `Esta OT fue cancelada por el cliente${otSeleccionada.cancelada.motivo ? `: ${otSeleccionada.cancelada.motivo}` : ''}. ${textoRetomar(otSeleccionada.cancelada.fechaPropuesta)}`, boton: 'Volver al panel', accion: () => navigate('/dashboard') }
         // El trabajo ya se hizo — la cotización que se envió/aceptó queda fija, no tiene
         // sentido seguir editándola. Pedido explícito del usuario: de acá en adelante el
         // seguimiento pasa por Ejecución (ver el informe) y Pago (registrar el cobro).

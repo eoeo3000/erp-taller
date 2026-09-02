@@ -102,10 +102,12 @@ export function actualizarHes(otId, numero, archivo) {
 
 // POST /api/portal/solicitudes/:id/cancelar?token= — 'id' es siempre el _id de la Solicitud
 // de origen, exista o no una OT todavía (misma OT reutiliza ese _id, ver otController).
-export function cancelarSolicitud(solicitudId, motivo) {
+// fechaPropuesta (YYYY-MM-DD) es para cuándo el cliente propone retomarlo; '' significa
+// "sin fecha, hasta nuevo aviso" — una respuesta explícita, no un campo sin llenar.
+export function cancelarSolicitud(solicitudId, motivo, fechaPropuesta = '') {
     const { token } = getSesion();
     return pedir(`/portal/solicitudes/${solicitudId}/cancelar?token=${encodeURIComponent(token)}`, {
-        method: 'POST', body: JSON.stringify({ motivo }),
+        method: 'POST', body: JSON.stringify({ motivo, fechaPropuesta }),
     });
 }
 
