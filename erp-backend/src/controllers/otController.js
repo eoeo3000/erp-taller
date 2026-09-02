@@ -735,8 +735,14 @@ async function aplicarRespuestaCotizacion({ id, nuevoEstado, motivoRechazo, conn
         const e = new Error(`Esta cotización ya fue respondida (${otAnterior.cotizacion.respuestaCliente}).`); e.status = 409; throw e;
     }
 
+    // Este guard es la última red, no la primera: la planificación ya no arranca sin supervisor
+    // (TratamientoScreen bloquea las pestañas 1-4 igual que con el informe inicial), así que una
+    // cotización no debería llegar al cliente sin uno. Si igual pasa — por ejemplo si se
+    // desasigna después de enviarla — el que se entera es el cliente, y a él no le corresponde
+    // saber cómo tenemos repartido el personal: el detalle queda en el log del servidor.
     if (nuevoEstado === 'Aprobada' && !otAnterior.supervisorId) {
-        const e = new Error(`La orden ${otAnterior.numeroOT || ''} todavía no tiene un supervisor asignado.`);
+        console.warn(`[Cotización] Aprobación bloqueada: ${otAnterior.numeroOT || otAnterior._id} no tiene supervisorId asignado.`);
+        const e = new Error('No pudimos registrar la aprobación. Contáctate con la oficina para confirmarla.');
         e.status = 409; e.sinSupervisor = true; throw e;
     }
 
@@ -795,7 +801,7 @@ exports.responderCotizacionCliente = async (req, res) => {
                 <div style="font-family: sans-serif; text-align: center; padding: 100px 20px;">
                     <h1 style="color: #2c3e50;">No pudimos procesar su respuesta</h1>
                     <p style="font-size: 18px; color: #7f8c8d;">
-                        ${error.message} Por favor contáctenos para confirmar la aprobación.
+                        ${error.message}
                     </p>
                 </div>
             `);

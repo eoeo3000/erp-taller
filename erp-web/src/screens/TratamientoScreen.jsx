@@ -961,6 +961,14 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
     };
 
     const aplicarInformeAOT = () => {
+        // Este botón vive en la pestaña Informe Inicial (siempre abierta) y volcaba el informe
+        // en Tareas saltándose el candado de las pestañas 1-4 — el mismo requisito tiene que
+        // valer acá, si no la planificación arranca igual sin supervisor.
+        if (!haySupervisor) {
+            notificar.advertencia('Asigna un supervisor a la OT en Antecedentes antes de planificar.');
+            setTabActiva('antecedentes');
+            return;
+        }
         const { tareas: tInforme = [], componentes: cInforme = [], logistica: lInforme = [] } = informeEvaluacion;
         if (!tInforme.length && !cInforme.length && !lInforme.length) {
             notificar.advertencia('El informe no tiene tareas, equipos ni suministros cargados para aplicar.');
@@ -974,10 +982,17 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
         setTabActiva('tareas');
     };
 
+    // motivoTabs14/haySupervisor se declaran más abajo: para cuando esto corre (un onClick) ya
+    // están inicializados, y así el aviso, el title y el disabled salen todos del mismo motivo.
     const irATab = (tab) => {
-        if (['tareas', 'componentes', 'Logistica', 'cotizacion'].includes(tab) && !informeEvaluacion.completo && !yaTeniaContenidoPrevio) {
-            notificar.advertencia('Completa y marca como terminado el Informe Inicial antes de continuar.');
-            setTabActiva('informe');
+        if (['tareas', 'componentes', 'Logistica', 'cotizacion'].includes(tab) && motivoTabs14) {
+            if (!haySupervisor) {
+                notificar.advertencia('Asigna un supervisor a la OT en Antecedentes antes de planificar.');
+                setTabActiva('antecedentes');
+            } else {
+                notificar.advertencia('Completa y marca como terminado el Informe Inicial antes de continuar.');
+                setTabActiva('informe');
+            }
             return;
         }
         setTabActiva(tab);
@@ -1114,7 +1129,21 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
 
     const info = etapaInfo(otSeleccionada);
     const puedeEjecucion = ['Programada', 'En Ejecución', 'Trabajo Terminado', 'Con Informe', 'Pagada'].includes(otSeleccionada.estado);
-    const habilitadoTabs14 = informeEvaluacion.completo || yaTeniaContenidoPrevio;
+    // Sin supervisor asignado no se planifica. El guard ya existía, pero recién al final del
+    // recorrido: la OT se planificaba y cotizaba entera y el 409 saltaba cuando el CLIENTE
+    // apretaba aprobar (otController, responderCotizacion) — o sea, el aviso de un dato interno
+    // que falta le llegaba al cliente en vez de a la oficina. Acá se pide antes de empezar.
+    // otSeleccionada.supervisorId está desde el primer render (viene con la OT); antecedentes
+    // es el respaldo para cuando la OT llegó de una lista vieja sin el campo.
+    const haySupervisor = !!(otSeleccionada?.supervisorId || antecedentes?.ot?.supervisorId);
+    // Un solo motivo, que sirve para deshabilitar, para el title y para el aviso al intentar
+    // entrar — así los tres nunca se contradicen entre sí.
+    const motivoTabs14 = (!informeEvaluacion.completo && !yaTeniaContenidoPrevio)
+        ? 'Completa el Informe Inicial primero'
+        : !haySupervisor
+            ? 'Asigna un supervisor en Antecedentes primero'
+            : '';
+    const habilitadoTabs14 = !motivoTabs14;
     // Campos que hacen a una tarea "cotizable": descripción, puesto, al menos un responsable,
     // horas, fecha, hora de inicio y $/hora — todo lo que la fila de Tareas deja editar, salvo
     // "desarrollo" (ese queda como advertencia suave aparte, con su propio punto rojo en la
@@ -1236,15 +1265,17 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
 
             <div style={styles.tabsFila}>
                 <div style={styles.tabs}>
+                    {/* El asterisco marca "acá falta algo para poder seguir", igual que en Informe
+                        Inicial — sin supervisor asignado las pestañas 1-4 no abren. */}
                     <button onClick={() => setTabActiva('antecedentes')} style={tabActiva === 'antecedentes' ? styles.tabActivo : styles.tab}>
-                        Antecedentes
+                        Antecedentes{!haySupervisor ? ' *' : ''}
                     </button>
                     <button onClick={() => setTabActiva('informe')} style={tabActiva === 'informe' ? styles.tabActivo : styles.tab}>
                         0 · Informe Inicial{!informeEvaluacion.completo && !yaTeniaContenidoPrevio ? ' *' : ''}
                     </button>
-                    <button onClick={() => irATab('tareas')} disabled={!habilitadoTabs14} title={habilitadoTabs14 ? '' : 'Completa el Informe Inicial primero'} style={{ ...(tabActiva === 'tareas' ? styles.tabActivo : styles.tab), opacity: habilitadoTabs14 ? 1 : .5 }}>1 · Tareas</button>
-                    <button onClick={() => irATab('componentes')} disabled={!habilitadoTabs14} title={habilitadoTabs14 ? '' : 'Completa el Informe Inicial primero'} style={{ ...(tabActiva === 'componentes' ? styles.tabActivo : styles.tab), opacity: habilitadoTabs14 ? 1 : .5 }}>2 · Equipos y materiales</button>
-                    <button onClick={() => irATab('Logistica')} disabled={!habilitadoTabs14} title={habilitadoTabs14 ? '' : 'Completa el Informe Inicial primero'} style={{ ...(tabActiva === 'Logistica' ? styles.tabActivo : styles.tab), opacity: habilitadoTabs14 ? 1 : .5 }}>3 · Suministros directos</button>
+                    <button onClick={() => irATab('tareas')} disabled={!habilitadoTabs14} title={motivoTabs14} style={{ ...(tabActiva === 'tareas' ? styles.tabActivo : styles.tab), opacity: habilitadoTabs14 ? 1 : .5 }}>1 · Tareas</button>
+                    <button onClick={() => irATab('componentes')} disabled={!habilitadoTabs14} title={motivoTabs14} style={{ ...(tabActiva === 'componentes' ? styles.tabActivo : styles.tab), opacity: habilitadoTabs14 ? 1 : .5 }}>2 · Equipos y materiales</button>
+                    <button onClick={() => irATab('Logistica')} disabled={!habilitadoTabs14} title={motivoTabs14} style={{ ...(tabActiva === 'Logistica' ? styles.tabActivo : styles.tab), opacity: habilitadoTabs14 ? 1 : .5 }}>3 · Suministros directos</button>
                     {/* Habilitada recién cuando "Terminar planificación" confirma el paso
                         (planificacionTerminada) — no alcanza con tareas/costos completos en
                         memoria, hay que haber presionado el botón. La única forma de deshabilitarla
@@ -1254,7 +1285,7 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                     <button
                         onClick={() => irATab('cotizacion')}
                         disabled={!habilitadoTabs14 || !planificacionTerminada}
-                        title={!habilitadoTabs14 ? 'Completa el Informe Inicial primero' : !planificacionTerminada ? 'Termina la planificación (pestaña 3) primero' : ''}
+                        title={motivoTabs14 || (!planificacionTerminada ? 'Termina la planificación (pestaña 3) primero' : '')}
                         style={{ ...(tabActiva === 'cotizacion' ? styles.tabActivo : styles.tab), opacity: (habilitadoTabs14 && planificacionTerminada) ? 1 : .5 }}
                     >4 · Cotización</button>
                     <button onClick={() => puedeEjecucion && setTabActiva('reportes')} disabled={!puedeEjecucion} title={puedeEjecucion ? '' : 'Disponible una vez que la OT esté Programada'} style={{ ...(tabActiva === 'reportes' ? styles.tabActivo : styles.tab), opacity: puedeEjecucion ? 1 : .5 }}>
