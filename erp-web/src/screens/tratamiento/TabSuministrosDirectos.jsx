@@ -11,7 +11,7 @@ const GRID_LOGISTICA_MIN_W = 96 + 96 + 200 + 62 + 96 + 100 + 140 + 24 + 7 * 8 + 
 export default function TabSuministrosDirectos({
     logistica, suministrosDB, actualizarLogistica, agregarLogistica, eliminarLogistica,
     disponibilidadSuministro, soloLecturaPlanificacion,
-    puedeTerminarPlanificacion, todasTareasCompletas, equiposHerramientasConCosto, informeEvaluacion,
+    puedeTerminarPlanificacion, motivoNoPuedeTerminar, irATab,
     guardarPlanificacion, navigate, otIdParaOC,
 }) {
     return (
@@ -67,22 +67,22 @@ export default function TabSuministrosDirectos({
                 <button onClick={agregarLogistica} style={styles.btnAgregar}>Agregar suministro</button>
             </div>
             <div style={{ ...styles.continuarWrap, justifyContent: 'space-between' }}>
+                {/* Un único motivo, calculado en TratamientoScreen (motivoNoPuedeTerminar): el
+                    cartel y el title salen de ahí. Cuando lo que falta se arregla en otra
+                    pestaña, el motivo trae además el atajo para ir — decir "falta el supervisor"
+                    sin decir dónde se asigna deja a la persona igual de trabada. */}
                 {puedeTerminarPlanificacion
                     ? <span style={{ fontSize: 11.5, color: t.verde, fontWeight: 600 }}>Tareas, equipos y suministros definidos</span>
-                    : <span style={{ fontSize: 11.5, color: t.rojo, fontWeight: 600 }}>
-                        {!todasTareasCompletas ? 'Completa descripción, puesto, responsable, horas, fecha, hora y $/hora de todas las tareas'
-                            : !equiposHerramientasConCosto ? 'Todo equipo o herramienta debe tener un costo mayor a $0'
-                                : 'El informe inicial tiene observaciones sin resolver'}
+                    : <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 11.5, color: t.rojo, fontWeight: 600 }}>
+                        Falta para terminar: {motivoNoPuedeTerminar?.texto}
+                        {motivoNoPuedeTerminar?.tab && (
+                            <button onClick={() => irATab(motivoNoPuedeTerminar.tab)} style={styles.btnSecundario}>{motivoNoPuedeTerminar.etiquetaTab}</button>
+                        )}
                     </span>}
                 <button
                     onClick={() => guardarPlanificacion('Planificada')}
                     disabled={!puedeTerminarPlanificacion}
-                    title={
-                        !todasTareasCompletas ? 'Completa descripción, puesto, responsable, horas, fecha, hora y $/hora de todas las tareas'
-                            : !equiposHerramientasConCosto ? 'Todo equipo o herramienta debe tener un costo mayor a $0'
-                                : informeEvaluacion.revision?.estado === 'ConObservaciones' ? 'El informe inicial tiene observaciones sin resolver'
-                                    : ''
-                    }
+                    title={motivoNoPuedeTerminar?.texto || ''}
                     style={{ ...styles.btnPrimario, opacity: puedeTerminarPlanificacion ? 1 : .5 }}
                 >Terminar planificación</button>
             </div>

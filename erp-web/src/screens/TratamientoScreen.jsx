@@ -965,14 +965,6 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
     };
 
     const aplicarInformeAOT = () => {
-        // Este botón vive en la pestaña Informe Inicial (siempre abierta) y volcaba el informe
-        // en Tareas saltándose el candado de las pestañas 1-4 — el mismo requisito tiene que
-        // valer acá, si no la planificación arranca igual sin supervisor.
-        if (!haySupervisor) {
-            notificar.advertencia('Asigna un supervisor a la OT en Antecedentes antes de planificar.');
-            setTabActiva('antecedentes');
-            return;
-        }
         const { tareas: tInforme = [], componentes: cInforme = [], logistica: lInforme = [] } = informeEvaluacion;
         if (!tInforme.length && !cInforme.length && !lInforme.length) {
             notificar.advertencia('El informe no tiene tareas, equipos ni suministros cargados para aplicar.');
@@ -986,17 +978,12 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
         setTabActiva('tareas');
     };
 
-    // motivoTabs14/haySupervisor se declaran más abajo: para cuando esto corre (un onClick) ya
-    // están inicializados, y así el aviso, el title y el disabled salen todos del mismo motivo.
+    // motivoTabs14 se declara más abajo: para cuando esto corre (un onClick) ya está
+    // inicializado, y así el aviso, el title y el disabled salen todos del mismo motivo.
     const irATab = (tab) => {
         if (['tareas', 'componentes', 'Logistica', 'cotizacion'].includes(tab) && motivoTabs14) {
-            if (!haySupervisor) {
-                notificar.advertencia('Asigna un supervisor a la OT en Antecedentes antes de planificar.');
-                setTabActiva('antecedentes');
-            } else {
-                notificar.advertencia('Completa y marca como terminado el Informe Inicial antes de continuar.');
-                setTabActiva('informe');
-            }
+            notificar.advertencia('Completa y marca como terminado el Informe Inicial antes de continuar.');
+            setTabActiva('informe');
             return;
         }
         setTabActiva(tab);
@@ -1133,20 +1120,13 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
 
     const info = etapaInfo(otSeleccionada);
     const puedeEjecucion = ['Programada', 'En Ejecución', 'Trabajo Terminado', 'Con Informe', 'Pagada'].includes(otSeleccionada.estado);
-    // Sin supervisor asignado no se planifica. El guard ya existía, pero recién al final del
-    // recorrido: la OT se planificaba y cotizaba entera y el 409 saltaba cuando el CLIENTE
-    // apretaba aprobar (otController, responderCotizacion) — o sea, el aviso de un dato interno
-    // que falta le llegaba al cliente en vez de a la oficina. Acá se pide antes de empezar.
     // otSeleccionada.supervisorId está desde el primer render (viene con la OT); antecedentes
     // es el respaldo para cuando la OT llegó de una lista vieja sin el campo.
     const haySupervisor = !!(otSeleccionada?.supervisorId || antecedentes?.ot?.supervisorId);
-    // Un solo motivo, que sirve para deshabilitar, para el title y para el aviso al intentar
-    // entrar — así los tres nunca se contradicen entre sí.
-    const motivoTabs14 = (!informeEvaluacion.completo && !yaTeniaContenidoPrevio)
-        ? 'Completa el Informe Inicial primero'
-        : !haySupervisor
-            ? 'Asigna un supervisor en Antecedentes primero'
-            : '';
+    // Falta de supervisor NO cierra las pestañas 1-4: se pide al terminar la planificación,
+    // junto con el resto de lo que falta y diciendo qué es (ver motivoNoPuedeTerminar). Una
+    // pestaña gris no explica nada — se probó y el propio usuario se quedó sin saber por qué.
+    const motivoTabs14 = (!informeEvaluacion.completo && !yaTeniaContenidoPrevio) ? 'Completa el Informe Inicial primero' : '';
     const habilitadoTabs14 = !motivoTabs14;
     // Campos que hacen a una tarea "cotizable": descripción, puesto, al menos un responsable,
     // horas, fecha, hora de inicio y $/hora — todo lo que la fila de Tareas deja editar, salvo
@@ -1164,9 +1144,19 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
     // herramientas; no hay ningún componentes.length>0 exigido, una OT puede no necesitar ninguno.
     const equiposHerramientasConCosto = componentes.every(c => (c.tipo !== 'Equipo' && c.tipo !== 'Herramienta') || Number(c.precio) > 0);
     // "Terminar planificación" (no las pestañas 1-3, que quedan libres para ir armando) es lo
-    // que bloquea una observación abierta sobre el informe inicial, las tareas incompletas y
-    // los equipos/herramientas sin costo.
-    const puedeTerminarPlanificacion = informeEvaluacion.revision?.estado !== 'ConObservaciones' && todasTareasCompletas && equiposHerramientasConCosto;
+    // que bloquea la OT sin supervisor a cargo, una observación abierta sobre el informe
+    // inicial, las tareas incompletas y los equipos/herramientas sin costo.
+    // Un solo motivo, en un solo lugar: de acá salen el cartel rojo, el title del botón y el
+    // propio puedeTerminarPlanificacion, así que no pueden decir cosas distintas. `tab` es para
+    // los requisitos que se arreglan en OTRA pestaña — sin eso, "falta el supervisor" deja a la
+    // persona sabiendo qué falta pero no dónde.
+    const motivoNoPuedeTerminar =
+        !haySupervisor ? { texto: 'Asigna un supervisor a cargo de la OT', tab: 'antecedentes', etiquetaTab: 'Ir a Antecedentes' }
+            : !todasTareasCompletas ? { texto: 'Completa descripción, puesto, responsable, horas, fecha, hora y $/hora de todas las tareas' }
+                : !equiposHerramientasConCosto ? { texto: 'Todo equipo o herramienta debe tener un costo mayor a $0' }
+                    : informeEvaluacion.revision?.estado === 'ConObservaciones' ? { texto: 'El informe inicial tiene observaciones sin resolver', tab: 'informe', etiquetaTab: 'Ir al Informe Inicial' }
+                        : null;
+    const puedeTerminarPlanificacion = !motivoNoPuedeTerminar;
     // Que las tareas ESTÉN completas no basta para entrar a Cotización: hace falta además que
     // se haya presionado "Terminar planificación" (guardarPlanificacion('Planificada')) — sin
     // esto, se podía completar todo en memoria y saltar directo a la pestaña 4 sin haber
@@ -1529,9 +1519,8 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                             eliminarLogistica={eliminarLogistica} disponibilidadSuministro={disponibilidadSuministro}
                             soloLecturaPlanificacion={soloLecturaPlanificacion}
                             puedeTerminarPlanificacion={puedeTerminarPlanificacion}
-                            todasTareasCompletas={todasTareasCompletas}
-                            equiposHerramientasConCosto={equiposHerramientasConCosto}
-                            informeEvaluacion={informeEvaluacion} guardarPlanificacion={guardarPlanificacion}
+                            motivoNoPuedeTerminar={motivoNoPuedeTerminar} irATab={irATab}
+                            guardarPlanificacion={guardarPlanificacion}
                             navigate={navigate} otIdParaOC={otSeleccionada._id || datosRecibidos?._id}
                         />
                     )}
