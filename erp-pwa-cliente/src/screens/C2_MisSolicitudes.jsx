@@ -10,6 +10,21 @@ const COLOR = { activo: 'var(--en-curso)', pago: 'var(--atencion)', cerrado: 'va
 // cotizacion.respuestaCliente sin sacar a la OT de 'Planificada' (ver erp-backend/src/models/OT.js).
 function clasificar(t) {
     const ot = t.ot;
+    // Antes de todo lo demás: cancelar es un flag encima del estado (OT.cancelada), no un
+    // valor de estado nuevo, así que sin este chequeo una solicitud cancelada seguía
+    // clasificándose por el estado que tenía antes — se mostraba como "En evaluación" o
+    // "Llegamos el 5-09" después de que el propio cliente la canceló.
+    const cancelada = ot ? ot.cancelada?.activa : t.estado === 'Cancelada';
+    if (cancelada) {
+        // Con OT el detalle vive en ot.cancelada; sin OT, en la Solicitud (ver
+        // portalController.cancelarSolicitud).
+        const fechaPropuesta = ot ? ot.cancelada?.fechaPropuesta : t.cancelacion?.fechaPropuesta;
+        return {
+            grupo: 'canceladas',
+            color: COLOR.rechazado,
+            linea: fechaPropuesta ? `Cancelada · retomar el ${fmt(fechaPropuesta)}` : 'Cancelada · sin fecha',
+        };
+    }
     if (!ot) return { grupo: 'en_curso', color: COLOR.activo, linea: 'En evaluación' };
     if (ot.estado === 'Planificada' && ot.cotizacion?.enviada && ot.cotizacion?.respuestaCliente === 'Pendiente') {
         return { grupo: 'por_aprobar', color: COLOR.pago, linea: 'Cotización lista — requiere tu aprobación' };
@@ -52,6 +67,9 @@ const CHIPS = [
     { id: 'en_ejecucion', label: 'En ejecución' },
     { id: 'por_pagar', label: 'Por pagar' },
     { id: 'cerradas', label: 'Cerradas' },
+    // Al final y aparte de "Cerradas": una cancelada no es un trabajo que se completó, y
+    // muchas veces está esperando que el cliente avise para retomarla.
+    { id: 'canceladas', label: 'Canceladas' },
 ];
 
 export default function C2MisSolicitudes({ nav }) {
