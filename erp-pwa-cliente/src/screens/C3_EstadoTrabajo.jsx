@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { responderCotizacion, responderExcepcion, cancelarSolicitud, reactivarSolicitud, editarDescripcionSolicitud } from '../api.js';
+import { useEffect, useState } from 'react';
+import { responderCotizacion, responderExcepcion, cancelarSolicitud, reactivarSolicitud, editarDescripcionSolicitud, misSolicitudes } from '../api.js';
 
 // Mismo corte que portalController.ESTADOS_OT_CANCELABLE (erp-backend) — duplicado acá
 // porque no hay forma de compartir código entre apps. El cliente puede cancelar/editar el
@@ -141,6 +141,29 @@ export default function C3EstadoTrabajo({ nav, trabajo: trabajoProp }) {
     const [fechaPropuesta, setFechaPropuesta] = useState('');
     const [enviandoCancelacion, setEnviandoCancelacion] = useState(false);
     const [errorCancelacion, setErrorCancelacion] = useState('');
+
+    // Esta pantalla vivía solo del `trabajo` que le pasó el listado al entrar, sin volver a
+    // pedir nada nunca. En un teléfono la app casi no se cierra: se deja en segundo plano y se
+    // vuelve, así que se quedaba mostrando el estado de horas antes. El caso concreto: la
+    // oficina reenvía la cotización (que reinicia las 12 h de plazo) y la app, con la
+    // fechaEnvio vieja, seguía diciendo "esta cotización venció, ya no se puede aceptar".
+    // No se refresca en medio de una edición: pisaría lo que la persona está escribiendo.
+    const editandoAlgo = cancelando || editandoDescripcion || enviando || !!enviandoExc || enviandoCancelacion;
+    useEffect(() => {
+        if (editandoAlgo) return undefined;
+        const refrescar = async () => {
+            try {
+                const { trabajos } = await misSolicitudes();
+                const actualizado = (trabajos || []).find((t) => String(t._id) === String(trabajo._id));
+                if (actualizado) setTrabajo(actualizado);
+            } catch { /* sin señal se sigue con lo que hay */ }
+        };
+        refrescar();
+        const alVolver = () => { if (document.visibilityState === 'visible') refrescar(); };
+        document.addEventListener('visibilitychange', alVolver);
+        return () => document.removeEventListener('visibilitychange', alVolver);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [trabajo._id, editandoAlgo]);
 
     if (!trabajo) return null;
     const ot = trabajo.ot;

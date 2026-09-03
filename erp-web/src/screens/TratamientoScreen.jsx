@@ -292,6 +292,12 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
         });
         if (resultado?.exito) {
             notificar.exito('Aceptación cancelada.');
+            // Faltaba esto: cargarDatos() refresca el `ots` global de App.jsx, pero esta
+            // pantalla lee otSeleccionada, que es estado propio — sin esta línea el aviso de
+            // "esperando respuesta" y los botones seguían mostrando la cotización como enviada
+            // hasta recargar la página. Mismo bug ya corregido en volverAPlanificacion y en
+            // enviarPorWhatsApp; acá había quedado sin arreglar.
+            if (resultado.otActualizada) setOtSeleccionada(resultado.otActualizada);
             if (cargarDatos) await cargarDatos();
         } else {
             notificar.error(resultado?.error || 'No se pudo cancelar.');

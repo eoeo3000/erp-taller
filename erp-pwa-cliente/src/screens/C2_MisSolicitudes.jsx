@@ -78,8 +78,15 @@ export default function C2MisSolicitudes({ nav }) {
     const [error, setError] = useState('');
     const sesion = getSesion();
 
+    // También al volver del segundo plano: en un teléfono la app casi no se cierra, así que
+    // con solo cargar al montar el listado se quedaba con el estado de cuando se abrió —
+    // mostrando "por aprobar" algo ya respondido, o al revés (mismo motivo que en C3).
     useEffect(() => {
-        misSolicitudes().then(setDatos).catch((e) => setError(e.message));
+        const cargar = () => misSolicitudes().then(setDatos).catch((e) => setError(e.message));
+        cargar();
+        const alVolver = () => { if (document.visibilityState === 'visible') cargar(); };
+        document.addEventListener('visibilitychange', alVolver);
+        return () => document.removeEventListener('visibilitychange', alVolver);
     }, []);
 
     if (error) return <div style={{ padding: 24, fontSize: 'var(--fs-cuerpo)', color: 'var(--detenido)' }}>{error}</div>;
