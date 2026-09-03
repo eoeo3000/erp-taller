@@ -66,6 +66,11 @@ export default function TabSuministrosDirectos({
             <div style={{ padding: '8px 16px' }}>
                 <button onClick={agregarLogistica} style={styles.btnAgregar}>Agregar suministro</button>
             </div>
+            {/* Con la planificación ya terminada esta franja no aplica: la pestaña está de solo
+                lectura (el aviso de arriba lo explica) y el contenedor tiene pointerEvents:none,
+                así que "Falta para terminar: X" quedaba pidiendo algo para un paso que ya se dio,
+                con sus dos botones muertos — incluido el atajo para ir a resolverlo. */}
+            {!soloLecturaPlanificacion && (
             <div style={{ ...styles.continuarWrap, justifyContent: 'space-between' }}>
                 {/* Un único motivo, calculado en TratamientoScreen (motivoNoPuedeTerminar): el
                     cartel y el title salen de ahí. Cuando lo que falta se arregla en otra
@@ -86,6 +91,7 @@ export default function TabSuministrosDirectos({
                     style={{ ...styles.btnPrimario, opacity: puedeTerminarPlanificacion ? 1 : .5 }}
                 >Terminar planificación</button>
             </div>
+            )}
         </div>
     );
 }

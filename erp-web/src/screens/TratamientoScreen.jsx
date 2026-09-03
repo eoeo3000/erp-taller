@@ -1352,7 +1352,15 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                             onGuardar={guardarAsignacion}
                             guardando={guardandoAsignacion}
                             aviso={avisoAsignacion}
-                            soloLectura={otSeleccionada?.estado === 'Pagada' || soloLecturaPlanificacion}
+                            // Antecedentes NO se congela al terminar la planificación: acá no hay
+                            // contenido de la cotización (eso es tareas/equipos/suministros), sino
+                            // quién está a cargo, con qué prioridad y con qué instrucciones —
+                            // datos administrativos que la oficina tiene que poder corregir
+                            // después. Con el freeze puesto acá, una OT ya planificada a la que le
+                            // faltaba el supervisor quedaba trabada: no se podía asignar sin antes
+                            // deshacer la planificación entera. El corte es el mismo que aplica el
+                            // backend en asignarSupervisor: todo editable hasta 'Pagada'.
+                            soloLectura={otSeleccionada?.estado === 'Pagada'}
                         />
                     )}
 
