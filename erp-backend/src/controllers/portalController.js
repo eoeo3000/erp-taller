@@ -860,6 +860,11 @@ exports.cancelarSolicitud = async (req, res) => {
     }
 };
 
+// El día de hoy en Chile, no en el del servidor: Render corre en UTC y a partir de las 20:00
+// hora chilena el UTC ya está en el día siguiente, así que un trabajo de hoy se leería como
+// vencido. 'en-CA' con timeZone da directamente YYYY-MM-DD, el mismo formato de tareas[].fecha.
+const hoyEnChile = () => new Date().toLocaleDateString('en-CA', { timeZone: 'America/Santiago' });
+
 // Queda en la bitácora de la OT porque cancelar y volver atrás es un ida y vuelta que la
 // oficina necesita poder reconstruir: OT.cancelada solo guarda el estado actual, no que
 // alguna vez estuvo cancelada ni por qué.
@@ -886,9 +891,28 @@ exports.reactivarSolicitud = async (req, res) => {
         if (ot) {
             if (!ot.cancelada?.activa) return res.status(409).json({ error: 'Esta solicitud no está cancelada.' });
             ot.cancelada = { activa: false, motivo: '', fecha: null, fechaPropuesta: '' };
+
+            // Devolverla tal cual a 'Programada' cuando su fecha ya pasó dejaría a la OT
+            // agendada para un día que no existe más: le aparecería al supervisor en una
+            // semana anterior de "Mis trabajos" y nadie llegaría a hacerla. 'Reprogramar' es
+            // exactamente el estado que ya se usa para "esto necesita fecha nueva de la
+            // oficina" (ver otController.aplicarAccionOT accion:'reprogramar').
+            const hoy = hoyEnChile();
+            const fechas = (ot.tareas || []).map(t => t.fecha).filter(Boolean).sort();
+            const ultimaFecha = fechas[fechas.length - 1];
+            const quedoEnElPasado = ot.estado === 'Programada' && ultimaFecha && ultimaFecha < hoy;
+
             ot.bitacora = ot.bitacora || [];
-            ot.bitacora.push({ fecha: new Date(), texto: `El cliente anuló la cancelación desde su app — la OT vuelve a ${ot.estado}` });
+            if (quedoEnElPasado) {
+                ot.bitacora.push({ fecha: new Date(), texto: `El cliente anuló la cancelación desde su app — la fecha programada (${ultimaFecha}) ya pasó, queda para reprogramar` });
+                ot.estado = 'Reprogramar';
+            } else {
+                ot.bitacora.push({ fecha: new Date(), texto: `El cliente anuló la cancelación desde su app — la OT vuelve a ${ot.estado}` });
+            }
             await ot.save();
+            // No hace falta avisar aparte de la reprogramación: otPublica ya lleva el estado
+            // nuevo y la app lo traduce sola a "Estamos coordinando una nueva fecha para su
+            // trabajo" (ver lineaCliente en C3_EstadoTrabajo.jsx).
             return res.json({ ok: true, ot: otPublica(ot) });
         }
 

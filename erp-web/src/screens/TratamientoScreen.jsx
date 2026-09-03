@@ -272,6 +272,15 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
             });
             if (respuesta.data.ok) {
                 notificar.exito('Extensión de cotización enviada.');
+                // Quien marca la excepción como 'Enviada' es el endpoint de correo, no este
+                // guardado, así que hay que volver a leer la OT: sin esto la fila seguía
+                // mostrándose como borrador —con su botón "Enviar"— hasta recargar la página.
+                // Se refresca también `excepciones`, que es estado local aparte de
+                // otSeleccionada (mismo par que tareas/componentes, ver la carga inicial).
+                try {
+                    const { data } = await axios.get(`${API}/ots/${otSeleccionada._id}`);
+                    if (data) { setOtSeleccionada(data); setExcepciones(data.excepciones || []); }
+                } catch { /* si falla, cargarDatos() de abajo deja igual el panel al día */ }
                 if (cargarDatos) await cargarDatos();
             }
         } catch (error) {
