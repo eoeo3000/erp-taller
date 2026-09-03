@@ -581,11 +581,19 @@ exports.actualizarOT = async (req, res) => {
         const otAnterior = await OT.findById(id).lean();
 
         // Pestaña Antecedentes: sin supervisor asignado, la OT no puede pasar a Programada.
-        if (datosCuerpo.estado === 'Programada') {
-            const supervisorFinal = ('supervisorId' in datosCuerpo) ? datosCuerpo.supervisorId : otAnterior?.supervisorId;
-            if (!supervisorFinal) {
-                return res.status(409).json({ error: 'La OT no tiene supervisor asignado' });
-            }
+        const supervisorFinal = ('supervisorId' in datosCuerpo) ? datosCuerpo.supervisorId : otAnterior?.supervisorId;
+        if (datosCuerpo.estado === 'Programada' && !supervisorFinal) {
+            return res.status(409).json({ error: 'La OT no tiene supervisor asignado' });
+        }
+
+        // Tampoco se manda la cotización al cliente sin supervisor. El requisito ya se pedía al
+        // terminar la planificación (TratamientoScreen), pero reenviar una OT ya planificada no
+        // vuelve a pasar por ahí: la cotización salía igual y el cliente se topaba con el
+        // problema recién al apretar aprobar, que es el peor lugar posible para enterarse.
+        // Se acepta la forma con punto y la anidada: el frontend manda 'cotizacion.enviada'.
+        const marcandoEnviada = datosCuerpo['cotizacion.enviada'] === true || datosCuerpo.cotizacion?.enviada === true;
+        if (marcandoEnviada && !supervisorFinal) {
+            return res.status(409).json({ error: 'La OT no tiene supervisor asignado: asígnalo en Antecedentes antes de enviar la cotización.' });
         }
 
         // fechaEjecucion es lo que usa la PWA Operativa para decidir si una OT le aparece

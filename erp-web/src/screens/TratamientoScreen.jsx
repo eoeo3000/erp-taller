@@ -360,7 +360,20 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
     // Cliente (mailRoutes.resolverLinkPortal), pero compartido por WhatsApp — mismo patrón que
     // enviarPortalCliente en App.jsx (wa.me armado en el cliente), acá con el link real de
     // aprobación en vez del portal público de solo lectura.
+    // Mandar la cotización sin supervisor asignado deja al cliente descubriendo el problema
+    // recién al apretar aprobar (otController.aplicarRespuestaCotizacion lo rechaza) — el peor
+    // lugar para enterarse. El requisito ya se pide al terminar la planificación, pero reenviar
+    // una OT ya planificada no vuelve a pasar por ahí, así que se repite acá, en la última
+    // puerta antes de que el cliente entre en juego. El backend lo valida igual (actualizarOT).
+    const faltaSupervisorParaEnviar = () => {
+        if (haySupervisor) return false;
+        notificar.advertencia('Asigna un supervisor a la OT en Antecedentes antes de enviar la cotización — sin eso el cliente no va a poder aprobarla.');
+        setTabActiva('antecedentes');
+        return true;
+    };
+
     const enviarCotizacionWhatsApp = async () => {
+        if (faltaSupervisorParaEnviar()) return;
         setEnviandoWhatsApp(true);
         try {
             const respuesta = await axios.post(`${API}/mail/link-cotizacion`, { otId: otSeleccionada._id });
@@ -396,6 +409,7 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
     // forma, o el cliente ya sabe entrar solo.
     const [marcandoEnviada, setMarcandoEnviada] = useState(false);
     const marcarCotizacionEnviada = async () => {
+        if (faltaSupervisorParaEnviar()) return;
         if (!(await confirmar(
             '¿Marcar la cotización como enviada? Va a aparecer "por aprobar" en el Portal Cliente sin mandar ningún correo ni WhatsApp — asegurate de que el cliente sepa cómo entrar (teléfono + número de solicitud).',
             { danger: false, textoConfirmar: 'Marcar como enviada' },
@@ -2254,6 +2268,9 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                             <button onClick={() => setIsModalEnvioOpen(false)} style={styles.btnSecundario}>Cancelar</button>
                             <button
                                 onClick={async () => {
+                                    // Tercera vía de envío, junto a WhatsApp y "marcar como
+                                    // enviada": las tres tienen que pedir lo mismo.
+                                    if (faltaSupervisorParaEnviar()) { setIsModalEnvioOpen(false); return; }
                                     try {
                                         const fechasRaw = tareas.map(tt => tt.fecha).filter(Boolean);
                                         if (fechasRaw.length === 0) { notificar.advertencia("No hay fechas programadas en las tareas."); return; }
