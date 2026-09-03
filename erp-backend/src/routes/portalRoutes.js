@@ -13,6 +13,7 @@ router.post('/acceso',            ctrl.acceso);
 router.post('/emitir-token',      ctrl.emitirTokenContacto);
 router.get('/mis-solicitudes',    ctrl.misSolicitudes);
 router.post('/solicitudes/:id/cancelar',    ctrl.cancelarSolicitud);
+router.post('/solicitudes/:id/reactivar',   ctrl.reactivarSolicitud);
 router.post('/solicitudes/:id/descripcion', ctrl.editarDescripcionSolicitud);
 router.post('/ot/:id/responder',  ctrl.responderCotizacion);
 router.post('/ot/:id/excepciones/:excepcionId/responder', ctrl.responderExcepcion);

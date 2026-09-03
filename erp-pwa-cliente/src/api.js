@@ -111,6 +111,15 @@ export function cancelarSolicitud(solicitudId, motivo, fechaPropuesta = '') {
     });
 }
 
+// POST /api/portal/solicitudes/:id/reactivar?token= — anular la propia cancelación. La OT
+// vuelve al estado que tenía: cancelar es un flag encima del estado, no lo reemplaza.
+export function reactivarSolicitud(solicitudId) {
+    const { token } = getSesion();
+    return pedir(`/portal/solicitudes/${solicitudId}/reactivar?token=${encodeURIComponent(token)}`, {
+        method: 'POST', body: JSON.stringify({}),
+    });
+}
+
 // POST /api/portal/solicitudes/:id/descripcion?token= — corregir/ampliar el alcance pedido
 export function editarDescripcionSolicitud(solicitudId, descripcion) {
     const { token } = getSesion();

@@ -842,17 +842,64 @@ exports.cancelarSolicitud = async (req, res) => {
                 return res.status(409).json({ error: 'Ya no se puede cancelar: el trabajo está en ejecución o ya terminó.' });
             }
             ot.cancelada = { activa: true, motivo, fecha: new Date(), fechaPropuesta };
+            ot.bitacora = ot.bitacora || [];
+            ot.bitacora.push({ fecha: new Date(), texto: textoBitacoraCancelacion(motivo, fechaPropuesta) });
             await ot.save();
             return res.json({ ok: true, ot: otPublica(ot) });
         }
 
         if (solicitud.estado === 'Cancelada') return res.status(409).json({ error: 'Esta solicitud ya está cancelada.' });
-        solicitud.estado = 'Cancelada';
         // Sin OT el detalle no tenía dónde guardarse y el motivo se perdía en silencio (ver
         // Solicitud.cancelacion) — ahora se conserva igual que en la OT.
-        solicitud.cancelacion = { motivo, fecha: new Date(), fechaPropuesta };
+        solicitud.cancelacion = { motivo, fecha: new Date(), fechaPropuesta, estadoPrevio: solicitud.estado };
+        solicitud.estado = 'Cancelada';
         await solicitud.save();
         res.json({ ok: true, cancelacion: { motivo, fechaPropuesta } });
+    } catch (err) {
+        res.status(err.status || 500).json({ error: err.message });
+    }
+};
+
+// Queda en la bitácora de la OT porque cancelar y volver atrás es un ida y vuelta que la
+// oficina necesita poder reconstruir: OT.cancelada solo guarda el estado actual, no que
+// alguna vez estuvo cancelada ni por qué.
+function textoBitacoraCancelacion(motivo, fechaPropuesta) {
+    const detalle = motivo ? ` — ${motivo}` : '';
+    const cuando = fechaPropuesta ? ` (propone retomar el ${fechaPropuesta})` : ' (sin fecha, hasta nuevo aviso)';
+    return `El cliente canceló la solicitud desde su app${detalle}${cuando}`;
+}
+
+// POST /api/portal/solicitudes/:id/reactivar?token= — el cliente anula su propia cancelación.
+// Cancelar es casi siempre correr el trabajo, no darlo de baja (por eso se pide una fecha
+// propuesta al hacerlo), así que arrepentirse tiene que poder hacerse solo, sin llamar a la
+// oficina. No revive nada que la oficina haya cerrado: cancelar nunca tocó ot.estado (es un
+// flag encima, ver models/OT.js), así que la OT vuelve exactamente al estado que tenía.
+exports.reactivarSolicitud = async (req, res) => {
+    const Solicitud = getSolicitud(req.db);
+    const OT = getOT(req.db);
+    const SesionPortal = getSesionPortal(req.db);
+    try {
+        const { id } = req.params;
+        const solicitud = await solicitudDeLaSesion(Solicitud, SesionPortal, id, req.query.token);
+
+        const ot = await OT.findById(id);
+        if (ot) {
+            if (!ot.cancelada?.activa) return res.status(409).json({ error: 'Esta solicitud no está cancelada.' });
+            ot.cancelada = { activa: false, motivo: '', fecha: null, fechaPropuesta: '' };
+            ot.bitacora = ot.bitacora || [];
+            ot.bitacora.push({ fecha: new Date(), texto: `El cliente anuló la cancelación desde su app — la OT vuelve a ${ot.estado}` });
+            await ot.save();
+            return res.json({ ok: true, ot: otPublica(ot) });
+        }
+
+        if (solicitud.estado !== 'Cancelada') return res.status(409).json({ error: 'Esta solicitud no está cancelada.' });
+        // Vuelve al estado que tenía antes de cancelarse. Las canceladas de antes de que se
+        // guardara estadoPrevio no lo traen: 'Pendiente' es el único estado posible sin OT
+        // (en cuanto se trata, convertirOT crea la OT y la deja en 'Tratada').
+        solicitud.estado = solicitud.cancelacion?.estadoPrevio || 'Pendiente';
+        solicitud.cancelacion = { motivo: '', fecha: null, fechaPropuesta: '', estadoPrevio: '' };
+        await solicitud.save();
+        res.json({ ok: true, estado: solicitud.estado });
     } catch (err) {
         res.status(err.status || 500).json({ error: err.message });
     }

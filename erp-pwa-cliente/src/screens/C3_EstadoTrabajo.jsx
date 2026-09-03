@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { responderCotizacion, responderExcepcion, cancelarSolicitud, editarDescripcionSolicitud } from '../api.js';
+import { responderCotizacion, responderExcepcion, cancelarSolicitud, reactivarSolicitud, editarDescripcionSolicitud } from '../api.js';
 
 // Mismo corte que portalController.ESTADOS_OT_CANCELABLE (erp-backend) — duplicado acá
 // porque no hay forma de compartir código entre apps. El cliente puede cancelar/editar el
@@ -195,6 +195,26 @@ export default function C3EstadoTrabajo({ nav, trabajo: trabajoProp }) {
             setErrorDescripcion(e.message);
         } finally {
             setGuardandoDescripcion(false);
+        }
+    };
+
+    // Anular la cancelación: cancelar casi siempre es correr el trabajo, no darlo de baja, así
+    // que arrepentirse tiene que poder hacerse solo y no llamando a la oficina.
+    const confirmarReactivacion = async () => {
+        setEnviandoCancelacion(true); setErrorCancelacion('');
+        try {
+            const resultado = await reactivarSolicitud(trabajo._id);
+            setTrabajo((t) => ({
+                ...t,
+                estado: resultado.ot ? t.estado : (resultado.estado || t.estado),
+                ot: resultado.ot || t.ot,
+                cancelacion: null,
+            }));
+            setMotivoCancelacion(''); setFechaPropuesta('');
+        } catch (e) {
+            setErrorCancelacion(e.message);
+        } finally {
+            setEnviandoCancelacion(false);
         }
     };
 
@@ -422,6 +442,21 @@ export default function C3EstadoTrabajo({ nav, trabajo: trabajoProp }) {
                     )}
                 </div>
             ))}
+
+            {/* Anular la cancelación, en el mismo lugar donde estaba el botón de cancelar: es
+                la vuelta atrás de esa misma decisión. La OT no perdió nada — cancelar es un
+                flag encima del estado — así que vuelve exactamente a donde estaba. */}
+            {yaCancelada && (
+                <div style={{ padding: '0 16px 16px' }}>
+                    <div style={{ fontSize: 'var(--fs-secundario)', color: 'var(--texto-secundario-1)', marginBottom: 8 }}>
+                        ¿Se arrepintió? Puede reactivarla y seguimos donde quedó.
+                    </div>
+                    {errorCancelacion && <div style={{ fontSize: 'var(--fs-secundario)', color: 'var(--detenido)', marginBottom: 8 }}>{errorCancelacion}</div>}
+                    <button className="boton-secundario" disabled={enviandoCancelacion} onClick={confirmarReactivacion}>
+                        {enviandoCancelacion ? 'Reactivando…' : 'Anular la cancelación'}
+                    </button>
+                </div>
+            )}
 
             {puedeCancelar && (
                 <div style={{ padding: '0 16px 16px' }}>

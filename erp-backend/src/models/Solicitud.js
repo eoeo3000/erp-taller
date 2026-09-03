@@ -27,6 +27,9 @@ const solicitudSchema = new mongoose.Schema({
         motivo: { type: String, default: '' },
         fecha: { type: Date, default: null },
         fechaPropuesta: { type: String, default: '' },
+        // Qué estado tenía antes de cancelarse, para poder devolverlo exactamente a ese si el
+        // cliente anula la cancelación (reactivarSolicitud). Sin esto habría que adivinarlo.
+        estadoPrevio: { type: String, default: '' },
     },
 
     // --- Tiempos y Plazos ---
