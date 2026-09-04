@@ -18,6 +18,7 @@ import TabTareas from './tratamiento/TabTareas';
 import TabEquiposMateriales from './tratamiento/TabEquiposMateriales';
 import TabSuministrosDirectos from './tratamiento/TabSuministrosDirectos';
 import TabPago from './tratamiento/TabPago';
+import { registrosDeTarea, tieneAvanceEnTerreno, selloRegistro } from '../utils/registros';
 
 // Paso 4 del rediseño (ver docs/rediseno/design_handoff_panel_control/README.md §6):
 // pipeline + 7 tabs (se agrega "0 · Informe Inicial", que no estaba en el mock, ver resumen
@@ -452,9 +453,22 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
         solicitudDescripcion: datosRecibidos?.descripcion || '',
         hallazgos: (informeEvaluacion?.hallazgos || []).map(h => ({ texto: h.textoDescriptivo || h.textoGenerado || '', fotos: [...(h.fotos || [])] })),
         tareas: tareas
-            .filter(tt => (tt.desarrollo || '').trim() || tt.registro?.texto || tt.registro?.fotos?.length)
-            .map(tt => ({ descripcion: tt.descripcion || '', desarrollo: tt.desarrollo || '', registroTexto: tt.registro?.texto || '', fotos: [...(tt.registro?.fotos || [])] })),
+            .filter(tt => (tt.desarrollo || '').trim() || tieneAvanceEnTerreno(tt))
+            .map(tt => ({
+                descripcion: tt.descripcion || '',
+                desarrollo: tt.desarrollo || '',
+                // Cada reporte con su sello, para que el informe deje ver qué se hizo cada día
+                // y no solo un texto suelto sin fecha. `registroTexto` se sigue armando —
+                // juntando las entradas— porque es lo que leen el editor del informe, el PDF y
+                // la app del cliente para los informes ya enviados.
+                registros: registrosDeTarea(tt).map(r => ({ texto: r.texto || '', fotos: [...(r.fotos || [])], sello: selloRegistro(r), autor: r.autor || '' })),
+                registroTexto: registrosDeTarea(tt).map(r => [selloRegistro(r), r.texto].filter(Boolean).join(' — ')).filter(Boolean).join('\n'),
+                fotos: registrosDeTarea(tt).flatMap(r => r.fotos || []),
+            })),
         evidencias: (otSeleccionada?.reportes || []).map(r => ({ fecha: r.fecha, usuario: r.usuario || '', comentario: r.comentario || '', fotos: r.foto ? [r.foto] : [] })),
+        // El log de acciones va al informe: es lo que responde "qué pasó y cuándo" — cuándo
+        // arrancó, si se pospuso, si se reabrió y por qué.
+        bitacora: bitacoraOrdenada.map(b => ({ fecha: b.fecha, texto: b.texto || '', autor: b.autor || '' })),
     });
 
     const abrirEditorInforme = () => {
@@ -803,6 +817,21 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                 for (const foto of (r.fotos || [])) await agregarImagen(foto);
                 y += 3;
             }
+        }
+
+        // Log de acciones al final: es lo que responde "qué pasó y cuándo" (cuándo arrancó el
+        // trabajo, si se pospuso, si se reabrió y por qué). Va después de las evidencias para
+        // no interrumpir la lectura de lo ejecutado.
+        if (contenido.bitacora?.length > 0) {
+            titulo('Bitácora de la OT');
+            doc.setFontSize(9); doc.setFont(undefined, 'normal'); doc.setTextColor(70);
+            for (const b of contenido.bitacora) {
+                if (y > 275) { doc.addPage(); y = 20; }
+                const sello = b.fecha ? new Date(b.fecha).toLocaleString('es-CL', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+                const linea = doc.splitTextToSize([sello, b.texto, b.autor].filter(Boolean).join(' · '), pageWidth - 28);
+                doc.text(linea, 14, y); y += linea.length * 5 + 1;
+            }
+            y += 3;
         }
 
         if (descargar) doc.save(`Informe_OT_${otSeleccionada?.numeroOT || datosRecibidos?._id || 'nueva'}.pdf`);
@@ -1232,6 +1261,9 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
     // (pedido explícito del usuario): tiene que poder emitirse un cobro igual por lo ya
     // ejecutado (ej. una visita de evaluación), aunque el resto del trabajo se haya cancelado.
     const otCancelada = !!otSeleccionada?.cancelada?.activa;
+    // Copia ordenada: la bitácora se va agregando en el orden en que ocurren las cosas, pero
+    // una migración pudo intercalar entradas viejas y no hay garantía de orden en el documento.
+    const bitacoraOrdenada = [...(otSeleccionada?.bitacora || [])].sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
     // Con la cotización ya aceptada, lo que el cliente aprobó es un acuerdo cerrado: no se
     // toca ni se vuelve a enviar (reenviar, además, resetea respuestaCliente a 'Pendiente' y
     // borraría la aceptación). La pestaña queda de consulta y solo se puede descargar el PDF.
@@ -1923,30 +1955,57 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                                 son reportes generales de la OT, no se vinculan a una tarea puntual
                                 (aplicarAccionOT no guarda tareaId al crearlos) — tareas[].registro sí
                                 está atado a la tarea exacta, por eso se muestra acá junto al plan. */}
-                            {tareas.some(tt => (tt.desarrollo || '').trim() || tt.registro?.texto || tt.registro?.fotos?.length) && (
+                            {tareas.some(tt => (tt.desarrollo || '').trim() || tieneAvanceEnTerreno(tt)) && (
                                 <div style={{ marginBottom: 16 }}>
                                     <div style={styles.tituloSub}>Plan de trabajo y avance en terreno</div>
                                     <div style={{ border: `1px solid ${t.bordeZona}`, borderRadius: 2 }}>
-                                        {tareas.filter(tt => (tt.desarrollo || '').trim() || tt.registro?.texto || tt.registro?.fotos?.length).map((tt, i) => (
+                                        {tareas.filter(tt => (tt.desarrollo || '').trim() || tieneAvanceEnTerreno(tt)).map((tt, i) => (
                                             <div key={tt._id || tt.id || i} style={{ padding: '8px 12px', borderBottom: `1px solid ${t.hairlineFila}` }}>
                                                 <div style={{ fontSize: 11.5, fontWeight: 600, color: t.textoPrincipal }}>{tt.descripcion}</div>
                                                 {(tt.desarrollo || '').trim() && (
                                                     <div style={{ fontSize: 11, color: t.textoSecundario2, marginTop: 2, whiteSpace: 'pre-wrap', lineHeight: 1.45 }}>{tt.desarrollo}</div>
                                                 )}
-                                                {(tt.registro?.texto || tt.registro?.fotos?.length > 0) && (
-                                                    <div style={{ display: 'flex', gap: 8, marginTop: 6, padding: '7px 9px', background: t.fondoMain, borderLeft: `2px solid ${t.verde}` }}>
-                                                        {tt.registro.fotos?.[0] && (
-                                                            <img src={tt.registro.fotos[0]} alt="" style={{ flex: 'none', width: 44, height: 34, objectFit: 'cover', borderRadius: 2, cursor: 'pointer' }} onClick={() => window.open(tt.registro.fotos[0], '_blank')} />
+                                                {/* Una entrada por reporte, con día y hora: antes era una sola
+                                                    observación (la última pisaba a la anterior) y su sello era
+                                                    un "HH:MM" sin fecha, así que no se podía saber de qué día
+                                                    era lo que se estaba leyendo. */}
+                                                {registrosDeTarea(tt).map((r, ri) => (
+                                                    <div key={ri} style={{ display: 'flex', gap: 8, marginTop: 6, padding: '7px 9px', background: t.fondoMain, borderLeft: `2px solid ${t.verde}` }}>
+                                                        {r.fotos?.[0] && (
+                                                            <img src={r.fotos[0]} alt="" style={{ flex: 'none', width: 44, height: 34, objectFit: 'cover', borderRadius: 2, cursor: 'pointer' }} onClick={() => window.open(r.fotos[0], '_blank')} />
                                                         )}
                                                         <div style={{ flex: 1, minWidth: 0 }}>
                                                             <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.04em', textTransform: 'uppercase', color: t.verde }}>Reportado desde terreno</div>
-                                                            {tt.registro.texto && <div style={{ fontSize: 11, color: t.textoSecundario2, marginTop: 2, whiteSpace: 'pre-wrap', lineHeight: 1.4 }}>{tt.registro.texto}</div>}
+                                                            {r.texto && <div style={{ fontSize: 11, color: t.textoSecundario2, marginTop: 2, whiteSpace: 'pre-wrap', lineHeight: 1.4 }}>{r.texto}</div>}
                                                             <div style={{ fontFamily: t.fontMono, fontSize: 10, color: t.textoAtenuado3, marginTop: 3 }}>
-                                                                {[tt.registro.autor, tt.registro.hora, tt.registro.fotos?.length ? `${tt.registro.fotos.length} foto${tt.registro.fotos.length === 1 ? '' : 's'}` : null].filter(Boolean).join(' · ')}
+                                                                {[selloRegistro(r), r.autor, r.fotos?.length ? `${r.fotos.length} foto${r.fotos.length === 1 ? '' : 's'}` : null].filter(Boolean).join(' · ')}
                                                             </div>
                                                         </div>
                                                     </div>
-                                                )}
+                                                ))}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Bitácora: el log de acciones de la OT (inicio, pausas, reaperturas,
+                                reprogramaciones, asignaciones). Antes estas acciones se guardaban
+                                como si fueran reportes de terreno y salían más abajo, en
+                                "Evidencias", donde no corresponden — "OT REABIERTA" no es evidencia
+                                de nada visto en la faena. Se muestra completa y en orden. */}
+                            {bitacoraOrdenada.length > 0 && (
+                                <div style={{ marginBottom: 16 }}>
+                                    <div style={styles.tituloSub}>Bitácora de la OT ({bitacoraOrdenada.length})</div>
+                                    <div style={{ border: `1px solid ${t.bordeZona}`, borderRadius: 2 }}>
+                                        {bitacoraOrdenada.map((b, i) => (
+                                            <div key={i} style={{ display: 'flex', gap: 10, padding: '7px 12px', borderBottom: i === bitacoraOrdenada.length - 1 ? 'none' : `1px solid ${t.hairlineFila}` }}>
+                                                <span style={{ fontFamily: t.fontMono, flex: 'none', fontSize: 10, color: t.textoAtenuado3, paddingTop: 1 }}>
+                                                    {new Date(b.fecha).toLocaleString('es-CL', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                                </span>
+                                                <span style={{ flex: 1, minWidth: 0, fontSize: 11, color: t.textoSecundario2, lineHeight: 1.4 }}>
+                                                    {b.texto}{b.autor ? <span style={{ color: t.textoAtenuado3 }}> · {b.autor}</span> : null}
+                                                </span>
                                             </div>
                                         ))}
                                     </div>

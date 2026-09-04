@@ -5,6 +5,7 @@ const getOT = require('../models/OT');
 const getSesionPortal = require('../models/SesionPortal');
 const getCliente = require('../models/Cliente');
 const otController = require('./otController');
+const { registrosDeTarea } = require('./otController');
 const transporter = require('../config/mailer');
 const { PWA_CLIENTE_URL } = require('../config/urls');
 
@@ -92,9 +93,12 @@ function otPublica(ot) {
             // fotos, ver S3_Trabajo.jsx "Guardar lo ingresado") — antes no viajaba al cliente
             // en absoluto, así que el informe final no tenía forma de mostrar avance por
             // tarea, solo el feed genérico de OT.reportes (sin vincular a una tarea).
-            registro: (t.registro?.texto || t.registro?.fotos?.length) ? {
-                texto: t.registro.texto, fotos: t.registro.fotos, hora: t.registro.hora, autor: t.registro.autor,
-            } : null,
+            // Ahora es una lista: cada reporte de terreno es una entrada con su fecha, no una
+            // sola observación que se pisa a sí misma. Se normaliza acá el formato viejo
+            // (tareas[].registro) para que el cliente no tenga que conocer las dos formas.
+            registros: registrosDeTarea(t).map(r => ({
+                texto: r.texto, fotos: r.fotos, fecha: r.fecha || null, hora: r.hora || '', autor: r.autor,
+            })),
         })),
         // Antes exponía {nombre, precioUnitario, subtotal} — campos que no existen en el
         // schema real de OT.componentes (models/OT.js: codigo/descripcion/cantidad/precio/

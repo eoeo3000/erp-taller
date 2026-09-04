@@ -48,9 +48,19 @@ export default function C4AvanceFotos({ nav, trabajo }) {
     const hallazgos = contenido ? (contenido.hallazgos || []) : (ot?.informeEvaluacion?.hallazgos || []);
     const tareasConDetalle = contenido
         ? (contenido.tareas || [])
+        // registros[] (una entrada por reporte de terreno, con su fecha) reemplazó al registro
+        // único; el backend ya normaliza las OT viejas a esta forma (otPublica). Se juntan en
+        // un solo bloque por tarea: el cliente quiere ver qué se hizo, no la mecánica de en
+        // cuántas veces se fue reportando.
         : (ot?.tareas || [])
-            .filter((t) => (t.desarrollo || '').trim() || t.registro?.texto || t.registro?.fotos?.length)
-            .map((t) => ({ descripcion: t.descripcion, desarrollo: t.desarrollo, registroTexto: t.registro?.texto, fotos: t.registro?.fotos || [] }));
+            .map((t) => ({ tarea: t, registros: t.registros || [] }))
+            .filter(({ tarea, registros }) => (tarea.desarrollo || '').trim() || registros.some((r) => r.texto || r.fotos?.length))
+            .map(({ tarea, registros }) => ({
+                descripcion: tarea.descripcion,
+                desarrollo: tarea.desarrollo,
+                registroTexto: registros.map((r) => r.texto).filter(Boolean).join('\n'),
+                fotos: registros.flatMap((r) => r.fotos || []),
+            }));
     const evidenciasInforme = contenido ? (contenido.evidencias || []) : null;
     const solicitudDescripcion = contenido ? contenido.solicitudDescripcion : trabajo.descripcion;
 

@@ -3,6 +3,7 @@ import { obtenerOT, actualizarOT, accionOT, miSemana, subirFoto } from '../api.j
 import { detectarCruces } from '../cruces.js';
 import { hoyISO } from '../fecha.js';
 import { confirmar, avisar } from '../confirmar.js';
+import { registrosDeTarea, selloRegistro } from '../registros.js';
 import Cargando from './Cargando.jsx';
 
 const COLOR_ESTADO = { 'En Ejecución': 'var(--en-curso)', 'Trabajo Terminado': 'var(--listo)', 'Con Informe': 'var(--listo)', 'Pagada': 'var(--listo)', 'Reprogramar': 'var(--atencion)' };
@@ -154,12 +155,15 @@ export default function S3Trabajo({ nav, asignacion, persona }) {
         if (soloLectura) return;
         const conBorrador = Object.keys(borradores).filter((idx) => borradores[idx].texto?.trim() || borradores[idx].fotos?.length);
         if (conBorrador.length === 0) return;
-        const ahora = new Date();
-        const horaTexto = `${String(ahora.getHours()).padStart(2, '0')}:${String(ahora.getMinutes()).padStart(2, '0')}`;
+        const ahora = new Date().toISOString();
+        // Se agrega al final, no se pisa lo anterior: antes `registro` era un solo objeto, así
+        // que el segundo comentario de una tarea borraba el primero y se perdía qué se había
+        // hecho el día anterior. Ahora cada reporte es una entrada más de la bitácora.
         const nuevasTareas = tareas.map((t, i) => {
             const b = borradores[i];
             if (!b || !(b.texto?.trim() || b.fotos?.length)) return t;
-            return { ...t, registro: { texto: b.texto?.trim() || '', fotos: b.fotos || [], hora: horaTexto, autor: persona?.nombre || '' } };
+            const entrada = { texto: b.texto?.trim() || '', fotos: b.fotos || [], fecha: ahora, autor: persona?.nombre || '' };
+            return { ...t, registros: [...registrosDeTarea(t), entrada] };
         });
         setGuardando(true);
         try { await actualizarOT(otId, { tareas: nuevasTareas }); setBorradores({}); await cargar(); } finally { setGuardando(false); }
@@ -406,7 +410,7 @@ function FilaTarea({
     if (t.completada || (t.fecha && t.fecha < hoy)) { colorBg = '#e6e4dd'; colorBorde = '#a3a29a'; } // cerrado
     if (enCurso) { colorBg = 'oklch(0.48 0.10 250 / .18)'; colorBorde = 'oklch(0.48 0.10 250)'; }
 
-    const registro = t.registro?.texto || t.registro?.fotos?.length ? t.registro : null;
+    const registros = registrosDeTarea(t);
 
     return (
         <div style={{ display: 'flex', gap: 12, padding: '12px 18px 13px', borderBottom: '1px solid var(--linea-fina)' }}>
@@ -466,15 +470,22 @@ function FilaTarea({
                     </span>
                 )}
 
-                {registro ? (
-                    <span style={{ display: 'flex', gap: 10, marginTop: 9, padding: '9px 10px', background: 'var(--fondo-pantalla)', borderLeft: '2px solid var(--deshabilitado-2)' }}>
-                        {registro.fotos?.[0] && <img src={registro.fotos[0]} alt="" style={{ flex: 'none', width: 44, height: 34, objectFit: 'cover' }} />}
+                {/* Todas las observaciones, no la última: es la bitácora de la tarea. Antes acá
+                    se mostraba una sola y, además, el cuadro para escribir DESAPARECÍA en cuanto
+                    existía — por eso no se podía dejar un segundo comentario al día siguiente. */}
+                {registros.map((r, i) => (
+                    <span key={i} style={{ display: 'flex', gap: 10, marginTop: i === 0 ? 9 : 6, padding: '9px 10px', background: 'var(--fondo-pantalla)', borderLeft: '2px solid var(--deshabilitado-2)' }}>
+                        {r.fotos?.[0] && <img src={r.fotos[0]} alt="" style={{ flex: 'none', width: 44, height: 34, objectFit: 'cover' }} />}
                         <span style={{ flex: 1, minWidth: 0 }}>
-                            <span style={{ display: 'block', fontSize: 13.5, lineHeight: 1.45, color: 'var(--texto-secundario-1)' }}>{registro.texto}</span>
-                            <span className="mono" style={{ display: 'block', marginTop: 3, fontSize: 11.5, color: 'var(--texto-atenuado-3)' }}>{registro.hora} · {registro.fotos?.length || 0} foto{registro.fotos?.length === 1 ? '' : 's'}</span>
+                            <span style={{ display: 'block', fontSize: 13.5, lineHeight: 1.45, color: 'var(--texto-secundario-1)' }}>{r.texto}</span>
+                            <span className="mono" style={{ display: 'block', marginTop: 3, fontSize: 11.5, color: 'var(--texto-atenuado-3)' }}>
+                                {[selloRegistro(r), r.autor, r.fotos?.length ? `${r.fotos.length} foto${r.fotos.length === 1 ? '' : 's'}` : null].filter(Boolean).join(' · ')}
+                            </span>
                         </span>
                     </span>
-                ) : !bloqueada && (
+                ))}
+
+                {!bloqueada && (
                     // Antes exigía !resuelta acá — al marcar "completada" (onMarcarRealizada,
                     // más arriba) este bloque entero desaparecía, incluido lo que ya se había
                     // tecleado en el borrador (borrador?.texto/fotos). El dato seguía vivo en
@@ -485,7 +496,8 @@ function FilaTarea({
                     <>
                         <span style={{ display: 'flex', gap: 8, marginTop: 9 }}>
                             <input
-                                value={borrador?.texto || ''} onChange={(e) => onCambiarTexto(e.target.value)} placeholder="Qué se hizo…"
+                                value={borrador?.texto || ''} onChange={(e) => onCambiarTexto(e.target.value)}
+                                placeholder={registros.length ? 'Agregar otra observación…' : 'Qué se hizo…'}
                                 style={{ flex: 1, minWidth: 0, height: 44, padding: '0 10px', background: '#fff', border: '1px solid rgba(0,0,0,.20)', borderRadius: 'var(--radio)', fontSize: 14 }}
                             />
                             <label style={{ flex: 'none', width: 78, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#fff', border: '1px solid rgba(0,0,0,.20)', borderRadius: 'var(--radio)', fontSize: 14, fontWeight: 600, color: 'var(--texto-secundario-1)', cursor: 'pointer' }}>
@@ -542,21 +554,23 @@ function VistaInforme({ ot, onVolver }) {
                         {t.completada && <div style={{ marginTop: 4, fontSize: 12.5, fontWeight: 600, color: 'var(--listo)' }}>Realizada</div>}
                         {t.motivoNoRealizada && <div style={{ marginTop: 4, fontSize: 12.5, fontWeight: 600, color: 'var(--atencion)' }}>No realizada: {t.motivoNoRealizada}</div>}
                         {!t.completada && !t.motivoNoRealizada && <div style={{ marginTop: 4, fontSize: 12.5, color: 'var(--texto-atenuado-3)' }}>Todavía pendiente</div>}
-                        {(t.registro?.texto || t.registro?.fotos?.length > 0) && (
-                            <div style={{ marginTop: 8 }}>
-                                {t.registro.texto && <div style={{ fontSize: 13.5, lineHeight: 1.45, color: 'var(--texto-secundario-1)' }}>{t.registro.texto}</div>}
-                                {t.registro.fotos?.length > 0 && (
+                        {/* Una entrada por reporte y con su sello de día/hora: el informe tiene
+                            que dejar ver qué se hizo cada jornada, no solo lo último. */}
+                        {registrosDeTarea(t).map((r, ri) => (
+                            <div key={ri} style={{ marginTop: 8 }}>
+                                {r.texto && <div style={{ fontSize: 13.5, lineHeight: 1.45, color: 'var(--texto-secundario-1)' }}>{r.texto}</div>}
+                                {r.fotos?.length > 0 && (
                                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
-                                        {t.registro.fotos.map((f, fi) => (
+                                        {r.fotos.map((f, fi) => (
                                             <img key={fi} src={f} alt="" loading="lazy" style={{ width: 70, height: 52, objectFit: 'cover' }} />
                                         ))}
                                     </div>
                                 )}
                                 <div className="mono" style={{ marginTop: 4, fontSize: 11.5, color: 'var(--texto-atenuado-3)' }}>
-                                    {t.registro.hora}{t.registro.autor ? ` · ${t.registro.autor}` : ''}
+                                    {[selloRegistro(r), r.autor].filter(Boolean).join(' · ')}
                                 </div>
                             </div>
-                        )}
+                        ))}
                     </div>
                 ))}
                 <div style={{ height: 18 }} />

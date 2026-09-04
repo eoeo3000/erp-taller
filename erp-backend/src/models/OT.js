@@ -154,12 +154,27 @@ const OTSchema = new mongoose.Schema({
         motivoNoRealizada: { type: String, default: '' },
         // Ingreso de lo realizado en terreno, por tarea (no por OT, a diferencia de OT.reportes
         // que usa ReporteTerreno.jsx). Uno por tarea: se sobreescribe si se vuelve a guardar.
+        // Legado: una sola observación por tarea. Ya no se escribe — quedó para las OT que se
+        // grabaron antes de `registros`. Todo lector debe normalizar las dos formas (ver
+        // registrosDeTarea en otController / en cada app; no hay forma de compartir código).
         registro: {
             texto: { type: String, default: '' },
             fotos: [String],
             hora: { type: String, default: '' },
             autor: { type: String, default: '' }
-        }
+        },
+        // Bitácora de la tarea: cada vez que alguien reporta desde terreno se agrega una
+        // entrada, no se pisa la anterior. Antes era un solo objeto, así que el segundo
+        // comentario borraba el primero y se perdía el rastro de qué se hizo cada día.
+        registros: [{
+            texto: { type: String, default: '' },
+            fotos: [String],
+            // Momento real del reporte. `hora` (HH:MM) se conservaba suelto y sin día, así que
+            // no se podía saber de cuándo era: esto es lo que permite ordenar la bitácora y
+            // agruparla por jornada en el informe final.
+            fecha: { type: Date, default: Date.now },
+            autor: { type: String, default: '' }
+        }]
     }],
 
     // 2. Componentes y Materiales
@@ -330,10 +345,16 @@ const OTSchema = new mongoose.Schema({
     // "quién" asignó de forma confiable hoy. Se deja el campo para cuando exista una sesión
     // real; queda null en vez de inventar un valor.
     asignadaPor: { type: mongoose.Schema.Types.ObjectId, ref: 'Usuario', default: null },
-    // Bitácora de la OT (por ahora solo la usa la asignación de supervisor).
+    // Bitácora de la OT: el log de acciones, en orden cronológico. Acá van los hechos —
+    // asignaciones, inicio/fin del trabajo, pausas, reaperturas, cancelación del cliente —,
+    // NO la evidencia de terreno, que sigue en `reportes` (comentario + foto de lo que se ve
+    // en la faena). Antes las acciones se empujaban a `reportes` con un emoji de prefijo, así
+    // que "OT REABIERTA" aparecía en el escritorio bajo "Evidencias de terreno", donde no
+    // corresponde: no es evidencia de nada, es algo que alguien hizo.
     bitacora: [{
         fecha: { type: Date, default: Date.now },
         texto: String,
+        autor: { type: String, default: '' },
     }],
 
     // Órdenes de Compra generadas para cubrir faltantes de stock de esta OT (ver docs/funcionalidades-v2.md, Gap 3)

@@ -30,22 +30,45 @@ function cotizacionVencida(ot) {
     );
 }
 
+// Observaciones de terreno de una tarea, normalizando las dos formas que conviven: hoy se
+// escribe `tareas[].registros` (una entrada por reporte, con fecha), pero las OT anteriores
+// tienen una sola en `tareas[].registro`, sin día. Se exporta para que portalController
+// exponga siempre la forma nueva y el cliente no tenga que conocer la vieja.
+function registrosDeTarea(tarea) {
+    if (tarea?.registros?.length) return tarea.registros;
+    const legado = tarea?.registro;
+    if (legado?.texto || legado?.fotos?.length) {
+        return [{ texto: legado.texto || '', fotos: legado.fotos || [], fecha: null, hora: legado.hora || '', autor: legado.autor || '' }];
+    }
+    return [];
+}
+exports.registrosDeTarea = registrosDeTarea;
+
 // Acciones sobre una OT en terreno (iniciar/posponer/interrumpir/reporte/terminar) —
 // compartida por supervisorAccion (token por OT, portal HTML) y accionMovil (token por
 // persona, PWA Operativa, ver docs/rediseno/design_handoff_pwa_movil/README.md §5, O3/O4).
 // Un solo lugar con la lógica de negocio; cada endpoint solo decide CÓMO se autoriza.
 function aplicarAccionOT(ot, { accion, motivo, comentario, foto, usuarioNombre = 'Supervisor' }) {
+    // Toda acción queda en la bitácora (el log), no en `reportes` (la evidencia de terreno).
+    // Ver el comentario de `bitacora` en models/OT.js: mezclarlas hacía que "OT REABIERTA"
+    // apareciera en el escritorio como si fuera una evidencia más de la faena.
+    const anotar = (texto) => {
+        ot.bitacora = ot.bitacora || [];
+        ot.bitacora.push({ fecha: new Date(), texto, autor: usuarioNombre });
+    };
+
     if (accion === 'iniciar') {
+        // Se anota el arranque igual que el cierre: sin esto, el log de la OT empezaba recién
+        // en la primera pausa y no había forma de saber cuándo se puso en marcha el trabajo.
+        anotar('Trabajo iniciado en terreno');
         ot.estado = 'En Ejecución';
     } else if (accion === 'posponer') {
         if (!motivo) { const e = new Error('Motivo requerido'); e.status = 400; throw e; }
-        ot.reportes = ot.reportes || [];
-        ot.reportes.push({ comentario: `⏸️ TRABAJO POSPUESTO: ${motivo}`, fecha: new Date(), usuario: usuarioNombre });
+        anotar(`Trabajo pospuesto: ${motivo}`);
         ot.estado = 'Programada';
     } else if (accion === 'interrumpir') {
         if (!motivo) { const e = new Error('Motivo requerido'); e.status = 400; throw e; }
-        ot.reportes = ot.reportes || [];
-        ot.reportes.push({ comentario: `⚠️ TRABAJO INTERRUMPIDO: ${motivo}`, fecha: new Date(), usuario: usuarioNombre });
+        anotar(`Trabajo interrumpido: ${motivo}`);
         ot.estado = 'Programada';
     } else if (accion === 'reporte') {
         if (!comentario && !foto) { const e = new Error('Comentario o foto requeridos'); e.status = 400; throw e; }
@@ -53,6 +76,7 @@ function aplicarAccionOT(ot, { accion, motivo, comentario, foto, usuarioNombre =
         ot.reportes.push({ comentario: comentario || '', foto: foto || '', fecha: new Date(), usuario: usuarioNombre });
         if (ot.estado === 'Trabajo Terminado') ot.estado = 'Con Informe';
     } else if (accion === 'terminar') {
+        anotar('Trabajo marcado como terminado');
         ot.estado = 'Trabajo Terminado';
     } else if (accion === 'reabrir') {
         // Solo desde S3 (supervisor), solo tiene sentido sobre una OT 'Trabajo Terminado' (el
@@ -62,9 +86,8 @@ function aplicarAccionOT(ot, { accion, motivo, comentario, foto, usuarioNombre =
         // de nuevo sin duplicar esa lógica. Pensado para dos casos: falta agregar una foto o un
         // comentario a alguna tarea, o la OT se cerró por error.
         if (!motivo) { const e = new Error('Motivo requerido'); e.status = 400; throw e; }
+        anotar(`OT reabierta: ${motivo}`);
         ot.estado = 'En Ejecución';
-        ot.reportes = ot.reportes || [];
-        ot.reportes.push({ comentario: `🔓 OT REABIERTA: ${motivo}`, fecha: new Date(), usuario: usuarioNombre });
     } else if (accion === 'reprogramar') {
         // Solo desde S3 (supervisor) — no está en el flujo de O3 (ejecutor). La OT necesita una
         // fecha nueva; el planificador la reasigna en Tareas (Tratamiento) y recién vuelve a
@@ -72,21 +95,19 @@ function aplicarAccionOT(ot, { accion, motivo, comentario, foto, usuarioNombre =
         // mismo gate que exige capacidadVerificada antes de poder enviar la cotización la
         // primera vez. Se resetea acá para que ese botón vuelva a pedirse.
         if (!motivo) { const e = new Error('Motivo requerido'); e.status = 400; throw e; }
+        anotar(`Reprogramación solicitada: ${motivo}`);
         ot.estado = 'Reprogramar';
         if (ot.cotizacion) ot.cotizacion.capacidadVerificada = false;
-        ot.reportes = ot.reportes || [];
-        ot.reportes.push({ comentario: `📅 REPROGRAMACIÓN SOLICITADA: ${motivo}`, fecha: new Date(), usuario: usuarioNombre });
     } else if (accion === 'replanificar') {
         // Solo desde S3 — la OT sigue en curso, pero necesita más HH/materiales de lo cotizado.
         // Crea de una vez el borrador de la excepción con el motivo del supervisor, para que el
         // planificador no arranque de cero, solo la complete con precios (ver
         // aplicarRespuestaExcepcion y TratamientoScreen.jsx, pestaña Excepciones).
         if (!motivo) { const e = new Error('Motivo requerido'); e.status = 400; throw e; }
+        anotar(`Replanificación solicitada: ${motivo}`);
         ot.subEstado = 'Replanificar';
         ot.excepciones = ot.excepciones || [];
         ot.excepciones.push({ descripcion: motivo, foto: foto || '', creadoPor: usuarioNombre, fecha: new Date() });
-        ot.reportes = ot.reportes || [];
-        ot.reportes.push({ comentario: `🔧 REPLANIFICACIÓN SOLICITADA: ${motivo}`, fecha: new Date(), usuario: usuarioNombre });
     } else {
         const e = new Error('Acción no reconocida'); e.status = 400; throw e;
     }

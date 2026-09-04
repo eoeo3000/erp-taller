@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { solicitudesSinInforme, misInformes, ejecutadas, tomarSolicitud, miSemana, obtenerOT } from '../api.js';
 import { hoyISO } from '../fecha.js';
+import { fotosDeTarea } from '../registros.js';
 import Cargando from './Cargando.jsx';
 
 // Una sola puerta de entrada a las solicitudes, con filtros adentro — pedido explícito del
@@ -425,7 +426,7 @@ function DetalleEjecutada({ otId, onVolver }) {
 
     const fotos = [
         ...(ot.reportes || []).filter((r) => r.foto).map((r) => r.foto),
-        ...(ot.tareas || []).flatMap((t) => t.registro?.fotos || []),
+        ...(ot.tareas || []).flatMap((t) => fotosDeTarea(t)),
     ];
 
     return (
