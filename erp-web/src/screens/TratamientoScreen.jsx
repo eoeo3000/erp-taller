@@ -1361,15 +1361,17 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                             onGuardar={guardarAsignacion}
                             guardando={guardandoAsignacion}
                             aviso={avisoAsignacion}
-                            // Antecedentes NO se congela al terminar la planificación: acá no hay
-                            // contenido de la cotización (eso es tareas/equipos/suministros), sino
-                            // quién está a cargo, con qué prioridad y con qué instrucciones —
-                            // datos administrativos que la oficina tiene que poder corregir
-                            // después. Con el freeze puesto acá, una OT ya planificada a la que le
-                            // faltaba el supervisor quedaba trabada: no se podía asignar sin antes
-                            // deshacer la planificación entera. El corte es el mismo que aplica el
-                            // backend en asignarSupervisor: todo editable hasta 'Pagada'.
-                            soloLectura={otSeleccionada?.estado === 'Pagada'}
+                            // Se congela junto con el resto al terminar la planificación: el
+                            // supervisor es requisito PARA cerrarla (ver motivoNoPuedeTerminar), así
+                            // que una OT planificada de acá en adelante ya lo tiene sí o sí y no hay
+                            // nada que corregir después.
+                            // La excepción son las que quedaron planificadas sin supervisor de antes
+                            // de ese requisito: ahí la pestaña sigue abierta hasta que se asigne, si
+                            // no quedarían trabadas para siempre —no se puede enviar ni aprobar la
+                            // cotización sin supervisor— y ponerlas al día obligaría a deshacer la
+                            // planificación entera. En cuanto se asigna, se cierra como el resto.
+                            // 'Pagada' cierra siempre: es un registro financiero terminado.
+                            soloLectura={otSeleccionada?.estado === 'Pagada' || (soloLecturaPlanificacion && haySupervisor)}
                         />
                     )}
 
