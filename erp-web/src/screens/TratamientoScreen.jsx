@@ -521,8 +521,17 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
     });
 
     const guardarPlanificacion = async (estadoForzado) => {
+        // Solo los campos que esta pantalla realmente edita. Antes esto empezaba con
+        // `...datosRecibidos` —la OT tal como estaba cuando se abrió la pantalla— y la mandaba
+        // entera: como el backend hace $set de todo lo que recibe, cada guardado de la
+        // planificación reescribía con datos viejos campos que ya no le pertenecen. El caso que
+        // lo destapó: asignar el supervisor, guardar la planificación, y el supervisorId volvía
+        // a null porque la foto inicial no lo tenía. Lo mismo podía pasar con la cancelación
+        // hecha por el cliente, el pago o el informe final mientras la pestaña estaba abierta.
+        // Una lista explícita falla del lado seguro: un campo nuevo no se pisa por descuido.
+        // No hace falta mandar el resto ni siquiera al crear la OT: si todavía no existe, el
+        // backend la arma a partir de la Solicitud (ver otController.actualizarOT).
         const dataCompleta = {
-            ...datosRecibidos,
             solicitudId: datosRecibidos.solicitudId || datosRecibidos._id,
             numeroOT: otSeleccionada.numeroOT || datosRecibidos.numeroOT,
             // 'Reprogramar' (el supervisor la marcó desde S3, PWA Operativa) se preserva tal cual
