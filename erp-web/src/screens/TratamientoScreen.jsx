@@ -1232,6 +1232,18 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
     // (pedido explícito del usuario): tiene que poder emitirse un cobro igual por lo ya
     // ejecutado (ej. una visita de evaluación), aunque el resto del trabajo se haya cancelado.
     const otCancelada = !!otSeleccionada?.cancelada?.activa;
+    // Con la cotización ya aceptada, lo que el cliente aprobó es un acuerdo cerrado: no se
+    // toca ni se vuelve a enviar (reenviar, además, resetea respuestaCliente a 'Pendiente' y
+    // borraría la aceptación). La pestaña queda de consulta y solo se puede descargar el PDF.
+    // Un cambio de alcance posterior tiene su propio camino: las excepciones ("extensión de
+    // cotización"), que el cliente aprueba aparte sin tocar la cotización original.
+    // Se pide el estado además de la respuesta: 'Reprogramar' deja respuestaCliente en
+    // 'Aprobada' (ver otController.aplicarAccionOT) y ahí SÍ hay que poder reenviar, porque el
+    // cliente tiene que aprobar la fecha nueva. Lo mismo tras "Cancelar y volver a
+    // planificación". Solo se cierra mientras la aceptación es el acuerdo vigente y el trabajo
+    // avanza sobre ella; de 'Trabajo Terminado' en adelante ya se ocupa bloqueoCotizacion.
+    const cotizacionAceptada = otSeleccionada?.cotizacion?.respuestaCliente === 'Aprobada'
+        && ['Programada', 'En Ejecución'].includes(otSeleccionada?.estado);
     const soloLecturaPlanificacion = (planificacionTerminada && otSeleccionada?.estado !== 'Reprogramar') || otCancelada;
 
     // Único condicionante bloqueante de la pestaña Cotización, en el orden en que se resuelven
@@ -1624,7 +1636,18 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                                 <button onClick={cancelarAceptacion} style={{ ...styles.btnSecundario, flex: 'none' }}>Cancelar aceptación</button>
                             </div>
                         )}
-                        <div style={{ maxWidth: 620, flex: '1 1 480px' }}>
+                        {cotizacionAceptada && (
+                            <div style={{ width: '100%', padding: '10px 14px', borderRadius: 2, background: '#eef5ee', border: `1px solid ${t.verde}` }}>
+                                <span style={{ fontSize: 12, color: t.textoPrincipal }}>
+                                    El cliente aceptó esta cotización — queda fija y solo se puede descargar. Si el trabajo cambia de alcance, se cotiza aparte con una extensión desde Ejecución.
+                                </span>
+                            </div>
+                        )}
+                        {/* Aceptada: el detalle y las condiciones quedan de consulta. El panel de
+                            la derecha se maneja aparte porque ahí vive "Descargar PDF", que sí
+                            tiene que seguir funcionando — meterlo en este mismo bloqueo lo dejaría
+                            muerto por el pointerEvents. */}
+                        <div style={{ maxWidth: 620, flex: '1 1 480px', ...(cotizacionAceptada ? { pointerEvents: 'none', opacity: .65 } : {}) }}>
                             <div style={styles.tituloSub}>Cotización técnica y comercial</div>
                             {[
                                 { label: 'Mano de obra', detalle: `${tareas.length} tarea(s)`, valor: totalManoObra },
@@ -1797,6 +1820,12 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                                 </label>
                             ))}
                             <button onClick={() => generarPDF(seccionesPdf)} style={{ ...styles.btnPrimario, width: '100%', marginTop: 11 }}>Descargar PDF</button>
+                            {/* Los tres envíos desaparecen una vez aceptada: además de no tener
+                                sentido reenviar lo que el cliente ya aprobó, cualquiera de ellos
+                                deja respuestaCliente en 'Pendiente' otra vez y borraría la
+                                aceptación. Descargar PDF y elegir sus secciones siguen disponibles
+                                —no tocan la OT— para poder reenviarle el documento por fuera. */}
+                            {!cotizacionAceptada && (<>
                             <button
                                 onClick={() => { setEmailsEnvio([datosRecibidos?.correo || '']); setIsModalEnvioOpen(true); }}
                                 disabled={!otSeleccionada.cotizacion?.capacidadVerificada}
@@ -1815,6 +1844,7 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                                 title={otSeleccionada.cotizacion?.capacidadVerificada ? 'El cliente entra con teléfono + número de solicitud, sin necesitar un link' : 'Verifica la capacidad en Programación antes de enviar'}
                                 style={{ ...styles.btnSecundario, width: '100%', marginTop: 6, opacity: (otSeleccionada.cotizacion?.capacidadVerificada && !marcandoEnviada) ? 1 : .5 }}
                             >{marcandoEnviada ? 'Marcando…' : 'Habilitar en la app del cliente (sin correo/WhatsApp)'}</button>
+                            </>)}
                             {otSeleccionada.estado === 'Planificada' && (
                                 <button
                                     onClick={volverAPlanificacion}
