@@ -173,6 +173,10 @@ const OTSchema = new mongoose.Schema({
             // no se podía saber de cuándo era: esto es lo que permite ordenar la bitácora y
             // agruparla por jornada en el informe final.
             fecha: { type: Date, default: Date.now },
+            // Solo para observaciones migradas de cuando no se guardaba la fecha: si no se
+            // pudo deducir el día (ver migrar-registros-tarea.js), queda `fecha: null` y la
+            // hora suelta que sí se había guardado. Las nuevas no lo usan.
+            hora: { type: String, default: '' },
             autor: { type: String, default: '' }
         }]
     }],
