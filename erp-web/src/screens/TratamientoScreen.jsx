@@ -1706,9 +1706,12 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                             // Se muestra SOLO este recuadro, sin el resto de la pestaña (desglose,
                             // envío) — para que quede claro que es un paso obligatorio y no un aviso
                             // más al lado de una cotización que en realidad todavía no se puede ver.
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, padding: '10px 14px', background: '#fbeceb', border: `1px solid ${t.rojo}`, borderRadius: 2 }}>
-                                <span style={{ fontSize: 12, color: t.textoPrincipal }}>{bloqueoCotizacion.mensaje}</span>
-                                <div style={{ display: 'flex', gap: 8, flex: 'none' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, padding: '10px 14px', background: '#fbeceb', border: `1px solid ${t.rojo}`, borderRadius: 2, flexWrap: 'wrap' }}>
+                                <span style={{ fontSize: 12, color: t.textoPrincipal, flex: '1 1 260px' }}>{bloqueoCotizacion.mensaje}</span>
+                                {/* flexWrap: con el bloqueo puede haber hasta cuatro botones (volver a
+                                    planificación, ver, descargar y la acción principal) y en pantallas
+                                    angostas se salían del recuadro. */}
+                                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                                     {/* Antes había que salir de este recuadro (a Tareas u otra pestaña)
                                         para encontrar "Cancelar y volver a planificación" — quedaba
                                         oculto detrás de este bloqueo junto con el resto de Cotización.
@@ -1720,6 +1723,19 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                                             disabled={volviendoAPlanificacion}
                                             style={{ ...styles.btnSecundario, color: t.rojo, opacity: volviendoAPlanificacion ? .6 : 1 }}
                                         >{volviendoAPlanificacion ? 'Volviendo…' : 'Cancelar y volver a planificación'}</button>
+                                    )}
+                                    {/* Este recuadro reemplaza la pestaña entera, así que se llevaba
+                                        puestos también Ver y Descargar el PDF — justo en los estados
+                                        donde la cotización ya es el documento de respaldo del trabajo
+                                        (terminado, con informe, pagada) y más falta hace tenerla a
+                                        mano. Solo cuando el documento existe de verdad: en los
+                                        bloqueos por datos incompletos (faltan tareas, costos, cerrar
+                                        la planificación) el PDF sería una cotización a medio armar. */}
+                                    {planificacionTerminada && (
+                                        <>
+                                            <button onClick={verCotizacionPDF} style={styles.btnSecundario}>Ver PDF</button>
+                                            <button onClick={() => generarPDF(seccionesPdf)} style={styles.btnSecundario}>Descargar PDF</button>
+                                        </>
                                     )}
                                     <button onClick={bloqueoCotizacion.accion} style={styles.btnPrimario}>{bloqueoCotizacion.boton}</button>
                                 </div>
