@@ -435,8 +435,11 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
     // otPublica; esto solo marca que ya se compartió, mismo criterio que
     // marcarCotizacionEnviada (arriba) — un booleano + fecha.
     const [enviandoInforme, setEnviandoInforme] = useState(false);
-    const [previsualizarInforme, setPrevisualizarInforme] = useState(false);
-    const [pdfPreviewInformeUrl, setPdfPreviewInformeUrl] = useState(null);
+    // Vista previa de PDF, compartida por el informe y la cotización: mismo modal, cambia el
+    // título, el documento y qué hace su botón de descargar. Antes era un estado propio del
+    // informe, y al sumar la vista previa de la cotización habrían quedado dos modales iguales.
+    // null = cerrado; { titulo, url, descargar } = abierto.
+    const [pdfPreview, setPdfPreview] = useState(null);
     // Borrador editable del informe — copia independiente de tareas/informeEvaluacion/reportes
     // (decisión explícita del usuario: corregir redacción u ortografía o agregar/quitar fotos
     // acá no debe tocar los registros originales de planificación/ejecución). null = todavía no
@@ -636,7 +639,10 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
     // Mejora v3 #6 — Cotización ampliada. `secciones` controla qué bloques opcionales entran
     // (tareas/materiales/gantt/condiciones); encabezado y totales van siempre. "fotos" queda
     // listado en el panel pero deshabilitado (sin implementar).
-    const generarPDF = async (secciones = seccionesPdf) => {
+    // `descargar=false` se usa para la vista previa (no dispara doc.save) — mismo patrón que
+    // generarInformePDF más abajo, que ya tenía vista previa cuando la cotización solo se
+    // podía descargar a ciegas.
+    const generarPDF = async (secciones = seccionesPdf, descargar = true) => {
         const doc = new jsPDF();
         const pageWidth = doc.internal.pageSize.getWidth();
         doc.setFontSize(18); doc.setTextColor(44, 62, 80);
@@ -747,8 +753,13 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
             });
         }
 
-        doc.save(`Cotizacion_OT_${datosRecibidos?._id || 'nueva'}.pdf`);
+        if (descargar) doc.save(`Cotizacion_OT_${otSeleccionada?.numeroOT || datosRecibidos?._id || 'nueva'}.pdf`);
         return doc;
+    };
+
+    const verCotizacionPDF = async () => {
+        const doc = await generarPDF(seccionesPdf, false);
+        setPdfPreview({ titulo: `Vista previa de la cotización${otSeleccionada?.numeroOT ? ` · ${otSeleccionada.numeroOT}` : ''}`, url: doc.output('datauristring'), descargar: () => generarPDF(seccionesPdf) });
     };
 
 
@@ -885,12 +896,11 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
         return doc;
     };
 
+    const descargarInformePDF = async () => { await generarInformePDF(true); };
     const verInformePDF = async () => {
         const doc = await generarInformePDF(false);
-        setPdfPreviewInformeUrl(doc.output('datauristring'));
-        setPrevisualizarInforme(true);
+        setPdfPreview({ titulo: 'Vista previa del informe', url: doc.output('datauristring'), descargar: descargarInformePDF });
     };
-    const descargarInformePDF = async () => { await generarInformePDF(true); };
 
     // Pestaña Antecedentes: al agregar una tarea en una OT que ya tiene supervisor
     // asignado, se precarga su nombre como responsable por defecto (solo valor inicial,
@@ -1916,7 +1926,14 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                                     <span style={{ marginLeft: 'auto', fontSize: 9.5, letterSpacing: '.07em', textTransform: 'uppercase', color: estado === 'Nuevo' ? t.verde : t.textoAtenuado3 }}>{estado}</span>
                                 </label>
                             ))}
-                            <button onClick={() => generarPDF(seccionesPdf)} style={{ ...styles.btnPrimario, width: '100%', marginTop: 11 }}>Descargar PDF</button>
+                            {/* Ver antes de mandar: la cotización solo se podía descargar a
+                                ciegas, así que para revisar cómo quedaba con las secciones
+                                elegidas había que bajar el archivo y abrirlo a mano. El informe
+                                ya tenía vista previa; esto la empareja, con el mismo modal. */}
+                            <div style={{ display: 'flex', gap: 6, marginTop: 11 }}>
+                                <button onClick={verCotizacionPDF} style={{ ...styles.btnSecundario, flex: 1 }}>Ver PDF</button>
+                                <button onClick={() => generarPDF(seccionesPdf)} style={{ ...styles.btnPrimario, flex: 1 }}>Descargar PDF</button>
+                            </div>
                             {/* Los tres envíos desaparecen una vez aceptada: además de no tener
                                 sentido reenviar lo que el cliente ya aprobó, cualquiera de ellos
                                 deja respuestaCliente en 'Pendiente' otra vez y borraría la
@@ -2406,21 +2423,21 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
             )}
 
             {/* MODAL VISTA PREVIA DEL INFORME */}
-            {previsualizarInforme && (
+            {/* Un solo modal para las dos vistas previas (informe y cotización): el documento,
+                el título y qué descarga vienen en el propio estado. */}
+            {pdfPreview && (
                 <div style={styles.overlay}>
                     <div style={{ ...styles.modal, width: 760, maxWidth: '95vw', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
                         <div style={styles.modalHeader}>
-                            <span style={{ fontSize: 12.5, fontWeight: 700 }}>Vista previa del informe</span>
-                            <span onClick={() => { setPrevisualizarInforme(false); setPdfPreviewInformeUrl(null); }} style={styles.xModal}>×</span>
+                            <span style={{ fontSize: 12.5, fontWeight: 700 }}>{pdfPreview.titulo}</span>
+                            <span onClick={() => setPdfPreview(null)} style={styles.xModal}>×</span>
                         </div>
                         <div style={{ flex: 1, overflow: 'hidden', padding: 10 }}>
-                            {pdfPreviewInformeUrl && (
-                                <iframe title="Vista previa del informe" src={pdfPreviewInformeUrl} style={{ width: '100%', height: '100%', minHeight: '65vh', border: `1px solid ${t.bordeZona}` }} />
-                            )}
+                            <iframe title={pdfPreview.titulo} src={pdfPreview.url} style={{ width: '100%', height: '100%', minHeight: '65vh', border: `1px solid ${t.bordeZona}` }} />
                         </div>
                         <div style={styles.modalFooter}>
-                            <button onClick={() => { setPrevisualizarInforme(false); setPdfPreviewInformeUrl(null); }} style={styles.btnSecundario}>Cerrar</button>
-                            <button onClick={descargarInformePDF} style={styles.btnPrimario}>Descargar PDF</button>
+                            <button onClick={() => setPdfPreview(null)} style={styles.btnSecundario}>Cerrar</button>
+                            <button onClick={pdfPreview.descargar} style={styles.btnPrimario}>Descargar PDF</button>
                         </div>
                     </div>
                 </div>
