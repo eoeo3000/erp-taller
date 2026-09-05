@@ -1155,7 +1155,15 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
     // completos (número o archivo, no hace falta ambos). El backend recalcula lo mismo en
     // actualizarOT (defensa en profundidad); esto es lo que decide qué mostrar/enviar ya.
     const hayDocumentoPago = (d) => !!(d?.numero || d?.archivo);
-    const documentosPagoCompletos = () => !!(ordenCompra || ordenCompraArchivo) && hayDocumentoPago(pago.estadoPago) && hayDocumentoPago(pago.hes);
+    // Cuáles de los 3 faltan, no solo si están todos: guardar con dos cargados dejaba la OT en
+    // 'Pendiente' sin decir por qué, y desde la pantalla parecía que el guardado no había hecho
+    // nada. El mismo array alimenta el aviso al guardar y el recuadro de estado de TabPago.
+    const faltantesPago = [
+        !(ordenCompra || ordenCompraArchivo) && 'Orden de Compra',
+        !hayDocumentoPago(pago.estadoPago) && 'Estado de Pago',
+        !hayDocumentoPago(pago.hes) && 'Hoja de Entrada de Servicio',
+    ].filter(Boolean);
+    const documentosPagoCompletos = () => faltantesPago.length === 0;
 
     const guardarPago = async () => {
         try {
@@ -1171,7 +1179,14 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
             if (data.ordenCompra !== undefined) setOrdenCompra(data.ordenCompra);
             if (data.ordenCompraArchivo !== undefined) setOrdenCompraArchivo(data.ordenCompraArchivo);
             if (cargarDatos) cargarDatos();
-            notificar.exito('Información de pago guardada');
+            // Decir por qué la OT sigue pendiente: guardar con documentos incompletos es
+            // legítimo (se van cargando de a poco), pero sin esto el guardado parecía no haber
+            // hecho nada — el estado no se movía y nada explicaba qué faltaba.
+            if (estadoPagoCalculado === 'Pagado') {
+                notificar.exito('Pago registrado — la OT queda Pagada.');
+            } else {
+                notificar.exito(`Información de pago guardada. Para marcarla como pagada falta: ${faltantesPago.join(', ')}.`);
+            }
         } catch (e) { notificar.error('Error al guardar pago: ' + e.message); }
     };
     const anularPago = async () => {
@@ -2252,7 +2267,7 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                             pago={pago} setPago={setPago} granTotal={granTotal}
                             ordenCompra={ordenCompra} setOrdenCompra={setOrdenCompra}
                             ordenCompraArchivo={ordenCompraArchivo} setOrdenCompraArchivo={setOrdenCompraArchivo}
-                            guardarPago={guardarPago} anularPago={anularPago} restaurarPago={restaurarPago}
+                            guardarPago={guardarPago} anularPago={anularPago} restaurarPago={restaurarPago} faltantesPago={faltantesPago}
                             estadoOT={otSeleccionada.estado} informeFinal={otSeleccionada.informeFinal}
                             enviarInformeFinal={enviarInformeFinal} enviandoInforme={enviandoInforme}
                             verInformePDF={verInformePDF} descargarInformePDF={descargarInformePDF}

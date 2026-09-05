@@ -50,7 +50,7 @@ function DocumentoPago({ titulo, numero, archivo, onNumero, onArchivo }) {
 }
 
 export default function TabPago({
-    pago, setPago, granTotal, guardarPago, anularPago, restaurarPago,
+    pago, setPago, granTotal, guardarPago, anularPago, restaurarPago, faltantesPago = [],
     ordenCompra, setOrdenCompra, ordenCompraArchivo, setOrdenCompraArchivo,
     estadoOT, informeFinal, enviarInformeFinal, enviandoInforme,
     verInformePDF, descargarInformePDF, abrirEditorInforme,
@@ -119,12 +119,21 @@ export default function TabPago({
                 ))}
             </div>
 
+            {/* Qué falta, no solo la regla general: la OT solo pasa a Pagada con los 3
+                documentos, y antes esto decía la regla en abstracto. Se guardaba con dos
+                cargados, el estado no se movía y nada explicaba por qué — parecía que el
+                guardado no había hecho nada. `faltantesPago` se calcula en vivo sobre lo que
+                hay en pantalla, así que se va tachando solo a medida que se completan. */}
             <div style={{ marginBottom: 14, padding: '10px 12px', background: t.barraFiltrosPie, borderLeft: `2px solid ${pagado ? t.verde : t.acento}`, borderRadius: 2 }}>
                 <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.03em', textTransform: 'uppercase', color: pagado ? t.verde : t.textoPrincipal }}>
                     {pagado ? 'Pagado' : 'Pendiente'}
                 </div>
                 <div style={{ fontSize: 11.5, color: t.textoSecundario2, marginTop: 4 }}>
-                    Se considera pagado cuando estén los 3 documentos: Orden de Compra, Estado de Pago y Hoja de Entrada de Servicio.
+                    {pagado
+                        ? 'Están los 3 documentos del flujo de pago.'
+                        : faltantesPago.length > 0
+                            ? <>Para marcarla como pagada falta cargar: <b>{faltantesPago.join(', ')}</b>. Cada uno vale con su número o con el archivo adjunto.</>
+                            : 'Ya están los 3 documentos — guarda para que la OT quede Pagada.'}
                 </div>
             </div>
 
