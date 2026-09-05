@@ -664,10 +664,35 @@ exports.actualizarOT = async (req, res) => {
             }
         }
 
+        // La revisión del informe de ejecución decide si el supervisor puede seguir tocando la
+        // OT (ver informeFinal.revision en models/OT.js), así que aceptar / pedir mejoras /
+        // reabrir son acciones que tienen que quedar en el log igual que las de terreno — si no,
+        // la OT se cierra o se reabre sin que quede registro de quién y cuándo.
+        const revisionNueva = datosCuerpo['informeFinal.revision.estado'];
+        const revisionAnterior = otAnterior?.informeFinal?.revision?.estado || 'Pendiente';
+        const TEXTO_REVISION = {
+            Aceptado: 'Oficina: informe de ejecución aceptado — la OT queda cerrada para terreno',
+            ConObservaciones: 'Oficina: se pidieron mejoras al informe de ejecución',
+            Pendiente: 'Oficina: se reabrió el informe de ejecución — vuelve a quedar pendiente de revisión',
+        };
+        const anotarRevision = revisionNueva && revisionNueva !== revisionAnterior && TEXTO_REVISION[revisionNueva];
+        const comentarioRevision = datosCuerpo['informeFinal.revision.comentario'];
+
         // 1. Intentar actualizar (Usamos $set para campos normales y nos aseguramos de traer la OT nueva)
         let ot = await OT.findByIdAndUpdate(
             id,
-            { $set: datosCuerpo },
+            {
+                $set: datosCuerpo,
+                ...(anotarRevision ? {
+                    $push: {
+                        bitacora: {
+                            fecha: new Date(),
+                            texto: `${TEXTO_REVISION[revisionNueva]}${comentarioRevision ? `: ${comentarioRevision}` : ''}`,
+                            autor: '',
+                        },
+                    },
+                } : {}),
+            },
             { new: true, runValidators: true }
         );
 

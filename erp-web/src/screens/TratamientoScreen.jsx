@@ -503,6 +503,20 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
             notificar.exito('Se le pidieron mejoras al supervisor — lo va a ver en la OT desde su app.');
         }
     };
+    // Deshacer la aceptación: aceptar el informe no puede ser una puerta de una sola vía. Si
+    // después se ve que faltaba algo, la OT vuelve a quedar abierta para el supervisor —
+    // mientras no haya entrado a pago, que es el límite que rige para toda la OT. Vuelve a
+    // 'Pendiente', no a 'ConObservaciones': todavía no se sabe qué pedir, eso se escribe
+    // aparte con "Pedir mejoras".
+    const reabrirRevisionInforme = async () => {
+        if (!(await confirmar(
+            '¿Reabrir el informe? Vuelve a quedar pendiente de revisión y el supervisor puede modificar la OT de nuevo desde su app.',
+            { danger: false, textoConfirmar: 'Reabrir' },
+        ))) return;
+        if (await guardarRevisionInformeFinal('Pendiente', '')) {
+            notificar.exito('Informe reabierto — el supervisor puede volver a corregirlo.');
+        }
+    };
 
     const abrirEditorInforme = () => {
         setContenidoInforme(prev => prev || armarBorradorDesdeVivo());
@@ -1971,6 +1985,11 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                                             </span>
                                             <div style={{ display: 'flex', gap: 8, flex: 'none' }}>
                                                 <button onClick={verInformePDF} style={styles.btnSecundario}>Ver informe</button>
+                                                {/* Aceptar no puede ser una puerta de una sola vía: si después se ve
+                                                    que faltaba algo, hay que poder volver a abrirla. El límite es el
+                                                    que ya rige para toda la OT — hasta que entre a pago (con la OT
+                                                    'Pagada' este recuadro entero deja de mostrarse). */}
+                                                <button onClick={reabrirRevisionInforme} style={styles.btnSecundario}>Reabrir para correcciones</button>
                                                 <button onClick={() => setTabActiva('pago')} style={styles.btnPrimario}>Ir a Pago</button>
                                             </div>
                                         </div>
