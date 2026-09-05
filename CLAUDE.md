@@ -77,6 +77,7 @@ WhatsApp integration is a plain `wa.me` deep link built client-side (`enviarASup
 
 ## Conventions to follow
 
+- **Toda etapa tiene vuelta atrás** — principio rector de producto, ver [`docs/principio-vuelta-atras.md`](docs/principio-vuelta-atras.md). Antes de agregar un paso que cierra algo (aprobar, aceptar, finalizar, enviar), definir explícitamente cómo se deshace y hasta cuándo. Cuatro reglas: el corte lo decide quien revisa, no quien ejecuta; la vuelta atrás va donde se detecta el problema; deshacer también revierte los efectos (reservas de stock/equipos, envíos, copias congeladas), no solo el `estado`; y toda ida y vuelta queda en `OT.bitacora`. Ese documento tiene además el mapa de qué etapa se puede deshacer hoy y cuál no.
 - Backend is CommonJS (`require`/`module.exports`); frontend is ESM (`import`/`export`). Don't mix.
 - Domain language throughout the codebase (variables, model fields, routes, UI copy) is Spanish — match it in new code rather than introducing English identifiers.
 - Mongoose models guard against recompilation with `mongoose.models.X || mongoose.model('X', schema)` in some files (`OT`, `Solicitud`, `Plantilla`) but not others (`Recurso`, `Calendario`, `EquiposHerramientas`, `Puesto`, `Suministro`) — copy the pattern of the file you're editing rather than "fixing" inconsistently across the codebase in an unrelated change.
