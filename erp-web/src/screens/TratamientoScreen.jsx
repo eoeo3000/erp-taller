@@ -471,6 +471,39 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
         bitacora: bitacoraOrdenada.map(b => ({ fecha: b.fecha, texto: b.texto || '', autor: b.autor || '' })),
     });
 
+    // Aceptar el informe cierra la OT para el supervisor; pedir mejoras se la deja abierta con
+    // el comentario a la vista en su app (S3_Trabajo). No hay sesión de staff interno, así que
+    // `autor` queda vacío en vez de inventar un nombre — mismo criterio que el resto.
+    const [mejorasInforme, setMejorasInforme] = useState('');
+    const guardarRevisionInformeFinal = async (estado, comentario) => {
+        const resultado = await actualizarOtGlobal(otSeleccionada._id, {
+            'informeFinal.revision.estado': estado,
+            'informeFinal.revision.comentario': comentario,
+            'informeFinal.revision.fecha': new Date().toISOString(),
+        });
+        if (!resultado?.exito) { notificar.error(resultado?.error || 'No se pudo guardar la revisión del informe.'); return false; }
+        if (resultado.otActualizada) setOtSeleccionada(resultado.otActualizada);
+        if (cargarDatos) await cargarDatos();
+        return true;
+    };
+    const aceptarInformeFinal = async () => {
+        if (!(await confirmar(
+            '¿Aceptar el informe de ejecución? El supervisor ya no va a poder reabrir ni modificar esta OT desde su app.',
+            { danger: false, textoConfirmar: 'Aceptar informe' },
+        ))) return;
+        if (await guardarRevisionInformeFinal('Aceptado', '')) {
+            setMejorasInforme('');
+            notificar.exito('Informe aceptado — la OT queda cerrada para terreno.');
+        }
+    };
+    const pedirMejorasInforme = async () => {
+        if (!mejorasInforme.trim()) return;
+        if (await guardarRevisionInformeFinal('ConObservaciones', mejorasInforme.trim())) {
+            setMejorasInforme('');
+            notificar.exito('Se le pidieron mejoras al supervisor — lo va a ver en la OT desde su app.');
+        }
+    };
+
     const abrirEditorInforme = () => {
         setContenidoInforme(prev => prev || armarBorradorDesdeVivo());
         setEditandoInforme(true);
@@ -1261,6 +1294,9 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
     // (pedido explícito del usuario): tiene que poder emitirse un cobro igual por lo ya
     // ejecutado (ej. una visita de evaluación), aunque el resto del trabajo se haya cancelado.
     const otCancelada = !!otSeleccionada?.cancelada?.activa;
+    // Revisión del informe de ejecución (ver informeFinal.revision en models/OT.js): es lo que
+    // corta la capacidad del supervisor de seguir tocando la OT desde su app.
+    const revisionInformeFinal = otSeleccionada?.informeFinal?.revision || { estado: 'Pendiente', comentario: '', fecha: null };
     // Copia ordenada: la bitácora se va agregando en el orden en que ocurren las cosas, pero
     // una migración pudo intercalar entradas viejas y no hay garantía de orden en el documento.
     const bitacoraOrdenada = [...(otSeleccionada?.bitacora || [])].sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
@@ -1918,15 +1954,57 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                                 explícito del usuario. Si al mirar el informe falta algo, la forma
                                 de corregirlo es "Reabrir OT" desde la app del supervisor (S3,
                                 vuelve a 'En Ejecución' y deja editar tareas/registro de nuevo). */}
+                            {/* Revisión del informe de ejecución: es la acción de corte del
+                                supervisor. Mientras esto no esté 'Aceptado' él puede reabrir la OT
+                                y corregir desde su app; al aceptarlo, se le cierra. "Pedir mejoras"
+                                es el camino de vuelta — le llega el comentario a su pantalla de la
+                                OT y puede completar lo que falte. Mismo esquema que la revisión del
+                                informe inicial, pero sobre lo ejecutado. */}
                             {['Trabajo Terminado', 'Con Informe'].includes(otSeleccionada.estado) && (
-                                <div style={{ marginBottom: 20, padding: '10px 14px', background: t.barraFiltrosPie, borderLeft: `2px solid ${t.acento}`, borderRadius: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
-                                    <span style={{ fontSize: 11.5, color: t.textoSecundario1 }}>
-                                        Trabajo terminado — revisa el informe y, cuando esté todo bien, registra el cobro en Pago. Si falta una foto o comentario, se corrige reabriendo la OT desde la app del supervisor.
-                                    </span>
-                                    <div style={{ display: 'flex', gap: 8, flex: 'none' }}>
-                                        <button onClick={verInformePDF} style={styles.btnSecundario}>Ver informe</button>
-                                        <button onClick={() => setTabActiva('pago')} style={styles.btnPrimario}>Ir a Pago</button>
-                                    </div>
+                                <div style={{ marginBottom: 20, padding: '10px 14px', background: t.barraFiltrosPie, borderLeft: `2px solid ${revisionInformeFinal.estado === 'Aceptado' ? t.verde : revisionInformeFinal.estado === 'ConObservaciones' ? t.ambar : t.acento}`, borderRadius: 2 }}>
+                                    {revisionInformeFinal.estado === 'Aceptado' ? (
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+                                            <span style={{ fontSize: 11.5, color: t.textoSecundario1 }}>
+                                                <b style={{ color: t.verde }}>Informe aceptado</b>
+                                                {revisionInformeFinal.fecha ? ` · ${new Date(revisionInformeFinal.fecha).toLocaleDateString('es-CL')}` : ''}
+                                                {' — '}la OT quedó cerrada para terreno. Registra el cobro en Pago.
+                                            </span>
+                                            <div style={{ display: 'flex', gap: 8, flex: 'none' }}>
+                                                <button onClick={verInformePDF} style={styles.btnSecundario}>Ver informe</button>
+                                                <button onClick={() => setTabActiva('pago')} style={styles.btnPrimario}>Ir a Pago</button>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+                                                <span style={{ fontSize: 11.5, color: t.textoSecundario1 }}>
+                                                    {revisionInformeFinal.estado === 'ConObservaciones'
+                                                        ? <>Se pidieron mejoras al supervisor{revisionInformeFinal.fecha ? ` el ${new Date(revisionInformeFinal.fecha).toLocaleDateString('es-CL')}` : ''} — la OT sigue abierta para él hasta que corrija y la vuelva a enviar.</>
+                                                        : 'Trabajo terminado — revisa el informe. Mientras no lo aceptes, el supervisor puede seguir corrigiéndolo desde su app.'}
+                                                </span>
+                                                <div style={{ display: 'flex', gap: 8, flex: 'none' }}>
+                                                    <button onClick={verInformePDF} style={styles.btnSecundario}>Ver informe</button>
+                                                    <button onClick={aceptarInformeFinal} style={styles.btnPrimario}>Aceptar informe</button>
+                                                </div>
+                                            </div>
+                                            {revisionInformeFinal.comentario && (
+                                                <div style={{ fontSize: 11.5, color: t.textoSecundario2, marginTop: 6, whiteSpace: 'pre-wrap' }}>{revisionInformeFinal.comentario}</div>
+                                            )}
+                                            <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start', marginTop: 8 }}>
+                                                <textarea
+                                                    value={mejorasInforme} onChange={e => setMejorasInforme(e.target.value)}
+                                                    placeholder="Qué falta o hay que corregir del informe…"
+                                                    style={{ ...styles.inputPlano, flex: 1, minHeight: 42, resize: 'vertical' }}
+                                                />
+                                                <button
+                                                    onClick={pedirMejorasInforme}
+                                                    disabled={!mejorasInforme.trim()}
+                                                    title={mejorasInforme.trim() ? '' : 'Escribe qué hay que mejorar'}
+                                                    style={{ ...styles.btnSecundario, flex: 'none', opacity: mejorasInforme.trim() ? 1 : .5 }}
+                                                >Pedir mejoras</button>
+                                            </div>
+                                        </>
+                                    )}
                                 </div>
                             )}
 

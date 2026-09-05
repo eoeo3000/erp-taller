@@ -76,7 +76,15 @@ function aplicarAccionOT(ot, { accion, motivo, comentario, foto, usuarioNombre =
         ot.reportes.push({ comentario: comentario || '', foto: foto || '', fecha: new Date(), usuario: usuarioNombre });
         if (ot.estado === 'Trabajo Terminado') ot.estado = 'Con Informe';
     } else if (accion === 'terminar') {
-        anotar('Trabajo marcado como terminado');
+        // Si la oficina había pedido mejorar el informe, volver a finalizar es reenviarlo: la
+        // revisión vuelve a 'Pendiente' para que lo miren de nuevo (mismo criterio que
+        // O5_InformeEvaluacion al regrabar el informe inicial). Sin esto quedaba pegada en
+        // 'ConObservaciones' y la OT seguía apareciendo como si nadie hubiera corregido nada.
+        const rehecho = ot.informeFinal?.revision?.estado === 'ConObservaciones';
+        anotar(rehecho ? 'Informe corregido y reenviado a la oficina' : 'Trabajo marcado como terminado');
+        if (rehecho) {
+            ot.informeFinal.revision = { estado: 'Pendiente', comentario: '', fecha: null, autor: '' };
+        }
         ot.estado = 'Trabajo Terminado';
     } else if (accion === 'reabrir') {
         // Solo desde S3 (supervisor), solo tiene sentido sobre una OT 'Trabajo Terminado' (el

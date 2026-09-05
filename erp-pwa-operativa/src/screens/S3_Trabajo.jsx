@@ -100,8 +100,17 @@ export default function S3Trabajo({ nav, asignacion, persona }) {
     // Antes de esto, la pantalla se quedaba igual de editable después de terminar la OT que
     // antes: se podía seguir tocando "Guardar lo ingresado"/casillas aunque ya estuviera
     // cerrada, sin ninguna pista de que el trabajo ya se dio por terminado.
-    const terminada = ot.estado === 'Trabajo Terminado';
-    const soloLectura = bloqueada || terminada;
+    // Trabajo cerrado por el supervisor. 'Con Informe' cuenta igual que 'Trabajo Terminado':
+    // el backend promueve sola la OT a 'Con Informe' en cuanto se sube un reporte de terreno
+    // (aplicarAccionOT), y con el corte puesto solo en 'Trabajo Terminado' el botón "Reabrir
+    // OT" desaparecía justo después de finalizar — quedaba cerrada y sin forma de corregirla.
+    const terminada = ['Trabajo Terminado', 'Con Informe'].includes(ot.estado);
+    // La acción de corte real: la oficina acepta el informe. Hasta ese momento el supervisor
+    // puede reabrir y corregir; después la OT le queda de solo lectura. 'Pagada' es el tope
+    // duro (registro financiero cerrado), aunque con el informe aceptado ya no debería llegar.
+    const informeAceptado = ot.informeFinal?.revision?.estado === 'Aceptado' || ot.estado === 'Pagada';
+    const mejorasPedidas = ot.informeFinal?.revision?.estado === 'ConObservaciones';
+    const soloLectura = bloqueada || informeAceptado || (terminada && !mejorasPedidas);
 
     const tareas = ot.tareas || [];
     const resueltas = tareas.filter((t) => t.completada || t.motivoNoRealizada).length;
@@ -241,6 +250,22 @@ export default function S3Trabajo({ nav, asignacion, persona }) {
                     </div>
                 )}
 
+                {/* La oficina revisó lo reportado en terreno y pidió mejorarlo. A diferencia del
+                    informe inicial, esto no se corrige en otra pantalla: se corrige acá mismo
+                    (las tareas quedan editables aunque el trabajo esté marcado terminado), así
+                    que el aviso solo dice qué falta. */}
+                {mejorasPedidas && (
+                    <div style={{ padding: '12px 18px', background: 'oklch(0.55 0.11 65 / .10)', borderLeft: '3px solid var(--atencion)' }}>
+                        <div className="versalita" style={{ color: 'var(--atencion)' }}>La oficina pidió mejorar el informe</div>
+                        {ot.informeFinal?.revision?.comentario && (
+                            <div style={{ marginTop: 6, fontSize: 13, color: 'var(--texto-secundario-2)' }}>{ot.informeFinal.revision.comentario}</div>
+                        )}
+                        <div style={{ marginTop: 6, fontSize: 12.5, color: 'var(--texto-atenuado-2)' }}>
+                            Agregá lo que falte en las tareas de abajo y volvé a marcar el trabajo como finalizado.
+                        </div>
+                    </div>
+                )}
+
                 <div style={{ padding: '16px 18px', background: 'var(--superficie)', borderBottom: '1px solid var(--linea-fina)' }}>
                     <div style={{ fontSize: 17, fontWeight: 600, lineHeight: 1.35 }}>{ot.descripcion}</div>
                     <div style={{ marginTop: 6, fontSize: 13.5, color: 'var(--texto-secundario-2)' }}>{ot.solicitante}</div>
@@ -310,12 +335,20 @@ export default function S3Trabajo({ nav, asignacion, persona }) {
                         <div style={{ marginTop: 8, fontSize: 12.5, color: 'var(--detenido)' }}>
                             Esta OT quedó marcada para reprogramar — solo se puede ver hasta que la oficina le asigne una fecha nueva.
                         </div>
+                    ) : informeAceptado ? (
+                        // Acá termina el trabajo del supervisor sobre esta OT: la oficina revisó
+                        // lo reportado y lo dio por bueno. Antes el corte estaba al marcar
+                        // "trabajo finalizado", que es una decisión del propio supervisor y por
+                        // eso no servía como cierre — se cerraba a sí mismo la puerta.
+                        <div style={{ marginTop: 8, fontSize: 12.5, color: 'var(--listo)' }}>
+                            La oficina aceptó el informe de este trabajo — la OT queda cerrada para terreno. Si hay algo que corregir, avisá a la oficina.
+                        </div>
                     ) : terminada && accionEstado === null ? (
                         // Motivos para reabrir: falta agregar una foto/comentario a alguna tarea, o
                         // "Trabajo finalizado" se apretó por error — pedido explícito del usuario.
                         <div style={{ marginTop: 8 }}>
                             <div style={{ fontSize: 12.5, color: 'var(--texto-secundario-2)', marginBottom: 8 }}>
-                                Este trabajo ya se marcó como terminado. Si falta una foto o un comentario, o se cerró por error, podés reabrirlo.
+                                Este trabajo ya se marcó como terminado, pero la oficina todavía no acepta el informe: hasta que lo haga podés reabrirlo si falta una foto o un comentario, o si se cerró por error.
                             </div>
                             <button className="boton-secundario" style={{ width: 'auto', minHeight: 40, padding: '0 14px', fontSize: 13 }} onClick={() => setAccionEstado('reabrir')}>Reabrir OT</button>
                         </div>
@@ -325,7 +358,10 @@ export default function S3Trabajo({ nav, asignacion, persona }) {
                             disabled={guardando} onClick={iniciarTrabajo}
                         >Marcar trabajo en ejecución</button>
                     )}
-                    {!bloqueada && !terminada && accionEstado === null && (
+                    {/* informeAceptado aparte de `terminada`: con la OT pagada, `terminada` es
+                        false (ese estado no está en la lista) y estos dos botones volvían a
+                        aparecer sobre un trabajo ya cerrado y cobrado. */}
+                    {!bloqueada && !terminada && !informeAceptado && accionEstado === null && (
                         <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
                             <button className="boton-secundario" style={{ width: 'auto', minHeight: 40, padding: '0 12px', fontSize: 13 }} onClick={() => setAccionEstado('reprogramar')}>Reprogramar</button>
                             <button className="boton-secundario" style={{ width: 'auto', minHeight: 40, padding: '0 12px', fontSize: 13 }} onClick={() => setAccionEstado('replanificar')}>Replanificar</button>
@@ -367,23 +403,23 @@ export default function S3Trabajo({ nav, asignacion, persona }) {
             </div>
 
             <div className="pie-accion">
-                {/* Una vez terminada, ya no tiene sentido seguir "guardando" ni volver a
-                    "terminar" — la única acción disponible es Reabrir OT (arriba, en Estado
-                    de la OT). Antes esta barra se quedaba igual de editable después de
-                    terminar, sin ninguna pista de que el trabajo ya se dio por cerrado. */}
-                {!terminada && <button className="boton-primario" disabled={guardando || soloLectura} onClick={guardarLoIngresado}>Guardar lo ingresado</button>}
+                {/* Se guía por soloLectura, no por `terminada`: con el trabajo cerrado no tiene
+                    sentido seguir guardando (la acción es Reabrir OT, arriba), pero si la
+                    oficina pidió mejorar el informe hay que poder completar lo que falta y
+                    volver a finalizarlo sin tener que reabrir nada. */}
+                {!soloLectura && <button className="boton-primario" disabled={guardando} onClick={guardarLoIngresado}>Guardar lo ingresado</button>}
                 <button className="boton-secundario" onClick={() => setVerInforme(true)}>Ver informe</button>
-                {!terminada && (
+                {!soloLectura && (
                     <button
                         className="boton-secundario"
-                        disabled={!puedeTerminar || guardando || soloLectura}
+                        disabled={!puedeTerminar || guardando}
                         onClick={terminarTrabajo}
                         style={puedeTerminar ? { background: 'var(--accion-primaria)', color: '#fff', borderColor: 'var(--accion-primaria)' } : {}}
                     >
-                        Trabajo finalizado · informe final
+                        {mejorasPedidas ? 'Volver a enviar el informe' : 'Trabajo finalizado · informe final'}
                     </button>
                 )}
-                {!terminada && (
+                {!soloLectura && (
                     <div style={{ fontSize: 12.5, lineHeight: 1.5, color: 'var(--texto-atenuado-2)', textAlign: 'center' }}>
                         {puedeTerminar
                             ? 'Todas las tareas están marcadas. El informe final reúne cada tarea con lo que se hizo y sus fotos.'

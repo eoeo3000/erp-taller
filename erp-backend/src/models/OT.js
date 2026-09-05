@@ -260,6 +260,20 @@ const OTSchema = new mongoose.Schema({
         // ejecución. Mixed porque es un snapshot de forma libre armado en el frontend — el
         // backend no necesita validar su forma, solo guardarlo y devolverlo tal cual.
         contenido: { type: mongoose.Schema.Types.Mixed, default: null },
+        // Revisión de la oficina sobre el trabajo reportado. Es la ACCIÓN DE CORTE del
+        // supervisor: mientras no esté 'Aceptado', puede seguir corrigiendo desde su app
+        // (reabrir la OT, agregar observaciones y fotos); una vez aceptado, la OT le queda de
+        // solo lectura. Antes el corte era implícito y estaba mal puesto: al marcar "trabajo
+        // finalizado" no había forma de volver atrás si faltaba algo, aunque la OT todavía no
+        // hubiera entrado a pago. 'ConObservaciones' es el camino de vuelta — la oficina pide
+        // mejorar el informe y el supervisor lo ve en su pantalla de la OT.
+        // Mismo esquema que informeEvaluacion.revision, pero sobre la ejecución.
+        revision: {
+            estado: { type: String, enum: ['Pendiente', 'Aceptado', 'ConObservaciones'], default: 'Pendiente' },
+            comentario: { type: String, default: '' },
+            fecha: { type: Date, default: null },
+            autor: { type: String, default: '' },
+        },
     },
 
     // 6. Cotización y programación — respuesta del cliente ('Aprobada'/'Rechazada') dejó de
