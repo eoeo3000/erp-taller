@@ -4,7 +4,7 @@ const getUsuario = require('../models/Usuario');
 const getSesionStaff = require('../models/SesionStaff');
 const { hashPassword, verificarPassword } = require('../utils/password');
 const { generarToken, hashToken } = require('../utils/tokens');
-const { nuevaExpiracion, expiracionAbsoluta, MINUTOS_INACTIVIDAD } = require('../middlewares/sesion');
+const { nuevaExpiracion, expiracionAbsoluta, authRequerida, MINUTOS_INACTIVIDAD } = require('../middlewares/sesion');
 const transporter = require('../config/mailer');
 const { SPA_URL } = require('../config/urls');
 
@@ -106,8 +106,17 @@ exports.logout = async (req, res) => {
 // GET /api/auth/yo — quién está conectado. El SPA la llama al arrancar para decidir si
 // muestra el login o la app.
 exports.yo = async (req, res) => {
-    if (!req.usuario) return res.status(401).json({ error: 'Sesión requerida' });
-    res.json({ usuario: usuarioPublico(req.usuario), expira: req.sesion?.expira || null });
+    if (req.usuario) {
+        return res.json({ usuario: usuarioPublico(req.usuario), expira: req.sesion?.expira || null, authRequerida: authRequerida() });
+    }
+    // Sin sesión y con el gate todavía apagado, el SPA entra igual que antes de que
+    // existiera el login. Esto es lo que hace que el rollout de AUTH_REQUERIDA valga en los
+    // DOS lados: si acá se respondiera 401 siempre, desplegar esta versión dejaría a la
+    // oficina mirando una pantalla de acceso que nadie puede pasar todavía, porque las
+    // cuentas con clave se crean después (scripts/crearAdmin.js).
+    if (!authRequerida()) return res.json({ usuario: null, authRequerida: false });
+
+    res.status(401).json({ error: 'Sesión requerida' });
 };
 
 // POST /api/auth/cambiar-password — { passwordActual, passwordNueva }
