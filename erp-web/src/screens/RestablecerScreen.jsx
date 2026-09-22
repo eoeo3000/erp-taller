@@ -1,9 +1,12 @@
 import React, { useState } from 'react';
 import axios from 'axios';
 
-// Pantalla que abre el link del correo de recuperación (`/restablecer?token=...&entorno=...`,
-// armado en erp-backend/src/controllers/authController.js). Es pública: quien llega acá es
-// justamente alguien que no puede entrar.
+// Pantalla que abre un link de correo con token. Sirve a dos casos que para el backend son
+// el mismo acto —alguien que demuestra tener el buzón elige una clave— y que solo cambian
+// en el texto:
+//   - `/restablecer?token=...` recuperar una clave olvidada (authController.recuperar)
+//   - `/activar?token=...`     activar una cuenta recién invitada (cuentasController.invitar)
+// Es pública: quien llega acá es justamente alguien que todavía no puede entrar.
 const t = {
     superficie: '#ffffff',
     textoPrincipal: '#1a1a18',
@@ -17,7 +20,23 @@ const t = {
     fontUi: '"Helvetica Neue", Helvetica, Arial, sans-serif',
 };
 
-export default function RestablecerScreen({ API }) {
+const TEXTOS = {
+    restablecer: {
+        titulo: 'Nueva clave',
+        etiqueta: 'Clave nueva',
+        exito: 'Tu clave quedó cambiada. Si tenías la app abierta en otro lado, esa sesión se cerró.',
+        linkVencido: 'Este link está incompleto. Pide uno nuevo desde "Olvidé mi clave".',
+    },
+    activar: {
+        titulo: 'Activa tu cuenta',
+        etiqueta: 'Elige tu clave',
+        exito: 'Tu cuenta quedó activa. Ya puedes entrar con tu correo y la clave que elegiste.',
+        linkVencido: 'Este link está incompleto. Pídele a la oficina que te reenvíe la invitación.',
+    },
+};
+
+export default function RestablecerScreen({ API, modo = 'restablecer' }) {
+    const texto = TEXTOS[modo] || TEXTOS.restablecer;
     const parametros = new URLSearchParams(window.location.search);
     const token = parametros.get('token') || '';
     // El entorno viaja en el link y NO se toma de localStorage: el correo pudo emitirse
@@ -51,21 +70,19 @@ export default function RestablecerScreen({ API }) {
             <div style={styles.tarjeta}>
                 <div style={styles.marca}>Taller ERP</div>
                 <div style={styles.form}>
-                    <div style={styles.titulo}>Nueva clave</div>
+                    <div style={styles.titulo}>{texto.titulo}</div>
 
-                    {!token && <div style={styles.error}>Este link está incompleto. Pide uno nuevo desde "Olvidé mi clave".</div>}
+                    {!token && <div style={styles.error}>{texto.linkVencido}</div>}
 
                     {listo ? (
                         <>
-                            <div style={styles.aviso}>
-                                Tu clave quedó cambiada. Si tenías la app abierta en otro lado, esa sesión se cerró.
-                            </div>
+                            <div style={styles.aviso}>{texto.exito}</div>
                             <a href="/" style={styles.btnPrimarioLink}>Ir a ingresar</a>
                         </>
                     ) : token && (
                         <form onSubmit={guardar} style={styles.form2}>
                             <label style={styles.campo}>
-                                <span style={styles.etiqueta}>Clave nueva</span>
+                                <span style={styles.etiqueta}>{texto.etiqueta}</span>
                                 <input type="password" value={password} autoFocus required minLength={8} autoComplete="new-password"
                                     onChange={(e) => setPassword(e.target.value)} style={styles.input} />
                             </label>

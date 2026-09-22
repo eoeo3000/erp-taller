@@ -57,10 +57,11 @@ import useCalendarios from './hooks/useCalendarios';
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
-// La única pantalla de esta app que se abre SIN cuenta: el link de recuperación de clave que
-// llega por correo — entra justamente quien no puede entrar. El portal del cliente ya no vive
-// acá (es erp-pwa-cliente, app aparte; ver enviarPortalCliente más abajo).
-const RUTAS_PUBLICAS = ['/restablecer'];
+// Las pantallas de esta app que se abren SIN cuenta, las dos por un link de correo con
+// token: recuperar una clave olvidada y activar una cuenta recién invitada — a las dos entra
+// justamente quien todavía no puede entrar. El portal del cliente ya no vive acá (es
+// erp-pwa-cliente, app aparte; ver enviarPortalCliente más abajo).
+const RUTAS_PUBLICAS = ['/restablecer', '/activar'];
 
 function App() {
   const isMobile = useIsMobile();
@@ -386,7 +387,8 @@ function App() {
       <Router>
         <NotificacionesHost />
         <Routes>
-          <Route path="/restablecer" element={<RestablecerScreen API={API} />} />
+          <Route path="/restablecer" element={<RestablecerScreen API={API} modo="restablecer" />} />
+          <Route path="/activar" element={<RestablecerScreen API={API} modo="activar" />} />
         </Routes>
       </Router>
     );

@@ -4,6 +4,7 @@ const { identificar, requiereSesion } = require('../middlewares/sesion');
 
 // Importar todas las rutas individuales
 const authRoutes = require('./authRoutes');
+const cuentasRoutes = require('./cuentasRoutes');
 const dataRoutes = require('./dataRoutes');
 const personalRoutes = require('./recursosRoutes');
 const equipoRoutes = require('./equiposHerramientasRoutes');
@@ -36,6 +37,9 @@ const catalogoTransversalRoutes = require('./catalogoTransversalRoutes');
 router.use(identificar);
 
 router.use('/auth', authRoutes);
+// Administración de cuentas de escritorio. Exige sesión real por su cuenta (ver el router),
+// no el gate con rollout que usan las rutas de abajo.
+router.use('/cuentas', cuentasRoutes);
 
 // --- Rutas de la app de escritorio: exigen sesión ---
 // (mientras AUTH_REQUERIDA no esté en 'true' solo avisan por consola, ver sesion.js)
