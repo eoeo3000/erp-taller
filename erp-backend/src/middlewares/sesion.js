@@ -124,6 +124,7 @@ function requiereSesion(req, res, next) {
 module.exports = {
     identificar,
     requiereSesion,
+    authRequerida,
     nuevaExpiracion,
     expiracionAbsoluta,
     MINUTOS_INACTIVIDAD,

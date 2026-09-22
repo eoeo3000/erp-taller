@@ -57,15 +57,19 @@ import useCalendarios from './hooks/useCalendarios';
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
-// Las dos pantallas que se abren SIN cuenta: el portal del cliente (el link que se manda por
-// WhatsApp apunta acá, ver enviarPortalCliente más abajo) y el link de recuperación de clave
-// que llega por correo — a esa entra justamente quien no puede entrar.
-const RUTAS_PUBLICAS = ['/portal', '/restablecer'];
+// La única pantalla de esta app que se abre SIN cuenta: el link de recuperación de clave que
+// llega por correo — entra justamente quien no puede entrar. El portal del cliente ya no vive
+// acá (es erp-pwa-cliente, app aparte; ver enviarPortalCliente más abajo).
+const RUTAS_PUBLICAS = ['/restablecer'];
 
 function App() {
   const isMobile = useIsMobile();
-  // undefined = todavía preguntando al backend; null = sin sesión; objeto = quién entró.
-  const [sesion, setSesion] = useState(undefined);
+  // 'verificando' = todavía preguntando al backend; 'requiere-login' = hay que entrar;
+  // 'adentro' = se puede usar la app. Es 'adentro' con sesión, y también SIN sesión mientras
+  // AUTH_REQUERIDA siga apagada en el backend (ver authController.yo): así desplegar esta
+  // versión no deja a la oficina afuera antes de que existan las cuentas.
+  const [acceso, setAcceso] = useState('verificando');
+  const [usuario, setUsuario] = useState(null);
   // Se calcula una sola vez, del path con que se abrió la pestaña: dentro de la app ya
   // logueada, navegar a /portal sigue funcionando por la ruta de siempre.
   const [rutaPublica] = useState(() => RUTAS_PUBLICAS.some(r => window.location.pathname.startsWith(r)));
@@ -133,24 +137,31 @@ function App() {
   useEffect(() => {
     if (rutaPublica) return;
     axios.get(`${API}/auth/yo`)
-      .then(({ data }) => setSesion(data.usuario))
-      .catch(() => setSesion(null));
+      .then(({ data }) => {
+        setUsuario(data.usuario || null);
+        setAcceso('adentro'); // con usuario, o sin él si el backend todavía no exige login
+      })
+      // 401 (hay que entrar) y también un backend caído: ante la duda, se pide clave.
+      .catch(() => setAcceso('requiere-login'));
     // Una sesión puede caerse sola (inactividad, tope de 24h, o alguien la revocó desde la
     // oficina): el interceptor de utils/sesion.js avisa acá y la app vuelve al login.
-    suscribirCaidaDeSesion(() => setSesion(null));
+    suscribirCaidaDeSesion(() => { setUsuario(null); setAcceso('requiere-login'); });
   }, [rutaPublica]);
+
+  const entrar = (usuarioQueEntro) => { setUsuario(usuarioQueEntro); setAcceso('adentro'); };
 
   const cerrarSesionUsuario = async () => {
     // Si el logout falla (sin red, sesión ya vencida) igual se limpia local: el objetivo de
     // quien apretó el botón es salir, y el token del servidor vence solo.
     try { await axios.post(`${API}/auth/logout`); } catch { /* sin conexión: se limpia igual */ }
     limpiarSesion();
-    setSesion(null);
+    setUsuario(null);
+    setAcceso('requiere-login');
   };
 
   useEffect(() => {
-    // Sin sesión no hay nada que cargar: /api/data responde 401. Se espera a que haya una.
-    if (!sesion) return;
+    // Antes de pasar la puerta no hay nada que cargar: /api/data respondería 401.
+    if (acceso !== 'adentro') return;
 
     cargarDatos(); // Carga inicial inmediata
 
@@ -189,11 +200,11 @@ function App() {
     }, 30000); // 30 segundos es un buen equilibrio
 
     return () => clearInterval(interval);
-    // Depende solo de `sesion`, que cambia al entrar y al salir — no de ots/solicitudes/etc.
+    // Depende solo de `acceso`, que cambia al entrar y al salir — no de ots/solicitudes/etc.
     // Esas se reescriben con una referencia nueva en cada cargarDatos(), y depender de ellas
     // remontaba el efecto solo, disparando /api/data cada pocos segundos en vez de cada 30
     // (ver docs/bugs-conocidos.md).
-  }, [sesion]);
+  }, [acceso]);
 
   // Shell nuevo (ver docs/rediseno/design_handoff_panel_control/README.md, paso 1):
   // nav lateral colapsable con ancho arrastrable, en vez del top bar. En móvil arranca colapsada.
@@ -375,15 +386,14 @@ function App() {
       <Router>
         <NotificacionesHost />
         <Routes>
-          <Route path="/portal" element={<PortalClienteScreen API={API} />} />
           <Route path="/restablecer" element={<RestablecerScreen API={API} />} />
         </Routes>
       </Router>
     );
   }
 
-  if (sesion === undefined) return <div style={styles.esperando}>Cargando…</div>;
-  if (!sesion) return <LoginScreen API={API} onIngreso={setSesion} />;
+  if (acceso === 'verificando') return <div style={styles.esperando}>Cargando…</div>;
+  if (acceso === 'requiere-login') return <LoginScreen API={API} onIngreso={entrar} />;
 
   return (
     <Router>
@@ -415,10 +425,14 @@ function App() {
                     </NavLink>
                   ))}
                 </div>
-                <div style={styles.navUsuario}>
-                  <div style={styles.navUsuarioNombre} title={sesion.email}>{sesion.nombre}</div>
-                  <div onClick={cerrarSesionUsuario} style={styles.navUsuarioSalir}>Cerrar sesión</div>
-                </div>
+                {/* Sin usuario solo se llega acá con el login todavía apagado en el backend:
+                    no hay sesión que mostrar ni que cerrar. */}
+                {usuario && (
+                  <div style={styles.navUsuario}>
+                    <div style={styles.navUsuarioNombre} title={usuario.email}>{usuario.nombre}</div>
+                    <div onClick={cerrarSesionUsuario} style={styles.navUsuarioSalir}>Cerrar sesión</div>
+                  </div>
+                )}
                 <div style={styles.navPie}>Sincronizado {horaSync}</div>
               </nav>
               <div
@@ -535,7 +549,10 @@ const styles = {
     textDecoration: 'underline', whiteSpace: 'nowrap',
   },
   navPie: {
-    padding: '10px 14px', borderTop: '1px solid rgba(255,255,255,.09)',
+    // `marginTop: auto` acá y en navUsuario: el primero de los dos que exista se lleva el
+    // espacio libre y queda pegado abajo. Con el login todavía apagado no hay bloque de
+    // usuario, y sin esto el pie quedaría flotando pegado al menú.
+    marginTop: 'auto', padding: '10px 14px', borderTop: '1px solid rgba(255,255,255,.09)',
     fontSize: '10.5px', color: 'rgba(255,255,255,.38)', fontFamily: fontMono, whiteSpace: 'nowrap', overflow: 'hidden',
   },
   navSeparador: { width: '5px', flex: 'none', cursor: 'col-resize', background: '#1c1d1b', borderRight: '1px solid rgba(0,0,0,.18)' },
