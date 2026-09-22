@@ -678,6 +678,12 @@ exports.accionMovil = async (req, res) => {
         const { id } = req.params;
         const { token } = req.query;
 
+        // Sin este descarte, un token vacío viaja a Mongo como { token: null }, y null hace
+        // match con los documentos que no tienen el campo — desde que existe el login de
+        // escritorio, eso son las cuentas de oficina (y esta ruta ejecuta acciones sobre la
+        // OT, no solo lecturas).
+        if (!token) return res.status(403).json({ error: 'Token inválido o revocado' });
+
         const usuario = await Usuario.findOne({ token, estado: 'activo' });
         if (!usuario) return res.status(403).json({ error: 'Token inválido o revocado' });
 

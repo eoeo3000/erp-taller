@@ -79,6 +79,11 @@ exports.crear = async (req, res) => {
 exports.whoami = async (req, res) => {
     const Usuario = getUsuario(req.db);
     try {
+        // Sin este descarte, un token vacío viaja a Mongo como { token: null }, y null hace
+        // match con los documentos que no tienen el campo — desde que existe el login de
+        // escritorio, eso son justamente las cuentas de oficina.
+        if (!req.query.token) return res.status(403).json({ error: 'Token inválido o revocado' });
+
         const usuario = await Usuario.findOne({ token: req.query.token, estado: 'activo' });
         if (!usuario) return res.status(403).json({ error: 'Token inválido o revocado' });
         res.json({ nombre: usuario.nombre, puesto: usuario.puesto, rol: usuario.rol, fechaEmision: usuario.fechaEmision });
