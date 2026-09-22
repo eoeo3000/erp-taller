@@ -41,6 +41,7 @@ import BodegaTokensScreen from './screens/BodegaTokensScreen';
 import TableroSupervisoresScreen from './screens/TableroSupervisoresScreen';
 import useIsMobile from './hooks/useIsMobile';
 import LoginScreen from './screens/LoginScreen';
+import InstalacionScreen from './screens/InstalacionScreen';
 import RestablecerScreen from './screens/RestablecerScreen';
 import { obtenerEntorno, fijarEntorno } from './utils/entorno';
 import { limpiarSesion, suscribirCaidaDeSesion, headerSondeo } from './utils/sesion';
@@ -65,12 +66,14 @@ const RUTAS_PUBLICAS = ['/restablecer', '/activar'];
 
 function App() {
   const isMobile = useIsMobile();
-  // 'verificando' = todavía preguntando al backend; 'requiere-login' = hay que entrar;
-  // 'adentro' = se puede usar la app. Es 'adentro' con sesión, y también SIN sesión mientras
-  // AUTH_REQUERIDA siga apagada en el backend (ver authController.yo): así desplegar esta
-  // versión no deja a la oficina afuera antes de que existan las cuentas.
+  // 'verificando' = todavía preguntando al backend; 'instalacion' = la base no tiene ninguna
+  // cuenta todavía; 'requiere-login' = hay que entrar; 'adentro' = se puede usar la app. Es
+  // 'adentro' con sesión, y también SIN sesión mientras AUTH_REQUERIDA siga apagada en el
+  // backend (ver authController.yo): así desplegar no deja a la oficina afuera antes de que
+  // existan las cuentas.
   const [acceso, setAcceso] = useState('verificando');
   const [usuario, setUsuario] = useState(null);
+  const [requiereClaveInstalacion, setRequiereClaveInstalacion] = useState(false);
   // Se calcula una sola vez, del path con que se abrió la pestaña: dentro de la app ya
   // logueada, navegar a /portal sigue funcionando por la ruta de siempre.
   const [rutaPublica] = useState(() => RUTAS_PUBLICAS.some(r => window.location.pathname.startsWith(r)));
@@ -139,6 +142,10 @@ function App() {
     if (rutaPublica) return;
     axios.get(`${API}/auth/yo`)
       .then(({ data }) => {
+        if (data.requiereInstalacion) {
+          setRequiereClaveInstalacion(!!data.requiereClaveInstalacion);
+          return setAcceso('instalacion');
+        }
         setUsuario(data.usuario || null);
         setAcceso('adentro'); // con usuario, o sin él si el backend todavía no exige login
       })
@@ -395,6 +402,9 @@ function App() {
   }
 
   if (acceso === 'verificando') return <div style={styles.esperando}>Cargando…</div>;
+  if (acceso === 'instalacion') {
+    return <InstalacionScreen API={API} requiereClaveInstalacion={requiereClaveInstalacion} onListo={entrar} />;
+  }
   if (acceso === 'requiere-login') return <LoginScreen API={API} onIngreso={entrar} />;
 
   return (
