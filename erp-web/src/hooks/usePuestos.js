@@ -5,6 +5,7 @@
 // CLAUDE.md — solo encapsula el estado y las mutaciones (crear/eliminar) de este dominio.
 import { useState } from 'react';
 import { headerEntorno, headerApiKey } from '../utils/entorno';
+import { headerSesion } from '../utils/sesion';
 import { notificar, confirmar } from '../utils/notificar';
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
@@ -16,7 +17,7 @@ export default function usePuestos() {
     try {
       const response = await fetch(`${API}/puestos`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...{ ...headerEntorno(), ...headerApiKey() } },
+        headers: { 'Content-Type': 'application/json', ...{ ...headerEntorno(), ...headerApiKey(), ...headerSesion() } },
         body: JSON.stringify({
           nombre: String(nombre).trim(),
           costoHora: parseFloat(costoHora),
@@ -43,7 +44,7 @@ export default function usePuestos() {
   const eliminarPuesto = async (id) => {
     if (!(await confirmar("¿Seguro que deseas eliminar este puesto?"))) return;
     try {
-      const response = await fetch(`${API}/puestos/${id}`, { method: 'DELETE', headers: { ...headerEntorno(), ...headerApiKey() } });
+      const response = await fetch(`${API}/puestos/${id}`, { method: 'DELETE', headers: { ...headerEntorno(), ...headerApiKey(), ...headerSesion() } });
       if (response.ok) {
         setPuestosDB(prev => prev.filter(p => p._id !== id));
       }

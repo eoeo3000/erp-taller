@@ -47,7 +47,10 @@ import ClientesScreen from './screens/ClientesScreen';
 import BodegaTokensScreen from './screens/BodegaTokensScreen';
 import TableroSupervisoresScreen from './screens/TableroSupervisoresScreen';
 import useIsMobile from './hooks/useIsMobile';
+import LoginScreen from './screens/LoginScreen';
+import RestablecerScreen from './screens/RestablecerScreen';
 import { obtenerEntorno, fijarEntorno } from './utils/entorno';
+import { limpiarSesion, suscribirCaidaDeSesion, headerSondeo } from './utils/sesion';
 import { notificar, confirmar } from './utils/notificar';
 import NotificacionesHost from './components/NotificacionesHost';
 import usePuestos from './hooks/usePuestos';
@@ -60,8 +63,19 @@ import useSolicitudes from './hooks/useSolicitudes';
 import useCalendarios from './hooks/useCalendarios';
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+
+// Las dos pantallas que se abren SIN cuenta: el portal del cliente (el link que se manda por
+// WhatsApp apunta acá, ver enviarPortalCliente más abajo) y el link de recuperación de clave
+// que llega por correo — a esa entra justamente quien no puede entrar.
+const RUTAS_PUBLICAS = ['/portal', '/restablecer'];
+
 function App() {
   const isMobile = useIsMobile();
+  // undefined = todavía preguntando al backend; null = sin sesión; objeto = quién entró.
+  const [sesion, setSesion] = useState(undefined);
+  // Se calcula una sola vez, del path con que se abrió la pestaña: dentro de la app ya
+  // logueada, navegar a /portal sigue funcionando por la ruta de siempre.
+  const [rutaPublica] = useState(() => RUTAS_PUBLICAS.some(r => window.location.pathname.startsWith(r)));
   const [navW, setNavW] = useState(186);
   const [navOculta, setNavOculta] = useState(false);
   const [ultimaSync, setUltimaSync] = useState(null);
@@ -121,7 +135,30 @@ function App() {
     }
   };
 
+  // Al arrancar se le pregunta al backend si el token guardado sigue sirviendo. Es también
+  // lo que decide si se muestra el login o la app.
   useEffect(() => {
+    if (rutaPublica) return;
+    axios.get(`${API}/auth/yo`)
+      .then(({ data }) => setSesion(data.usuario))
+      .catch(() => setSesion(null));
+    // Una sesión puede caerse sola (inactividad, tope de 24h, o alguien la revocó desde la
+    // oficina): el interceptor de utils/sesion.js avisa acá y la app vuelve al login.
+    suscribirCaidaDeSesion(() => setSesion(null));
+  }, [rutaPublica]);
+
+  const cerrarSesionUsuario = async () => {
+    // Si el logout falla (sin red, sesión ya vencida) igual se limpia local: el objetivo de
+    // quien apretó el botón es salir, y el token del servidor vence solo.
+    try { await axios.post(`${API}/auth/logout`); } catch { /* sin conexión: se limpia igual */ }
+    limpiarSesion();
+    setSesion(null);
+  };
+
+  useEffect(() => {
+    // Sin sesión no hay nada que cargar: /api/data responde 401. Se espera a que haya una.
+    if (!sesion) return;
+
     cargarDatos(); // Carga inicial inmediata
 
     const interval = setInterval(async () => {
@@ -129,8 +166,10 @@ function App() {
       // el poll para no seguir golpeando /api/data sin necesidad.
       if (document.visibilityState !== 'visible') return;
       try {
-        // Usamos axios para mantener la consistencia
-        const { data } = await axios.get(`${API}/data`);
+        // Usamos axios para mantener la consistencia. headerSondeo marca esta llamada como
+        // automática: el backend NO corre con ella la ventana de inactividad de la sesión,
+        // para que una pestaña abierta sin nadie al frente no la mantenga viva para siempre.
+        const { data } = await axios.get(`${API}/data`, { headers: headerSondeo() });
 
         // Sincronización inteligente: solo actualiza si hay cambios reales.
         // IMPORTANTE: comparamos contra 'prev' dentro del propio setState funcional,
@@ -157,7 +196,11 @@ function App() {
     }, 30000); // 30 segundos es un buen equilibrio
 
     return () => clearInterval(interval);
-  }, []); // Se monta una sola vez — el intervalo interno no necesita reiniciarse por cambios de estado
+    // Depende solo de `sesion`, que cambia al entrar y al salir — no de ots/solicitudes/etc.
+    // Esas se reescriben con una referencia nueva en cada cargarDatos(), y depender de ellas
+    // remontaba el efecto solo, disparando /api/data cada pocos segundos en vez de cada 30
+    // (ver docs/bugs-conocidos.md).
+  }, [sesion]);
 
   // Shell nuevo (ver docs/rediseno/design_handoff_panel_control/README.md, paso 1):
   // nav lateral colapsable con ancho arrastrable, en vez del top bar. En móvil arranca colapsada.
@@ -322,6 +365,25 @@ function App() {
   // Fuera del nav por decisión del cliente (siguen existiendo y accesibles por URL directa):
   // Compras (/compras), Finanzas (/finanzas), Contabilidad (/contabilidad), Portal cliente (/portal).
 
+  // --- Puerta de entrada. Va después de todos los hooks (el orden de hooks no puede variar
+  // entre renders) y antes de montar la app completa. ---
+
+  // Las pantallas sin cuenta se montan solas, sin el shell ni el estado de la oficina.
+  if (rutaPublica) {
+    return (
+      <Router>
+        <NotificacionesHost />
+        <Routes>
+          <Route path="/portal" element={<PortalClienteScreen API={API} />} />
+          <Route path="/restablecer" element={<RestablecerScreen API={API} />} />
+        </Routes>
+      </Router>
+    );
+  }
+
+  if (sesion === undefined) return <div style={styles.esperando}>Cargando…</div>;
+  if (!sesion) return <LoginScreen API={API} onIngreso={setSesion} />;
+
   return (
     <Router>
       <div style={styles.raiz}>
@@ -351,6 +413,10 @@ function App() {
                       <span style={styles.navItemLabel}>{item.label}</span>
                     </NavLink>
                   ))}
+                </div>
+                <div style={styles.navUsuario}>
+                  <div style={styles.navUsuarioNombre} title={sesion.email}>{sesion.nombre}</div>
+                  <div onClick={cerrarSesionUsuario} style={styles.navUsuarioSalir}>Cerrar sesión</div>
                 </div>
                 <div style={styles.navPie}>Sincronizado {horaSync}</div>
               </nav>
@@ -452,8 +518,24 @@ const styles = {
   navItemActivo: { background: 'rgba(255,255,255,.10)', borderLeft: '2px solid oklch(0.62 0.11 250)', color: '#fff' },
   navItemLabel: { minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' },
   navItemCount: { fontFamily: fontMono, fontSize: '10.5px', color: 'rgba(255,255,255,.36)', flex: 'none' },
-  navPie: {
+  esperando: {
+    display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100dvh',
+    background: '#eceae5', color: '#75746e', fontFamily: fontUi, fontSize: '13px',
+  },
+  navUsuario: {
     marginTop: 'auto', padding: '10px 14px', borderTop: '1px solid rgba(255,255,255,.09)',
+    display: 'flex', flexDirection: 'column', gap: '3px', overflow: 'hidden',
+  },
+  navUsuarioNombre: {
+    fontSize: '11.5px', color: 'rgba(255,255,255,.72)',
+    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+  },
+  navUsuarioSalir: {
+    fontSize: '10.5px', color: 'rgba(255,255,255,.38)', cursor: 'pointer',
+    textDecoration: 'underline', whiteSpace: 'nowrap',
+  },
+  navPie: {
+    padding: '10px 14px', borderTop: '1px solid rgba(255,255,255,.09)',
     fontSize: '10.5px', color: 'rgba(255,255,255,.38)', fontFamily: fontMono, whiteSpace: 'nowrap', overflow: 'hidden',
   },
   navSeparador: { width: '5px', flex: 'none', cursor: 'col-resize', background: '#1c1d1b', borderRight: '1px solid rgba(0,0,0,.18)' },

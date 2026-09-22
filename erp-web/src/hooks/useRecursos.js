@@ -6,6 +6,7 @@
 import { useState } from 'react';
 import axios from 'axios';
 import { headerEntorno, headerApiKey } from '../utils/entorno';
+import { headerSesion } from '../utils/sesion';
 import { notificar } from '../utils/notificar';
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
@@ -71,7 +72,7 @@ export default function useRecursos() {
 
       const response = await fetch(`${API}/recursos/${recursoId}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json', ...{ ...headerEntorno(), ...headerApiKey() } },
+        headers: { 'Content-Type': 'application/json', ...{ ...headerEntorno(), ...headerApiKey(), ...headerSesion() } },
         body: JSON.stringify(recursoActualizado)
       });
 
