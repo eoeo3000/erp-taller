@@ -4,6 +4,7 @@ const { identificar, requiereSesion } = require('../middlewares/sesion');
 
 // Importar todas las rutas individuales
 const authRoutes = require('./authRoutes');
+const instalacionRoutes = require('./instalacionRoutes');
 const cuentasRoutes = require('./cuentasRoutes');
 const dataRoutes = require('./dataRoutes');
 const personalRoutes = require('./recursosRoutes');
@@ -37,6 +38,8 @@ const catalogoTransversalRoutes = require('./catalogoTransversalRoutes');
 router.use(identificar);
 
 router.use('/auth', authRoutes);
+// Primera puesta en marcha: pública, y se apaga sola cuando ya hay una cuenta con clave.
+router.use('/instalacion', instalacionRoutes);
 // Administración de cuentas de escritorio. Exige sesión real por su cuenta (ver el router),
 // no el gate con rollout que usan las rutas de abajo.
 router.use('/cuentas', cuentasRoutes);

@@ -5,6 +5,7 @@ const getSesionStaff = require('../models/SesionStaff');
 const { hashPassword, verificarPassword } = require('../utils/password');
 const { generarToken, hashToken } = require('../utils/tokens');
 const { nuevaExpiracion, expiracionAbsoluta, authRequerida, MINUTOS_INACTIVIDAD } = require('../middlewares/sesion');
+const { hayCuentasDeEscritorio, claveInstalacionRequerida } = require('./instalacionController');
 const transporter = require('../config/mailer');
 const { SPA_URL } = require('../config/urls');
 
@@ -108,6 +109,14 @@ exports.logout = async (req, res) => {
 exports.yo = async (req, res) => {
     if (req.usuario) {
         return res.json({ usuario: usuarioPublico(req.usuario), expira: req.sesion?.expira || null, authRequerida: authRequerida() });
+    }
+
+    // Sin NINGUNA cuenta con clave no hay con qué entrar, así que pedir login sería mandar a
+    // la gente a una pantalla que nadie puede pasar (es exactamente lo que pasaba antes de
+    // que existiera la instalación: había que entrar al servidor a correr un script). Se
+    // ofrece crear la primera cuenta, y esto se apaga solo en cuanto exista una.
+    if (!await hayCuentasDeEscritorio(getUsuario(req.db))) {
+        return res.json({ usuario: null, requiereInstalacion: true, requiereClaveInstalacion: claveInstalacionRequerida() });
     }
     // Sin sesión y con el gate todavía apagado, el SPA entra igual que antes de que
     // existiera el login. Esto es lo que hace que el rollout de AUTH_REQUERIDA valga en los
