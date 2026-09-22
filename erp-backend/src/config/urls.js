@@ -5,14 +5,19 @@
 // Operativa a partir de API_URL, apuntando al propio backend en vez de al host real de esa
 // PWA, que es un Render Static Site aparte).
 //
-// En Render, definir estas tres variables en el servicio del backend:
+// En Render, definir estas variables en el servicio del backend:
 //   API_URL            = https://erp-taller-backend.onrender.com
 //   PWA_OPERATIVA_URL  = https://erp-pwa-operativa.onrender.com
 //   PWA_CLIENTE_URL    = https://erp-pwa-cliente.onrender.com
+//   SPA_URL            = https://erp-taller-web.onrender.com
 // En local, dejarlas sin definir (o copiarlas a erp-backend/.env con los puertos de
 // `npm run dev` de cada PWA) — los defaults de abajo ya apuntan a localhost.
 const API_URL = process.env.API_URL || 'http://localhost:5000';
 const PWA_OPERATIVA_URL = process.env.PWA_OPERATIVA_URL || 'http://localhost:5174';
 const PWA_CLIENTE_URL = process.env.PWA_CLIENTE_URL || 'http://localhost:5175';
+// SPA de escritorio (erp-web). La usa el correo de recuperación de clave para armar el
+// link de restablecimiento — mismo motivo que PWA_OPERATIVA_URL: el link tiene que apuntar
+// al host de la app, no al del backend que envía el correo.
+const SPA_URL = process.env.SPA_URL || 'http://localhost:5173';
 
-module.exports = { API_URL, PWA_OPERATIVA_URL, PWA_CLIENTE_URL };
+module.exports = { API_URL, PWA_OPERATIVA_URL, PWA_CLIENTE_URL, SPA_URL };
