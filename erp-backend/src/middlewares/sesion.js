@@ -121,9 +121,21 @@ function requiereSesion(req, res, next) {
     return res.status(401).json({ error: 'Sesión requerida' });
 }
 
+// Exige sesión SIEMPRE, ignore o no el rollout. Para lo que crea o cambia credenciales
+// (invitar a alguien a la oficina, revocar su cuenta): una invitación emitida durante la
+// ventana en que AUTH_REQUERIDA sigue apagada seguiría sirviendo después de encenderla, así
+// que dejar pasar ahí no es "todavía no bloqueamos", es regalar acceso permanente.
+// Consecuencia buscada: antes de que exista la primera cuenta no se puede invitar desde la
+// app; esa primera sale de scripts/crearAdmin.js, que es justamente para lo que existe.
+function requiereSesionEstricta(req, res, next) {
+    if (req.usuario) return next();
+    res.status(401).json({ error: 'Sesión requerida' });
+}
+
 module.exports = {
     identificar,
     requiereSesion,
+    requiereSesionEstricta,
     authRequerida,
     nuevaExpiracion,
     expiracionAbsoluta,

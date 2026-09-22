@@ -53,10 +53,12 @@ export default function BodegaTokensScreen({ API }) {
                 <button style={seg(vista === 'activos')} onClick={() => setVista('activos')}>Tokens activos</button>
                 <button style={seg(vista === 'emitir')} onClick={() => setVista('emitir')}>Emitir acceso cliente</button>
                 <button style={seg(vista === 'stock')} onClick={() => setVista('stock')}>Stock pre-generado</button>
+                <button style={seg(vista === 'cuentas')} onClick={() => setVista('cuentas')}>Cuentas de oficina</button>
             </div>
             {vista === 'activos' && <TokensActivos API={API} />}
             {vista === 'emitir' && <EmitirAccesoCliente API={API} />}
             {vista === 'stock' && <StockPreGenerado API={API} />}
+            {vista === 'cuentas' && <CuentasOficina API={API} />}
         </div>
     );
 }
@@ -228,6 +230,152 @@ function TokensActivos({ API }) {
             <div style={{ padding: '9px 12px', fontSize: 10.5, color: t.textoAtenuado2, lineHeight: 1.6 }}>
                 Los tokens operativos se emiten desde la ficha de cada persona en Recursos. Los tokens cliente se emiten desde el contacto de la empresa en Clientes, al momento de habilitarle el portal. Un mismo contacto necesita un token por empresa. Cada acceso queda registrado con fecha, hora y dispositivo; al revocar se avisa por correo al titular.
             </div>
+            </div>
+        </div>
+    );
+}
+
+// Cuentas de escritorio (correo + clave). Alta SOLO por invitación de alguien que ya está
+// adentro: no hay registro abierto en la pantalla de ingreso, porque un correo confirma el
+// buzón pero no que la persona trabaje en el taller (ver cuentasController.js).
+// El nombre y el correo son lo que se lee para identificar a alguien, así que se llevan el
+// espacio libre; las columnas fijas se quedan con lo justo para su contenido más largo.
+const GRID_CUENTAS = '1fr 92px 104px 152px';
+
+function CuentasOficina({ API }) {
+    const [cuentas, setCuentas] = useState([]);
+    const [nombre, setNombre] = useState('');
+    const [email, setEmail] = useState('');
+    const [aviso, setAviso] = useState(null);
+    const [linkAMano, setLinkAMano] = useState('');
+    const [enviando, setEnviando] = useState(false);
+    const [procesando, setProcesando] = useState(null);
+    const cabeceras = { headers: { ...headerEntorno(), ...headerApiKey() } };
+
+    const cargar = () => axios.get(`${API}/cuentas`, cabeceras)
+        .then(({ data }) => setCuentas(data))
+        .catch((e) => setAviso({ tipo: 'error', texto: e.response?.data?.error || 'No se pudo cargar la lista.' }));
+
+    // La primera carga repite la llamada en vez de invocar `cargar`: esa función se redefine
+    // en cada render, así que como dependencia dispararía la petición en bucle, y omitirla
+    // deja una advertencia de exhaustive-deps. Son tres líneas, no vale una abstracción.
+    useEffect(() => {
+        axios.get(`${API}/cuentas`, { headers: { ...headerEntorno(), ...headerApiKey() } })
+            .then(({ data }) => setCuentas(data))
+            .catch((e) => setAviso({ tipo: 'error', texto: e.response?.data?.error || 'No se pudo cargar la lista.' }));
+    }, [API]);
+
+    const invitar = async () => {
+        if (!nombre.trim() || !email.trim()) return setAviso({ tipo: 'error', texto: 'Escribe el nombre y el correo.' });
+        setEnviando(true); setAviso(null); setLinkAMano('');
+        try {
+            const { data } = await axios.post(`${API}/cuentas/invitar`, { nombre, email }, cabeceras);
+            setAviso({
+                tipo: 'ok',
+                texto: data.correoEnviado
+                    ? `Invitación enviada a ${email}. La cuenta queda pendiente hasta que elija su clave.`
+                    : 'Cuenta creada, pero no se pudo enviar el correo — copia el link de abajo y mándaselo a mano.',
+            });
+            if (!data.correoEnviado && data.link) setLinkAMano(data.link);
+            setNombre(''); setEmail('');
+            await cargar();
+        } catch (e) {
+            setAviso({ tipo: 'error', texto: e.response?.data?.error || 'No se pudo invitar.' });
+        } finally {
+            setEnviando(false);
+        }
+    };
+
+    const accion = async (cuenta, tipo) => {
+        if (tipo === 'revocar' && !(await confirmar(`¿Revocar el acceso de ${cuenta.nombre}? Sus sesiones abiertas se cierran de inmediato.`))) return;
+        setProcesando(cuenta._id); setAviso(null); setLinkAMano('');
+        try {
+            const { data } = await axios.post(`${API}/cuentas/${cuenta._id}/${tipo}`, {}, cabeceras);
+            if (tipo === 'reenviar') {
+                setAviso({ tipo: 'ok', texto: data.correoEnviado ? `Invitación reenviada a ${cuenta.email}.` : 'No se pudo enviar el correo — copia el link de abajo.' });
+                if (!data.correoEnviado && data.link) setLinkAMano(data.link);
+            } else {
+                setAviso({ tipo: 'ok', texto: tipo === 'revocar' ? 'Acceso revocado.' : 'Acceso reactivado.' });
+            }
+            await cargar();
+        } catch (e) {
+            setAviso({ tipo: 'error', texto: e.response?.data?.error || 'No se pudo completar la acción.' });
+        } finally {
+            setProcesando(null);
+        }
+    };
+
+    const estadoDe = (c) => {
+        if (c.estado === 'revocado') return { texto: 'Revocada', fondo: 'rgba(168,65,47,.10)', tono: t.rojo };
+        // "Pendiente" a secas: la columna ya se llama Estado, y el título largo dejaba sin
+        // ancho al nombre, que es lo que de verdad se lee para identificar a alguien.
+        if (!c.activada) return { texto: 'Pendiente', fondo: 'rgba(122,90,47,.10)', tono: t.ambar, ayuda: 'Invitada, todavía no elige su clave' };
+        return { texto: 'Activa', fondo: 'rgba(76,122,76,.10)', tono: t.verde };
+    };
+
+    return (
+        <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+            <div style={{ width: 420, background: '#fff', border: `1px solid ${t.bordeZona}` }}>
+                <div style={{ padding: '7px 12px', background: '#e4e2dc', borderBottom: '1px solid rgba(0,0,0,.14)', fontSize: 9.5, letterSpacing: '.1em', textTransform: 'uppercase', color: t.textoAtenuado1, fontWeight: 700 }}>
+                    Invitar a la oficina
+                </div>
+                <div style={{ padding: 12, display: 'grid', gridTemplateColumns: '96px 1fr', gap: '9px 10px', alignItems: 'center' }}>
+                    <span style={{ fontSize: 11, color: t.textoAtenuado1 }}>Nombre</span>
+                    <input value={nombre} onChange={e => setNombre(e.target.value)} placeholder="Nombre y apellido" style={campoStyle} />
+                    <span style={{ fontSize: 11, color: t.textoAtenuado1 }}>Correo</span>
+                    <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="persona@taller.cl" style={campoStyle} />
+                </div>
+                <div style={{ padding: '0 12px 12px', display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <button onClick={invitar} disabled={enviando} style={{ flex: 'none', whiteSpace: 'nowrap', height: 27, padding: '0 12px', background: t.acento, border: `1px solid ${t.acento}`, fontSize: 11.5, fontWeight: 700, color: '#fff', cursor: enviando ? 'default' : 'pointer', borderRadius: 2, opacity: enviando ? .6 : 1, fontFamily: t.fontUi }}>
+                        {enviando ? 'Enviando…' : 'Enviar invitación'}
+                    </button>
+                    {aviso && <span style={{ fontSize: 11, color: aviso.tipo === 'error' ? t.rojo : t.verde, lineHeight: 1.4 }}>{aviso.texto}</span>}
+                </div>
+                {linkAMano && (
+                    <div style={{ padding: '0 12px 12px' }}>
+                        <div style={{ fontSize: 10.5, color: t.textoAtenuado1, marginBottom: 4 }}>Link de activación (vence en 7 días):</div>
+                        <input readOnly value={linkAMano} onFocus={e => e.target.select()} style={{ ...campoStyle, width: '100%', fontFamily: t.fontMono, fontSize: 10.5 }} />
+                    </div>
+                )}
+                <div style={{ padding: '9px 12px', borderTop: `1px solid ${t.hairline}`, fontSize: 10.5, color: t.textoAtenuado2, lineHeight: 1.6 }}>
+                    A la persona le llega un correo para elegir su propia clave. Nadie, ni quien invita, conoce la clave de otro. La cuenta no sirve para entrar hasta que la active.
+                </div>
+            </div>
+
+            <div style={{ flex: 1, minWidth: 520, background: '#fff', border: `1px solid ${t.bordeZona}` }}>
+                <div style={{ display: 'grid', gridTemplateColumns: GRID_CUENTAS, gap: 10, padding: '7px 12px', background: t.encabezadoTabla, borderBottom: `1px solid ${t.hairline}`, fontSize: 9.5, letterSpacing: '.09em', textTransform: 'uppercase', color: t.textoAtenuado2 }}>
+                    <span>Persona</span><span>Estado</span><span>Último acceso</span><span style={{ justifySelf: 'end' }}>Acciones</span>
+                </div>
+                {cuentas.length === 0 && (
+                    <div style={{ padding: 16, fontSize: 11.5, color: t.textoAtenuado2 }}>Todavía no hay cuentas de oficina.</div>
+                )}
+                {cuentas.map(c => {
+                    const est = estadoDe(c);
+                    const enCurso = procesando === c._id;
+                    return (
+                        <div key={c._id} style={{ display: 'grid', gridTemplateColumns: GRID_CUENTAS, gap: 10, padding: '8px 12px', borderBottom: `1px solid ${t.hairline}`, alignItems: 'center' }}>
+                            <div style={{ minWidth: 0 }}>
+                                <div style={{ fontSize: 12, color: t.textoPrincipal, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.nombre}</div>
+                                <div style={{ fontSize: 10.5, color: t.textoAtenuado2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.email}</div>
+                            </div>
+                            <span title={est.ayuda || ''} style={{ justifySelf: 'start', fontSize: 10, fontWeight: 700, letterSpacing: '.05em', textTransform: 'uppercase', padding: '2px 7px', borderRadius: 2, background: est.fondo, color: est.tono }}>{est.texto}</span>
+                            <span style={{ fontFamily: t.fontMono, fontSize: 11, color: t.textoAtenuado1 }}>{fmtAcceso(c.ultimoAccesoSpa)}</span>
+                            <div style={{ justifySelf: 'end', display: 'flex', gap: 4 }}>
+                                {!c.activada && c.estado === 'activo' && (
+                                    <button onClick={() => accion(c, 'reenviar')} disabled={enCurso} style={{ height: 23, padding: '0 8px', background: '#fff', border: '1px solid rgba(0,0,0,.22)', fontSize: 10.5, color: t.textoSecundario2, cursor: enCurso ? 'default' : 'pointer', borderRadius: 2, opacity: enCurso ? .5 : 1 }}>{enCurso ? '…' : 'Reenviar'}</button>
+                                )}
+                                {c.estado === 'activo' ? (
+                                    <button onClick={() => accion(c, 'revocar')} disabled={enCurso} style={{ height: 23, padding: '0 8px', background: '#fff', border: '1px solid rgba(0,0,0,.22)', fontSize: 10.5, color: t.rojo, cursor: enCurso ? 'default' : 'pointer', borderRadius: 2, opacity: enCurso ? .5 : 1 }}>{enCurso ? '…' : 'Revocar'}</button>
+                                ) : (
+                                    <button onClick={() => accion(c, 'reactivar')} disabled={enCurso} style={{ height: 23, padding: '0 8px', background: '#fff', border: '1px solid rgba(0,0,0,.22)', fontSize: 10.5, color: t.textoSecundario2, cursor: enCurso ? 'default' : 'pointer', borderRadius: 2, opacity: enCurso ? .5 : 1 }}>{enCurso ? '…' : 'Reactivar'}</button>
+                                )}
+                            </div>
+                        </div>
+                    );
+                })}
+                <div style={{ padding: '9px 12px', fontSize: 10.5, color: t.textoAtenuado2, lineHeight: 1.6 }}>
+                    Revocar cierra las sesiones abiertas de esa persona de inmediato y se puede deshacer con Reactivar, que conserva su misma clave. Nadie puede revocar su propia cuenta: quedarse sin ninguna activa dejaría al taller afuera de su propio sistema.
+                </div>
             </div>
         </div>
     );
