@@ -34,8 +34,10 @@ function preguntar(pregunta) {
 
 // Pide escribir el nombre exacto de la base de datos a la que MONGO_URI apunta. `--confirm`
 // salta el prompt para quien ya confirmó a mano y quiere repetir el comando (ej. reintentos).
-async function confirmarDestructivo(descripcionAccion) {
-    const nombreDB = extraerNombreDB(process.env.MONGO_URI);
+// `uri` permite confirmar contra una base distinta de MONGO_URI (la demo, por ejemplo).
+// Sin ella se mantiene el comportamiento anterior, que es el de todos los scripts de acá.
+async function confirmarDestructivo(descripcionAccion, uri = process.env.MONGO_URI) {
+    const nombreDB = extraerNombreDB(uri);
     // Si no se pudo determinar el nombre real, se pide una palabra clave fija en vez de
     // repetir el mensaje de error como si fuera la respuesta esperada.
     const palabraClave = nombreDB || 'CONFIRMAR';
@@ -59,4 +61,4 @@ async function confirmarDestructivo(descripcionAccion) {
     console.log('✅ Confirmado.\n');
 }
 
-module.exports = { confirmarDestructivo };
+module.exports = { confirmarDestructivo, extraerNombreDB };

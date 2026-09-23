@@ -6,6 +6,7 @@ const { identificar, requiereSesion } = require('../middlewares/sesion');
 const authRoutes = require('./authRoutes');
 const instalacionRoutes = require('./instalacionRoutes');
 const cuentasRoutes = require('./cuentasRoutes');
+const respaldoRoutes = require('./respaldoRoutes');
 const dataRoutes = require('./dataRoutes');
 const personalRoutes = require('./recursosRoutes');
 const equipoRoutes = require('./equiposHerramientasRoutes');
@@ -43,6 +44,8 @@ router.use('/instalacion', instalacionRoutes);
 // Administración de cuentas de escritorio. Exige sesión real por su cuenta (ver el router),
 // no el gate con rollout que usan las rutas de abajo.
 router.use('/cuentas', cuentasRoutes);
+// Respaldos: los dispara un programador externo con RESPALDO_TOKEN, no una sesión del SPA.
+router.use('/respaldos', respaldoRoutes);
 
 // --- Rutas de la app de escritorio: exigen sesión ---
 // (mientras AUTH_REQUERIDA no esté en 'true' solo avisan por consola, ver sesion.js)
