@@ -1,0 +1,53 @@
+# Respaldo diario de la base de datos.
+#
+# Por qué acá y no dentro del backend: en el plan gratis de Render el servicio se duerme
+# cuando nadie lo usa, así que un temporizador dentro del proceso no correría — y el
+# respaldo no saldría sin que nadie se entere. Esta acción lo llama desde fuera, lo que
+# además despierta el servicio.
+#
+# Para que funcione hay que configurar dos secretos en GitHub
+# (Settings → Secrets and variables → Actions):
+#   RESPALDO_URL    https://erp-taller-backend.onrender.com/api/respaldos
+#   RESPALDO_TOKEN  el mismo valor que la variable RESPALDO_TOKEN del backend en Render
+name: Respaldo diario
+
+on:
+  schedule:
+    # 08:00 UTC = 05:00 en Chile continental (UTC-3). Temprano, antes de la jornada del
+    # taller, para que el respaldo tome el cierre del día anterior. GitHub puede atrasar
+    # las tareas programadas cuando sus runners están cargados; para un respaldo diario da
+    # lo mismo que salga una hora después.
+    - cron: '0 8 * * *'
+  # Permite dispararlo a mano desde la pestaña Actions, antes de tocar algo delicado.
+  workflow_dispatch:
+
+jobs:
+  respaldar:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Pedir el respaldo al backend
+        run: |
+          if [ -z "${{ secrets.RESPALDO_URL }}" ] || [ -z "${{ secrets.RESPALDO_TOKEN }}" ]; then
+            echo "::error::Faltan los secretos RESPALDO_URL o RESPALDO_TOKEN en este repositorio."
+            exit 1
+          fi
+
+          # El servicio puede estar dormido: la primera llamada tarda ~1 minuto en
+          # responder mientras Render lo levanta. De ahí el --max-time generoso.
+          codigo=$(curl -sS -o respuesta.json -w '%{http_code}' \
+            --max-time 600 --retry 2 --retry-delay 30 \
+            -X POST "${{ secrets.RESPALDO_URL }}" \
+            -H "X-Respaldo-Token: ${{ secrets.RESPALDO_TOKEN }}")
+
+          echo "HTTP $codigo"
+          # La respuesta trae el conteo por colección, no datos del taller.
+          cat respuesta.json
+          echo
+
+          if [ "$codigo" != "201" ]; then
+            echo "::error::El respaldo falló (HTTP $codigo). Revisa los logs del backend en Render."
+            exit 1
+          fi
+
+          documentos=$(grep -o '"documentos":[0-9]*' respuesta.json | cut -d: -f2)
+          echo "::notice::Respaldo creado con ${documentos:-?} documentos."

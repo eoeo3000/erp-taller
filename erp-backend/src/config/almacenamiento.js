@@ -25,13 +25,23 @@ const path = require('path');
 const CARPETA_LOCAL = path.join(__dirname, '..', '..', 'uploads');
 
 // Las claves viajan en la URL y terminan en una ruta de disco: sin esto, un `..` en el
-// nombre deja leer cualquier archivo del servidor.
+// nombre deja leer cualquier archivo del servidor. Sin barras a propósito: los archivos
+// públicos viven todos en el mismo nivel.
 const CLAVE_VALIDA = /^[A-Za-z0-9._-]{1,120}$/;
+
+// Las claves internas (respaldos) sí llevan prefijo con barras — `respaldos/produccion/...`.
+// Nunca vienen de una URL ni de nada que escriba un usuario, pero igual se valida: son las
+// mismas funciones que terminan en una ruta de disco.
+const RUTA_VALIDA = /^[A-Za-z0-9._/-]{1,200}$/;
+function rutaSegura(clave) {
+    const texto = String(clave || '');
+    return RUTA_VALIDA.test(texto) && !texto.split('/').includes('..');
+}
 
 const TIPOS = {
     '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png',
     '.webp': 'image/webp', '.gif': 'image/gif', '.heic': 'image/heic',
-    '.pdf': 'application/pdf',
+    '.pdf': 'application/pdf', '.gz': 'application/gzip', '.json': 'application/json',
 };
 
 const config = {
@@ -140,6 +150,100 @@ async function obtener(clave) {
     }
 }
 
+// --- Operaciones con clave explícita ---
+// `guardar()` inventa el nombre porque para una foto da lo mismo cuál sea. Los respaldos
+// necesitan controlarlo: la fecha va en la clave, y es lo que permite listarlos ordenados y
+// saber cuál borrar. Mismo almacén, mismo interruptor de credenciales.
+
+async function guardarEn(clave, buffer, contentType) {
+    if (!rutaSegura(clave)) throw new Error(`Clave de almacenamiento inválida: ${clave}`);
+    const tipo = contentType || tipoPorNombre(clave);
+
+    if (hayBucket()) {
+        const { PutObjectCommand } = require('@aws-sdk/client-s3');
+        await cliente().send(new PutObjectCommand({
+            Bucket: config.bucket, Key: clave, Body: buffer, ContentType: tipo,
+        }));
+    } else {
+        const ruta = path.join(CARPETA_LOCAL, clave);
+        await fsp.mkdir(path.dirname(ruta), { recursive: true });
+        await fsp.writeFile(ruta, buffer);
+    }
+    return { clave, tamano: buffer.length };
+}
+
+// Devuelve el contenido completo en memoria, no un stream: quien llama a esto necesita el
+// archivo entero para descomprimirlo, no para reenviarlo por la red.
+async function leer(clave) {
+    if (!rutaSegura(clave)) return null;
+
+    if (hayBucket()) {
+        try {
+            const { GetObjectCommand } = require('@aws-sdk/client-s3');
+            const r = await cliente().send(new GetObjectCommand({ Bucket: config.bucket, Key: clave }));
+            const partes = [];
+            for await (const parte of r.Body) partes.push(parte);
+            return Buffer.concat(partes);
+        } catch (error) {
+            if (error?.name !== 'NoSuchKey' && error?.$metadata?.httpStatusCode !== 404) throw error;
+        }
+    }
+
+    try {
+        return await fsp.readFile(path.join(CARPETA_LOCAL, clave));
+    } catch {
+        return null;
+    }
+}
+
+// Devuelve [{ clave, tamano, fecha }] ordenado de más nuevo a más viejo.
+async function listar(prefijo) {
+    if (!rutaSegura(prefijo)) throw new Error(`Prefijo inválido: ${prefijo}`);
+
+    if (hayBucket()) {
+        const { ListObjectsV2Command } = require('@aws-sdk/client-s3');
+        const encontrados = [];
+        let continuacion;
+        // Un listado devuelve como máximo 1000 claves por llamada; con retención de 30
+        // respaldos nunca se llega, pero paginar cuesta tres líneas y evita que un día
+        // alguien vea media lista sin entender por qué.
+        do {
+            const r = await cliente().send(new ListObjectsV2Command({
+                Bucket: config.bucket, Prefix: prefijo, ContinuationToken: continuacion,
+            }));
+            for (const o of r.Contents || []) {
+                encontrados.push({ clave: o.Key, tamano: o.Size, fecha: o.LastModified });
+            }
+            continuacion = r.IsTruncated ? r.NextContinuationToken : null;
+        } while (continuacion);
+        return encontrados.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+    }
+
+    const carpeta = path.join(CARPETA_LOCAL, prefijo);
+    try {
+        const nombres = await fsp.readdir(carpeta);
+        const encontrados = [];
+        for (const nombre of nombres) {
+            const info = await fsp.stat(path.join(carpeta, nombre));
+            if (info.isFile()) encontrados.push({ clave: `${prefijo}/${nombre}`, tamano: info.size, fecha: info.mtime });
+        }
+        return encontrados.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+    } catch {
+        return [];
+    }
+}
+
+async function borrar(clave) {
+    if (!rutaSegura(clave)) throw new Error(`Clave de almacenamiento inválida: ${clave}`);
+
+    if (hayBucket()) {
+        const { DeleteObjectCommand } = require('@aws-sdk/client-s3');
+        await cliente().send(new DeleteObjectCommand({ Bucket: config.bucket, Key: clave }));
+        return;
+    }
+    await fsp.rm(path.join(CARPETA_LOCAL, clave), { force: true });
+}
+
 function avisarConfiguracion() {
     if (hayBucket()) {
         console.log(`📦 Archivos en bucket R2 "${config.bucket}" (el disco queda de respaldo de lectura)`);
@@ -154,5 +258,6 @@ function avisarConfiguracion() {
 
 module.exports = {
     guardar, obtener, nombreUnico, tipoPorNombre, hayBucket, avisarConfiguracion, releerEntorno,
+    guardarEn, leer, listar, borrar, rutaSegura,
     CLAVE_VALIDA, CARPETA_LOCAL,
 };

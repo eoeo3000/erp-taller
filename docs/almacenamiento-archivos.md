@@ -120,10 +120,15 @@ El camino del bucket se ejercita contra un servicio S3 mínimo levantado en la p
 contra R2. Eso verifica la configuración del SDK y el contrato, pero **no** las credenciales
 ni la red: la primera subida real contra el bucket hay que mirarla a mano.
 
+## Verificado en producción
+
+Puesto en marcha el 23-09-2026 contra el bucket `erp-taller`: la primera foto subida desde la
+PWA Operativa llegó al bucket (`image/jpeg`, 69.78 KB) y se leyó de vuelta a través del
+backend. Las fotos comprimidas pesan ~70 KB, no los ~200 KB estimados, así que 5.000 fotos
+ocupan unos 350 MB — el 3,5% de los 10 GB gratis.
+
 ## Pendiente
 
-- **Respaldo de la base.** Este cambio cierra la pérdida de archivos, no la de datos. Mongo
-  Atlas en plan gratis no trae respaldo automático, y en `scripts/peligrosos/` hay borrado
-  masivo. Un `mongodump` programado al mismo bucket lo resolvería barato.
+- **Respaldo de la base**: hecho, ver [`respaldos.md`](respaldos.md). Va al mismo bucket.
 - **Borrado de archivos.** Hoy nada borra del bucket: una foto quitada de una OT queda
   ocupando lugar. A esta escala no importa, pero es deuda consciente.
