@@ -32,6 +32,31 @@ En ningún caso el campo de cabecera puede representar correctamente una OT cuya
 
 ---
 
+#### ✅ CORREGIDO — 23-09-2026
+
+**El síntoma descrito arriba ya no ocurría** al revisar el código: los tres puntos que arman la agenda (`fechasDeTrabajo`, `supervisionesDesdeOTs` y el `trabajaHoy` de `miPanel`) ya miraban `tareas[].fecha`. Una OT repartida en varios días aparecía en todos. Esa parte del reporte quedó desactualizada por correcciones anteriores.
+
+**Lo que sí seguía mal era otra cosa**: había **tres definiciones distintas del mismo concepto** en `asignacionController.js`, y no coincidían entre sí.
+
+| Dónde | Qué hacía |
+|---|---|
+| `fechasDeTrabajo` (~96) | tareas; la cabecera **solo** si no hay ninguna tarea con fecha |
+| `supervisionesDesdeOTs` (~106) | tareas **+** cabecera, siempre |
+| `trabajaHoy` en `miPanel` (~410) | cabecera **o** tareas |
+
+Con una OT de tareas el 5 y el 7 de octubre y `fechaEjecucion` escrita a mano el día 1, las tres daban resultados distintos: la primera `[05, 07]`, las otras dos incluían además el **día 1, donde no hay ninguna tarea**.
+
+Consecuencias reales:
+
+- El supervisor veía en Mi día una fila para un día **sin nada que hacer** — `fechaEjecucion` se escribe a mano desde la pestaña Antecedentes (`otController`, ~línea 483) y ese guardado no toca `tareas[]`, así que puede apuntar a cualquier fecha.
+- El **contador de Mi panel y el listado de Mi día se contradecían**, porque salían de cálculos distintos.
+
+**Qué se hizo**: `fechasDeTrabajo` queda como la **única** definición y los otros dos puntos la usan. Las tareas mandan; la cabecera sigue sirviendo de respaldo solo cuando no hay ninguna tarea con fecha —así una OT recién asignada, todavía sin tareas armadas, no desaparece— pero ya no se suma a las de las tareas.
+
+Cubierto por `test/agenda.test.js`, incluida la comprobación de que el contador y el listado no puedan volver a contradecirse. Las pruebas se verificaron al revés: revirtiendo el arreglo, se ponen rojas.
+
+---
+
 ### B2 — El turno seleccionado desde la pantalla principal no se aplica
 
 **Dónde ocurre**: "al seleccionar el turno desde la pantalla principal, la selección no se aplica" (síntoma reportado). Requiere confirmación de la pantalla exacta — ver más abajo.

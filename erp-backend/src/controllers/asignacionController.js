@@ -90,24 +90,32 @@ async function otsSupervisadasPorRecurso(OT, recursoId) {
     return OT.find({ supervisorId: recursoId, estado: { $in: ESTADOS_TRABAJO_CONFIRMADO } }).lean();
 }
 
-// Los días en los que una OT tiene trabajo. Las tareas mandan: ot.fechaEjecucion es la fecha
-// de cabecera y se desincroniza en cuanto el Gantt reprograma (mismo motivo que
-// supervisionesDesdeOTs), así que solo se usa cuando no hay ninguna tarea con fecha.
+// Los días en los que una OT tiene trabajo. **Única definición**: todo lo que conteste
+// "¿qué le toca a esta persona tal día?" tiene que pasar por acá.
+//
+// Las tareas mandan. `ot.fechaEjecucion` es una fecha de cabecera —un solo valor tratando de
+// resumir varias— y solo se usa como respaldo cuando no hay NINGUNA tarea con fecha. No se
+// suma a las de las tareas: se escribe a mano desde Antecedentes (otController, ~línea 483)
+// y ese guardado no toca `tareas[]`, así que puede apuntar a un día donde no hay nada que
+// hacer. Sumarla inventaba ese día en la agenda del supervisor.
+//
+// Antes había tres versiones de esto en este mismo archivo y no coincidían entre sí: esta,
+// `supervisionesDesdeOTs` (unía tareas + cabecera) y `trabajaHoy` (cabecera O tareas). El
+// resultado era que el listado de Mi día y los contadores de Mi panel se contradecían —
+// ver docs/bugs-conocidos.md, B1.
 function fechasDeTrabajo(ot) {
     const deTareas = [...new Set((ot.tareas || []).map(t => t.fecha).filter(Boolean))].sort();
     if (deTareas.length) return deTareas;
     return ot.fechaEjecucion ? [aISO(new Date(ot.fechaEjecucion))] : [];
 }
 
-// Igual que fechasDeTrabajo (más arriba): la fecha de cabecera (ot.fechaEjecucion) no basta,
-// porque se desincroniza de las tareas reales una vez que el Gantt se reprograma — hay que
-// considerar también tareas[].fecha, o el supervisor deja de ver en su día/semana un OT que
-// sí tiene trabajo programado ese día.
+// Una fila por OT y por día con trabajo, para mi-dia/mi-semana. Qué días son lo decide
+// fechasDeTrabajo (arriba) y no un cálculo propio: tener dos definiciones de lo mismo fue
+// exactamente el problema.
 function supervisionesDesdeOTs(ots, fechasISO) {
     const filas = [];
     for (const ot of ots) {
-        const fechasConTrabajo = new Set((ot.tareas || []).map(t => t.fecha).filter(Boolean));
-        if (ot.fechaEjecucion) fechasConTrabajo.add(aISO(new Date(ot.fechaEjecucion)));
+        const fechasConTrabajo = new Set(fechasDeTrabajo(ot));
         for (const dia of fechasISO) {
             if (!fechasConTrabajo.has(dia)) continue;
             filas.push({
@@ -407,8 +415,9 @@ exports.miPanel = async (req, res) => {
         // tirando el resto. Ahora el panel entra a "Mis trabajos" (S5), que necesita el
         // horizonte completo: acá va el resumen para la entrada — total, cuántos hoy y en
         // cuántas semanas distintas hay trabajo — y el detalle lo pide S5 por su cuenta.
-        const trabajaHoy = (ot) => (ot.fechaEjecucion && aISO(new Date(ot.fechaEjecucion)) === hoy)
-            || (ot.tareas || []).some(t => t.fecha === hoy);
+        // Misma definición que el listado de Mi día: si el contador y la lista no salen de
+        // la misma función, tarde o temprano se contradicen.
+        const trabajaHoy = (ot) => fechasDeTrabajo(ot).includes(hoy);
         const hoyEnTerreno = otsActivas.filter(trabajaHoy);
         const semanasConTrabajo = new Set();
         for (const ot of otsActivas) {
@@ -644,3 +653,9 @@ exports.ejecutadas = async (req, res) => {
         res.status(500).json({ error: error.message });
     }
 };
+
+// Se exportan las funciones puras de fechas para poder probarlas sin Mongo ni servidor: son
+// las que deciden qué trabajo ve cada persona cada día, y se contradecían entre sí (B1).
+module.exports.fechasDeTrabajo = fechasDeTrabajo;
+module.exports.supervisionesDesdeOTs = supervisionesDesdeOTs;
+module.exports.tareasSemanaDesdeOTs = tareasSemanaDesdeOTs;

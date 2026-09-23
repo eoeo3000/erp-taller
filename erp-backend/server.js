@@ -9,6 +9,7 @@ const resolverEntorno = require('./src/middlewares/entorno');
 const contratoRespuesta = require('./src/middlewares/respuestas');
 const { inicializarConexiones } = require('./src/config/conexiones');
 const almacenamiento = require('./src/config/almacenamiento');
+const { avisarUrlsInvalidas } = require('./src/config/urls');
 const app = express();
 
 // Middlewares
@@ -28,6 +29,11 @@ app.use('/api/mail', mailRoutes);
 // el respaldo de lectura de todo lo que se subió antes de que existiera el bucket.
 if (!fs.existsSync(almacenamiento.CARPETA_LOCAL)) fs.mkdirSync(almacenamiento.CARPETA_LOCAL, { recursive: true });
 almacenamiento.avisarConfiguracion();
+// Configuración que falla en silencio si no se revisa: una SPA_URL mal escrita manda correos
+// con links muertos, y un EMAIL_FROM vacío o de dominio personal arruina el remitente. Las
+// dos costaron tardes de diagnóstico justamente por arrancar sin decir nada.
+avisarUrlsInvalidas();
+require('./src/config/mailer').avisarConfiguracion();
 
 // --- TODAS LAS RUTAS (Incluyendo /data, /solicitudes, /recursos, etc.) ---
 // resolverEntorno resuelve req.db/req.entorno según el header X-Entorno antes de
