@@ -4,7 +4,8 @@ Documento de decisión, escrito **antes** de tocar código. Describe cómo pasar
 instalación para un taller a un sistema que arrienda el servicio a varios, sin que ninguno
 vea los datos de otro.
 
-> **Estado: propuesta.** Nada de esto está implementado todavía.
+> **Estado**: las decisiones están tomadas (arquitectura en §1, producto en §9).
+> **Nada está implementado todavía** — el plan por etapas está en §5.
 
 ---
 
@@ -139,7 +140,9 @@ Es la etapa que cierra el agujero mientras todavía no hay nada que robar.
   secas. **Ojo**: hay URL ya escritas en la base con el formato viejo, así que la lectura
   tiene que seguir entendiendo las dos — el mismo criterio que se usó al pasar del disco al
   bucket.
-- Baja de un cliente: entregarle su respaldo y borrar su base.
+- Baja de un cliente según lo definido en §9.4: suspender, 10 días de descarga (respaldo
+  técnico + planillas), borrado de base, respaldos y archivos a los 30, reversible hasta ahí.
+- La demo compartida se restaura sola cada noche (§9.2).
 
 ## 6. El orden importa
 
@@ -173,18 +176,81 @@ Es la etapa que cierra el agujero mientras todavía no hay nada que robar.
 - **Personalización por cliente** más allá del logo. Cada cosa que se pueda configurar por
   taller es una combinación más que probar y mantener.
 
-## 9. Decisiones que quedan abiertas
+## 9. Las cuatro decisiones de producto
 
-- **¿Una base por taller dentro del mismo clúster, o un clúster por taller?** Lo primero es
-  más barato y alcanza de sobra a esta escala; lo segundo aísla también el rendimiento — que
-  un taller pesado no enlentezca a los demás.
-- **¿Qué pasa con la demo?** Hoy es una base paralela. Puede seguir siendo una segunda base
-  por taller, o una sola demo compartida de solo lectura para mostrar el producto.
-- **¿El identificador del taller va en la URL** (`taller1.miapp.cl`) **o solo en la sesión?**
-  El subdominio ayuda a que la gente no se confunda de cuenta, pero obliga a certificados y
-  DNS por cliente.
-- **Qué se hace con los datos al dar de baja**, y en qué plazo se borran. Conviene decidirlo
-  antes de firmar el primer contrato, porque es lo que van a preguntar.
+Resueltas el 23-09-2026. Se dejan escritas con su razón, porque las cuatro se van a volver a
+preguntar cuando el sistema crezca.
+
+### 9.1 Un clúster compartido, con una base por taller
+
+Un clúster por cliente serían diez clústers pagados para diez talleres. El aislamiento que
+importa —que nadie lea los datos de otro— lo da la base separada, no el clúster. Lo que
+agrega un clúster propio es aislamiento de *rendimiento* y de *caída*, y a esta escala
+ninguno de los dos es un riesgo real.
+
+**No encierra**: como la base de control guarda la URI de cada taller (etapa 2), mover un
+cliente que creció a su propio clúster es cambiar un campo, no rehacer nada.
+
+### 9.2 Una sola demo compartida
+
+No una demo por taller. Es para mostrar el producto, no para que cada cliente tenga la suya.
+
+**Se restaura sola todas las noches.** Si cualquiera puede escribir en ella, un prospecto le
+borra datos a otro mientras la mira. La restauración nocturna sale casi gratis de lo ya
+hecho: es un respaldo fijo de la demo que se vuelve a cargar con `servicios/respaldo.js`.
+
+### 9.3 Sin subdominio: el taller vive en la sesión
+
+Nada de `taller1.miapp.cl`. Cuesta DNS por cliente, certificado comodín, configuración en
+Render y CORS por origen — y el SPA es un sitio estático con una sola `VITE_API_URL`, así
+que además complica el build.
+
+Lo que el subdominio resolvería es que alguien que pertenece a varios talleres los distinga,
+y **acá cada persona pertenece a uno solo**. La confusión real ("¿en qué cuenta estoy?") se
+resuelve mostrando el nombre del taller en la barra de navegación.
+
+Dos razones más:
+
+- **Es lo reversible.** Agregar subdominios después es fácil; sacarlos, cuando los clientes
+  ya tienen el link guardado, no.
+- Si algún día se agregan, **el subdominio nunca puede ser la autoridad** de qué taller es —
+  solo una pista. Si mandara él, vuelve el agujero de la sección 4: alguien entra a
+  `taller2.miapp.cl` con la sesión de `taller1`.
+
+### 9.4 Baja de un cliente: 10 días para descargar, borrado a los 30
+
+| Día | Qué pasa |
+|---|---|
+| 0 | El cliente cancela. La cuenta queda suspendida: no se puede entrar a operar. |
+| 0–10 | Puede descargar todos sus datos. |
+| 30 | Se borra: su base, **sus respaldos** y sus archivos del bucket. |
+
+**Por qué 10 para descargar pero 30 para borrar.** Diez días son razonables para que alguien
+baje sus datos, pero un dueño de taller que cancela y se va de vacaciones vuelve sin nada.
+Los veinte días extra no le cuestan nada a nadie y evitan la única versión de esto que
+termina en un reclamo justificado. Hasta el día 30 la baja **se puede deshacer**, que es el
+principio de vuelta atrás aplicado al último paso de todos.
+
+**Los respaldos cuentan.** Se borran junto con la base, no se dejan envejecer. Si quedaran
+30 días más, decirle al cliente "tus datos fueron eliminados" no sería cierto. Es más simple
+de cumplir y de explicar.
+
+**La descarga son dos cosas.** El respaldo técnico (EJSON comprimido) sirve para restaurar o
+migrar, pero es ilegible para una persona. Así que también van planillas Excel de OT,
+solicitudes, clientes y recursos — que `importExportRoutes` ya sabe generar. Un dueño de
+taller tiene que poder abrir lo que se lleva.
+
+> El plazo y la forma de la baja van en el contrato. Las obligaciones legales sobre datos
+> personales en Chile están cambiando (ley 21.719): **confirmar los plazos con alguien que
+> sepa antes de firmar el primero** — esto es una decisión de producto, no una asesoría.
+
+## 10. Lo que queda por decidir más adelante
+
+- **Cuándo migrar a `tallerId`.** La base por taller tiene techo (ver sección 3). El momento
+  de revisarlo es cuando mantener las conexiones o correr las migraciones N veces empiece a
+  doler, no antes.
+- **Si la demo compartida necesita límites** (cuántas OT puede crear un visitante, cada
+  cuánto se restaura) cuando la use más de un prospecto a la vez.
 
 ---
 
