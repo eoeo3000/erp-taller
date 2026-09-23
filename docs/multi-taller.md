@@ -5,7 +5,7 @@ instalación para un taller a un sistema que arrienda el servicio a varios, sin 
 vea los datos de otro.
 
 > **Estado**: las decisiones están tomadas (arquitectura en §1, producto en §9).
-> **Nada está implementado todavía** — el plan por etapas está en §5.
+> **Etapa 1 hecha**; de la 2 en adelante, nada implementado — el plan está en §5.
 
 ---
 
@@ -105,14 +105,29 @@ Esta es la razón por la que la etapa 1 de abajo va antes que todo lo demás.
 
 Cada etapa se puede desplegar sola y deja el sistema funcionando.
 
-### Etapa 1 — El taller sale de la sesión (sin multi-taller todavía)
+### Etapa 1 — El taller sale de la sesión (sin multi-taller todavía) ✅ HECHA
 
-- `Usuario` gana `tallerId`.
-- `middlewares/entorno.js` resuelve la conexión desde `req.usuario.tallerId` cuando hay
-  sesión, y solo cae al header cuando no la hay (PWAs, portal del cliente).
-- Se despliega con **un solo taller**, así que el comportamiento no cambia para nadie.
+- `config/talleres.js` — el concepto de taller. Hoy conoce uno (`principal`); es donde la
+  etapa 2 pondrá el registro real sin tocar nada más.
+- `Usuario.tallerId` — el slug del taller de esa persona. Sin `required` ni `default`: las
+  cuentas anteriores no lo tienen y se resuelven como del taller por defecto, así que
+  desplegar no migra datos ni echa a nadie.
+- **El token de sesión lleva prefijo**: `principal.a3f9…`. Resolvió la dependencia circular
+  que tenía este paso — para saber el taller hay que leer la sesión, pero la sesión vive
+  dentro de la base del taller, así que hay que saber el taller antes. El prefijo es **dato
+  de ruteo, no de autenticación**: solo elige en qué base buscar el token, y el token igual
+  tiene que existir ahí. Un token sin punto (sesión anterior) se entiende del taller por
+  defecto.
+- `middlewares/entorno.js` deja `req.taller`, `req.entorno` y `req.db`. El header sigue
+  eligiendo producción/demo —su uso legítimo— y **no puede elegir el taller**.
+- `middlewares/sesion.js` cierra la cadena: la persona encontrada tiene que pertenecer al
+  taller cuya base se abrió. Es la comprobación que confronta el dato del cliente con lo que
+  dice la base.
 
-Es la etapa que cierra el agujero mientras todavía no hay nada que robar.
+Con un solo taller nada de esto cambia el comportamiento, y la comprobación final nunca
+falla. Se construyó igual, y desde ahora, para que cuando haya dos ya lleve meses
+funcionando — y para no tener que acordarse de agregarla, que es el olvido que convierte un
+sistema multi-cliente en una filtración.
 
 ### Etapa 2 — La base de control y el registro de talleres
 

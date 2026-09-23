@@ -17,7 +17,8 @@
 // SPA ya sabe autenticarse.
 const getSesionStaff = require('../models/SesionStaff');
 const getUsuario = require('../models/Usuario');
-const { hashToken } = require('../utils/tokens');
+const { hashToken, separarPrefijo } = require('../utils/tokens');
+const { tallerPorDefecto } = require('../config/talleres');
 
 // Ventana de inactividad: un PC suspendido no dispara ningún evento que el navegador pueda
 // avisar, así que "pedir clave al volver de suspender" se implementa como "pedir clave
@@ -62,7 +63,12 @@ function expiracionAbsoluta(desde = Date.now()) {
 
 // Devuelve { sesion, usuario } o null. No responde nunca: quien llama decide qué hacer.
 async function resolverSesion(req) {
-    const token = tokenDeLaRequest(req);
+    const tokenCompleto = tokenDeLaRequest(req);
+    if (!tokenCompleto) return null;
+
+    // El prefijo ya lo usó middlewares/entorno.js para elegir la base; acá se descarta y se
+    // trabaja con el token solo, que es lo que se guardó hasheado.
+    const { token } = separarPrefijo(tokenCompleto);
     if (!token) return null;
 
     const SesionStaff = getSesionStaff(req.db);
@@ -80,6 +86,20 @@ async function resolverSesion(req) {
     // Revocar a la persona corta sus sesiones abiertas en la siguiente request, sin tener
     // que ir a buscarlas una por una.
     if (!usuario || usuario.estado !== 'activo') return null;
+
+    // El cierre de la cadena: la persona tiene que pertenecer al taller cuya base se abrió.
+    // El prefijo del token eligió la base, pero es dato del cliente; esto lo confronta con
+    // lo que dice la base. Sin `tallerId` son cuentas anteriores a que el campo existiera y
+    // se resuelven como del taller por defecto, que es el único que hay hoy.
+    //
+    // Con un solo taller esto nunca falla. Existe desde ahora para que el día que haya dos
+    // no haya que acordarse de agregarlo: ese es exactamente el olvido que convierte un
+    // sistema multi-cliente en una filtración.
+    const tallerDelUsuario = usuario.tallerId || tallerPorDefecto();
+    if (tallerDelUsuario !== (req.taller || tallerPorDefecto())) {
+        console.warn(`[sesion] sesión de un usuario de "${tallerDelUsuario}" llegó resuelta al taller "${req.taller}" — se rechaza`);
+        return null;
+    }
 
     if (!esSondeo(req) && ahora - sesion.ultimoAcceso > RENOVAR_CADA_MS) {
         const expira = nuevaExpiracion(ahora.getTime());

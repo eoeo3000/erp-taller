@@ -18,6 +18,7 @@
 // quedan en el historial del shell y son visibles en la lista de procesos del servidor.
 require('dotenv').config();
 const mongoose = require('mongoose');
+const { TALLER_PRINCIPAL } = require('../src/config/talleres');
 const getUsuario = require('../src/models/Usuario');
 const { hashPassword } = require('../src/utils/password');
 
@@ -84,6 +85,7 @@ async function main() {
                 nombre: nombre || email,
                 rol: 'administrador',
                 email,
+                tallerId: TALLER_PRINCIPAL,
                 passwordHash,
                 debeCambiarPassword: true,
             });

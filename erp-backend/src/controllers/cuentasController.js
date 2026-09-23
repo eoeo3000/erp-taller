@@ -11,6 +11,7 @@ const getSesionStaff = require('../models/SesionStaff');
 const { generarToken, hashToken } = require('../utils/tokens');
 const transporter = require('../config/mailer');
 const { SPA_URL } = require('../config/urls');
+const { tallerPorDefecto } = require('../config/talleres');
 
 // Más larga que la de recuperar clave (1h): una invitación se manda a alguien que capaz
 // recién entra el lunes, no a alguien que está mirando la pantalla en este momento.
@@ -75,7 +76,7 @@ exports.invitar = async (req, res) => {
 
         // Sin passwordHash: la cuenta existe pero no sirve para entrar hasta que la persona
         // elija su clave desde el link. Nadie, ni quien invita, conoce una clave suya.
-        const usuario = await Usuario.create({ nombre, email, rol: 'administrador' });
+        const usuario = await Usuario.create({ nombre, email, rol: 'administrador', tallerId: req.taller || tallerPorDefecto() });
 
         const link = await emitirInvitacion(Usuario, usuario, req.entorno);
         let correoEnviado = true;

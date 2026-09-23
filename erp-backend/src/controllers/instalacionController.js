@@ -11,7 +11,8 @@
 const getUsuario = require('../models/Usuario');
 const getSesionStaff = require('../models/SesionStaff');
 const { hashPassword } = require('../utils/password');
-const { generarToken, hashToken } = require('../utils/tokens');
+const { tallerPorDefecto } = require('../config/talleres');
+const { generarToken, hashToken, conPrefijo } = require('../utils/tokens');
 const { nuevaExpiracion, expiracionAbsoluta } = require('../middlewares/sesion');
 
 const LARGO_MINIMO_PASSWORD = 8;
@@ -63,6 +64,7 @@ exports.instalar = async (req, res) => {
         // la escribe quien corre el script.
         const usuario = await Usuario.create({
             nombre, email, rol: 'administrador',
+            tallerId: req.taller || tallerPorDefecto(),
             passwordHash: await hashPassword(password),
             ultimoAccesoSpa: new Date(),
         });
@@ -80,7 +82,9 @@ exports.instalar = async (req, res) => {
         });
 
         res.ok({
-            token,
+            // Con el prefijo del taller, igual que authController.crearSesion: es lo que
+            // dice en qué base buscar esta sesión (ver utils/tokens.js).
+            token: conPrefijo(usuario.tallerId, token),
             usuario: {
                 _id: usuario._id, nombre: usuario.nombre, email: usuario.email,
                 rol: usuario.rol, puesto: '', debeCambiarPassword: false,
