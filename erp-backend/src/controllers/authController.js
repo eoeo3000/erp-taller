@@ -3,7 +3,8 @@
 const getUsuario = require('../models/Usuario');
 const getSesionStaff = require('../models/SesionStaff');
 const { hashPassword, verificarPassword } = require('../utils/password');
-const { generarToken, hashToken } = require('../utils/tokens');
+const { generarToken, hashToken, conPrefijo } = require('../utils/tokens');
+const { tallerPorDefecto } = require('../config/talleres');
 const { nuevaExpiracion, expiracionAbsoluta, authRequerida, MINUTOS_INACTIVIDAD } = require('../middlewares/sesion');
 const { hayCuentasDeEscritorio, claveInstalacionRequerida } = require('./instalacionController');
 const transporter = require('../config/mailer');
@@ -45,7 +46,10 @@ async function crearSesion(req, usuario) {
         userAgent: req.headers['user-agent'] || '',
     });
 
-    return token;
+    // Se guarda el hash del token SOLO, y se devuelve con el prefijo del taller delante:
+    // el prefijo es ruteo (dice en qué base buscarlo la próxima vez) y no forma parte del
+    // secreto. Ver utils/tokens.js.
+    return conPrefijo(usuario.tallerId || tallerPorDefecto(), token);
 }
 
 // POST /api/auth/login — { email, password }

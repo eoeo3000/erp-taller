@@ -23,6 +23,17 @@ const UsuarioSchema = new mongoose.Schema({
     // descartar antes el valor vacío, como ya hace asignacionController.resolverUsuarioPorToken.
     token: { type: String },
     estado: { type: String, enum: ['activo', 'revocado'], default: 'activo' },
+    // A qué taller (cliente que arrienda el sistema) pertenece esta persona. Guarda el SLUG
+    // del taller, no un ObjectId: el taller identifica una base de datos, no un documento
+    // de esta base (ver config/talleres.js y docs/multi-taller.md).
+    //
+    // Sin `required` ni `default` a propósito: las cuentas creadas antes de que esto
+    // existiera no lo tienen, y se resuelven como del taller por defecto. Eso es lo que
+    // permite desplegar sin migrar datos ni echar a nadie.
+    //
+    // Desde la etapa 2 este campo es lo que decide de quién son los datos que la persona
+    // ve, así que **nunca debe poder cambiarlo quien usa el sistema** — solo el alta.
+    tallerId: { type: String, trim: true },
     fechaEmision: { type: Date, default: Date.now },
     ultimoAcceso: { type: Date, default: null },
 
