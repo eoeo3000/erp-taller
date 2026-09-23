@@ -1,21 +1,12 @@
 const express = require('express');
 const router = express.Router();
 const solicitudController = require('../controllers/solicitudController');
-const multer = require('multer');
-const path = require('path');
-
-// Configuración de almacenamiento
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        cb(null, 'uploads/'); // Asegúrate de que esta carpeta exista en la raíz de tu backend
-    },
-    filename: (req, file, cb) => {
-        // Generamos un nombre único: timestamp + extensión original
-        cb(null, Date.now() + path.extname(file.originalname));
-    }
-});
-
-const upload = multer({ storage: storage });
+// Antes acá había un multer propio escribiendo en `uploads/` del disco, duplicando el de
+// middlewares/upload.js. Ahora comparten el mismo, que trabaja en memoria y deja que
+// config/almacenamiento.js decida el destino (bucket R2, o disco si no está configurado).
+// De paso desaparece un choque de nombres: aquel usaba solo `Date.now()`, así que dos
+// adjuntos subidos en el mismo milisegundo se pisaban entre sí.
+const upload = require('../middlewares/upload');
 
 // --- ENDPOINTS ACTUALIZADOS ---
 
