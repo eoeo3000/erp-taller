@@ -240,7 +240,14 @@ function TokensActivos({ API }) {
 // buzón pero no que la persona trabaje en el taller (ver cuentasController.js).
 // El nombre y el correo son lo que se lee para identificar a alguien, así que se llevan el
 // espacio libre; las columnas fijas se quedan con lo justo para su contenido más largo.
-const GRID_CUENTAS = '1fr 92px 104px 152px';
+const GRID_CUENTAS = '1fr 92px 104px 212px';
+
+// Los botones de la fila son todos iguales salvo el color del texto, así que el estilo se
+// arma una vez en vez de repetir ocho veces las mismas nueve propiedades.
+const botonFila = (enCurso, color) => ({
+    height: 23, padding: '0 8px', background: '#fff', border: '1px solid rgba(0,0,0,.22)',
+    fontSize: 10.5, color, cursor: enCurso ? 'default' : 'pointer', borderRadius: 2, opacity: enCurso ? .5 : 1,
+});
 
 function CuentasOficina({ API }) {
     const [cuentas, setCuentas] = useState([]);
@@ -250,6 +257,10 @@ function CuentasOficina({ API }) {
     const [linkAMano, setLinkAMano] = useState('');
     const [enviando, setEnviando] = useState(false);
     const [procesando, setProcesando] = useState(null);
+    // Edición en la propia fila: la lista es de tres o cuatro personas y el cambio es de un
+    // campo, así que un diálogo aparte sería más pantalla para menos trabajo.
+    const [editando, setEditando] = useState(null);
+    const [borrador, setBorrador] = useState({ nombre: '', email: '' });
     const cabeceras = { headers: { ...headerEntorno(), ...headerApiKey() } };
 
     const cargar = () => axios.get(`${API}/cuentas`, cabeceras)
@@ -283,6 +294,38 @@ function CuentasOficina({ API }) {
             setAviso({ tipo: 'error', texto: e.response?.data?.error || 'No se pudo invitar.' });
         } finally {
             setEnviando(false);
+        }
+    };
+
+    const abrirEdicion = (cuenta) => {
+        setEditando(cuenta._id);
+        setBorrador({ nombre: cuenta.nombre, email: cuenta.email });
+        setAviso(null); setLinkAMano('');
+    };
+
+    const guardar = async (cuenta) => {
+        if (!borrador.nombre.trim()) return setAviso({ tipo: 'error', texto: 'El nombre no puede quedar vacío.' });
+        setProcesando(cuenta._id); setAviso(null); setLinkAMano('');
+        try {
+            const { data } = await axios.put(`${API}/cuentas/${cuenta._id}`, borrador, cabeceras);
+            const cambioCorreo = data.cuenta.email !== cuenta.email;
+            setAviso({
+                tipo: 'ok',
+                texto: data.sinCambios ? 'No había nada que cambiar.'
+                    : !cambioCorreo ? 'Cuenta actualizada.'
+                    // El link viejo ya salió al buzón equivocado y deja de servir al corregir
+                    // el correo, así que la invitación nueva no es un extra: es la única que
+                    // queda viva, y hay que decirlo para que nadie espere con la anterior.
+                    : data.correoEnviado ? `Correo corregido. Se mandó una invitación nueva a ${data.cuenta.email} y el link anterior dejó de servir.`
+                    : 'Correo corregido y link anterior anulado, pero no se pudo enviar el correo — copia el link de abajo.',
+            });
+            if (cambioCorreo && !data.correoEnviado && data.link) setLinkAMano(data.link);
+            setEditando(null);
+            await cargar();
+        } catch (e) {
+            setAviso({ tipo: 'error', texto: e.response?.data?.error || 'No se pudo guardar.' });
+        } finally {
+            setProcesando(null);
         }
     };
 
@@ -354,27 +397,55 @@ function CuentasOficina({ API }) {
                     const enCurso = procesando === c._id;
                     return (
                         <div key={c._id} style={{ display: 'grid', gridTemplateColumns: GRID_CUENTAS, gap: 10, padding: '8px 12px', borderBottom: `1px solid ${t.hairline}`, alignItems: 'center' }}>
-                            <div style={{ minWidth: 0 }}>
-                                <div style={{ fontSize: 12, color: t.textoPrincipal, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.nombre}</div>
-                                <div style={{ fontSize: 10.5, color: t.textoAtenuado2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.email}</div>
-                            </div>
+                            {editando === c._id ? (
+                                <div style={{ minWidth: 0, display: 'grid', gap: 4 }}>
+                                    <input value={borrador.nombre} onChange={e => setBorrador({ ...borrador, nombre: e.target.value })} placeholder="Nombre y apellido" style={{ ...campoStyle, height: 23, fontSize: 11.5 }} />
+                                    <input
+                                        type="email" value={borrador.email}
+                                        onChange={e => setBorrador({ ...borrador, email: e.target.value })}
+                                        disabled={c.activada}
+                                        // El correo es con lo que entra: cambiárselo a una cuenta
+                                        // ya activa la deja afuera al instante y, si el correo
+                                        // nuevo es de otra persona, le entrega el acceso a ella.
+                                        // Se bloquea acá además del 409 del backend para que se
+                                        // vea antes de escribir, no después de guardar.
+                                        title={c.activada ? 'Esta cuenta ya está activa y su correo es con lo que entra. Invita al correo correcto y revoca esta.' : 'Solo mientras la invitación está pendiente'}
+                                        style={{ ...campoStyle, height: 23, fontSize: 11, background: c.activada ? '#f2f0eb' : '#fff', color: c.activada ? t.textoAtenuado2 : t.textoPrincipal, cursor: c.activada ? 'not-allowed' : 'text' }}
+                                    />
+                                </div>
+                            ) : (
+                                <div style={{ minWidth: 0 }}>
+                                    <div style={{ fontSize: 12, color: t.textoPrincipal, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.nombre}</div>
+                                    <div style={{ fontSize: 10.5, color: t.textoAtenuado2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.email}</div>
+                                </div>
+                            )}
                             <span title={est.ayuda || ''} style={{ justifySelf: 'start', fontSize: 10, fontWeight: 700, letterSpacing: '.05em', textTransform: 'uppercase', padding: '2px 7px', borderRadius: 2, background: est.fondo, color: est.tono }}>{est.texto}</span>
                             <span style={{ fontFamily: t.fontMono, fontSize: 11, color: t.textoAtenuado1 }}>{fmtAcceso(c.ultimoAccesoSpa)}</span>
                             <div style={{ justifySelf: 'end', display: 'flex', gap: 4 }}>
-                                {!c.activada && c.estado === 'activo' && (
-                                    <button onClick={() => accion(c, 'reenviar')} disabled={enCurso} style={{ height: 23, padding: '0 8px', background: '#fff', border: '1px solid rgba(0,0,0,.22)', fontSize: 10.5, color: t.textoSecundario2, cursor: enCurso ? 'default' : 'pointer', borderRadius: 2, opacity: enCurso ? .5 : 1 }}>{enCurso ? '…' : 'Reenviar'}</button>
-                                )}
-                                {c.estado === 'activo' ? (
-                                    <button onClick={() => accion(c, 'revocar')} disabled={enCurso} style={{ height: 23, padding: '0 8px', background: '#fff', border: '1px solid rgba(0,0,0,.22)', fontSize: 10.5, color: t.rojo, cursor: enCurso ? 'default' : 'pointer', borderRadius: 2, opacity: enCurso ? .5 : 1 }}>{enCurso ? '…' : 'Revocar'}</button>
+                                {editando === c._id ? (
+                                    <>
+                                        <button onClick={() => guardar(c)} disabled={enCurso} style={{ ...botonFila(enCurso, '#fff'), background: t.acento, border: `1px solid ${t.acento}`, fontWeight: 700 }}>{enCurso ? '…' : 'Guardar'}</button>
+                                        <button onClick={() => setEditando(null)} disabled={enCurso} style={botonFila(enCurso, t.textoSecundario2)}>Cancelar</button>
+                                    </>
                                 ) : (
-                                    <button onClick={() => accion(c, 'reactivar')} disabled={enCurso} style={{ height: 23, padding: '0 8px', background: '#fff', border: '1px solid rgba(0,0,0,.22)', fontSize: 10.5, color: t.textoSecundario2, cursor: enCurso ? 'default' : 'pointer', borderRadius: 2, opacity: enCurso ? .5 : 1 }}>{enCurso ? '…' : 'Reactivar'}</button>
+                                    <>
+                                        <button onClick={() => abrirEdicion(c)} disabled={enCurso} style={botonFila(enCurso, t.textoSecundario2)}>Editar</button>
+                                        {!c.activada && c.estado === 'activo' && (
+                                            <button onClick={() => accion(c, 'reenviar')} disabled={enCurso} style={botonFila(enCurso, t.textoSecundario2)}>{enCurso ? '…' : 'Reenviar'}</button>
+                                        )}
+                                        {c.estado === 'activo' ? (
+                                            <button onClick={() => accion(c, 'revocar')} disabled={enCurso} style={botonFila(enCurso, t.rojo)}>{enCurso ? '…' : 'Revocar'}</button>
+                                        ) : (
+                                            <button onClick={() => accion(c, 'reactivar')} disabled={enCurso} style={botonFila(enCurso, t.textoSecundario2)}>{enCurso ? '…' : 'Reactivar'}</button>
+                                        )}
+                                    </>
                                 )}
                             </div>
                         </div>
                     );
                 })}
                 <div style={{ padding: '9px 12px', fontSize: 10.5, color: t.textoAtenuado2, lineHeight: 1.6 }}>
-                    Revocar cierra las sesiones abiertas de esa persona de inmediato y se puede deshacer con Reactivar, que conserva su misma clave. Nadie puede revocar su propia cuenta: quedarse sin ninguna activa dejaría al taller afuera de su propio sistema.
+                    Revocar cierra las sesiones abiertas de esa persona de inmediato y se puede deshacer con Reactivar, que conserva su misma clave. Nadie puede revocar su propia cuenta: quedarse sin ninguna activa dejaría al taller afuera de su propio sistema. El nombre se corrige cuando sea; el correo, solo mientras la invitación está pendiente —es con lo que la persona entra, así que en una cuenta activa se invita al correo correcto y se revoca la anterior. Al corregir un correo pendiente sale una invitación nueva y el link anterior deja de servir.
                 </div>
             </div>
         </div>
