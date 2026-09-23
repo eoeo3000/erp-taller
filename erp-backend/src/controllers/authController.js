@@ -166,6 +166,24 @@ exports.cambiarPassword = async (req, res) => {
 };
 
 // POST /api/auth/recuperar — { email }. Manda el correo con el link de restablecimiento.
+// Qué se registra de una recuperación, y qué no.
+//
+// La respuesta al navegador es siempre la misma —exista o no la cuenta— para que el
+// formulario no se convierta en una forma de averiguar qué correos están registrados. Pero
+// esa misma opacidad dejaba a quien administra el sistema sin ninguna forma de saber qué
+// pasó: "no existe esa cuenta", "la cuenta todavía no tiene clave" y "el correo salió bien"
+// se veían exactamente igual desde afuera. Eso costó horas de adivinanzas con un caso real.
+//
+// Así que el resultado SÍ va al log del servidor, con dos reglas:
+//   - Nunca la dirección completa. El log de Render lo lee cualquiera con acceso al panel y
+//     quedaría ahí una lista de quién tiene cuenta.
+//   - Sí el dominio, que es lo que de verdad sirve para diagnosticar: el error típico es
+//     escribir el correo de otra cuenta (un gmail cuando la cuenta es de hotmail).
+function registrarRecuperacion(resultado, email) {
+    const dominio = String(email || '').split('@')[1] || '(sin dominio)';
+    console.log(`[auth] recuperación: ${resultado} (@${dominio})`);
+}
+
 exports.recuperar = async (req, res) => {
     const Usuario = getUsuario(req.db);
     try {
@@ -173,10 +191,22 @@ exports.recuperar = async (req, res) => {
         // Respuesta idéntica exista o no la cuenta: si no, esto se convierte en una forma
         // de averiguar qué correos están registrados (mismo criterio que CREDENCIAL_INVALIDA).
         const respuesta = { ok: true, mensaje: 'Si el correo está registrado, te llegará un mensaje con las instrucciones.' };
-        if (!email) return res.json(respuesta);
+        if (!email) {
+            registrarRecuperacion('pedida sin correo', email);
+            return res.json(respuesta);
+        }
 
         const usuario = await Usuario.findOne({ email, estado: 'activo' });
-        if (!usuario || !usuario.passwordHash) return res.json(respuesta);
+        if (!usuario) {
+            registrarRecuperacion('NO se envió — ninguna cuenta activa con ese correo', email);
+            return res.json(respuesta);
+        }
+        if (!usuario.passwordHash) {
+            // Una invitación que todavía no se activó. Reponer la clave no aplica: lo que
+            // corresponde es reenviar la invitación desde Cuentas de oficina.
+            registrarRecuperacion('NO se envió — la cuenta existe pero aún no tiene clave (invitación sin activar)', email);
+            return res.json(respuesta);
+        }
 
         const token = generarToken();
         await Usuario.updateOne({ _id: usuario._id }, {
@@ -196,10 +226,12 @@ exports.recuperar = async (req, res) => {
                     + `El link vence en ${MINUTOS_VALIDEZ_RESET} minutos y sirve una sola vez.\n`
                     + `Si no fuiste tú, ignora este correo: tu clave actual sigue funcionando.`,
             });
+            registrarRecuperacion('correo entregado al proveedor', email);
         } catch (eCorreo) {
             // Mismo criterio que usuarioController al emitir tokens: el fallo de correo se
             // registra pero no se le informa a quien llama, para no filtrar si existe o no.
             console.warn('[auth] no se pudo enviar el correo de recuperación:', eCorreo.message);
+            registrarRecuperacion(`FALLÓ el envío — ${eCorreo.message}`, email);
         }
 
         res.json(respuesta);
