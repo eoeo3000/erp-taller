@@ -11,6 +11,7 @@ router.use(requiereSesionEstricta);
 
 router.get('/', ctrl.listar);
 router.post('/invitar', ctrl.invitar);
+router.put('/:id', ctrl.actualizar);
 router.post('/:id/reenviar', ctrl.reenviar);
 router.post('/:id/revocar', ctrl.revocar);
 router.post('/:id/reactivar', ctrl.reactivar);

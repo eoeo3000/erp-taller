@@ -107,6 +107,59 @@ exports.listar = async (req, res) => {
     }
 };
 
+// PUT /api/cuentas/:id — { nombre?, email? }
+exports.actualizar = async (req, res) => {
+    const Usuario = getUsuario(req.db);
+    try {
+        const usuario = await Usuario.findById(req.params.id);
+        if (!usuario || !usuario.email) return res.fail(404, 'Cuenta no encontrada');
+
+        const cambios = {};
+
+        const nombre = String(req.body?.nombre || '').trim();
+        if (nombre && nombre !== usuario.nombre) cambios.nombre = nombre;
+
+        const email = String(req.body?.email || '').trim().toLowerCase();
+        if (email && email !== usuario.email) {
+            // El correo es con lo que entra: cambiárselo a una cuenta activa la deja sin
+            // acceso de inmediato y, si el correo nuevo es de otra persona, le entrega el
+            // acceso a ella. Para eso está invitar al correo correcto y revocar esta, que
+            // además deja rastro de las dos cuentas.
+            if (usuario.passwordHash) {
+                return res.fail(409, 'Esa cuenta ya está activa y su correo es con lo que entra. Invita al correo correcto y revoca esta.');
+            }
+            if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.fail(400, 'El correo no parece válido');
+            if (await Usuario.findOne({ email })) return res.fail(409, 'Ya hay una cuenta con ese correo.');
+            cambios.email = email;
+        }
+
+        if (!Object.keys(cambios).length) return res.ok({ cuenta: cuentaPublica(usuario), sinCambios: true });
+
+        await Usuario.updateOne({ _id: usuario._id }, cambios);
+        Object.assign(usuario, cambios);
+
+        let correoEnviado = false;
+        let link = '';
+        if (cambios.email) {
+            // La invitación anterior ya salió al correo equivocado y su link SIGUE sirviendo:
+            // quien lo haya recibido podría activar esta cuenta. Emitir otra reemplaza el
+            // resetHash guardado, así que el link viejo muere acá mismo.
+            link = await emitirInvitacion(Usuario, usuario, req.entorno);
+            correoEnviado = true;
+            try {
+                await enviarCorreoInvitacion(usuario, link, req.usuario?.nombre || 'La oficina');
+            } catch (eCorreo) {
+                console.warn('[cuentas] no se pudo enviar la invitación al correo corregido:', eCorreo.message);
+                correoEnviado = false;
+            }
+        }
+
+        res.ok({ cuenta: cuentaPublica(usuario), correoEnviado, link: correoEnviado ? '' : link });
+    } catch (error) {
+        res.fail(500, error.message);
+    }
+};
+
 // POST /api/cuentas/:id/reenviar — nueva invitación (invalida la anterior)
 exports.reenviar = async (req, res) => {
     const Usuario = getUsuario(req.db);
