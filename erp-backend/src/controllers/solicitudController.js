@@ -2,6 +2,7 @@ const getSolicitud = require('../models/Solicitud');
 const getOT = require('../models/OT');
 const getAsignacion = require('../models/Asignacion');
 const { resolverOCrearClientePorNombre } = require('./clienteController');
+const almacenamiento = require('../config/almacenamiento');
 
 async function generarNumeroSolicitud(conn) {
     const Solicitud = getSolicitud(conn);
@@ -56,9 +57,12 @@ exports.crearSolicitud = async (req, res) => {
             }
         }
 
-        // Si Multer capturó el archivo
+        // Si Multer capturó el archivo. Multer ahora trabaja en memoria: el archivo se
+        // entrega a config/almacenamiento.js, que lo manda al bucket (o al disco si no hay
+        // credenciales). Se sigue guardando la ruta relativa, igual que antes.
         if (req.file) {
-            data.adjuntos = `/uploads/${req.file.filename}`;
+            const { url } = await almacenamiento.guardar(req.file.buffer, req.file.originalname);
+            data.adjuntos = url;
         }
 
         // IMPORTANTE: Si el campo adjuntos existe en req.body como string "undefined"
