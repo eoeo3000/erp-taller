@@ -7,11 +7,30 @@ import { obtenerHorasParaDia as obtenerHorasParaDiaPura } from './utils/calendar
 // vivía embebido en esta SPA (ruta /portal, PortalClienteScreen.jsx) — eliminado: era un
 // portal viejo, sin la autenticación real de erp-pwa-cliente (ver enviarPortalCliente),
 // reemplazado hace tiempo por esa app aparte.
+// SVG inline y no un emoji: los emoji los dibuja el sistema operativo, así que cambian de
+// forma y de color entre Windows, Mac y Android — en una franja de 26px eso se nota, y rompe
+// el registro sobrio del resto de la app. currentColor lo ata al color del texto de la franja.
+function IconoAviso({ tamano = 13 }) {
+  return (
+    <svg width={tamano} height={tamano} viewBox="0 0 16 16" fill="none" stroke="currentColor"
+      strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"
+      style={{ flex: 'none' }}>
+      <path d="M8 2.2 14.4 13.4H1.6L8 2.2Z" />
+      <path d="M8 6.6v3.1" />
+      <path d="M8 11.6h.01" />
+    </svg>
+  );
+}
+
 function BannerDemo({ entorno, onVolver }) {
   if (entorno !== 'demo') return null;
   return (
     <div style={stylesBannerDemo.franja}>
-      <span>Entorno de demostración — estos datos son ficticios, no son del taller.</span>
+      <span style={stylesBannerDemo.etiqueta}>
+        <IconoAviso />
+        Demo con datos ficticios
+      </span>
+      <span style={stylesBannerDemo.detalle}>Ninguna empresa, persona ni monto de esta demostración es real.</span>
       <span onClick={onVolver} style={stylesBannerDemo.accion}>Volver a producción</span>
     </div>
   );
@@ -22,6 +41,8 @@ const stylesBannerDemo = {
     flex: 'none', height: 26, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16,
     background: 'oklch(0.55 0.11 65)', color: '#ffffff', fontSize: 11, fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif',
   },
+  etiqueta: { display: 'inline-flex', alignItems: 'center', gap: 6, fontWeight: 600, letterSpacing: '.02em' },
+  detalle: { opacity: .85 },
   accion: { textDecoration: 'underline', cursor: 'pointer', fontWeight: 600 },
 };
 import axios from 'axios';
@@ -94,13 +115,13 @@ function App() {
   const { recursos, setRecursos, crearRecurso, actualizarRecurso, guardarCambioManualGlobal } = useRecursos();
   // `actualizarProgresoTarea` no se destructura: no se usa en ningún lado (ya estaba sin
   // usar antes de esta extracción, confirmado por grep y por el lint de no-unused-vars).
-  const { ots, setOts, otSeleccionada, setOtSeleccionada, eliminarOT, actualizarOtGlobal, editarOtGlobal } = useOts(() => cargarDatos());
-  const { solicitudes, setSolicitudes, crearSolicitudGlobal, actualizarSolicitudGlobal, eliminarSolicitud, liberarSolicitudManual, actualizarEstadoSolicitud, aprobarYCrearOT } = useSolicitudes(() => cargarDatos());
+  const { ots, setOts, otSeleccionada, setOtSeleccionada, eliminarOT: eliminarOTReal, actualizarOtGlobal, editarOtGlobal } = useOts(() => cargarDatos());
+  const { solicitudes, setSolicitudes, crearSolicitudGlobal, actualizarSolicitudGlobal, eliminarSolicitud: eliminarSolicitudReal, liberarSolicitudManual, actualizarEstadoSolicitud, aprobarYCrearOT } = useSolicitudes(() => cargarDatos());
   const { calendarios, setCalendarios, guardarCalendarioGlobal } = useCalendarios(() => cargarDatos());
-  const { componentes, setComponentes, crearEquipo, eliminarEquipo, actualizarEquipo } = useComponentes();
-  const { suministros, setSuministros, crearSuministro, eliminarSuministro, actualizarSuministro, ajustarStockSuministro, obtenerMovimientosStock } = useSuministros();
-  const { puestosDB, setPuestosDB, crearPuesto, eliminarPuesto } = usePuestos();
-  const { plantillas, setPlantillas, crearPlantilla, actualizarPlantilla, eliminarPlantilla } = usePlantillas();
+  const { componentes, setComponentes, crearEquipo, eliminarEquipo: eliminarEquipoReal, actualizarEquipo } = useComponentes();
+  const { suministros, setSuministros, crearSuministro, eliminarSuministro: eliminarSuministroReal, actualizarSuministro, ajustarStockSuministro, obtenerMovimientosStock } = useSuministros();
+  const { puestosDB, setPuestosDB, crearPuesto, eliminarPuesto: eliminarPuestoReal } = usePuestos();
+  const { plantillas, setPlantillas, crearPlantilla, actualizarPlantilla, eliminarPlantilla: eliminarPlantillaReal } = usePlantillas();
   // Solo lectura acá (CRUD propio en ClientesScreen) — se usa para resolver Solicitud.clienteId
   // al nombre ACTUAL del Cliente en Ingreso/Panel de control/Antecedentes, en vez de mostrar
   // el texto libre empresaSolicitante tal cual quedó escrito cuando se creó la solicitud.
@@ -239,7 +260,7 @@ function App() {
 
   // --- Flujos que cruzan dos dominios a la vez: se quedan en App.jsx como orquestación
   // entre los hooks de cada uno, en vez de forzar que un hook manipule el estado de otro. ---
-  const eliminarRecurso = async (id) => {
+  const eliminarRecursoReal = async (id) => {
     try {
       const respuesta = await axios.delete(`${API}/recursos/${id}`);
 
@@ -264,7 +285,7 @@ function App() {
     }
   };
 
-  const eliminarCalendarioMaestro = async (id) => {
+  const eliminarCalendarioMaestroReal = async (id) => {
     if (!(await confirmar("¿Estás seguro de eliminar este turno? Los operarios asignados quedarán 'Sin Turno'."))) return;
 
     try {
@@ -328,7 +349,7 @@ function App() {
     }
   };
 
-  const eliminarDisposicionGlobal = async (id) => {
+  const eliminarDisposicionGlobalReal = async (id) => {
     try {
       await axios.delete(`${API}/disposiciones/${id}`);
       return true;
@@ -337,6 +358,34 @@ function App() {
       return false;
     }
   };
+
+  // --- Modo demostración: nada se elimina ---
+  // La demo se muestra a gente que no conoce el sistema, y ahí un borrado por curiosidad deja
+  // el juego de datos cojo (peor: borrar una OT devuelve su Solicitud a 'Pendiente'). El
+  // backend ya rechaza todo DELETE cuando el entorno es demo (middlewares/demoSoloLectura.js);
+  // esto es la mitad de adelante, para que la persona lea una explicación en vez de un error.
+  //
+  // Se intercepta ACÁ, en el único lugar donde viven los handlers, y no botón por botón en cada
+  // pantalla: son una decena de afordancias de borrado repartidas entre Panel de control,
+  // Recursos y Tratamiento, y cualquiera nueva que se agregue mañana queda cubierta sola. Por
+  // eso los handlers reales se destructuran/definen arriba con sufijo `Real` y se reexponen acá
+  // con su nombre original: ninguna pantalla ni ninguna prop necesita cambiar.
+  const sinBorrarEnDemo = (fn, queCosa) => (
+    entornoActivo !== 'demo' ? fn : async () => {
+      notificar.advertencia(`En la demostración no se elimina ${queCosa}: los datos ficticios quedan intactos para la próxima vez.`);
+      return false;
+    }
+  );
+
+  const eliminarOT = sinBorrarEnDemo(eliminarOTReal, 'una OT');
+  const eliminarSolicitud = sinBorrarEnDemo(eliminarSolicitudReal, 'una solicitud');
+  const eliminarRecurso = sinBorrarEnDemo(eliminarRecursoReal, 'personal');
+  const eliminarEquipo = sinBorrarEnDemo(eliminarEquipoReal, 'un activo');
+  const eliminarSuministro = sinBorrarEnDemo(eliminarSuministroReal, 'un material');
+  const eliminarPuesto = sinBorrarEnDemo(eliminarPuestoReal, 'un puesto');
+  const eliminarPlantilla = sinBorrarEnDemo(eliminarPlantillaReal, 'una plantilla');
+  const eliminarCalendarioMaestro = sinBorrarEnDemo(eliminarCalendarioMaestroReal, 'un calendario');
+  const eliminarDisposicionGlobal = sinBorrarEnDemo(eliminarDisposicionGlobalReal, 'una vista guardada');
 
   // Antes armaba un link a /portal (window.location.origin) — el Portal Cliente VIEJO,
   // embebido en esta misma SPA (erp-web, la app de escritorio), reemplazado hace tiempo por

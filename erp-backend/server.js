@@ -6,6 +6,7 @@ const apiRoutes = require('./src/routes/index');
 const mailRoutes = require('./src/routes/mailRoutes');
 const archivosRoutes = require('./src/routes/archivosRoutes');
 const resolverEntorno = require('./src/middlewares/entorno');
+const demoSoloLectura = require('./src/middlewares/demoSoloLectura');
 const contratoRespuesta = require('./src/middlewares/respuestas');
 const { inicializarConexiones } = require('./src/config/conexiones');
 const almacenamiento = require('./src/config/almacenamiento');
@@ -38,7 +39,9 @@ require('./src/config/mailer').avisarConfiguracion();
 // --- TODAS LAS RUTAS (Incluyendo /data, /solicitudes, /recursos, etc.) ---
 // resolverEntorno resuelve req.db/req.entorno según el header X-Entorno antes de
 // llegar a cualquier controlador (ver src/middlewares/entorno.js).
-app.use('/api', resolverEntorno, apiRoutes);
+// demoSoloLectura va justo después: necesita req.entorno ya resuelto para negar los
+// DELETE cuando el entorno activo es el de demostración (ver ese archivo).
+app.use('/api', resolverEntorno, demoSoloLectura, apiRoutes);
 
 const PORT = process.env.PORT || 5000;
 
