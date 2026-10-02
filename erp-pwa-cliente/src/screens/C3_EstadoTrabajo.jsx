@@ -394,7 +394,7 @@ export default function C3EstadoTrabajo({ nav, trabajo: trabajoProp }) {
                     )}
                     {accion === null && (
                         <div style={{ display: 'flex', gap: 8 }}>
-                            {!cotizacionVencida(ot) && <button className="boton-primario" disabled={enviando} onClick={() => setAccion('aceptar')}>Aceptar cotización</button>}
+                            {!cotizacionVencida(ot) && <button data-demo="cliente-aceptar-cotizacion" className="boton-primario" disabled={enviando} onClick={() => setAccion('aceptar')}>Aceptar cotización</button>}
                             <button className="boton-secundario" disabled={enviando} onClick={() => setAccion('rechazar')}>Rechazar</button>
                         </div>
                     )}
@@ -404,7 +404,7 @@ export default function C3EstadoTrabajo({ nav, trabajo: trabajoProp }) {
                                 ¿Confirma? El trabajo quedará programado con las fechas indicadas.
                             </div>
                             <div style={{ display: 'flex', gap: 8 }}>
-                                <button className="boton-primario" disabled={enviando} onClick={() => responder('Aprobada')}>{enviando ? 'Enviando…' : 'Confirmar aceptación'}</button>
+                                <button data-demo="cliente-confirmar-aceptacion" className="boton-primario" disabled={enviando} onClick={() => responder('Aprobada')}>{enviando ? 'Enviando…' : 'Confirmar aceptación'}</button>
                                 <button className="boton-secundario" disabled={enviando} onClick={() => setAccion(null)}>Cancelar</button>
                             </div>
                         </div>
@@ -555,10 +555,10 @@ export default function C3EstadoTrabajo({ nav, trabajo: trabajoProp }) {
                     pedido explícito del usuario: no mostrar cobro hasta que el trabajo esté
                     realmente terminado, no mientras todavía se está ejecutando. */}
                 {ot?.granTotal > 0 && ['Trabajo Terminado', 'Con Informe', 'Pagada'].includes(ot?.estado) && (
-                    <button className="boton-secundario" onClick={() => nav.ir('c5', { trabajo })}>Cuenta y pago</button>
+                    <button data-demo="cliente-cuenta-pago" className="boton-secundario" onClick={() => nav.ir('c5', { trabajo })}>Cuenta y pago</button>
                 )}
                 {['En Ejecución', 'Trabajo Terminado', 'Con Informe'].includes(ot?.estado) && (
-                    <button className="boton-secundario" onClick={() => nav.ir('c4', { trabajo })}>{ot?.informeFinal?.enviado ? 'Informe' : 'Avance'}</button>
+                    <button data-demo="cliente-avance" className="boton-secundario" onClick={() => nav.ir('c4', { trabajo })}>{ot?.informeFinal?.enviado ? 'Informe' : 'Avance'}</button>
                 )}
             </div>
             <div className="pie-accion" style={{ borderTop: 'none', paddingTop: 0 }}>

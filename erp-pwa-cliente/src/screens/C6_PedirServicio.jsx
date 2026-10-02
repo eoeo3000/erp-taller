@@ -80,7 +80,7 @@ export default function C6PedirServicio({ nav }) {
             <div style={{ padding: 24, display: 'flex', flexDirection: 'column', minHeight: '100vh', justifyContent: 'center', alignItems: 'center', textAlign: 'center' }}>
                 <div style={{ fontSize: 'var(--fs-titulo)', fontWeight: 700 }}>Solicitud enviada</div>
                 <div style={{ fontSize: 'var(--fs-cuerpo)', color: 'var(--texto-atenuado-1)', marginTop: 8 }}>Guarde este número para consultar el estado:</div>
-                <div className="mono" style={{ fontSize: 22, fontWeight: 700, marginTop: 16 }}>{enviado.numeroSolicitud}</div>
+                <div data-demo="pedido-confirmado" data-demo-ref={enviado.numeroSolicitud || ''} className="mono" style={{ fontSize: 22, fontWeight: 700, marginTop: 16 }}>{enviado.numeroSolicitud}</div>
                 <button className="boton-primario" style={{ marginTop: 24 }} onClick={() => nav.irRaiz('c1')}>Entendido</button>
             </div>
         );
@@ -97,7 +97,7 @@ export default function C6PedirServicio({ nav }) {
                 {paso === 1 ? (
                     <>
                         <label className="versalita">Descripción</label>
-                        <textarea className="input-campo" style={{ minHeight: 120, marginTop: 6, resize: 'vertical' }}
+                        <textarea data-demo="pedido-descripcion" className="input-campo" style={{ minHeight: 120, marginTop: 6, resize: 'vertical' }}
                             value={form.descripcion} onChange={(e) => set('descripcion', e.target.value)}
                             placeholder="Ej: se rompió la correa de la cinta transportadora en la línea 2" />
 
@@ -105,6 +105,7 @@ export default function C6PedirServicio({ nav }) {
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 6 }}>
                             {URGENCIAS.map((u) => (
                                 <button key={u} className="boton-secundario" style={{ minHeight: 52, textAlign: 'left', paddingLeft: 14, borderColor: form.plazoEjecucionSugerido === u ? 'var(--texto-principal)' : 'var(--linea-zona)', fontWeight: form.plazoEjecucionSugerido === u ? 700 : 600 }}
+                                    data-demo="pedido-urgencia" data-demo-ref={u}
                                     onClick={() => set('plazoEjecucionSugerido', u)}>
                                     <span className="mono" style={{ marginRight: 8 }}>{form.plazoEjecucionSugerido === u ? '×' : '·'}</span>{u}
                                 </button>
@@ -119,9 +120,9 @@ export default function C6PedirServicio({ nav }) {
                     </>
                 ) : (
                     <>
-                        <Campo label="Empresa"><input className="input-campo" value={form.empresaSolicitante} onChange={(e) => set('empresaSolicitante', e.target.value)} /></Campo>
-                        <Campo label="Su nombre"><input className="input-campo" value={form.solicitante} onChange={(e) => set('solicitante', e.target.value)} /></Campo>
-                        <Campo label="Teléfono"><input className="input-campo" value={form.numero} onChange={(e) => set('numero', e.target.value)} inputMode="tel" /></Campo>
+                        <Campo label="Empresa"><input data-demo="pedido-empresa" className="input-campo" value={form.empresaSolicitante} onChange={(e) => set('empresaSolicitante', e.target.value)} /></Campo>
+                        <Campo label="Su nombre"><input data-demo="pedido-nombre" className="input-campo" value={form.solicitante} onChange={(e) => set('solicitante', e.target.value)} /></Campo>
+                        <Campo label="Teléfono"><input data-demo="pedido-telefono" className="input-campo" value={form.numero} onChange={(e) => set('numero', e.target.value)} inputMode="tel" /></Campo>
                         <Campo label="Correo"><input className="input-campo" type="email" value={form.correo} onChange={(e) => set('correo', e.target.value)} /></Campo>
                         <Campo label="Dirección"><input className="input-campo" value={form.direccion} onChange={(e) => set('direccion', e.target.value)} /></Campo>
                         {error && <div style={{ marginTop: 12, fontSize: 'var(--fs-secundario)', color: 'var(--detenido)' }}>{error}</div>}
@@ -131,8 +132,8 @@ export default function C6PedirServicio({ nav }) {
 
             <div className="pie-accion">
                 {paso === 1
-                    ? <button className="boton-primario" onClick={() => setPaso(2)}>Siguiente: sus datos</button>
-                    : <button className="boton-primario" disabled={enviando} onClick={enviar}>{enviando ? 'Enviando…' : 'Enviar solicitud'}</button>}
+                    ? <button data-demo="pedido-siguiente" className="boton-primario" onClick={() => setPaso(2)}>Siguiente: sus datos</button>
+                    : <button data-demo="pedido-enviar" className="boton-primario" disabled={enviando} onClick={enviar}>{enviando ? 'Enviando…' : 'Enviar solicitud'}</button>}
             </div>
         </div>
     );

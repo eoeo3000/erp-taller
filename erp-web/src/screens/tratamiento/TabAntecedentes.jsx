@@ -80,6 +80,7 @@ export default function TabAntecedentes({ cargando, antecedentes, form, onCampo,
 
                     <span style={etiquetaAnte}>Supervisor a cargo</span>
                     <select
+                        data-demo="antecedentes-supervisor"
                         style={controlAnte} disabled={soloLectura}
                         value={form.supervisorId} onChange={e => onCampo('supervisorId', e.target.value)}
                     >
@@ -124,6 +125,7 @@ export default function TabAntecedentes({ cargando, antecedentes, form, onCampo,
                 {!soloLectura && (
                     <div style={{ marginTop: 14, display: 'flex', alignItems: 'center', gap: 10 }}>
                         <button
+                            data-demo="antecedentes-guardar"
                             onClick={onGuardar} disabled={guardando}
                             style={{
                                 height: 28, padding: '0 14px', background: t.acento, color: '#fff', fontWeight: 700,

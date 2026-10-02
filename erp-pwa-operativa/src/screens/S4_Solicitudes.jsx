@@ -142,6 +142,7 @@ export default function S4Solicitudes({ nav }) {
                     return (
                         <button
                             key={f.id}
+                            data-demo="solicitudes-filtro" data-demo-ref={f.id}
                             onClick={() => setFiltroElegido(f.id)}
                             style={{
                                 flex: 'none', minHeight: 40, padding: '0 12px', cursor: 'pointer',
@@ -254,6 +255,7 @@ function TarjetaSinInforme({ s, destacada, onTomar }) {
             <div style={{ marginTop: 7, fontSize: 16, fontWeight: 600, lineHeight: 1.35 }}>{s.descripcion}</div>
             <div style={{ marginTop: 4, fontSize: 13.5, color: 'var(--texto-secundario-2)' }}>{s.empresaSolicitante}{s.direccion ? ` · ${s.direccion}` : ''}</div>
             <button
+                data-demo="supervisor-tomar-solicitud"
                 onClick={onTomar}
                 className={destacada ? 'boton-primario' : 'boton-secundario'}
                 style={{ marginTop: 12, height: destacada ? 56 : 48 }}
@@ -292,6 +294,7 @@ function TarjetaPendiente({ p, nav }) {
             )}
 
             <button
+                data-demo="abrir-informe" data-demo-ref={p.numeroSolicitud || ''}
                 onClick={() => nav.ir('o5', { asignacion: { _id: p._id, solicitudId: p.solicitudId } })}
                 className={p.hallazgos > 0 ? 'boton-primario' : 'boton-secundario'}
                 style={{ marginTop: 12, height: p.hallazgos > 0 ? 56 : 48 }}
@@ -397,7 +400,7 @@ function HojaAsignar({ solicitud, onCancelar, onAsignada }) {
                 </div>
                 {error && <div style={{ margin: '10px 18px 0', fontSize: 13, color: 'var(--detenido)', fontWeight: 600 }}>{error}</div>}
                 <div style={{ padding: '12px 18px 20px' }}>
-                    <button className="boton-primario" disabled={enviando} onClick={confirmar}>{enviando ? 'Asignando…' : 'Confirmar y asignarme'}</button>
+                    <button data-demo="supervisor-confirmar-visita" className="boton-primario" disabled={enviando} onClick={confirmar}>{enviando ? 'Asignando…' : 'Confirmar y asignarme'}</button>
                     <button
                         onClick={onCancelar}
                         style={{ marginTop: 8, height: 48, width: '100%', background: 'none', border: 'none', fontSize: 15, fontWeight: 600, color: 'var(--texto-secundario-2)', cursor: 'pointer' }}

@@ -389,6 +389,8 @@ const GanttScreen = ({ recursos = [], ots = [], calendarios = [], obtenerHorasPa
                                                 <span style={{ fontSize: 10.5, color: t.textoAtenuado1 }}>A espera de inicio (Supervisor)</span>
                                             ) : (
                                                 <button
+                                                    data-demo="gantt-programar-fila"
+                                                    data-demo-ot={ot.numeroOT || ''}
                                                     onClick={(e) => { e.stopPropagation(); if (puedeProgramar) confirmarCapacidad(ot); }}
                                                     disabled={!puedeProgramar}
                                                     title={tituloAccion}
@@ -622,6 +624,7 @@ const GanttScreen = ({ recursos = [], ots = [], calendarios = [], obtenerHorasPa
                                                 : '';
                                         return (
                                             <button
+                                                data-demo="gantt-programar"
                                                 onClick={() => puedeSel && confirmarCapacidad(otSel)}
                                                 disabled={!puedeSel}
                                                 title={tituloSel}

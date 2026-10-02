@@ -674,9 +674,9 @@ const DashboardScreen = ({ ots = [], solicitudes = [], eliminarOT, eliminarSolic
             </div>
 
             {/* Franja KPI */}
-            <div style={styles.kpiFranja}>
+            <div data-demo="kpi-franja" style={styles.kpiFranja}>
                 {kpis.map(k => (
-                    <div key={k.label} style={styles.kpiCelda}>
+                    <div key={k.label} data-demo="kpi" data-demo-label={k.label} style={styles.kpiCelda}>
                         <div style={styles.kpiLabel}>{k.label}</div>
                         <div style={styles.kpiFila}>
                             <span style={styles.kpiValor}>{k.valor}</span>

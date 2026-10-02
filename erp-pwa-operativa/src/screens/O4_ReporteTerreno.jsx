@@ -91,6 +91,7 @@ export default function O4ReporteTerreno({ nav, asignacion }) {
                 )}
 
                 <textarea
+                    data-demo="reporte-comentario"
                     value={comentario}
                     maxLength={MAX_COMENTARIO}
                     onChange={(e) => setComentario(e.target.value)}
@@ -113,11 +114,11 @@ export default function O4ReporteTerreno({ nav, asignacion }) {
 
             <div className="pie-accion">
                 {(avisoCola || !navigator.onLine) && (
-                    <div style={{ fontSize: 'var(--fs-linea-mono)', color: 'var(--atencion)', fontWeight: 600 }}>
+                    <div data-demo="reporte-aviso-sin-senal" style={{ fontSize: 'var(--fs-linea-mono)', color: 'var(--atencion)', fontWeight: 600 }}>
                         El reporte queda en el teléfono y se envía solo al recuperar conexión.
                     </div>
                 )}
-                <button className="boton-primario" disabled={enviando} onClick={guardarYEnviar}>
+                <button data-demo="reporte-enviar" className="boton-primario" disabled={enviando} onClick={guardarYEnviar}>
                     {enviando ? 'Guardando…' : 'Guardar y enviar'}
                 </button>
             </div>

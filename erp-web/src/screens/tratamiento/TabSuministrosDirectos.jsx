@@ -85,6 +85,7 @@ export default function TabSuministrosDirectos({
                         )}
                     </span>}
                 <button
+                    data-demo="terminar-planificacion"
                     onClick={() => guardarPlanificacion('Planificada')}
                     disabled={!puedeTerminarPlanificacion}
                     title={motivoNoPuedeTerminar?.texto || ''}

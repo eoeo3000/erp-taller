@@ -58,7 +58,7 @@ export default function O2MiDia({ nav }) {
                     <span style={{ fontSize: 'var(--fs-secundario)', marginLeft: 6, color: 'var(--texto-secundario-2)' }}>asignaciones · {horasPlanificadas} h</span>
                 </div>
                 {sinEnviar > 0 && (
-                    <span className="mono" style={{ fontSize: 'var(--fs-linea-mono)', color: 'var(--atencion)', fontWeight: 600 }}>
+                    <span data-demo="mi-dia-en-cola" className="mono" style={{ fontSize: 'var(--fs-linea-mono)', color: 'var(--atencion)', fontWeight: 600 }}>
                         {sinEnviar} en cola
                     </span>
                 )}
@@ -84,16 +84,16 @@ function TarjetaAsignacion({ asignacion, ot, nav }) {
 
     let boton = null;
     if (asignacion.tipo === 'evaluacion') {
-        boton = <button className="boton-secundario" onClick={() => nav.ir('o5', { asignacion })}>Levantar informe</button>;
+        boton = <button data-demo="mi-dia-levantar-informe" className="boton-secundario" onClick={() => nav.ir('o5', { asignacion })}>Levantar informe</button>;
     } else if (ot?.estado === 'En Ejecución') {
         boton = (
             <div style={{ display: 'flex', gap: 8 }}>
-                <button className="boton-secundario" style={{ flex: 1 }} onClick={() => nav.ir('o3', { asignacion })}>Continuar</button>
-                <button className="boton-secundario" style={{ flex: 1 }} onClick={() => nav.ir('o4', { asignacion, modo: 'reporte' })}>Reportar</button>
+                <button data-demo="mi-dia-continuar" className="boton-secundario" style={{ flex: 1 }} onClick={() => nav.ir('o3', { asignacion })}>Continuar</button>
+                <button data-demo="mi-dia-reportar" className="boton-secundario" style={{ flex: 1 }} onClick={() => nav.ir('o4', { asignacion, modo: 'reporte' })}>Reportar</button>
             </div>
         );
     } else if (ot?.estado === 'Programada') {
-        boton = <button className="boton-secundario" onClick={() => nav.ir('o3', { asignacion })}>Iniciar trabajo</button>;
+        boton = <button data-demo="mi-dia-iniciar" className="boton-secundario" onClick={() => nav.ir('o3', { asignacion })}>Iniciar trabajo</button>;
     }
 
     return (

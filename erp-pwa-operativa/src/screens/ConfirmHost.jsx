@@ -26,10 +26,11 @@ export default function ConfirmHost() {
                         <div style={s.pie}>
                             {/* .boton-secundario/.boton-primario traen width:100% (pensadas para
                                 pie-accion, un botón por fila) — acá van dos lado a lado. */}
-                            <button className="boton-secundario" style={{ width: 'auto', flex: 1, minHeight: 44 }} onClick={() => _resolverConfirm(false)}>{snap.confirm.textoCancelar}</button>
+                            <button data-demo="confirm-cancelar" className="boton-secundario" style={{ width: 'auto', flex: 1, minHeight: 44 }} onClick={() => _resolverConfirm(false)}>{snap.confirm.textoCancelar}</button>
                             <button
                                 className="boton-primario"
                                 style={{ width: 'auto', flex: 1, height: 44, ...(snap.confirm.danger ? { background: 'var(--detenido)' } : {}) }}
+                                data-demo="confirm-aceptar"
                                 onClick={() => _resolverConfirm(true)}
                             >{snap.confirm.textoConfirmar}</button>
                         </div>
