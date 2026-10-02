@@ -162,6 +162,15 @@ function numeroOTDesdeSolicitud(numeroSolicitud) {
 // un typo o un código reutilizado rompía esto en silencio).
 // NOTA: esta función no es un handler (req,res) — recibe la conexión explícitamente como `conn`
 // porque se invoca desde varios handlers distintos (actualizarOT, responderCotizacionCliente).
+// Deja una línea en OT.bitacora sin releer ni volver a guardar el documento completo: el hook
+// de reservas corre DESPUÉS de que el handler ya guardó la OT, y un save() de un documento
+// leído antes pisaría lo que ese guardado escribió. $push agrega la entrada y nada más.
+// Autor 'Sistema' porque no lo hace una persona: es el efecto en bodega del cambio de estado.
+async function anotarEnBitacora(conn, otId, texto) {
+    const OT = require('../models/OT')(conn);
+    await OT.updateOne({ _id: otId }, { $push: { bitacora: { fecha: new Date(), texto, autor: 'Sistema' } } });
+}
+
 async function aplicarReservaPorCambioEstado(otAnterior, otNueva, conn) {
     try {
         const estadoAnt = otAnterior?.estado;
@@ -208,8 +217,22 @@ async function aplicarReservaPorCambioEstado(otAnterior, otNueva, conn) {
             }
         }
 
-        // Faena completada: libera herramientas/equipos e insumos reservados
+        // Faena completada: libera herramientas/equipos y CONSUME los materiales.
+        //
+        // Antes esto solo liberaba la reserva (stockReservado bajaba) y stockActual no se movía
+        // nunca: el material quedaba eternamente en bodega aunque se hubiera ocupado en terreno,
+        // y lo único que descontaba de verdad era el ajuste manual de suministroController. Es
+        // decir, cerrar un trabajo no tenía ningún efecto sobre el inventario — el error que
+        // describe el punto 3 de docs/principio-vuelta-atras.md, pero al revés: avanzar no
+        // registraba su propio efecto.
+        //
+        // Ahora la reserva se libera Y se registra la salida real, en un solo updateOne (dos
+        // $inc sobre el mismo documento, no dos escrituras que podrían quedar a medias), más
+        // dos MovimientoStock: 'Liberación' cierra la reserva y 'Salida' es el consumo. Se
+        // guardan los dos y no uno solo porque la cartola de un material tiene que poder
+        // explicar por qué el número cambió, y son dos hechos distintos.
         if (estadoNuevo === 'Trabajo Terminado' && estadoAnt !== 'Trabajo Terminado') {
+            const consumidos = [];
             for (const c of componentes) {
                 if (!c.codigo && !c.catalogoId) continue;
                 if (esEquipo(c)) {
@@ -217,15 +240,71 @@ async function aplicarReservaPorCambioEstado(otAnterior, otNueva, conn) {
                 } else {
                     const suministro = await Suministro.findOne({ codigo: c.codigo });
                     if (suministro) {
-                        const delta = -(Number(c.cantidad) || 0);
-                        await Suministro.updateOne({ _id: suministro._id }, { $inc: { stockReservado: delta } });
-                        await MovimientoStock.create({
-                            suministroId: suministro._id, tipo: 'Liberación', cantidad: delta,
-                            otId: otNueva._id, motivo: `Liberación al terminar OT ${otNueva.numeroOT || ''}`
-                        });
+                        const cantidad = Number(c.cantidad) || 0;
+                        await Suministro.updateOne(
+                            { _id: suministro._id },
+                            { $inc: { stockReservado: -cantidad, stockActual: -cantidad } },
+                        );
+                        await MovimientoStock.create([
+                            {
+                                suministroId: suministro._id, tipo: 'Liberación', cantidad: -cantidad,
+                                otId: otNueva._id, motivo: `Liberación al terminar OT ${otNueva.numeroOT || ''}`
+                            },
+                            {
+                                suministroId: suministro._id, tipo: 'Salida', cantidad: -cantidad,
+                                otId: otNueva._id, motivo: `Consumo al terminar OT ${otNueva.numeroOT || ''}`
+                            },
+                        ]);
+                        consumidos.push(`${cantidad} × ${suministro.codigo}`);
                     }
                 }
             }
+            await anotarEnBitacora(conn, otNueva._id, consumidos.length
+                ? `Material descontado de bodega al cerrar: ${consumidos.join(', ')}`
+                : 'Cierre sin materiales que descontar');
+        }
+
+        // Vuelta atrás del cierre (accion 'reabrir', ver aplicarAccionOT): el trabajo vuelve a
+        // 'En Ejecución', así que el material que se había consumido vuelve a bodega y queda
+        // otra vez reservado, y los equipos vuelven a estar en uso. Sin esta rama, reabrir una
+        // OT cerrada por error dejaba el inventario descontado para siempre — exactamente lo
+        // que prohíbe la regla 3 de docs/principio-vuelta-atras.md ("deshacer también revierte
+        // los efectos, no solo el estado").
+        //
+        // Es una rama propia y no un caso de la de 'En Ejecución' de más arriba: ahí los equipos
+        // pasan de 'Reservado' a 'En Uso' (arranque normal del trabajo), mientras que acá vienen
+        // de 'Disponible', porque el cierre ya los había liberado.
+        if (estadoAnt === 'Trabajo Terminado' && estadoNuevo === 'En Ejecución') {
+            const devueltos = [];
+            for (const c of componentes) {
+                if (!c.codigo && !c.catalogoId) continue;
+                if (esEquipo(c)) {
+                    await EquiposHerramientas.updateOne({ ...filtroEquipo(c), estado: 'Disponible' }, { estado: 'En Uso' });
+                } else {
+                    const suministro = await Suministro.findOne({ codigo: c.codigo });
+                    if (suministro) {
+                        const cantidad = Number(c.cantidad) || 0;
+                        await Suministro.updateOne(
+                            { _id: suministro._id },
+                            { $inc: { stockReservado: cantidad, stockActual: cantidad } },
+                        );
+                        await MovimientoStock.create([
+                            {
+                                suministroId: suministro._id, tipo: 'Ingreso', cantidad,
+                                otId: otNueva._id, motivo: `Reverso de consumo por reapertura de OT ${otNueva.numeroOT || ''}`
+                            },
+                            {
+                                suministroId: suministro._id, tipo: 'Reserva', cantidad,
+                                otId: otNueva._id, motivo: `Reserva repuesta por reapertura de OT ${otNueva.numeroOT || ''}`
+                            },
+                        ]);
+                        devueltos.push(`${cantidad} × ${suministro.codigo}`);
+                    }
+                }
+            }
+            await anotarEnBitacora(conn, otNueva._id, devueltos.length
+                ? `Material devuelto a bodega al reabrir: ${devueltos.join(', ')}`
+                : 'Reapertura sin materiales que devolver');
         }
     } catch (e) {
         console.warn('[Reservas] Hook de cambio de estado falló (sin impacto en la operación):', e.message);
@@ -792,8 +871,20 @@ exports.accionMovil = async (req, res) => {
         const esSupervisorDeLaOT = usuario.rol === 'supervisor' && usuario.recursoId && String(ot.supervisorId || '') === String(usuario.recursoId);
         if (!tieneAsignacion && !esSupervisorDeLaOT) return res.status(403).json({ error: 'No tienes una asignación sobre esta OT' });
 
+        // El estado ANTES de aplicar la acción: es lo único que el hook de reservas necesita de
+        // la versión anterior (compara estadoAnt con estadoNuevo), así que se guarda el valor y
+        // no se hace una segunda lectura de la OT a Mongo.
+        const estadoAnterior = ot.estado;
+
         aplicarAccionOT(ot, { ...req.body, usuarioNombre: usuario.nombre });
         await ot.save();
+
+        // Reserva/liberación/consumo de bodega por el cambio de estado. Faltaba acá: esta ruta
+        // es la que usa la PWA Operativa, así que terminar un trabajo desde terreno —el camino
+        // normal, no la excepción— no liberaba los equipos ni tocaba el stock, mientras que
+        // hacerlo desde el escritorio (actualizarOT) sí. El efecto en bodega no puede depender
+        // de por qué pantalla se cerró la OT.
+        await aplicarReservaPorCambioEstado({ estado: estadoAnterior }, ot, req.db);
 
         usuario.ultimoAcceso = new Date();
         await usuario.save();

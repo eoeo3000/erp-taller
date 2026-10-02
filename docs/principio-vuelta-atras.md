@@ -59,10 +59,16 @@ oficina** (`OT.informeFinal.revision.estado === 'Aceptado'`), y el tope duro es 
 botón, y por eso quedó pendiente de decisión:
 
 - Las reservas de stock y equipos se toman al pasar de `Planificada` a `Programada`, pasan a
-  "En Uso" en `En Ejecución` y **se liberan recién en `Trabajo Terminado`**
+  "En Uso" en `En Ejecución` y **se liberan recién en `Trabajo Terminado`**, momento en el que
+  además el material **se consume** (baja `stockActual`, movimiento `Salida`)
   (`otController.aplicarReservaPorCambioEstado`). **No hay ninguna ruta de liberación hacia
-  atrás**: un botón de "volver" sin eso dejaría equipos en `Reservado` y stock comprometido
-  para siempre, en silencio — exactamente lo que prohíbe la regla 3.
+  atrás** desde `Programada` o `En Ejecución`: un botón de "volver" sin eso dejaría equipos en
+  `Reservado` y stock comprometido para siempre, en silencio — exactamente lo que prohíbe la
+  regla 3.
+- La única vuelta atrás de bodega que **sí** existe es la del cierre: reabrir una OT
+  (`accion: 'reabrir'`) devuelve el material a `stockActual`, repone la reserva, vuelve los
+  equipos a `En Uso` y deja las dos líneas en `OT.bitacora`. Sirve de plantilla para el resto:
+  el estado y su efecto se deshacen juntos, en el mismo lugar.
 - Además anula un acuerdo ya aprobado por el cliente, así que obliga a recotizar y reenviar.
 - Parte del caso ya tiene camino propio: para **"faltó algo"** existe la excepción / extensión
   de cotización, que el cliente aprueba aparte sin voltear el acuerdo original. Lo que queda
