@@ -9,3 +9,5 @@ erp-backend/uploads/*.png
 erp-backend/uploads/*.svg
 node_modules/
 .env
+# Videos de la demo (scripts/record-demo.js) — no se versionan
+demo-output/
