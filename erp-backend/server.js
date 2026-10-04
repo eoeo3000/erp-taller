@@ -35,6 +35,7 @@ almacenamiento.avisarConfiguracion();
 // dos costaron tardes de diagnóstico justamente por arrancar sin decir nada.
 avisarUrlsInvalidas();
 require('./src/config/mailer').avisarConfiguracion();
+require('./src/middlewares/identidad').avisarConfiguracion();
 
 // --- TODAS LAS RUTAS (Incluyendo /data, /solicitudes, /recursos, etc.) ---
 // resolverEntorno resuelve req.db/req.entorno según el header X-Entorno antes de

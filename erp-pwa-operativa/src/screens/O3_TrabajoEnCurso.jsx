@@ -1,5 +1,9 @@
 import { useEffect, useState } from 'react';
 import { obtenerOT, accionOT, actualizarOT } from '../api.js';
+// Para que un guardado rechazado se vea. `setError` no sirve acá: esta pantalla lo usa
+// para reemplazar todo el contenido, y tapar el trabajo entero por una casilla que no
+// se guardó sería peor que el problema.
+import { avisar } from '../confirmar.js';
 
 function claveInicio(otId) { return `operativo.inicio.${otId}`; }
 
@@ -40,19 +44,25 @@ export default function O3TrabajoEnCurso({ nav, asignacion }) {
     const marcarListo = async (idx) => {
         setProcesando(true);
         const tareas = ot.tareas.map((t, i) => (i === idx ? { ...t, completada: true } : t));
-        try { await actualizarOT(otId, { tareas }); await recargar(); } finally { setProcesando(false); }
+        try { await actualizarOT(otId, { tareas }); await recargar(); }
+        catch (e) { avisar.error(e.message || 'No se pudo marcar la tarea.'); }
+        finally { setProcesando(false); }
     };
 
     const terminar = async () => {
         setProcesando(true);
-        try { await accionOT(otId, { accion: 'terminar' }); await recargar(); } finally { setProcesando(false); }
+        try { await accionOT(otId, { accion: 'terminar' }); await recargar(); }
+        catch (e) { avisar.error(e.message || 'No se pudo terminar el trabajo.'); }
+        finally { setProcesando(false); }
     };
 
     const interrumpir = async () => {
         const motivo = window.prompt('Motivo de la interrupción:');
         if (!motivo) return;
         setProcesando(true);
-        try { await accionOT(otId, { accion: 'interrumpir', motivo }); nav.volver(); } finally { setProcesando(false); }
+        try { await accionOT(otId, { accion: 'interrumpir', motivo }); nav.volver(); }
+        catch (e) { avisar.error(e.message || 'No se pudo registrar la interrupción.'); }
+        finally { setProcesando(false); }
     };
 
     const inicio = localStorage.getItem(claveInicio(otId));
