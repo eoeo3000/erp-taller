@@ -26,10 +26,22 @@ export function haySesion() {
     return !!getSesion().token;
 }
 
+// Además del entorno, va SIEMPRE el token de la persona. Antes lo mandaban solo las
+// llamadas que lo necesitaban para funcionar (mi-día, mi-semana, acciones sobre una
+// asignación) y las de lectura iban sin nada: obtenerOT, obtenerSolicitud y actualizarOT
+// pegaban contra un backend que no preguntaba quién era. Esas rutas ahora exigen identidad
+// (erp-backend/middlewares/identidad.js), y ponerlo acá —y no en cada función— es lo que
+// hace que la próxima llamada que alguien agregue nazca identificada en vez de abierta.
+//
+// Las que ya traen `token=` en el path se dejan como están, para no mandarlo dos veces.
 function conEntorno(path) {
-    const { entorno } = getSesion();
+    const { entorno, token } = getSesion();
     const sep = path.includes('?') ? '&' : '?';
-    return `${API}${path}${sep}entorno=${entorno}`;
+    const conToken = path.includes('token=') || !token
+        ? path
+        : `${path}${sep}token=${encodeURIComponent(token)}`;
+    const sep2 = conToken.includes('?') ? '&' : '?';
+    return `${API}${conToken}${sep2}entorno=${entorno}`;
 }
 
 // X-Api-Key: gate del backend en rutas de escritura de alto riesgo (OT, contabilidad,

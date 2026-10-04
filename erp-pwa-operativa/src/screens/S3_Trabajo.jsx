@@ -128,7 +128,13 @@ export default function S3Trabajo({ nav, asignacion, persona }) {
         if (soloLectura) return;
         const nuevasTareas = tareas.map((t, i) => (i === idx ? { ...t, ...cambios } : t));
         setGuardando(true);
-        try { await actualizarOT(otId, { tareas: nuevasTareas }); await cargar(); } finally { setGuardando(false); }
+        // El `catch` no es decorativo: sin él, un guardado rechazado por el backend (401 por
+        // identidad o por X-Api-Key, o la OT en modo demostración) solo apagaba el spinner y
+        // la casilla volvía sola a su estado anterior — el supervisor se quedaba creyendo que
+        // marcó la tarea. Ya pasó una vez en producción con el gate de API_KEY.
+        try { await actualizarOT(otId, { tareas: nuevasTareas }); await cargar(); }
+        catch (e) { avisar.error(e.message || 'No se pudo guardar el cambio.'); }
+        finally { setGuardando(false); }
     };
 
     // Toggle, no solo marcar: un supervisor que se equivoca al tocar la casilla debe poder
@@ -175,7 +181,12 @@ export default function S3Trabajo({ nav, asignacion, persona }) {
             return { ...t, registros: [...registrosDeTarea(t), entrada] };
         });
         setGuardando(true);
-        try { await actualizarOT(otId, { tareas: nuevasTareas }); setBorradores({}); await cargar(); } finally { setGuardando(false); }
+        // `setBorradores({})` va DESPUÉS del await a propósito: si el guardado falla, lo que
+        // la persona escribió sigue en pantalla para reintentar, en vez de borrarse junto con
+        // el intento.
+        try { await actualizarOT(otId, { tareas: nuevasTareas }); setBorradores({}); await cargar(); }
+        catch (e) { avisar.error(e.message || 'No se pudo guardar lo ingresado — no se perdió, vuelve a intentar.'); }
+        finally { setGuardando(false); }
     };
 
     // Antes 'En Ejecución' solo se activaba solo al abrir O3 (la pantalla del ejecutor,
@@ -188,14 +199,18 @@ export default function S3Trabajo({ nav, asignacion, persona }) {
         if (soloLectura) return;
         if (!(await confirmar('¿Marcar el trabajo como iniciado? El cliente y la oficina lo van a ver en ejecución.', { danger: false, textoConfirmar: 'Marcar en ejecución' }))) return;
         setGuardando(true);
-        try { await accionOT(otId, { accion: 'iniciar' }); await cargar(); } finally { setGuardando(false); }
+        try { await accionOT(otId, { accion: 'iniciar' }); await cargar(); }
+        catch (e) { avisar.error(e.message || 'No se pudo iniciar el trabajo.'); }
+        finally { setGuardando(false); }
     };
 
     const terminarTrabajo = async () => {
         if (soloLectura) return;
         if (!(await confirmar('¿Marcar el trabajo como finalizado? Queda lista para que la oficina facture.', { danger: false, textoConfirmar: 'Marcar finalizado' }))) return;
         setGuardando(true);
-        try { await accionOT(otId, { accion: 'terminar' }); await cargar(); } finally { setGuardando(false); }
+        try { await accionOT(otId, { accion: 'terminar' }); await cargar(); }
+        catch (e) { avisar.error(e.message || 'No se pudo terminar el trabajo.'); }
+        finally { setGuardando(false); }
     };
 
     const agregarFotoEstado = async (archivo) => {

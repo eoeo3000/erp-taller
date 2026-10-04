@@ -8,21 +8,9 @@ const getRecurso = require('../models/Recurso');
 const getOT = require('../models/OT');
 const getSolicitud = require('../models/Solicitud');
 const transporter = require('../config/mailer');
-
-async function resolverUsuarioPorToken(Usuario, token) {
-    if (!token) return null;
-    const usuario = await Usuario.findOne({ token, estado: 'activo' });
-    if (usuario) {
-        // No se espera este guardado: es solo una marca informativa de "último acceso", y
-        // cada request autenticado de la PWA pasa por acá — esperarlo duplica el
-        // round-trip a Mongo de CADA llamada (visto en producción: whoami, un solo
-        // findOne sin save, ya tarda ~600-800ms por la latencia propia de la conexión;
-        // sumar un segundo round-trip a mi-dia/mi-semana/mi-panel era buena parte de la lentitud).
-        usuario.ultimoAcceso = new Date();
-        usuario.save().catch(() => {});
-    }
-    return usuario;
-}
+// Una sola definición de "a quién corresponde este token", compartida con el middleware
+// que cierra /ots y /solicitudes. Antes había una copia acá.
+const { resolverUsuarioPorToken } = require('../middlewares/identidad');
 
 // Lunes de la semana de `fecha` (ISO, como ya usa GanttScreen/README §5 O6).
 function lunesDeLaSemana(fecha) {
