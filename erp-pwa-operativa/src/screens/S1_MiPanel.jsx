@@ -136,6 +136,8 @@ const COLOR_DEL_MES = { nombre: 'amarillo', oklch: 'oklch(0.82 0.16 95)' };
 function Entrada({ conteo, borde, titulo, lineas, extra, colorExtra, colorUltima, colorConteo, ultima, onClick }) {
     return (
         <div
+            data-demo={onClick ? 'panel-entrada' : undefined}
+            data-demo-ref={titulo}
             onClick={onClick || undefined}
             style={{
                 display: 'flex', alignItems: 'center', gap: 14, minHeight: 72, padding: '13px 18px',

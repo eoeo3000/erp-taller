@@ -100,7 +100,7 @@ export default function O5InformeEvaluacion({ nav, asignacion, persona }) {
             {error && <div style={{ margin: '0 18px 10px', fontSize: 13, color: 'var(--detenido)', fontWeight: 600 }}>{error}</div>}
             <div className="pie-accion" style={{ flexDirection: 'row' }}>
                 <button className="boton-secundario" style={{ width: 120 }} disabled={guardando} onClick={nav.volver}>Volver</button>
-                <button className="boton-primario" disabled={guardando} onClick={terminarInforme}>Guardar y salir</button>
+                <button data-demo="informe-guardar" className="boton-primario" disabled={guardando} onClick={terminarInforme}>Guardar y salir</button>
             </div>
         </div>
     );

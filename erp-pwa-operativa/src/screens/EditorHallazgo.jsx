@@ -90,6 +90,7 @@ export default function EditorHallazgo({ hallazgo, onCambiar, tiposTrabajo, cata
             {!tipoElegido && (
                 <div style={{ position: 'relative' }}>
                     <textarea
+                        data-demo="hallazgo-texto"
                         value={hallazgo.textoDescriptivo}
                         onChange={(e) => escribir(e.target.value)}
                         placeholder="¿Qué observaste? (ej: cambiar cañería de 4 pulgadas)"
@@ -100,6 +101,8 @@ export default function EditorHallazgo({ hallazgo, onCambiar, tiposTrabajo, cata
                             {sugerencias.map(({ tipo }) => (
                                 <button
                                     key={tipo._id}
+                                    data-demo="hallazgo-sugerencia"
+                                    data-demo-ref={tipo.nombre}
                                     onClick={() => elegirTipo(tipo)}
                                     style={{ display: 'block', width: '100%', textAlign: 'left', minHeight: 52, padding: '10px 14px', background: 'none', border: 'none', borderBottom: '1px solid var(--linea-fina)', fontSize: 15, cursor: 'pointer' }}
                                 >
@@ -182,6 +185,9 @@ function SegmentoCampo({ segmento, campo, onTocar, onSubirFoto, subiendo }) {
     const esFoto = campo?.tipoDato === 'foto';
     return (
         <span
+            data-demo="hallazgo-valor"
+            data-demo-ref={segmento.clave}
+            data-demo-pendiente={segmento.pendiente ? '1' : '0'}
             onClick={() => onTocar(inputFoto.current)}
             style={{
                 display: 'inline-block', padding: '0 2px',
@@ -231,6 +237,8 @@ function HojaCampo({ campo, valorActual, onElegir, onCerrar }) {
         const marcada = seleccionados.includes(op);
         return (
             <button
+                data-demo="hallazgo-opcion"
+                data-demo-ref={op}
                 onClick={() => onElegir(esMultiple ? (marcada ? seleccionados.filter((x) => x !== op) : [...seleccionados, op]) : op)}
                 className="boton-secundario"
                 style={{ minHeight: 52, textAlign: 'left', paddingLeft: 14, borderColor: marcada ? 'var(--texto-principal)' : 'var(--linea-zona)' }}
@@ -256,7 +264,7 @@ function HojaCampo({ campo, valorActual, onElegir, onCerrar }) {
                                 </div>
                             ))}
                         </div>
-                        {esMultiple && <button onClick={onCerrar} className="boton-primario" style={{ marginTop: 12 }}>Listo</button>}
+                        {esMultiple && <button data-demo="hallazgo-listo" onClick={onCerrar} className="boton-primario" style={{ marginTop: 12 }}>Listo</button>}
                     </>
                 ) : (
                     <>

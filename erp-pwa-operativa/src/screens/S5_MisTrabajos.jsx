@@ -157,7 +157,8 @@ export default function S5MisTrabajos({ nav }) {
                             <div style={{ background: 'var(--superficie)', borderTop: '1px solid var(--linea-fina)', borderBottom: '1px solid var(--linea-fina)' }}>
                                 {lista.map((t, i) => (
                                     <div
-                                        key={t.otId} onClick={() => nav.ir('s3', { asignacion: { otId: t.otId } })}
+                                        key={t.otId} data-demo="mis-trabajos-fila" data-demo-ref={t.numeroOT || ''}
+                                        onClick={() => nav.ir('s3', { asignacion: { otId: t.otId } })}
                                         style={{
                                             display: 'flex', gap: 12, padding: '13px 18px', cursor: 'pointer',
                                             borderBottom: i === lista.length - 1 ? 'none' : '1px solid var(--linea-fina)',

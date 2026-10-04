@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { setSesion, haySesion } from './api.js';
+import FranjaDemo from './FranjaDemo.jsx';
 import C1Acceso from './screens/C1_Acceso.jsx';
 import C2MisSolicitudes from './screens/C2_MisSolicitudes.jsx';
 import C3EstadoTrabajo from './screens/C3_EstadoTrabajo.jsx';
@@ -32,6 +33,17 @@ export default function App() {
     const actual = pila[pila.length - 1];
     const nav = { ir, reemplazar, volver, irRaiz };
 
+    // La franja de demostración va encima de la pantalla, así que el switch —que antes
+    // devolvía directo desde el componente— pasa a una función y App envuelve su resultado.
+    return (
+        <>
+            <FranjaDemo />
+            {renderPantalla(actual, nav)}
+        </>
+    );
+}
+
+function renderPantalla(actual, nav) {
     switch (actual.pantalla) {
         case 'cargando':
             return null;

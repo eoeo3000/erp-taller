@@ -1,0 +1,14 @@
+{
+  "name": "erp-taller-demo-tooling",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Herramientas de grabación de la demo. NO es un workspace: erp-backend, erp-web y las dos PWAs siguen siendo proyectos independientes con su propio package.json (ver CLAUDE.md). Este archivo existe solo porque el grabador recorre las tres apps a la vez y no pertenece a ninguna.",
+  "scripts": {
+    "demo:reset": "npm --prefix erp-backend run demo:reset",
+    "demo:record": "node scripts/record-demo.js",
+    "demo": "npm run demo:reset && npm run demo:record"
+  },
+  "devDependencies": {
+    "playwright": "^1.50.0"
+  }
+}

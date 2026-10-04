@@ -55,7 +55,7 @@ export default function O1PrimerAcceso({ onEntrar }) {
             </div>
 
             <div className="pie-accion">
-                <button className="boton-primario" onClick={onEntrar}>Entrar a mi día</button>
+                <button data-demo="entrar" className="boton-primario" onClick={onEntrar}>Entrar a mi día</button>
                 <div style={{ fontSize: 'var(--fs-linea-mono)', color: 'var(--texto-atenuado-2)', textAlign: 'center' }}>
                     Si pierdes el teléfono, avisa a la oficina para revocar este acceso.
                 </div>

@@ -128,7 +128,7 @@ export default function C2MisSolicitudes({ nav }) {
                 {visibles.length === 0 && <div style={{ padding: 24, color: 'var(--texto-atenuado-1)', fontSize: 'var(--fs-cuerpo)' }}>Sin trabajos en esta categoría.</div>}
                 {visibles.map((t) => (
                     <button
-                        key={t._id} onClick={() => nav.ir('c3', { trabajo: t })}
+                        key={t._id} data-demo="cliente-trabajo" data-demo-ref={t.numeroSolicitud || t.ot?.numeroOT || ''} onClick={() => nav.ir('c3', { trabajo: t })}
                         style={{
                             display: 'flex', width: '100%', minHeight: 96, border: 'none', borderBottom: '1px solid var(--linea-fina)',
                             background: 'var(--superficie)', cursor: 'pointer', textAlign: 'left', padding: 0,
@@ -153,7 +153,7 @@ export default function C2MisSolicitudes({ nav }) {
             </div>
 
             <div className="pie-accion">
-                <button className="boton-secundario" onClick={() => nav.ir('c6')}>Pedir un servicio nuevo</button>
+                <button data-demo="cliente-pedir-servicio" className="boton-secundario" onClick={() => nav.ir('c6')}>Pedir un servicio nuevo</button>
             </div>
         </div>
     );

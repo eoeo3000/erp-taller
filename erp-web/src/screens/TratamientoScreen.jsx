@@ -1425,15 +1425,15 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                 <div style={styles.tabs}>
                     {/* El asterisco marca "acá falta algo para poder seguir", igual que en Informe
                         Inicial — sin supervisor asignado las pestañas 1-4 no abren. */}
-                    <button onClick={() => setTabActiva('antecedentes')} style={tabActiva === 'antecedentes' ? styles.tabActivo : styles.tab}>
+                    <button data-demo="tab-antecedentes" onClick={() => setTabActiva('antecedentes')} style={tabActiva === 'antecedentes' ? styles.tabActivo : styles.tab}>
                         Antecedentes{!haySupervisor ? ' *' : ''}
                     </button>
                     <button onClick={() => setTabActiva('informe')} style={tabActiva === 'informe' ? styles.tabActivo : styles.tab}>
                         0 · Informe Inicial{!informeEvaluacion.completo && !yaTeniaContenidoPrevio ? ' *' : ''}
                     </button>
-                    <button onClick={() => irATab('tareas')} disabled={!habilitadoTabs14} title={motivoTabs14} style={{ ...(tabActiva === 'tareas' ? styles.tabActivo : styles.tab), opacity: habilitadoTabs14 ? 1 : .5 }}>1 · Tareas</button>
-                    <button onClick={() => irATab('componentes')} disabled={!habilitadoTabs14} title={motivoTabs14} style={{ ...(tabActiva === 'componentes' ? styles.tabActivo : styles.tab), opacity: habilitadoTabs14 ? 1 : .5 }}>2 · Equipos y materiales</button>
-                    <button onClick={() => irATab('Logistica')} disabled={!habilitadoTabs14} title={motivoTabs14} style={{ ...(tabActiva === 'Logistica' ? styles.tabActivo : styles.tab), opacity: habilitadoTabs14 ? 1 : .5 }}>3 · Suministros directos</button>
+                    <button data-demo="tab-tareas" onClick={() => irATab('tareas')} disabled={!habilitadoTabs14} title={motivoTabs14} style={{ ...(tabActiva === 'tareas' ? styles.tabActivo : styles.tab), opacity: habilitadoTabs14 ? 1 : .5 }}>1 · Tareas</button>
+                    <button data-demo="tab-componentes" onClick={() => irATab('componentes')} disabled={!habilitadoTabs14} title={motivoTabs14} style={{ ...(tabActiva === 'componentes' ? styles.tabActivo : styles.tab), opacity: habilitadoTabs14 ? 1 : .5 }}>2 · Equipos y materiales</button>
+                    <button data-demo="tab-logistica" onClick={() => irATab('Logistica')} disabled={!habilitadoTabs14} title={motivoTabs14} style={{ ...(tabActiva === 'Logistica' ? styles.tabActivo : styles.tab), opacity: habilitadoTabs14 ? 1 : .5 }}>3 · Suministros directos</button>
                     {/* Habilitada recién cuando "Terminar planificación" confirma el paso
                         (planificacionTerminada) — no alcanza con tareas/costos completos en
                         memoria, hay que haber presionado el botón. La única forma de deshabilitarla
@@ -1441,6 +1441,7 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                         bucle Tratada <-> Planificada que usa soloLecturaPlanificacion para las
                         pestañas 1-3, así que ambas quedan siempre en sincronía entre sí. */}
                     <button
+                        data-demo="tab-cotizacion"
                         onClick={() => irATab('cotizacion')}
                         disabled={!habilitadoTabs14 || !planificacionTerminada}
                         title={motivoTabs14 || (!planificacionTerminada ? 'Termina la planificación (pestaña 3) primero' : '')}
@@ -1969,6 +1970,7 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
                                 style={{ ...styles.btnSecundario, width: '100%', marginTop: 6, opacity: (otSeleccionada.cotizacion?.capacidadVerificada && !enviandoWhatsApp) ? 1 : .5 }}
                             >{enviandoWhatsApp ? 'Generando link…' : 'Enviar cotización por WhatsApp'}</button>
                             <button
+                                data-demo="cotizacion-habilitar-cliente"
                                 onClick={marcarCotizacionEnviada}
                                 disabled={!otSeleccionada.cotizacion?.capacidadVerificada || marcandoEnviada}
                                 title={otSeleccionada.cotizacion?.capacidadVerificada ? 'El cliente entra con teléfono + número de solicitud, sin necesitar un link' : 'Verifica la capacidad en Programación antes de enviar'}

@@ -212,7 +212,7 @@ const RecursosScreen = ({
 
             <div style={styles.tabs}>
                 {TABS.map(tabName => (
-                    <button key={tabName} onClick={() => setTabActiva(tabName)} style={tabActiva === tabName ? styles.tabActivo : styles.tab}>{tabName}</button>
+                    <button key={tabName} data-demo="recursos-tab" data-demo-ref={tabName} onClick={() => setTabActiva(tabName)} style={tabActiva === tabName ? styles.tabActivo : styles.tab}>{tabName}</button>
                 ))}
             </div>
 
@@ -355,7 +355,7 @@ const RecursosScreen = ({
                                 <span>Código</span><span>Descripción</span><span>Categoría</span><span style={{ textAlign: 'right' }}>Precio</span><span style={{ textAlign: 'right' }}>Stock</span><span />
                             </div>
                             {suministros.map(item => (
-                                <div key={item._id} style={styles.tablaFila('132px minmax(240px,1fr) 124px 116px 150px 24px')}>
+                                <div key={item._id} data-demo="suministro-fila" data-demo-ref={item.codigo || ''} style={styles.tablaFila('132px minmax(240px,1fr) 124px 116px 150px 24px')}>
                                     <input className="campo-ed" style={{ ...styles.inputCelda, fontFamily: t.fontMono }} value={item.codigo || ''} onChange={e => actualizarSuministro(item._id, { codigo: e.target.value })} />
                                     <input className="campo-ed" style={styles.inputCelda} value={item.descripcion || ''} onChange={e => actualizarSuministro(item._id, { descripcion: e.target.value })} />
                                     <select className="campo-ed" style={styles.inputCelda} value={item.categoria || 'Insumo'} onChange={e => actualizarSuministro(item._id, { categoria: e.target.value })}>
@@ -363,7 +363,7 @@ const RecursosScreen = ({
                                     </select>
                                     <input type="number" className="campo-ed" style={{ ...styles.inputCelda, textAlign: 'right' }} value={item.precio || 0} onChange={e => actualizarSuministro(item._id, { precio: Number(e.target.value) })} />
                                     <span style={{ display: 'flex', alignItems: 'center', gap: 4, justifyContent: 'flex-end' }}>
-                                        <span style={{ fontFamily: t.fontMono, fontWeight: 700, color: (item.stockActual ?? 0) > 0 ? t.verde : t.rojo }}>{item.stockActual ?? 0}</span>
+                                        <span data-demo="suministro-stock" style={{ fontFamily: t.fontMono, fontWeight: 700, color: (item.stockActual ?? 0) > 0 ? t.verde : t.rojo }}>{item.stockActual ?? 0}</span>
                                         <button onClick={() => ajustarStockRapido(item, +1)} title="Ingresar stock" style={styles.btnMini}>+</button>
                                         <button onClick={() => ajustarStockRapido(item, -1)} title="Retirar stock" style={styles.btnMini}>−</button>
                                         <button onClick={() => abrirHistorial(item)} title="Historial" style={styles.btnMini}>H</button>

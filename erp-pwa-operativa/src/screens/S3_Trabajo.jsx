@@ -411,6 +411,7 @@ export default function S3Trabajo({ nav, asignacion, persona }) {
                 <button className="boton-secundario" onClick={() => setVerInforme(true)}>Ver informe</button>
                 {!soloLectura && (
                     <button
+                        data-demo="trabajo-finalizar"
                         className="boton-secundario"
                         disabled={!puedeTerminar || guardando}
                         onClick={terminarTrabajo}
@@ -452,6 +453,8 @@ function FilaTarea({
         <div style={{ display: 'flex', gap: 12, padding: '12px 18px 13px', borderBottom: '1px solid var(--linea-fina)' }}>
             <span style={{ flex: 'none', width: 30, height: 48, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', paddingTop: 1 }}>
                 <button
+                    data-demo="tarea-realizada"
+                    data-demo-ref={t.completada ? 'si' : 'no'}
                     onClick={onMarcarRealizada}
                     disabled={guardando || bloqueada}
                     title={resuelta ? 'Volver a dejarla pendiente' : 'Marcar realizada'}

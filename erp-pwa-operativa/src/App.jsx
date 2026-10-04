@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { setSesion, haySesion, accionOT, whoami, subirDataURL } from './api.js';
 import { reintentarCola } from './db.js';
 import ConfirmHost from './screens/ConfirmHost.jsx';
+import FranjaDemo from './FranjaDemo.jsx';
 import O1PrimerAcceso from './screens/O1_PrimerAcceso.jsx';
 import O2MiDia from './screens/O2_MiDia.jsx';
 import O3TrabajoEnCurso from './screens/O3_TrabajoEnCurso.jsx';
@@ -67,6 +68,7 @@ export default function App() {
     return (
         <>
             <ConfirmHost />
+            <FranjaDemo />
             {renderPantalla(actual, nav, persona, reemplazar)}
         </>
     );

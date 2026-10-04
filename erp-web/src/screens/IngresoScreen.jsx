@@ -654,7 +654,7 @@ const IngresoScreen = ({ solicitudes = [], liberarSolicitudManual, cargarDatos, 
 
                                 return (
                                     <div
-                                        key={s._id || index} style={{ ...styles.fila, gridTemplateColumns: GRID, height: layoutTabla.rowH, background: (editandoId === s._id || viendoId === s._id) ? t.hoverFila : undefined, cursor: 'pointer' }}
+                                        key={s._id || index} data-demo="solicitud-fila" data-demo-ref={s.numeroSolicitud || ''} style={{ ...styles.fila, gridTemplateColumns: GRID, height: layoutTabla.rowH, background: (editandoId === s._id || viendoId === s._id) ? t.hoverFila : undefined, cursor: 'pointer' }}
                                         onDoubleClick={() => verSolicitud(s)}
                                         title="Doble clic para ver los datos de esta solicitud"
                                     >
@@ -700,6 +700,7 @@ const IngresoScreen = ({ solicitudes = [], liberarSolicitudManual, cargarDatos, 
                                         })}
                                         <span style={{ display: 'flex', gap: 4 }}>
                                             <button
+                                                data-demo="solicitud-tratar"
                                                 onClick={() => navigate('/tratamiento', { state: { ...(otEncontrada || s), solicitudId: s._id } })}
                                                 style={styles.btnFilaPrincipal}
                                             >
