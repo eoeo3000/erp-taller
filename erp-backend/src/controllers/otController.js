@@ -3,6 +3,7 @@ const getRecurso = require('../models/Recurso');
 const getUsuario = require('../models/Usuario');
 const getAsignacion = require('../models/Asignacion');
 const { guardarAdjuntoSiEsBase64 } = require('../utils/adjuntos');
+const { prefijoAnual, patronDelPrefijo, proximoCorrelativo } = require('../utils/correlativos');
 
 // Los 3 documentos del flujo chileno de pago (Orden de Compra → Estado de Pago/EDP → Hoja de
 // Entrada de Servicio/HES) reemplazan el selector manual Pendiente/Parcial/Pagado (TabPago.jsx,
@@ -127,15 +128,17 @@ function aplicarAccionOT(ot, { accion, motivo, comentario, foto, usuarioNombre =
 // (ej. uno cargado a mano) — "OT-2026-TEST2" ordena después de "OT-2026-0012" alfabéticamente,
 // así que la "última OT" detectada quedaba mal y el correlativo volvía a partir de 0001,
 // chocando con una OT ya existente (E11000 duplicate key, encontrado probando el nuevo flujo
-// de "Aprobar crea la OT"). Acá se ignora cualquier numeroOT que no matchee el patrón
-// numérico estricto y se calcula el máximo real entre los que sí matchean.
+// de "Aprobar crea la OT"). El cálculo del máximo vive ahora en utils/correlativos.js, donde
+// se puede probar sin Mongo.
+//
+// El año sale de la fecha y NO está escrito a mano. Antes decía 'OT-2026-' en la consulta y en
+// el número devuelto, lo que tenía fecha de vencimiento: el 1 de enero las Solicitudes pasan a
+// SOL-2027- (solicitudController ya usaba el año real), así que este respaldo habría seguido
+// devolviendo OT-2026-0001 y chocando con el índice unique de numeroOT, sin ninguna señal previa.
 async function siguienteNumeroOT(OT) {
-    const ots = await OT.find({ numeroOT: { $regex: /^OT-2026-\d+$/ } }, 'numeroOT').lean();
-    const maximo = ots.reduce((max, o) => {
-        const n = parseInt(o.numeroOT.split('-').pop(), 10);
-        return isNaN(n) ? max : Math.max(max, n);
-    }, 0);
-    return `OT-2026-${(maximo + 1).toString().padStart(4, '0')}`;
+    const prefijo = prefijoAnual('OT');
+    const ots = await OT.find({ numeroOT: { $regex: patronDelPrefijo(prefijo) } }, 'numeroOT').lean();
+    return proximoCorrelativo(ots.map((o) => o.numeroOT), prefijo);
 }
 
 // El numeroOT usa el mismo correlativo que ya trae la Solicitud (SOL-2026-0009 ->
@@ -340,7 +343,7 @@ exports.crearSolicitudManual = async (req, res) => {
     }
 };
 
-// 3. Convertir a OT (Con formato OT-2026-0000)
+// 3. Convertir a OT (formato OT-<año>-0000, ver utils/correlativos.js)
 exports.convertirOT = async (req, res) => {
     const OT = getOT(req.db);
     try {
