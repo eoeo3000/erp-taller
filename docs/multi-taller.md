@@ -129,13 +129,39 @@ falla. Se construyó igual, y desde ahora, para que cuando haya dos ya lleve mes
 funcionando — y para no tener que acordarse de agregarla, que es el olvido que convierte un
 sistema multi-cliente en una filtración.
 
-### Etapa 2 — La base de control y el registro de talleres
+### Etapa 2 — La base de control y el registro de talleres ✅ HECHA
 
-- Una base aparte (la "de control") con la colección `Taller`: nombre, identificador, estado,
-  plan, fecha de alta, y la URI de su base de datos.
-- `config/conexiones.js` pasa de dos conexiones fijas a un registro que las **abre bajo
-  demanda** y las reutiliza, con el tamaño de pool acotado.
-- Panel interno para ver los talleres, crear uno, suspenderlo.
+- `models/Taller.js` en la **base de control** (`MONGO_URI_CONTROL`): identificador, nombre,
+  estado, plan, fecha de alta, fecha de baja y la URI de su base de datos. Es el único modelo
+  que no vive junto a los datos de trabajo, porque es el que dice dónde están.
+- `config/conexiones.js` pasa de dos conexiones fijas a un **registro**: las de producción se
+  abren bajo demanda, se reutilizan y llevan el pool acotado (`POOL_MAXIMO`). La demo sigue
+  siendo **una sola**, compartida (§9.2).
+- **`obtenerConexion` sigue siendo síncrona**, y el registro vive en memoria. La llama
+  `middlewares/entorno.js` en cada request: buscar el taller en la base de control cada vez
+  agregaría un viaje a Mongo por request, y acá un solo `findOne` ya tarda 600-800ms. Se
+  carga al arrancar, se refresca cada minuto, y el controlador lo refresca al instante cuando
+  él mismo cambia algo.
+- **Sin `MONGO_URI_CONTROL` todo sigue igual que antes**: un taller, el de `MONGO_URI`. La
+  base de control se configura cuando haga falta el segundo cliente, no antes. Y la primera
+  vez que se enciende, el taller que ya existe **se anota solo** — si no, el despliegue
+  siguiente respondería "Taller desconocido: principal" a todo el mundo.
+- `controllers/tallerController.js` + `/api/talleres` (`PANEL_TOKEN`, 503 sin ella): listar,
+  dar de alta, suspender, reactivar, dar de baja. **La URI nunca sale por la API** — es una
+  credencial. La pantalla para operarlo es trabajo aparte; esto es la API.
+- Tres protecciones que no son evidentes y tienen prueba:
+  - **Dos talleres no pueden apuntar a la misma base.** Un copiar-y-pegar al dar de alta
+    bastaría para que el cliente nuevo abriera la base del anterior.
+  - **Un taller suspendido o dado de baja no obtiene conexión.** El corte está en el registro
+    y no en los controladores, así que ninguna ruta nueva puede olvidarlo. Es la palanca del
+    día 0 de §9.4 y la de un impago, y se deshace reactivando.
+  - **Si a un taller le cambian la base, la conexión anterior se cierra.** Seguir usándola
+    sería escribir en la base vieja después de la mudanza: datos perdidos sin un solo error.
+- No se puede suspender el **único** taller activo — mismo principio que "nadie puede
+  revocarse a sí mismo" en las cuentas de oficina.
+
+Lo que **no** trae: crear la base del taller nuevo, sus índices y su primera cuenta. Eso es la
+etapa 3. Hoy el alta anota un cliente cuya base ya existe.
 
 ### Etapa 3 — Alta de un taller nuevo
 
@@ -188,6 +214,10 @@ sistema multi-cliente en una filtración.
   semanas de trabajo para ahorrar diez transferencias al mes.
 - **Autoservicio de registro.** Vas a vender hablando con dueños de taller, no por un
   formulario. El alta la haces tú desde el panel.
+- **Cerrar las conexiones ociosas.** Con diez talleres y el pool acotado el techo son ~50
+  conexiones, muy por debajo del límite de cualquier clúster pagado. Cerrar una conexión en
+  uso es una fuente de errores intermitentes difíciles de reproducir; se paga cuando el
+  problema exista.
 - **Personalización por cliente** más allá del logo. Cada cosa que se pueda configurar por
   taller es una combinación más que probar y mantener.
 

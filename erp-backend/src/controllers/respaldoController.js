@@ -4,7 +4,7 @@
 // el servicio se duerme cuando nadie lo usa, y un `setInterval` no corre mientras duerme.
 // El respaldo nunca saldría, y —peor— nadie se enteraría de que no está saliendo. Una
 // llamada desde afuera (ver .github/workflows/respaldo.yml) además despierta el servicio.
-const crypto = require('crypto');
+const { comparaSegura } = require('../utils/claveCompartida');
 const { crearRespaldo, listarRespaldos } = require('../servicios/respaldo');
 const { obtenerConexion } = require('../config/conexiones');
 
@@ -18,16 +18,9 @@ function claveConfigurada() {
 }
 
 function claveCorrecta(req) {
-    const esperada = claveConfigurada();
-    const recibida = String(req.get('X-Respaldo-Token') || '').trim();
-    if (!esperada || !recibida) return false;
-
-    // Comparación de tiempo constante: `===` sobre strings corta en la primera diferencia y
-    // filtra, por el tiempo de respuesta, cuántos caracteres del principio son correctos.
-    const a = Buffer.from(esperada);
-    const b = Buffer.from(recibida);
-    if (a.length !== b.length) return false;
-    return crypto.timingSafeEqual(a, b);
+    // La comparación de tiempo constante vive en utils/claveCompartida.js: la comparte con
+    // el registro de talleres, y es el tipo de detalle que se degrada al copiarlo.
+    return comparaSegura(claveConfigurada(), req.get('X-Respaldo-Token'));
 }
 
 function autorizar(req, res) {

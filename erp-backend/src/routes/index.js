@@ -7,6 +7,7 @@ const authRoutes = require('./authRoutes');
 const instalacionRoutes = require('./instalacionRoutes');
 const cuentasRoutes = require('./cuentasRoutes');
 const respaldoRoutes = require('./respaldoRoutes');
+const tallerRoutes = require('./tallerRoutes');
 const dataRoutes = require('./dataRoutes');
 const personalRoutes = require('./recursosRoutes');
 const equipoRoutes = require('./equiposHerramientasRoutes');
@@ -46,6 +47,9 @@ router.use('/instalacion', instalacionRoutes);
 router.use('/cuentas', cuentasRoutes);
 // Respaldos: los dispara un programador externo con RESPALDO_TOKEN, no una sesión del SPA.
 router.use('/respaldos', respaldoRoutes);
+// Registro de talleres: el panel de quien arrienda el sistema, con PANEL_TOKEN. No es de
+// ningún taller, así que no pasa por los gates de sesión ni de identidad.
+router.use('/talleres', tallerRoutes);
 
 // --- Rutas de la app de escritorio: exigen sesión ---
 // (mientras AUTH_REQUERIDA no esté en 'true' solo avisan por consola, ver sesion.js)
