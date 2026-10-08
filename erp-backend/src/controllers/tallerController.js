@@ -9,10 +9,37 @@
 // omisión no conservaría un estado anterior, regalaría la lista de todos los clientes y la
 // capacidad de suspenderlos. No usa `requiereSesion` porque no la llama una persona con
 // sesión en el SPA de un taller: la llama quien administra el producto.
-const { conexionDeControl, refrescarRegistro, hayBaseDeControl } = require('../config/conexiones');
+const { conexionDeControl, refrescarRegistro, hayBaseDeControl, obtenerConexion } = require('../config/conexiones');
 const { esSlugValido, TALLER_PRINCIPAL } = require('../config/talleres');
 const { comparaSegura } = require('../utils/claveCompartida');
+const { generarToken, hashToken } = require('../utils/tokens');
+const { SPA_URL } = require('../config/urls');
 const getTaller = require('../models/Taller');
+const getUsuario = require('../models/Usuario');
+const { hayCuentasDeEscritorio } = require('./instalacionController');
+
+// Cuánto vive el enlace de instalación. Siete días y no una hora: el alta de un cliente no es
+// un trámite de un rato — se le manda el link al dueño del taller y puede sentarse a hacerlo
+// el lunes. Que venza igual es lo que impide que un link viejo, reenviado o archivado, siga
+// sirviendo meses después.
+const DIAS_VALIDEZ_INSTALACION = 7;
+
+// Emite un enlace nuevo y PISA el anterior: el viejo deja de servir en el acto. Es el mismo
+// criterio que reemitir la invitación de una cuenta de oficina al corregirle el correo —
+// emitir otro sin matar el anterior sería dejar dos llaves dando vueltas.
+//
+// Devuelve el token EN CLARO una sola vez. En la base queda solo su hash, así que si se
+// pierde no se recupera: se reemite.
+async function emitirInstalacion(taller) {
+    const token = generarToken();
+    taller.instalacionHash = hashToken(token);
+    taller.instalacionExpira = new Date(Date.now() + DIAS_VALIDEZ_INSTALACION * 24 * 60 * 60 * 1000);
+    await taller.save();
+    return {
+        url: `${SPA_URL}/instalar?taller=${encodeURIComponent(taller.slug)}&clave=${token}`,
+        expira: taller.instalacionExpira,
+    };
+}
 
 function autorizar(req, res) {
     if (!hayBaseDeControl()) {
@@ -85,9 +112,12 @@ exports.crear = async (req, res) => {
         }
 
         const creado = await Taller.create({ slug, nombre, mongoUri, plan: String(req.body?.plan || '').trim() });
-        // Que la instancia que lo creó lo sepa de inmediato, sin esperar el refresco.
+        // Que la instancia que lo creó lo sepa de inmediato, sin esperar el refresco — y
+        // ANTES de emitir el enlace, porque instalar necesita poder abrir esa base.
         await refrescarRegistro();
-        res.ok({ taller: publico(creado) }, 201);
+        const instalacion = await emitirInstalacion(creado);
+        // El enlace viaja UNA vez, acá. Después solo queda su hash: si se pierde, se reemite.
+        res.ok({ taller: publico(creado), instalacion }, 201);
     } catch (error) {
         res.fail(500, error.message);
     }
@@ -141,6 +171,32 @@ exports.actualizar = async (req, res) => {
     }
 };
 
+// POST /api/talleres/:slug/instalacion — reemitir el enlace de instalación.
+//
+// Hace falta porque el enlace se muestra una sola vez: si el correo se perdió o se mandó a la
+// persona equivocada, esto emite otro y mata el anterior. Lo que NO hace es servir para
+// entrar a un taller que ya opera: si ya tiene cuentas de escritorio, la instalación terminó
+// y no se vuelve a abrir — esa ventana se cierra sola, sin un interruptor que alguien pueda
+// dejar encendido.
+exports.reemitirInstalacion = async (req, res) => {
+    if (!autorizar(req, res)) return;
+    try {
+        const slug = String(req.params.slug || '').trim().toLowerCase();
+        const Taller = getTaller(conexionDeControl());
+        const taller = await Taller.findOne({ slug });
+        if (!taller) return res.fail(404, `No existe el taller "${slug}"`);
+
+        if (await hayCuentasDeEscritorio(getUsuario(obtenerConexion('produccion', slug)))) {
+            return res.fail(409, `El taller "${slug}" ya está instalado: tiene cuentas que pueden entrar. Para sumar a alguien se invita desde la app.`);
+        }
+
+        res.ok({ taller: publico(taller), instalacion: await emitirInstalacion(taller) });
+    } catch (error) {
+        res.fail(500, error.message);
+    }
+};
+
 // Para las pruebas y para quien lea esto buscando qué se expone.
 exports.publico = publico;
+exports.DIAS_VALIDEZ_INSTALACION = DIAS_VALIDEZ_INSTALACION;
 exports.TALLER_PRINCIPAL = TALLER_PRINCIPAL;

@@ -13,6 +13,8 @@ const URI_PRINCIPAL = 'mongodb://servidor/taller-principal';
 
 // Base de control falsa: una lista en memoria con la forma que usa el controlador.
 let filas = [];
+// ¿El taller ya tiene cuentas que pueden entrar? Decide si se le puede reemitir el enlace.
+let yaInstalado = false;
 function fabricaTaller() {
     const doc = (d) => ({
         ...d,
@@ -44,8 +46,12 @@ function fabricaTaller() {
 // Sustituciones antes de requerir el router, que desestructura al cargarse.
 for (const [ruta, exports] of [
     ['../src/models/Taller', () => fabricaTaller()],
+    ['../src/models/Usuario', (conn) => ({
+        exists: async () => (yaInstalado ? { _id: 1 } : null),
+    })],
     ['../src/config/conexiones', {
         conexionDeControl: () => ({}),
+        obtenerConexion: (entorno, slug) => ({ name: `base-${slug}` }),
         refrescarRegistro: async () => {},
         hayBaseDeControl: () => String(process.env.MONGO_URI_CONTROL || '').trim() !== '',
     }],
@@ -86,6 +92,7 @@ async function pedir(ruta, { metodo = 'GET', cuerpo, clave = CLAVE, control = tr
 test.beforeEach(() => {
     filas = [{ slug: 'principal', nombre: 'Taller principal', estado: 'activo', plan: '', mongoUri: URI_PRINCIPAL, fechaAlta: new Date(), fechaBaja: null }];
     process.env.PANEL_TOKEN = CLAVE;
+    yaInstalado = false;
 });
 test.after(() => { delete process.env.PANEL_TOKEN; delete process.env.MONGO_URI_CONTROL; });
 
@@ -200,4 +207,42 @@ test('con otro taller activo, sí se puede suspender el principal', async () => 
 
 test('un taller que no existe da 404, no 500', async () => {
     assert.strictEqual((await pedir('/api/talleres/no-existe', { metodo: 'PATCH', cuerpo: { estado: 'activo' } })).estado, 404);
+});
+
+test('dar de alta devuelve el enlace de instalación UNA vez', async () => {
+    // Es lo que se le manda al dueño del taller nuevo. Viaja en claro solo acá: en la base de
+    // control queda su hash, igual que un token de sesión o un resetHash.
+    const { cuerpo } = await pedir('/api/talleres', {
+        metodo: 'POST', cuerpo: { slug: 'taller-lopez', nombre: 'Taller López', mongoUri: 'mongodb://servidor/lopez' },
+    });
+    assert.match(cuerpo.instalacion.url, /\/instalar\?taller=taller-lopez&clave=[a-f0-9]{16,}/);
+    assert.ok(new Date(cuerpo.instalacion.expira) > new Date(), 'tiene que venir con vencimiento futuro');
+
+    const guardado = filas.find((f) => f.slug === 'taller-lopez');
+    assert.ok(guardado.instalacionHash, 'en la base queda el hash');
+    const clave = cuerpo.instalacion.url.split('clave=')[1];
+    assert.ok(!JSON.stringify(filas).includes(clave), 'la clave en claro NO puede quedar guardada');
+});
+
+test('reemitir el enlace mata el anterior', async () => {
+    // Si el correo se perdió o se mandó a la persona equivocada, se emite otro — y el viejo
+    // tiene que dejar de servir en el acto, o quedan dos llaves dando vueltas.
+    const alta = await pedir('/api/talleres', {
+        metodo: 'POST', cuerpo: { slug: 'taller-lopez', nombre: 'L', mongoUri: 'mongodb://servidor/lopez' },
+    });
+    const hashViejo = filas.find((f) => f.slug === 'taller-lopez').instalacionHash;
+
+    const reemitido = await pedir('/api/talleres/taller-lopez/instalacion', { metodo: 'POST' });
+    assert.strictEqual(reemitido.estado, 200);
+    assert.notStrictEqual(reemitido.cuerpo.instalacion.url, alta.cuerpo.instalacion.url);
+    assert.notStrictEqual(filas.find((f) => f.slug === 'taller-lopez').instalacionHash, hashViejo);
+});
+
+test('no se reemite el enlace de un taller que ya opera', async () => {
+    // La ventana de instalación se cierra sola cuando hay una cuenta que puede entrar, sin un
+    // interruptor que alguien pueda dejar encendido.
+    yaInstalado = true;
+    const { estado, cuerpo } = await pedir('/api/talleres/principal/instalacion', { metodo: 'POST' });
+    assert.strictEqual(estado, 409);
+    assert.match(cuerpo.error, /ya está instalado/);
 });

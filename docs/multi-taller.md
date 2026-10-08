@@ -163,11 +163,43 @@ sistema multi-cliente en una filtración.
 Lo que **no** trae: crear la base del taller nuevo, sus índices y su primera cuenta. Eso es la
 etapa 3. Hoy el alta anota un cliente cuya base ya existe.
 
-### Etapa 3 — Alta de un taller nuevo
+### Etapa 3 — Alta de un taller nuevo ✅ HECHA (el backend)
 
-- `InstalacionScreen` se convierte en el registro de cada taller: crea la base, sus índices y
-  la primera cuenta de administrador, y esa persona entra de inmediato.
-- Ya está casi escrita: hoy hace exactamente eso para una instalación.
+**El problema que resuelve, y que no era obvio:** quien va a instalar un taller recién dado de
+alta **todavía no tiene sesión**, y sin sesión `middlewares/entorno.js` resuelve al taller por
+defecto. Sin esto, el dueño de un cliente nuevo caería sobre la base del taller principal y se
+crearía su cuenta adentro de los datos de otro.
+
+- **Un enlace de instalación de un solo uso.** Dar de alta un taller (`POST /api/talleres`)
+  devuelve, **una sola vez**, `SPA_URL/instalar?taller=<slug>&clave=<token>`. En la base de
+  control queda solo el hash, igual que un `resetHash` o un token de sesión.
+- **El slug del enlace es ruteo, no autorización** — mismo criterio que el prefijo del token de
+  sesión y que §9.3 ("el subdominio nunca puede ser la autoridad, solo una pista"). Lo que
+  autoriza son tres condiciones juntas: el taller existe y está activo, la clave coincide con el
+  hash guardado y no venció, y **ese taller no tiene todavía cuentas de escritorio**.
+- **La tercera es la que de verdad importa**: sin ella, un enlace que quedó en un correo de hace
+  meses serviría para crearse un administrador dentro de un taller con datos reales adentro.
+- El enlace **se consume** al instalar y vence a los 7 días. Se reemite con
+  `POST /api/talleres/:slug/instalacion`, lo que mata el anterior — mismo criterio que reemitir
+  la invitación de una cuenta al corregirle el correo. Reemitirlo a un taller que ya opera
+  responde 409: esa ventana se cierra sola.
+- Clave equivocada y taller inexistente responden **lo mismo**, para que esto no sirva de
+  buscador de qué clientes existen (mismo criterio que `CREDENCIAL_INVALIDA` en el login).
+- `servicios/aprovisionamiento.js` construye los índices de los 22 modelos sobre la base nueva,
+  **antes** de crear la cuenta. En Mongo la base aparece sola al escribir, pero los índices no:
+  Mongoose los construye perezoso, la primera vez que se usa cada modelo, así que un modelo que
+  nadie tocó todavía no tiene su índice único — y el día que dos documentos choquen no hay
+  error, entran los dos. La lista de modelos se lee de la carpeta, no escrita a mano, para que
+  un modelo nuevo quede cubierto sin que nadie se acuerde.
+- **Sin `taller` en el cuerpo, `POST /api/instalacion` se comporta exactamente como antes**: la
+  instalación única de siempre, sobre `req.db`, con `SETUP_TOKEN`.
+
+**Lo que falta de esta etapa: la pantalla.** `erp-web` tiene que montar `InstalacionScreen` en
+`/instalar` sin sesión (como las rutas de `RUTAS_PUBLICAS`), leer `?taller=` y `?clave=` de la
+URL y mandarlos en el `POST /api/instalacion`. Hoy esa pantalla solo se alcanza cuando
+`GET /auth/yo` responde `requiereInstalacion`, que es la instalación única. Mientras tanto el
+alta se completa llamando a la API — que es como se va a hacer igual con los primeros clientes
+(§8: el alta la hace quien vende, no un formulario de autoservicio).
 
 ### Etapa 4 — Las PWAs
 

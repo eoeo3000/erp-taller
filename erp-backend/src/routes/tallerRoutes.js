@@ -9,5 +9,7 @@ const ctrl = require('../controllers/tallerController');
 router.get('/', ctrl.listar);
 router.post('/', ctrl.crear);
 router.patch('/:slug', ctrl.actualizar);
+// Reemitir el enlace de instalación (el anterior deja de servir).
+router.post('/:slug/instalacion', ctrl.reemitirInstalacion);
 
 module.exports = router;
