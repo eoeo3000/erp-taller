@@ -175,9 +175,11 @@ exports.vaciar = async (req, res) => {
 // del bloque "Entorno de trabajo" en el frontend, sin exponer credenciales de la cadena de conexión.
 exports.info = async (req, res) => {
     const { obtenerConexion, conexionDisponible } = require('../config/conexiones');
+    // El taller de la request, no el por defecto: con más de un taller, describir siempre el
+    // principal le mostraría a un cliente el nombre de la base de otro.
     const describir = (entorno) => {
-        if (!conexionDisponible(entorno)) return { disponible: false, db: null, host: null };
-        const conn = obtenerConexion(entorno);
+        if (!conexionDisponible(entorno, req.taller)) return { disponible: false, db: null, host: null };
+        const conn = obtenerConexion(entorno, req.taller);
         return { disponible: true, db: conn.name, host: conn.host || '' };
     };
     res.json({ activo: req.entorno, produccion: describir('produccion'), demo: describir('demo') });
