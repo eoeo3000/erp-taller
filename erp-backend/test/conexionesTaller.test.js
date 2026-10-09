@@ -127,3 +127,33 @@ test('si a un taller le cambian la base, deja de usarse la anterior', async () =
     assert.deepStrictEqual(cerradas, ['mongodb://servidor/taller-principal'],
         'la conexión a la base vieja tiene que cerrarse, no quedar colgando con su pool');
 });
+
+test('resolverTaller: la única respuesta a "¿existe este taller?"', async () => {
+    // Vivía duplicada en config/talleres.js, donde quedó congelada conociendo solo
+    // `principal`. Mientras el registro aprendía a cargar talleres de la base de control,
+    // esa copia seguía diciendo que no a todos — así que el token de cualquier otro taller
+    // caía en la base del principal. Una definición, en el módulo que tiene el registro.
+    await conexiones.inicializarConexiones();
+    const registro = await conexiones.refrescarRegistro();
+    registro.set('taller-lopez', { slug: 'taller-lopez', nombre: 'L', estado: 'activo', mongoUri: 'mongodb://servidor/lopez' });
+
+    assert.strictEqual(conexiones.resolverTaller('principal'), 'principal');
+    assert.strictEqual(conexiones.resolverTaller('taller-lopez'), 'taller-lopez');
+    assert.strictEqual(conexiones.resolverTaller('  TALLER-LOPEZ  '), 'taller-lopez', 'espacios y mayúsculas no deberían importar');
+
+    for (const desconocido of ['competidor', '', null, undefined, 'taller.lopez']) {
+        assert.strictEqual(conexiones.resolverTaller(desconocido), null, `resolvió ${JSON.stringify(desconocido)}`);
+    }
+});
+
+test('un taller suspendido NO se resuelve', async () => {
+    // Resolverlo para que obtenerConexion lance dos líneas después cambia un 401 claro por
+    // un 503 confuso. "Suspendido" significa que no opera, y eso empieza acá.
+    await conexiones.inicializarConexiones();
+    const registro = await conexiones.refrescarRegistro();
+    registro.set('taller-lopez', { slug: 'taller-lopez', nombre: 'L', estado: 'suspendido', mongoUri: 'mongodb://servidor/lopez' });
+    assert.strictEqual(conexiones.resolverTaller('taller-lopez'), null);
+
+    registro.set('taller-lopez', { slug: 'taller-lopez', nombre: 'L', estado: 'activo', mongoUri: 'mongodb://servidor/lopez' });
+    assert.strictEqual(conexiones.resolverTaller('taller-lopez'), 'taller-lopez', 'y vuelve al reactivarlo');
+});

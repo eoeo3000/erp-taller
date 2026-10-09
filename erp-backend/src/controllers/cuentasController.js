@@ -32,7 +32,7 @@ function cuentaPublica(usuario) {
     };
 }
 
-async function emitirInvitacion(Usuario, usuario, entorno) {
+async function emitirInvitacion(Usuario, usuario, entorno, taller) {
     const token = generarToken();
     await Usuario.updateOne({ _id: usuario._id }, {
         resetHash: hashToken(token),
@@ -42,7 +42,10 @@ async function emitirInvitacion(Usuario, usuario, entorno) {
     // graba la clave): activar una cuenta nueva y reponer una olvidada son el mismo acto
     // desde el punto de vista del backend — alguien que demuestra tener el buzón elige una
     // clave. Lo único que cambia es el texto del correo y el título de la pantalla.
-    return `${SPA_URL}/activar?token=${token}&entorno=${entorno}`;
+    // El taller va en el link por el mismo motivo que en el de recuperación: quien lo abre
+    // todavía no tiene sesión, y sin ese dato el SPA mandaría la activación a la base del
+    // taller por defecto, donde esta invitación no existe.
+    return `${SPA_URL}/activar?token=${token}&entorno=${entorno}&taller=${encodeURIComponent(taller)}`;
 }
 
 async function enviarCorreoInvitacion(usuario, link, invitadoPor) {
@@ -78,7 +81,7 @@ exports.invitar = async (req, res) => {
         // elija su clave desde el link. Nadie, ni quien invita, conoce una clave suya.
         const usuario = await Usuario.create({ nombre, email, rol: 'administrador', tallerId: req.taller || tallerPorDefecto() });
 
-        const link = await emitirInvitacion(Usuario, usuario, req.entorno);
+        const link = await emitirInvitacion(Usuario, usuario, req.entorno, req.taller || tallerPorDefecto());
         let correoEnviado = true;
         try {
             await enviarCorreoInvitacion(usuario, link, req.usuario?.nombre || 'La oficina');
@@ -145,7 +148,7 @@ exports.actualizar = async (req, res) => {
             // La invitación anterior ya salió al correo equivocado y su link SIGUE sirviendo:
             // quien lo haya recibido podría activar esta cuenta. Emitir otra reemplaza el
             // resetHash guardado, así que el link viejo muere acá mismo.
-            link = await emitirInvitacion(Usuario, usuario, req.entorno);
+            link = await emitirInvitacion(Usuario, usuario, req.entorno, req.taller || tallerPorDefecto());
             correoEnviado = true;
             try {
                 await enviarCorreoInvitacion(usuario, link, req.usuario?.nombre || 'La oficina');
@@ -169,7 +172,7 @@ exports.reenviar = async (req, res) => {
         if (!usuario || !usuario.email) return res.fail(404, 'Cuenta no encontrada');
         if (usuario.passwordHash) return res.fail(409, 'Esa cuenta ya está activa — si perdió la clave, que use "Olvidé mi clave" en la pantalla de ingreso.');
 
-        const link = await emitirInvitacion(Usuario, usuario, req.entorno);
+        const link = await emitirInvitacion(Usuario, usuario, req.entorno, req.taller || tallerPorDefecto());
         let correoEnviado = true;
         try {
             await enviarCorreoInvitacion(usuario, link, req.usuario?.nombre || 'La oficina');

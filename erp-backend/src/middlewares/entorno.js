@@ -26,8 +26,8 @@
 //
 // Hoy existe un solo taller y todo esto resuelve siempre a lo mismo. Se construye igual, y
 // desde ahora, para que cuando haya dos ya lleve meses funcionando.
-const { obtenerConexion } = require('../config/conexiones');
-const { resolverTaller, tallerPorDefecto } = require('../config/talleres');
+const { obtenerConexion, resolverTaller } = require('../config/conexiones');
+const { tallerPorDefecto } = require('../config/talleres');
 const { separarPrefijo } = require('../utils/tokens');
 
 function tallerDeLaRequest(req) {
@@ -56,3 +56,44 @@ module.exports = function resolverEntorno(req, res, next) {
         res.status(503).json({ error: err.message });
     }
 };
+
+// --- La base para lo que pasa ANTES de tener sesión ---
+//
+// Entrar, recuperar la clave y activar una invitación ocurren sin sesión, así que
+// `resolverEntorno` los manda al taller por defecto: el correo de alguien de otro taller se
+// busca en la base del principal, no se encuentra, y esa persona no puede entrar nunca.
+//
+// La salida es la misma que ya usan el prefijo del token y el enlace de instalación: **el
+// slug viaja como pista y no autoriza nada**. Las tres rutas que usan esto exigen una
+// credencial que tiene que existir EN ESA BASE —la clave, el hash de recuperación—, así que
+// apuntar a un taller ajeno lleva a una base donde esa credencial no está: 401, nunca los
+// datos de otro.
+//
+// Tres candados, y los tres importan:
+//   1. **Solo sin sesión.** Con `req.usuario` ya resuelto manda el prefijo del token y esto
+//      no se mira — si no, alguien con sesión válida podría saltar a otra base por cabecera.
+//   2. **Solo talleres registrados y activos** (`resolverTaller` consulta el registro).
+//   3. **Nunca lanza.** Un slug desconocido cae en la base por defecto, que es donde su
+//      credencial tampoco va a validar; cortar con un error distinto convertiría esto en un
+//      buscador de qué talleres existen.
+//
+// A propósito NO vive dentro de `resolverEntorno`: si la cabecera eligiera la base para
+// TODA la API, las rutas abiertas que todavía quedan (catálogos, tipos de trabajo) servirían
+// las de otro taller a quien la mandara. Acá el alcance es el de los tres controladores que
+// la llaman.
+function conexionPedida(req) {
+    const porDefecto = { taller: req.taller, db: req.db };
+    if (req.usuario) return porDefecto;
+
+    const pedido = resolverTaller(req.get?.('X-Taller') || req.query?.taller || '');
+    if (!pedido || pedido === req.taller) return porDefecto;
+
+    try {
+        return { taller: pedido, db: obtenerConexion(req.entorno, pedido) };
+    } catch (error) {
+        console.warn(`[entorno] no se pudo abrir el taller pedido "${pedido}":`, error.message);
+        return porDefecto;
+    }
+}
+
+module.exports.conexionPedida = conexionPedida;
