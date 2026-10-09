@@ -27,6 +27,13 @@ const TallerSchema = new mongoose.Schema({
     // (§9.1).
     mongoUri: { type: String, required: true },
 
+    // Enlace de instalación de un solo uso: lo que le llega al dueño del taller nuevo para
+    // crear su primera cuenta. Se guarda el HASH, nunca el valor —mismo criterio que
+    // `Usuario.resetHash` y que los tokens de sesión—, así que ni quien mira la base de
+    // control puede usarlo. Se consume al instalar y se puede reemitir.
+    instalacionHash: { type: String, default: '' },
+    instalacionExpira: { type: Date, default: null },
+
     fechaAlta: { type: Date, default: Date.now },
     // Cuándo pasó a 'baja'. Es lo que va a contar los 10 días de descarga y los 30 del
     // borrado (§9.4) cuando se construya esa etapa.
