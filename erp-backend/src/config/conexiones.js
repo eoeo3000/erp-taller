@@ -186,6 +186,21 @@ async function conectarPrincipal() {
     return conn;
 }
 
+// ¿Existe este taller y puede operar? **La única definición.** La usa middlewares/entorno.js
+// para decidir si un prefijo de token nombra un taller de verdad.
+//
+// Devolver null en vez de lanzar es lo que permite que quien pregunta decida: `entorno.js`
+// cae al taller por defecto, donde el token del que inventó el prefijo no va a validar.
+//
+// Un taller suspendido tampoco se resuelve: "suspendido" significa que no puede operar, y
+// resolverlo para que `obtenerConexion` lance dos líneas después solo cambia un 401 claro
+// por un 503 confuso.
+function resolverTaller(slug) {
+    const limpio = String(slug || '').trim().toLowerCase();
+    const ficha = limpio ? registro.get(limpio) : null;
+    return ficha && ficha.estado === 'activo' ? ficha.slug : null;
+}
+
 function conexionDisponible(entorno, taller = TALLER_PRINCIPAL) {
     if (entorno === 'demo') return !!conexionDemo;
     const ficha = registro.get(taller);
@@ -217,6 +232,7 @@ module.exports = {
     inicializarConexiones,
     obtenerConexion,
     conexionDisponible,
+    resolverTaller,
     conexionDeControl,
     refrescarRegistro,
     hayBaseDeControl,
