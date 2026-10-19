@@ -150,7 +150,10 @@ sistema multi-cliente en una filtración.
   dar de alta, suspender, reactivar, dar de baja. **La pantalla existe**: `GET /panel`, servida
   por el backend, con el contrato de cada cliente, cuándo lo usaron por última vez, sus
   conteos y si su base responde. La página no trae datos —los pide con la clave en una
-  cabecera— así que la clave nunca viaja en la dirección. **La URI nunca sale por la API** — es una
+  cabecera— así que la clave nunca viaja en la dirección. **El alta se hace desde ahí, escribiendo
+  solo el nombre**: el identificador y la base se derivan (`servicios/baseDelTaller.js`), y el
+  enlace de instalación aparece para copiar. Pegar una cadena de conexión a mano era el paso más
+  peligroso del alta: un error de copiado deja a dos clientes en la misma base. **La URI nunca sale por la API** — es una
   credencial. La pantalla para operarlo es trabajo aparte; esto es la API.
 - Tres protecciones que no son evidentes y tienen prueba:
   - **Dos talleres no pueden apuntar a la misma base.** Un copiar-y-pegar al dar de alta

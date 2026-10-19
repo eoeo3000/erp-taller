@@ -35,6 +35,11 @@
     .nota { color: var(--suave); font-size: 13px; }
     .pendiente { border-left: 3px solid var(--ambar); padding-left: 12px; }
     .oculto { display: none; }
+    .campos { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; margin-top: 12px; }
+    .campo { flex: 1 1 220px; }
+    .campo input { width: 100%; }
+    .enlace { margin-top: 14px; padding: 12px; border: 1px solid var(--verde); border-radius: 6px; background: var(--fondo); }
+    .enlace code { display: block; word-break: break-all; margin: 8px 0; font-size: 12px; }
     @media (prefers-color-scheme: dark) {
         :root { --fondo: #1b1a18; --papel: #232220; --borde: #3a3834; --texto: #ece9e3;
                 --suave: #a09b92; --rojo: #e08b86; --verde: #8ecfa8; --ambar: #e0bb70; }
@@ -57,6 +62,37 @@
     </section>
 
     <section id="contenido" class="oculto">
+        <div class="tarjeta">
+            <strong>Dar de alta un cliente</strong>
+            <p class="nota">Escribe el nombre. El identificador y la base de datos se arman solos a partir de los del servidor.</p>
+            <form id="formAlta">
+                <div class="campos">
+                    <div class="campo">
+                        <label for="nombreTaller">Nombre del taller</label>
+                        <input id="nombreTaller" required placeholder="Taller López">
+                    </div>
+                    <div class="campo">
+                        <label for="slugTaller">Identificador</label>
+                        <input id="slugTaller" placeholder="se arma solo" pattern="[a-z0-9-]{2,40}">
+                    </div>
+                    <div class="campo">
+                        <label for="planTaller">Plan</label>
+                        <input id="planTaller" placeholder="básico">
+                    </div>
+                    <div><button id="btnAlta" type="submit">Dar de alta</button></div>
+                </div>
+                <p id="errorAlta" class="aviso"></p>
+            </form>
+            <div id="resultadoAlta" class="enlace oculto">
+                <strong>Listo. Este enlace se muestra UNA sola vez:</strong>
+                <code id="enlaceInstalacion"></code>
+                <button id="copiarEnlace" class="secundario" type="button">Copiar</button>
+                <span id="copiado" class="nota"></span>
+                <p class="nota">Mándaselo al dueño del taller. Vence a los 7 días y se consume al usarse.
+                   Si se pierde, se reemite desde acá y el anterior deja de servir.</p>
+            </div>
+        </div>
+
         <div class="tarjeta">
             <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap">
                 <strong>Clientes</strong>
@@ -189,6 +225,63 @@ $('formClave').addEventListener('submit', async (e) => {
         sessionStorage.removeItem(CLAVE);
         $('errorClave').textContent = err.message;
     }
+});
+
+// El identificador se sugiere mientras se escribe el nombre, y se deja de sugerir en cuanto
+// alguien lo edita a mano: pisarle lo que escribió sería peor que no ayudar.
+let slugTocado = false;
+$('slugTaller').addEventListener('input', () => { slugTocado = true; });
+$('nombreTaller').addEventListener('input', (e) => {
+    if (slugTocado) return;
+    $('slugTaller').value = e.target.value
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40);
+});
+
+$('formAlta').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    $('errorAlta').textContent = '';
+    $('resultadoAlta').classList.add('oculto');
+    $('btnAlta').disabled = true;
+    try {
+        const resp = await fetch('/api/talleres', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-Panel-Token': sessionStorage.getItem(CLAVE) || '' },
+            body: JSON.stringify({
+                nombre: $('nombreTaller').value.trim(),
+                slug: $('slugTaller').value.trim() || undefined,
+                plan: $('planTaller').value.trim(),
+            }),
+        });
+        const cuerpo = await resp.json().catch(() => ({}));
+        if (!resp.ok) throw new Error(cuerpo.error || `Error ${resp.status}`);
+
+        $('enlaceInstalacion').textContent = cuerpo.instalacion.url;
+        $('resultadoAlta').classList.remove('oculto');
+        $('formAlta').reset();
+        slugTocado = false;
+        await cargar();
+    } catch (err) {
+        $('errorAlta').textContent = err.message;
+    } finally {
+        $('btnAlta').disabled = false;
+    }
+});
+
+$('copiarEnlace').addEventListener('click', async () => {
+    const texto = $('enlaceInstalacion').textContent;
+    try {
+        await navigator.clipboard.writeText(texto);
+        $('copiado').textContent = 'Copiado.';
+    } catch {
+        // Sin permiso de portapapeles (pasa fuera de https): se selecciona para copiar a mano.
+        const rango = document.createRange();
+        rango.selectNodeContents($('enlaceInstalacion'));
+        window.getSelection().removeAllRanges();
+        window.getSelection().addRange(rango);
+        $('copiado').textContent = 'Selecciónalo y copia con Ctrl+C.';
+    }
+    setTimeout(() => { $('copiado').textContent = ''; }, 4000);
 });
 
 $('recargar').addEventListener('click', cargar);
