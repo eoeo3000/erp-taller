@@ -24,12 +24,13 @@ function esSlugValido(slug) {
     return SLUG_VALIDO.test(String(slug || ''));
 }
 
-// Devuelve el taller si existe, o null. En la etapa 2 esto consulta la base de control; por
-// ahora solo conoce uno, y devolver null (en vez de lanzar) es lo que permite que quien
-// pregunta decida qué hacer con un taller desconocido.
-function resolverTaller(slug) {
-    return String(slug || '') === TALLER_PRINCIPAL ? TALLER_PRINCIPAL : null;
-}
+// `resolverTaller` vivía acá en la etapa 1, cuando conocía un solo taller. Desde la etapa 2
+// el registro de verdad está en config/conexiones.js —es quien lo carga de la base de
+// control y lo mantiene en memoria— y la función se mudó ahí. Dejar una copia acá sería
+// tener dos respuestas para "¿existe este taller?", y una de las dos se iba a quedar atrás:
+// de hecho se quedó. Durante dos etapas esta decía que no a todo lo que no fuera
+// `principal`, así que un token con el prefijo de otro taller caía en la base del principal
+// y a esa persona la dejaba afuera sin un solo error.
 
 // El taller a usar cuando no hay ninguna pista: una request sin sesión (las PWAs, el portal
 // del cliente) o una sesión emitida antes de que los tokens llevaran prefijo.
@@ -37,4 +38,4 @@ function tallerPorDefecto() {
     return TALLER_PRINCIPAL;
 }
 
-module.exports = { TALLER_PRINCIPAL, esSlugValido, resolverTaller, tallerPorDefecto };
+module.exports = { TALLER_PRINCIPAL, esSlugValido, tallerPorDefecto };

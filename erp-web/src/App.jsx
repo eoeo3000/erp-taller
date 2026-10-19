@@ -65,6 +65,11 @@ import LoginScreen from './screens/LoginScreen';
 import InstalacionScreen from './screens/InstalacionScreen';
 import RestablecerScreen from './screens/RestablecerScreen';
 import { obtenerEntorno, fijarEntorno } from './utils/entorno';
+// Importado por su efecto al cargar: lee `?taller=` del link (instalación, activación,
+// restablecer), lo recuerda en este navegador y lo manda en todas las llamadas. Sin esto,
+// quien es de otro taller no puede entrar: el login buscaría su correo en la base del
+// taller por defecto. Ver utils/taller.js.
+import './utils/taller';
 import { limpiarSesion, suscribirCaidaDeSesion, headerSondeo } from './utils/sesion';
 import { notificar, confirmar } from './utils/notificar';
 import NotificacionesHost from './components/NotificacionesHost';

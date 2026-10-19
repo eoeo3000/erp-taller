@@ -6,6 +6,9 @@ const { hashPassword, verificarPassword } = require('../utils/password');
 const { generarToken, hashToken, conPrefijo } = require('../utils/tokens');
 const { tallerPorDefecto } = require('../config/talleres');
 const { nuevaExpiracion, expiracionAbsoluta, authRequerida, MINUTOS_INACTIVIDAD } = require('../middlewares/sesion');
+// Qué base mirar cuando todavía no hay sesión (entrar, recuperar, restablecer). El slug
+// viaja como pista y la credencial igual tiene que existir ahí — ver middlewares/entorno.js.
+const { conexionPedida } = require('../middlewares/entorno');
 const { hayCuentasDeEscritorio, claveInstalacionRequerida } = require('./instalacionController');
 const transporter = require('../config/mailer');
 const { SPA_URL } = require('../config/urls');
@@ -31,8 +34,8 @@ function usuarioPublico(usuario) {
     };
 }
 
-async function crearSesion(req, usuario) {
-    const SesionStaff = getSesionStaff(req.db);
+async function crearSesion(req, usuario, db = req.db) {
+    const SesionStaff = getSesionStaff(db);
     const token = generarToken();
     const ahora = Date.now();
 
@@ -54,7 +57,10 @@ async function crearSesion(req, usuario) {
 
 // POST /api/auth/login — { email, password }
 exports.login = async (req, res) => {
-    const Usuario = getUsuario(req.db);
+    // La base del taller que pide quien entra, no la del taller por defecto. Sin esto, el
+    // correo de alguien de otro taller se busca donde no está y no puede entrar nunca.
+    const { db } = conexionPedida(req);
+    const Usuario = getUsuario(db);
     try {
         const email = String(req.body?.email || '').trim().toLowerCase();
         const password = String(req.body?.password || '');
@@ -84,7 +90,7 @@ exports.login = async (req, res) => {
             return res.status(401).json({ error: CREDENCIAL_INVALIDA });
         }
 
-        const token = await crearSesion(req, usuario);
+        const token = await crearSesion(req, usuario, db);
         await Usuario.updateOne({ _id: usuario._id }, {
             intentosFallidos: 0, bloqueadoHasta: null, ultimoAccesoSpa: new Date(),
         });
@@ -119,7 +125,8 @@ exports.yo = async (req, res) => {
     // la gente a una pantalla que nadie puede pasar (es exactamente lo que pasaba antes de
     // que existiera la instalación: había que entrar al servidor a correr un script). Se
     // ofrece crear la primera cuenta, y esto se apaga solo en cuanto exista una.
-    if (!await hayCuentasDeEscritorio(getUsuario(req.db))) {
+    const { db } = conexionPedida(req);
+    if (!await hayCuentasDeEscritorio(getUsuario(db))) {
         return res.json({ usuario: null, requiereInstalacion: true, requiereClaveInstalacion: claveInstalacionRequerida() });
     }
     // Sin sesión y con el gate todavía apagado, el SPA entra igual que antes de que
@@ -185,7 +192,8 @@ function registrarRecuperacion(resultado, email) {
 }
 
 exports.recuperar = async (req, res) => {
-    const Usuario = getUsuario(req.db);
+    const { db, taller } = conexionPedida(req);
+    const Usuario = getUsuario(db);
     try {
         const email = String(req.body?.email || '').trim().toLowerCase();
         // Respuesta idéntica exista o no la cuenta: si no, esto se convierte en una forma
@@ -214,7 +222,9 @@ exports.recuperar = async (req, res) => {
             resetExpira: new Date(Date.now() + MINUTOS_VALIDEZ_RESET * 60 * 1000),
         });
 
-        const link = `${SPA_URL}/restablecer?token=${token}&entorno=${req.entorno}`;
+        // El link lleva el taller: quien lo abre todavía no tiene sesión, así que sin esto
+        // el SPA mandaría el restablecimiento a la base del taller por defecto.
+        const link = `${SPA_URL}/restablecer?token=${token}&entorno=${req.entorno}&taller=${encodeURIComponent(taller)}`;
         try {
             await transporter.sendMail({
                 from: `"ERP - Gestión de Trabajo" <${process.env.EMAIL_FROM}>`,
@@ -242,7 +252,8 @@ exports.recuperar = async (req, res) => {
 
 // POST /api/auth/restablecer — { token, password }
 exports.restablecer = async (req, res) => {
-    const Usuario = getUsuario(req.db);
+    const { db } = conexionPedida(req);
+    const Usuario = getUsuario(db);
     try {
         const token = String(req.body?.token || '');
         const password = String(req.body?.password || '');
@@ -268,7 +279,7 @@ exports.restablecer = async (req, res) => {
         });
         // Acá sí se cierran TODAS: quien restablece la clave no tiene ninguna sesión que
         // conservar, y si alguien más estaba dentro con la clave vieja, queda afuera.
-        await getSesionStaff(req.db).updateMany({ usuarioId: usuario._id, estado: 'activa' }, { estado: 'cerrada' });
+        await getSesionStaff(db).updateMany({ usuarioId: usuario._id, estado: 'activa' }, { estado: 'cerrada' });
 
         res.json({ ok: true });
     } catch (error) {

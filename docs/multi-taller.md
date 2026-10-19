@@ -201,6 +201,34 @@ URL y mandarlos en el `POST /api/instalacion`. Hoy esa pantalla solo se alcanza 
 alta se completa llamando a la API — que es como se va a hacer igual con los primeros clientes
 (§8: el alta la hace quien vende, no un formulario de autoservicio).
 
+### Etapa 3.5 — Entrar a un taller que no es el principal ✅ HECHA (el backend)
+
+Salió al escribir la etapa 3 y es lo que la hacía inútil en la práctica: **todo lo que pasa
+antes de tener sesión** —entrar, recuperar la clave, activar una invitación— no puede sacar el
+taller del prefijo del token, porque todavía no hay token. Resolvían al taller por defecto, así
+que el correo de alguien de otro taller se buscaba en la base del principal y esa persona no
+podía entrar **nunca**: un cliente recién instalado quedaba afuera al vencérsele la sesión de
+la instalación.
+
+- `middlewares/entorno.js` → `conexionPedida(req)`: el slug viaja en `X-Taller` o `?taller=`,
+  **como pista y no como credencial**. Esas rutas exigen algo que tiene que existir en esa base
+  (la clave, el hash de recuperación), así que apuntar al taller de otro lleva a un lugar donde
+  tus credenciales no están.
+- Tres candados: **solo sin sesión** (con sesión manda el prefijo del token, o cualquiera con
+  cuenta saltaría a otra base por cabecera), solo talleres registrados y activos, y **nunca
+  lanza** — un slug desconocido cae en la base por defecto, donde la credencial tampoco valida.
+- **No vive dentro de `resolverEntorno`** a propósito: si la cabecera eligiera la base para toda
+  la API, las rutas que siguen abiertas servirían los catálogos de otro taller.
+- Los links de recuperación e invitación ahora llevan `&taller=`, y `erp-web/src/utils/taller.js`
+  lo lee una vez del link y lo recuerda en ese navegador.
+
+**Y un bug que esto destapó:** `resolverTaller` tenía dos definiciones. La de `config/talleres.js`
+quedó congelada en la etapa 1 conociendo solo `principal`, mientras el registro de la etapa 2
+aprendía a cargar talleres de la base de control. Durante dos etapas, un token con el prefijo de
+otro taller resolvía al principal. Ninguna prueba lo vio porque todas tenían un solo taller, y
+ahí "cae en el por defecto" se ve idéntico a "resuelve bien". Ahora hay una sola definición, en
+el módulo que tiene el registro, y una prueba con dos talleres.
+
 ### Etapa 4 — Las PWAs
 
 - El token de una persona ya identifica a esa persona; pasa a identificar también su taller.

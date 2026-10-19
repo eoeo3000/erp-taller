@@ -44,13 +44,6 @@ test('el prefijo no cambia el secreto: lo que se guarda es el hash del token sol
 
 // --- El registro de talleres ---
 
-test('solo se resuelve el taller que existe', () => {
-    assert.strictEqual(talleres.resolverTaller('principal'), 'principal');
-    for (const inventado of ['competidor', 'otro-taller', '', null, undefined, 'PRINCIPAL']) {
-        assert.strictEqual(talleres.resolverTaller(inventado), null, `resolvió ${inventado}`);
-    }
-});
-
 test('un slug no puede contener un punto', () => {
     // Si pudiera, el prefijo del token dejaría de ser divisible sin ambigüedad.
     assert.ok(talleres.esSlugValido('taller-uno'));
@@ -63,13 +56,18 @@ test('un slug no puede contener un punto', () => {
 
 // Se sustituye la conexión para no necesitar Mongo. Va antes de requerir el middleware,
 // que desestructura `obtenerConexion` al cargarse.
+const REGISTRADOS = ['principal', 'taller-lopez'];
 const rutaConexiones = require.resolve('../src/config/conexiones');
 const aperturas = [];
 require.cache[rutaConexiones] = {
     id: rutaConexiones, filename: rutaConexiones, loaded: true,
     exports: {
+        // El registro falso conoce DOS talleres: con uno solo, esta prueba no distinguiría
+        // "resuelve el taller correcto" de "siempre cae en el por defecto" — que es
+        // exactamente el bug que estuvo dos etapas sin verse.
+        resolverTaller: (slug) => (REGISTRADOS.includes(String(slug || '')) ? String(slug) : null),
         obtenerConexion: (entorno, taller) => {
-            if (taller !== 'principal') throw new Error(`Taller desconocido: ${taller}`);
+            if (!REGISTRADOS.includes(taller)) throw new Error(`Taller desconocido: ${taller}`);
             aperturas.push({ entorno, taller });
             return { marca: `${taller}/${entorno}` };
         },
@@ -103,6 +101,20 @@ test('el taller sale del prefijo del token, no del header', async (t) => {
 
     const r = await preguntar(url, { Authorization: `Bearer ${conPrefijo('principal', generarToken())}` });
     assert.strictEqual(r.taller, 'principal');
+});
+
+test('el prefijo de un taller REGISTRADO abre SU base, no la del principal', async (t) => {
+    // La prueba que faltaba. `resolverTaller` conocía solo `principal`, así que el token de
+    // alguien de otro taller caía en la base del principal: su sesión no estaba ahí y
+    // quedaba afuera sin un solo error a la vista. Dos etapas sin que nada lo notara, porque
+    // todas las pruebas anteriores tenían un único taller y "cae en el por defecto" se veía
+    // idéntico a "resuelve bien".
+    const { servidor, url } = await levantar();
+    t.after(() => servidor.close());
+
+    const r = await preguntar(url, { Authorization: `Bearer ${conPrefijo('taller-lopez', generarToken())}` });
+    assert.strictEqual(r.taller, 'taller-lopez');
+    assert.strictEqual(r.db, 'taller-lopez/produccion', 'tiene que abrir SU base');
 });
 
 test('un prefijo inventado NO abre la base de otro taller', async (t) => {

@@ -92,12 +92,26 @@ function levantar() {
     });
 }
 
+// El controlador escribe en consola al aprovisionar ("índices listos en…"). Eso tiene que
+// quedar fuera de la salida del proceso de prueba: `node --test` habla con sus hijos por un
+// protocolo binario sobre stdout, y un texto suelto —más todavía con emoji, que ocupa varios
+// bytes y puede partirse entre dos trozos— le corrompe el marco cada tantas corridas. Se veía
+// como un fallo intermitente de 1 en 5 con un error de deserialización que no tenía nada que
+// ver con lo que esta prueba verifica.
+async function sinRuidoEnConsola(fn) {
+    const log = console.log;
+    const error = console.error;
+    console.log = () => {};
+    console.error = () => {};
+    try { return await fn(); } finally { console.log = log; console.error = error; }
+}
+
 async function instalar(cuerpo) {
     const { servidor, base } = await levantar();
     try {
-        const resp = await fetch(`${base}/api/instalacion`, {
+        const resp = await sinRuidoEnConsola(() => fetch(`${base}/api/instalacion`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cuerpo),
-        });
+        }));
         return { estado: resp.status, cuerpo: await resp.json().catch(() => null) };
     } finally { servidor.close(); }
 }
