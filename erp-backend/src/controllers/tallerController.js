@@ -18,6 +18,7 @@ const getTaller = require('../models/Taller');
 const getUsuario = require('../models/Usuario');
 const { metricasDeTaller, diasSinUsar } = require('../servicios/metricasTaller');
 const { listarRespaldos } = require('../servicios/respaldo');
+const { uriParaTaller, slugDesdeNombre } = require('../servicios/baseDelTaller');
 const { hayCuentasDeEscritorio } = require('./instalacionController');
 
 // Cuánto vive el enlace de instalación. Siete días y no una hora: el alta de un cliente no es
@@ -89,15 +90,26 @@ exports.listar = async (req, res) => {
 exports.crear = async (req, res) => {
     if (!autorizar(req, res)) return;
     try {
-        const slug = String(req.body?.slug || '').trim().toLowerCase();
         const nombre = String(req.body?.nombre || '').trim();
-        const mongoUri = String(req.body?.mongoUri || '').trim();
+        if (!nombre) return res.fail(400, 'Falta el nombre del taller');
 
+        // El identificador se deriva del nombre si no lo mandan. Así dar de alta un cliente
+        // es escribir "Taller López" y nada más.
+        const slug = String(req.body?.slug || slugDesdeNombre(nombre)).trim().toLowerCase();
         if (!esSlugValido(slug)) {
             return res.fail(400, 'El identificador tiene que ser de 2 a 40 caracteres: minúsculas, números y guiones. Sin puntos: el punto separa el prefijo del token de sesión.');
         }
-        if (!nombre) return res.fail(400, 'Falta el nombre del taller');
-        if (!mongoUri) return res.fail(400, 'Falta la base de datos del taller (mongoUri)');
+
+        // Y la base se deriva de la del propio servidor, cambiándole el nombre. Pegar una
+        // cadena de conexión a mano era el paso más peligroso del alta: un error de copiado
+        // deja a dos clientes compartiendo datos. Se puede mandar una explícita igual — es el
+        // caso de mover a un cliente que creció a su propio clúster (§9.1).
+        let mongoUri;
+        try {
+            mongoUri = String(req.body?.mongoUri || '').trim() || uriParaTaller(slug);
+        } catch (error) {
+            return res.fail(400, error.message);
+        }
 
         const Taller = getTaller(conexionDeControl());
         if (await Taller.findOne({ slug })) return res.fail(409, `Ya existe un taller con el identificador "${slug}"`);

@@ -316,3 +316,51 @@ test('dice qué todavía no puede medir, en vez de inventarlo', async () => {
     assert.strictEqual(cuerpo.respaldo.compartido, true, 'el respaldo es del entorno, no del taller');
     assert.match(cuerpo.respaldo.ultimo, /2026-10-19/, 'y muestra el más reciente');
 });
+
+// --- Dar de alta escribiendo solo el nombre ---
+
+test('con solo el nombre se derivan el identificador Y la base', async () => {
+    // Es lo que saca el paso más peligroso del alta: pegar una cadena de conexión a mano.
+    process.env.MONGO_URI = 'mongodb+srv://u:p@c0.ab12c.mongodb.net/test?retryWrites=true&w=majority';
+    const { estado, cuerpo } = await pedir('/api/talleres', { metodo: 'POST', cuerpo: { nombre: 'Taller López' } });
+
+    assert.strictEqual(estado, 201);
+    assert.strictEqual(cuerpo.taller.slug, 'taller-lopez');
+    const guardado = filas.find((f) => f.slug === 'taller-lopez');
+    assert.strictEqual(guardado.mongoUri, 'mongodb+srv://u:p@c0.ab12c.mongodb.net/taller-lopez?retryWrites=true&w=majority');
+    assert.ok(!JSON.stringify(cuerpo).includes('mongodb'), 'la cadena derivada tampoco sale por la API');
+});
+
+test('dos nombres que derivan al mismo identificador chocan en vez de pisarse', async () => {
+    // "Taller López" y "taller lopez" dan el mismo slug. Si el segundo pisara al primero,
+    // dos clientes terminarían en la misma base.
+    process.env.MONGO_URI = 'mongodb+srv://u:p@c0.net/test';
+    assert.strictEqual((await pedir('/api/talleres', { metodo: 'POST', cuerpo: { nombre: 'Taller López' } })).estado, 201);
+    const segundo = await pedir('/api/talleres', { metodo: 'POST', cuerpo: { nombre: 'taller lopez' } });
+    assert.strictEqual(segundo.estado, 409);
+});
+
+test('se puede seguir mandando una mongoUri propia: mover a un cliente que creció', async () => {
+    // §9.1 — pasar un taller a su propio clúster es cambiar un campo, no rehacer nada.
+    process.env.MONGO_URI = 'mongodb+srv://u:p@c0.net/test';
+    const propia = 'mongodb+srv://otro:otra@clusterpropio.net/lopez?w=majority';
+    await pedir('/api/talleres', { metodo: 'POST', cuerpo: { nombre: 'Taller López', mongoUri: propia } });
+    assert.strictEqual(filas.find((f) => f.slug === 'taller-lopez').mongoUri, propia, 'la explícita manda');
+});
+
+test('un nombre del que no sale ningún identificador se rechaza con su motivo', async () => {
+    process.env.MONGO_URI = 'mongodb+srv://u:p@c0.net/test';
+    const { estado, cuerpo } = await pedir('/api/talleres', { metodo: 'POST', cuerpo: { nombre: '---' } });
+    assert.strictEqual(estado, 400);
+    assert.match(cuerpo.error, /identificador/i);
+});
+
+test('sin MONGO_URI en el servidor, el alta dice por qué en vez de romperse', async () => {
+    const previo = process.env.MONGO_URI;
+    delete process.env.MONGO_URI;
+    try {
+        const { estado, cuerpo } = await pedir('/api/talleres', { metodo: 'POST', cuerpo: { nombre: 'Taller López' } });
+        assert.strictEqual(estado, 400);
+        assert.match(cuerpo.error, /MONGO_URI/);
+    } finally { process.env.MONGO_URI = previo; }
+});
