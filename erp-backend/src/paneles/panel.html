@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Talleres · panel</title>
+<style>
+    :root {
+        --fondo: #faf9f7; --papel: #fff; --borde: #e3e0d9; --texto: #27251f;
+        --suave: #76726a; --rojo: #a8322d; --verde: #2f6b45; --ambar: #8a6414;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 24px 16px; background: var(--fondo); color: var(--texto);
+           font: 14px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+    main { max-width: 1100px; margin: 0 auto; }
+    h1 { font-size: 20px; margin: 0 0 4px; }
+    .sub { color: var(--suave); margin: 0 0 24px; }
+    .tarjeta { background: var(--papel); border: 1px solid var(--borde); border-radius: 8px; padding: 16px; margin-bottom: 16px; }
+    label { display: block; font-weight: 600; margin-bottom: 6px; }
+    input { width: 100%; max-width: 420px; padding: 9px 10px; border: 1px solid var(--borde);
+            border-radius: 6px; font: inherit; background: var(--papel); color: inherit; }
+    button { padding: 9px 16px; border: 1px solid var(--texto); background: var(--texto); color: var(--papel);
+             border-radius: 6px; font: inherit; cursor: pointer; }
+    button.secundario { background: var(--papel); color: var(--texto); }
+    button:disabled { opacity: .5; cursor: default; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--borde); vertical-align: top; }
+    th { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--suave); font-weight: 600; }
+    td.num, th.num { text-align: right; }
+    td.num { font-variant-numeric: tabular-nums; }
+    .punto { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+    .ok { background: var(--verde); } .mal { background: var(--rojo); } .tibio { background: var(--ambar); }
+    .aviso { color: var(--rojo); }
+    .nota { color: var(--suave); font-size: 13px; }
+    .pendiente { border-left: 3px solid var(--ambar); padding-left: 12px; }
+    .oculto { display: none; }
+    @media (prefers-color-scheme: dark) {
+        :root { --fondo: #1b1a18; --papel: #232220; --borde: #3a3834; --texto: #ece9e3;
+                --suave: #a09b92; --rojo: #e08b86; --verde: #8ecfa8; --ambar: #e0bb70; }
+    }
+</style>
+</head>
+<body>
+<main>
+    <h1>Talleres</h1>
+    <p class="sub">Panel de quien arrienda el sistema. No es la app de ningún taller.</p>
+
+    <section id="acceso" class="tarjeta">
+        <form id="formClave">
+            <label for="clave">Clave del panel</label>
+            <input id="clave" type="password" autocomplete="current-password" required>
+            <p class="nota">Es <code>PANEL_TOKEN</code>. Se guarda solo en esta pestaña y no viaja en la dirección.</p>
+            <button type="submit">Entrar</button>
+            <span id="errorClave" class="aviso"></span>
+        </form>
+    </section>
+
+    <section id="contenido" class="oculto">
+        <div class="tarjeta">
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap">
+                <strong>Clientes</strong>
+                <span>
+                    <button id="recargar" class="secundario" type="button">Actualizar</button>
+                    <button id="salir" class="secundario" type="button">Salir</button>
+                </span>
+            </div>
+            <p id="estado" class="nota"></p>
+            <div style="overflow-x:auto">
+                <table>
+                    <thead><tr>
+                        <th>Taller</th><th>Estado</th><th>Plan</th><th>Alta</th>
+                        <th>Última actividad</th><th class="num">OT</th><th class="num">Solicitudes</th>
+                        <th class="num">Cuentas</th><th>Base</th>
+                    </tr></thead>
+                    <tbody id="filas"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="tarjeta">
+            <strong>Respaldo</strong>
+            <p id="respaldo" class="nota"></p>
+            <div id="pendientes" class="pendiente nota"></div>
+        </div>
+    </section>
+</main>
+
+<script>
+// La clave vive en sessionStorage y viaja en una cabecera, nunca en la dirección: una URL
+// con la clave adentro queda en el historial, en los logs del servidor y en el Referer de
+// cualquier cosa que se abra desde acá.
+const CLAVE = 'panelTalleres.clave';
+const $ = (id) => document.getElementById(id);
+const texto = (v) => (v === null || v === undefined || v === '' ? '—' : String(v));
+
+function fecha(valor) {
+    if (!valor) return '—';
+    const d = new Date(valor);
+    return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString('es-CL');
+}
+
+// Cuánto hace que nadie entra. Es la señal de que un cliente se está enfriando antes de que
+// avise que se va, así que se pinta: verde hasta una semana, ámbar hasta un mes, rojo después.
+function actividad(fila) {
+    if (!fila.medible) return `<span class="nota">${texto(fila.motivo)}</span>`;
+    if (fila.ultimaActividad === null) return '<span class="punto tibio"></span>nunca entraron';
+    const d = fila.diasSinUsar;
+    const color = d <= 7 ? 'ok' : d <= 30 ? 'tibio' : 'mal';
+    const cuando = d === 0 ? 'hoy' : d === 1 ? 'ayer' : `hace ${d} días`;
+    return `<span class="punto ${color}"></span>${cuando}`;
+}
+
+function base(fila) {
+    if (fila.baseResponde === null) return '<span class="nota">—</span>';
+    return fila.baseResponde
+        ? '<span class="punto ok"></span>responde'
+        : `<span class="punto mal"></span><span class="aviso">${texto(fila.error || fila.motivo)}</span>`;
+}
+
+async function pedir(ruta) {
+    const resp = await fetch(ruta, { headers: { 'X-Panel-Token': sessionStorage.getItem(CLAVE) || '' } });
+    const cuerpo = await resp.json().catch(() => ({}));
+    if (!resp.ok) throw new Error(cuerpo.error || `Error ${resp.status}`);
+    return cuerpo;
+}
+
+function pintar(datos) {
+    $('filas').innerHTML = datos.talleres.map((t) => `
+        <tr>
+            <td><strong>${texto(t.nombre)}</strong><br><span class="nota">${texto(t.slug)}</span></td>
+            <td>${texto(t.estado)}</td>
+            <td>${texto(t.plan)}</td>
+            <td>${fecha(t.fechaAlta)}</td>
+            <td>${actividad(t)}</td>
+            <td class="num">${texto(t.ots)}</td>
+            <td class="num">${texto(t.solicitudes)}</td>
+            <td class="num">${texto(t.cuentas)}</td>
+            <td>${base(t)}</td>
+        </tr>`).join('') || '<tr><td colspan="9" class="nota">Todavía no hay talleres.</td></tr>';
+
+    const r = datos.respaldo || {};
+    $('respaldo').textContent = r.error
+        ? `No se pudo leer: ${r.error}`
+        : `Último: ${texto(r.ultimo)}${r.compartido ? ' — del entorno completo, todavía no separado por taller.' : ''}`;
+
+    $('pendientes').innerHTML = (datos.pendienteEtapa5 || []).length
+        ? `<strong>Todavía no se puede medir por taller:</strong> ${datos.pendienteEtapa5.join(' · ')}.
+           Los archivos del bucket y los respaldos no están separados por cliente (etapa 5).
+           Mostrar el total de todos para cada uno parecería un dato y sería mentira.`
+        : '';
+}
+
+async function cargar() {
+    $('estado').textContent = 'Consultando la base de cada taller…';
+    $('recargar').disabled = true;
+    try {
+        pintar(await pedir('/api/talleres/metricas'));
+        $('estado').textContent = `Actualizado a las ${new Date().toLocaleTimeString('es-CL')}`;
+    } catch (e) {
+        $('estado').innerHTML = `<span class="aviso">${e.message}</span>`;
+        if (/401|incorrecta/i.test(e.message)) salir();
+    } finally {
+        $('recargar').disabled = false;
+    }
+}
+
+function entrar() {
+    $('acceso').classList.add('oculto');
+    $('contenido').classList.remove('oculto');
+    cargar();
+}
+
+function salir() {
+    sessionStorage.removeItem(CLAVE);
+    $('contenido').classList.add('oculto');
+    $('acceso').classList.remove('oculto');
+}
+
+$('formClave').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    $('errorClave').textContent = '';
+    sessionStorage.setItem(CLAVE, $('clave').value);
+    try {
+        await pedir('/api/talleres');
+        $('clave').value = '';
+        entrar();
+    } catch (err) {
+        sessionStorage.removeItem(CLAVE);
+        $('errorClave').textContent = err.message;
+    }
+});
+
+$('recargar').addEventListener('click', cargar);
+$('salir').addEventListener('click', salir);
+
+if (sessionStorage.getItem(CLAVE)) entrar();
+</script>
+</body>
+</html>

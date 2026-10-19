@@ -42,6 +42,10 @@ require('./src/middlewares/identidad').avisarConfiguracion();
 // llegar a cualquier controlador (ver src/middlewares/entorno.js).
 // demoSoloLectura va justo después: necesita req.entorno ya resuelto para negar los
 // DELETE cuando el entorno activo es el de demostración (ver ese archivo).
+// El panel de talleres: una página, fuera de /api porque se abre en el navegador. No trae
+// datos — los pide a /api/talleres con la clave, así la clave no viaja en la dirección.
+app.use('/panel', require('./src/routes/panelRoutes'));
+
 app.use('/api', resolverEntorno, demoSoloLectura, apiRoutes);
 
 const PORT = process.env.PORT || 5000;

@@ -15,6 +15,11 @@ const URI_PRINCIPAL = 'mongodb://servidor/taller-principal';
 let filas = [];
 // ¿El taller ya tiene cuentas que pueden entrar? Decide si se le puede reemitir el enlace.
 let yaInstalado = false;
+// Talleres cuya conexión no se puede abrir: así se prueba que el panel los marque en vez de
+// quedarse sin mostrar a nadie.
+let SIN_BASE = [];
+// Lo que devuelve el servicio de métricas para cada taller medible.
+let metricasFalsas = { baseResponde: true, ots: 10, solicitudes: 12, cuentas: 2, ultimaActividad: new Date('2026-10-18T10:00:00Z'), error: null };
 function fabricaTaller() {
     const doc = (d) => ({
         ...d,
@@ -46,12 +51,22 @@ function fabricaTaller() {
 // Sustituciones antes de requerir el router, que desestructura al cargarse.
 for (const [ruta, exports] of [
     ['../src/models/Taller', () => fabricaTaller()],
+    ['../src/servicios/metricasTaller', {
+        metricasDeTaller: async () => metricasFalsas,
+        diasSinUsar: () => 1,
+    }],
+    ['../src/servicios/respaldo', {
+        listarRespaldos: async () => [{ clave: 'respaldos/produccion/2026-10-19.json.gz' }, { clave: 'respaldos/produccion/2026-10-18.json.gz' }],
+    }],
     ['../src/models/Usuario', (conn) => ({
         exists: async () => (yaInstalado ? { _id: 1 } : null),
     })],
     ['../src/config/conexiones', {
         conexionDeControl: () => ({}),
-        obtenerConexion: (entorno, slug) => ({ name: `base-${slug}` }),
+        obtenerConexion: (entorno, slug) => {
+            if (SIN_BASE.includes(slug)) throw new Error(`Taller desconocido: ${slug}`);
+            return { name: `base-${slug}` };
+        },
         refrescarRegistro: async () => {},
         hayBaseDeControl: () => String(process.env.MONGO_URI_CONTROL || '').trim() !== '',
     }],
@@ -93,6 +108,7 @@ test.beforeEach(() => {
     filas = [{ slug: 'principal', nombre: 'Taller principal', estado: 'activo', plan: '', mongoUri: URI_PRINCIPAL, fechaAlta: new Date(), fechaBaja: null }];
     process.env.PANEL_TOKEN = CLAVE;
     yaInstalado = false;
+    SIN_BASE = [];
 });
 test.after(() => { delete process.env.PANEL_TOKEN; delete process.env.MONGO_URI_CONTROL; });
 
@@ -245,4 +261,58 @@ test('no se reemite el enlace de un taller que ya opera', async () => {
     const { estado, cuerpo } = await pedir('/api/talleres/principal/instalacion', { metodo: 'POST' });
     assert.strictEqual(estado, 409);
     assert.match(cuerpo.error, /ya está instalado/);
+});
+
+// --- Las métricas que alimentan el panel ---
+
+test('las métricas exigen la misma clave', async () => {
+    assert.strictEqual((await pedir('/api/talleres/metricas', { clave: 'otra' })).estado, 401);
+    assert.strictEqual((await pedir('/api/talleres/metricas', { control: false })).estado, 503);
+});
+
+test('trae el contrato y los conteos de cada taller', async () => {
+    filas.push({ slug: 'taller-lopez', nombre: 'L', estado: 'activo', plan: 'básico', mongoUri: 'mongodb://servidor/lopez', fechaAlta: new Date(), fechaBaja: null });
+    const { estado, cuerpo } = await pedir('/api/talleres/metricas');
+    assert.strictEqual(estado, 200);
+    assert.strictEqual(cuerpo.talleres.length, 2);
+    const lopez = cuerpo.talleres.find((t) => t.slug === 'taller-lopez');
+    assert.strictEqual(lopez.medible, true);
+    assert.strictEqual(lopez.ots, 10);
+    assert.strictEqual(lopez.plan, 'básico');
+    assert.ok(!JSON.stringify(cuerpo).includes('mongodb://'), 'la URI tampoco sale por acá');
+});
+
+test('UNA BASE CAÍDA NO DEJA AL PANEL SIN MOSTRAR A NADIE', async () => {
+    // Enterarse de que la base de un cliente no responde es justamente para lo que existe el
+    // panel. Si una caída tumbara la consulta, el panel se apagaría justo cuando hace falta.
+    filas.push({ slug: 'taller-roto', nombre: 'Roto', estado: 'activo', plan: '', mongoUri: 'mongodb://servidor/roto', fechaAlta: new Date(), fechaBaja: null });
+    SIN_BASE = ['taller-roto'];
+
+    const { estado, cuerpo } = await pedir('/api/talleres/metricas');
+    assert.strictEqual(estado, 200, 'la consulta completa tiene que responder igual');
+    assert.strictEqual(cuerpo.talleres.length, 2);
+    const roto = cuerpo.talleres.find((t) => t.slug === 'taller-roto');
+    assert.strictEqual(roto.medible, false);
+    assert.strictEqual(roto.baseResponde, false);
+    assert.strictEqual(cuerpo.talleres.find((t) => t.slug === 'principal').ots, 10, 'los demás se miden igual');
+});
+
+test('un taller suspendido no se mide, y eso no es "base caída"', async () => {
+    // Su conexión está cortada a propósito (el corte vive en el registro). Marcarlo como
+    // caído confundiría una decisión comercial con un problema técnico.
+    filas.push({ slug: 'taller-pausa', nombre: 'Pausa', estado: 'suspendido', plan: '', mongoUri: 'mongodb://servidor/pausa', fechaAlta: new Date(), fechaBaja: null });
+    const { cuerpo } = await pedir('/api/talleres/metricas');
+    const pausa = cuerpo.talleres.find((t) => t.slug === 'taller-pausa');
+    assert.strictEqual(pausa.medible, false);
+    assert.strictEqual(pausa.baseResponde, null, 'null, no false: no se intentó');
+    assert.match(pausa.motivo, /suspendido/);
+});
+
+test('dice qué todavía no puede medir, en vez de inventarlo', async () => {
+    // Las fotos y los respaldos no están separados por taller (etapa 5). Mostrar el total de
+    // todos los clientes para cada uno parecería un dato y sería mentira.
+    const { cuerpo } = await pedir('/api/talleres/metricas');
+    assert.ok(cuerpo.pendienteEtapa5.length >= 2);
+    assert.strictEqual(cuerpo.respaldo.compartido, true, 'el respaldo es del entorno, no del taller');
+    assert.match(cuerpo.respaldo.ultimo, /2026-10-19/, 'y muestra el más reciente');
 });

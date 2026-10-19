@@ -7,6 +7,9 @@ const router = express.Router();
 const ctrl = require('../controllers/tallerController');
 
 router.get('/', ctrl.listar);
+// Antes de '/:slug' no hace falta (no hay rutas con parámetro en GET), pero igual va
+// primero para que agregar una después no la tape.
+router.get('/metricas', ctrl.metricas);
 router.post('/', ctrl.crear);
 router.patch('/:slug', ctrl.actualizar);
 // Reemitir el enlace de instalación (el anterior deja de servir).
