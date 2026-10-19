@@ -147,7 +147,10 @@ sistema multi-cliente en una filtración.
   vez que se enciende, el taller que ya existe **se anota solo** — si no, el despliegue
   siguiente respondería "Taller desconocido: principal" a todo el mundo.
 - `controllers/tallerController.js` + `/api/talleres` (`PANEL_TOKEN`, 503 sin ella): listar,
-  dar de alta, suspender, reactivar, dar de baja. **La URI nunca sale por la API** — es una
+  dar de alta, suspender, reactivar, dar de baja. **La pantalla existe**: `GET /panel`, servida
+  por el backend, con el contrato de cada cliente, cuándo lo usaron por última vez, sus
+  conteos y si su base responde. La página no trae datos —los pide con la clave en una
+  cabecera— así que la clave nunca viaja en la dirección. **La URI nunca sale por la API** — es una
   credencial. La pantalla para operarlo es trabajo aparte; esto es la API.
 - Tres protecciones que no son evidentes y tienen prueba:
   - **Dos talleres no pueden apuntar a la misma base.** Un copiar-y-pegar al dar de alta

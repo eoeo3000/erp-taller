@@ -16,6 +16,8 @@ const { generarToken, hashToken } = require('../utils/tokens');
 const { SPA_URL } = require('../config/urls');
 const getTaller = require('../models/Taller');
 const getUsuario = require('../models/Usuario');
+const { metricasDeTaller, diasSinUsar } = require('../servicios/metricasTaller');
+const { listarRespaldos } = require('../servicios/respaldo');
 const { hayCuentasDeEscritorio } = require('./instalacionController');
 
 // Cuánto vive el enlace de instalación. Siete días y no una hora: el alta de un cliente no es
@@ -166,6 +168,62 @@ exports.actualizar = async (req, res) => {
         await taller.save();
         await refrescarRegistro();
         res.ok({ taller: publico(taller) });
+    } catch (error) {
+        res.fail(500, error.message);
+    }
+};
+
+// GET /api/talleres/metricas — lo que alimenta el panel.
+//
+// Va aparte de `listar` y no mezclado con él: listar lee una sola colección de la base de
+// control y es instantáneo, mientras esto abre la base de CADA taller y cuenta. Con diez
+// clientes son diez idas a Mongo, y acá una sola tarda 600-800ms. Mezclarlas habría hecho
+// lento el listado para siempre por una pantalla que se mira de vez en cuando.
+//
+// Los talleres se consultan en paralelo y cada uno con su propio tope de espera: una base
+// caída tiene que salir marcada en la lista, no colgar la lista entera. Enterarse de eso es
+// justamente para lo que existe el panel.
+exports.metricas = async (req, res) => {
+    if (!autorizar(req, res)) return;
+    try {
+        const Taller = getTaller(conexionDeControl());
+        const talleres = await Taller.find().sort({ fechaAlta: 1 }).lean();
+
+        const filas = await Promise.all(talleres.map(async (t) => {
+            const base = publico(t);
+            // Un taller suspendido o de baja no obtiene conexión —el corte vive en el
+            // registro— así que ni se intenta: no es que su base esté caída.
+            if (t.estado !== 'activo') {
+                return { ...base, medible: false, motivo: `Está ${t.estado}`, baseResponde: null };
+            }
+            try {
+                const metricas = await metricasDeTaller(obtenerConexion('produccion', t.slug));
+                return { ...base, medible: true, ...metricas, diasSinUsar: diasSinUsar(metricas.ultimaActividad) };
+            } catch (error) {
+                return { ...base, medible: false, motivo: error.message, baseResponde: false };
+            }
+        }));
+
+        // El último respaldo es del ENTORNO, no de cada taller: todavía no están separados
+        // (etapa 5). Se devuelve igual, marcado como compartido, porque saber que el respaldo
+        // diario dejó de correr sirve aunque no esté desglosado — y mentir diciendo que es
+        // de cada taller sería peor que no mostrarlo.
+        let respaldo = { compartido: true, ultimo: null, error: null };
+        try {
+            const copias = await listarRespaldos('produccion');
+            const ultima = copias.sort((a, b) => String(b.clave || b).localeCompare(String(a.clave || a)))[0];
+            respaldo.ultimo = ultima ? (ultima.clave || ultima) : null;
+        } catch (error) {
+            respaldo.error = error.message;
+        }
+
+        res.ok({
+            talleres: filas,
+            respaldo,
+            // Lo que el panel NO puede mostrar todavía, dicho por el backend para que la
+            // pantalla no tenga que adivinarlo ni quede desactualizada cuando llegue.
+            pendienteEtapa5: ['Fotos y espacio por taller', 'Respaldo por taller'],
+        });
     } catch (error) {
         res.fail(500, error.message);
     }
