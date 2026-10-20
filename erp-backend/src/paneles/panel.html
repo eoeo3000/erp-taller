@@ -34,6 +34,7 @@
     .aviso { color: var(--rojo); }
     .nota { color: var(--suave); font-size: 13px; }
     .pendiente { border-left: 3px solid var(--ambar); padding-left: 12px; }
+    button.fila { padding: 4px 9px; font-size: 12px; margin: 0 4px 4px 0; }
     .oculto { display: none; }
     .campos { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; margin-top: 12px; }
     .campo { flex: 1 1 220px; }
@@ -84,12 +85,11 @@
                 <p id="errorAlta" class="aviso"></p>
             </form>
             <div id="resultadoAlta" class="enlace oculto">
-                <strong>Listo. Este enlace se muestra UNA sola vez:</strong>
+                <strong id="tituloEnlace">Listo. Este enlace se muestra UNA sola vez:</strong>
                 <code id="enlaceInstalacion"></code>
                 <button id="copiarEnlace" class="secundario" type="button">Copiar</button>
                 <span id="copiado" class="nota"></span>
-                <p class="nota">Mándaselo al dueño del taller. Vence a los 7 días y se consume al usarse.
-                   Si se pierde, se reemite desde acá y el anterior deja de servir.</p>
+                <p id="ayudaEnlace" class="nota"></p>
             </div>
         </div>
 
@@ -107,7 +107,7 @@
                     <thead><tr>
                         <th>Taller</th><th>Estado</th><th>Plan</th><th>Alta</th>
                         <th>Última actividad</th><th class="num">OT</th><th class="num">Solicitudes</th>
-                        <th class="num">Cuentas</th><th>Base</th>
+                        <th class="num">Cuentas</th><th>Base</th><th>Enlaces</th>
                     </tr></thead>
                     <tbody id="filas"></tbody>
                 </table>
@@ -154,6 +154,22 @@ function base(fila) {
         : `<span class="punto mal"></span><span class="aviso">${texto(fila.error || fila.motivo)}</span>`;
 }
 
+// Qué se puede hacer con cada fila.
+//
+// Un taller SIN cuentas todavía no se instaló: lo que hace falta ahí es su enlace de
+// instalación, y como se muestra una sola vez, la única salida cuando se pierde es reemitirlo
+// (lo que mata el anterior). Uno que ya opera no necesita ese enlace nunca más — ofrecerlo
+// sería ofrecer algo que el backend va a rechazar— y lo que sirve es el link para entrar.
+//
+// `cuentas` cuenta las que pueden entrar por el login, la misma definición que usa el backend
+// para decidir si una instalación sigue abierta. Así los dos lados no pueden contradecirse.
+function enlaces(t) {
+    if (!t.medible) return '<span class="nota">—</span>';
+    const acceso = `<button class="secundario fila" type="button" data-acceso="${t.slug}">Link de acceso</button>`;
+    if (t.cuentas > 0) return acceso;
+    return `<button class="secundario fila" type="button" data-reemitir="${t.slug}">Reemitir instalación</button>${acceso}`;
+}
+
 async function pedir(ruta) {
     const resp = await fetch(ruta, { headers: { 'X-Panel-Token': sessionStorage.getItem(CLAVE) || '' } });
     const cuerpo = await resp.json().catch(() => ({}));
@@ -162,6 +178,7 @@ async function pedir(ruta) {
 }
 
 function pintar(datos) {
+    spaUrl = datos.spaUrl || '';
     $('filas').innerHTML = datos.talleres.map((t) => `
         <tr>
             <td><strong>${texto(t.nombre)}</strong><br><span class="nota">${texto(t.slug)}</span></td>
@@ -172,8 +189,8 @@ function pintar(datos) {
             <td class="num">${texto(t.ots)}</td>
             <td class="num">${texto(t.solicitudes)}</td>
             <td class="num">${texto(t.cuentas)}</td>
-            <td>${base(t)}</td>
-        </tr>`).join('') || '<tr><td colspan="9" class="nota">Todavía no hay talleres.</td></tr>';
+            <td>${enlaces(t)}</td>
+        </tr>`).join('') || '<tr><td colspan="10" class="nota">Todavía no hay talleres.</td></tr>';
 
     const r = datos.respaldo || {};
     $('respaldo').textContent = r.error
@@ -256,8 +273,7 @@ $('formAlta').addEventListener('submit', async (e) => {
         const cuerpo = await resp.json().catch(() => ({}));
         if (!resp.ok) throw new Error(cuerpo.error || `Error ${resp.status}`);
 
-        $('enlaceInstalacion').textContent = cuerpo.instalacion.url;
-        $('resultadoAlta').classList.remove('oculto');
+        mostrarEnlace(cuerpo.instalacion.url, 'Listo. Este enlace se muestra UNA sola vez:');
         $('formAlta').reset();
         slugTocado = false;
         await cargar();
@@ -265,6 +281,53 @@ $('formAlta').addEventListener('submit', async (e) => {
         $('errorAlta').textContent = err.message;
     } finally {
         $('btnAlta').disabled = false;
+    }
+});
+
+// El recuadro del enlace lo comparten el alta, la reemisión y el link de acceso: es un solo
+// lugar donde mirar y un solo botón de copiar.
+let spaUrl = '';
+const AYUDA_INSTALACION = 'Mándaselo al dueño del taller. Vence a los 7 días y se consume al usarse. '
+    + 'Si se pierde, se reemite desde la fila y el anterior deja de servir.';
+const AYUDA_ACCESO = 'El «?taller=» no es decorativo: es lo que hace que su correo se busque en SU base. '
+    + 'Con abrirlo una vez basta — después el navegador lo recuerda y puede guardar el marcador normal.';
+
+function mostrarEnlace(url, titulo, ayuda = AYUDA_INSTALACION) {
+    $('tituloEnlace').textContent = titulo;
+    $('ayudaEnlace').textContent = ayuda;
+    $('enlaceInstalacion').textContent = url;
+    $('resultadoAlta').classList.remove('oculto');
+    $('resultadoAlta').scrollIntoView({ block: 'nearest' });
+}
+
+// Los botones de las filas se escuchan en la tabla y no uno por uno: las filas se vuelven a
+// pintar en cada actualización, y los listeners puestos sobre ellas morirían con ellas.
+$('filas').addEventListener('click', async (e) => {
+    const paraAcceso = e.target.dataset?.acceso;
+    const paraReemitir = e.target.dataset?.reemitir;
+
+    if (paraAcceso) {
+        // El `?taller=` no es decorativo: es lo que hace que el correo de esa persona se
+        // busque en SU base. Sin él no puede entrar (ver utils/taller.js en erp-web).
+        return mostrarEnlace(`${spaUrl}/?taller=${encodeURIComponent(paraAcceso)}`,
+            'Link de acceso para este cliente:', AYUDA_ACCESO);
+    }
+
+    if (paraReemitir) {
+        if (!confirm(`Al reemitir, el enlace anterior de "${paraReemitir}" deja de servir. ¿Seguir?`)) return;
+        e.target.disabled = true;
+        try {
+            const resp = await fetch(`/api/talleres/${encodeURIComponent(paraReemitir)}/instalacion`, {
+                method: 'POST', headers: { 'X-Panel-Token': sessionStorage.getItem(CLAVE) || '' },
+            });
+            const cuerpo = await resp.json().catch(() => ({}));
+            if (!resp.ok) throw new Error(cuerpo.error || `Error ${resp.status}`);
+            mostrarEnlace(cuerpo.instalacion.url, 'Enlace nuevo. El anterior ya no sirve, y este se muestra UNA sola vez:');
+        } catch (err) {
+            $('estado').innerHTML = `<span class="aviso">${err.message}</span>`;
+        } finally {
+            e.target.disabled = false;
+        }
     }
 });
 
