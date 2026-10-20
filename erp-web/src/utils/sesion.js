@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { fijarTaller } from './taller';
 
 // Sesión de la app de escritorio. Mismo truco que utils/entorno.js: el token se propaga a
 // TODAS las llamadas de axios vía axios.defaults, así ninguna llamada existente necesita
@@ -46,6 +47,12 @@ export function fijarSesion(token, usuario) {
     escribir(CLAVE_TOKEN, token);
     escribir(CLAVE_USUARIO, JSON.stringify(usuario || null));
     aplicarEnAxios(token);
+    // El prefijo del token dice de qué taller es esta sesión, y eso MANDA sobre la pista que
+    // el navegador venía recordando. Sin esto, abrir una vez el enlace de instalación de un
+    // cliente deja el navegador apuntando a ese taller para siempre: quien administra visita
+    // varios enlaces y después no puede volver a entrar al suyo. Entrar lo corrige solo.
+    const punto = String(token || '').indexOf('.');
+    if (punto > 0) fijarTaller(token.slice(0, punto));
 }
 
 export function limpiarSesion() {

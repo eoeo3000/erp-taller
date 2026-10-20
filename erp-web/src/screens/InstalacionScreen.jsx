@@ -1,6 +1,12 @@
 import React, { useState } from 'react';
 import axios from 'axios';
 import { fijarSesion } from '../utils/sesion';
+import { obtenerTaller } from '../utils/taller';
+
+// El enlace de instalación de un taller nuevo trae los dos datos: `?taller=` (que
+// utils/taller.js ya recordó y manda en cada llamada) y `?clave=`, la de un solo uso. Se lee
+// acá para que quien lo abre no tenga que copiarla a mano de la barra de direcciones.
+const claveDelEnlace = () => new URLSearchParams(window.location.search).get('clave') || '';
 
 // Primera puesta en marcha. Aparece solo cuando la base no tiene ninguna cuenta con clave, y
 // desaparece para siempre en cuanto se crea la primera (ver instalacionController). Es lo que
@@ -22,7 +28,7 @@ export default function InstalacionScreen({ API, requiereClaveInstalacion, onLis
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [repetida, setRepetida] = useState('');
-    const [claveInstalacion, setClaveInstalacion] = useState('');
+    const [claveInstalacion, setClaveInstalacion] = useState(claveDelEnlace);
     const [error, setError] = useState('');
     const [enviando, setEnviando] = useState(false);
 
@@ -35,6 +41,10 @@ export default function InstalacionScreen({ API, requiereClaveInstalacion, onLis
             const { data } = await axios.post(`${API}/instalacion`, {
                 nombre, email, password,
                 ...(requiereClaveInstalacion ? { claveInstalacion } : {}),
+                // Explícito además de la cabecera: lo que el backend mira para instalar tiene
+                // que ser lo mismo que miró `/auth/yo` para ofrecer esta pantalla. Cuando no
+                // coincidían, la pantalla preguntaba por un taller e instalaba en otro.
+                ...(obtenerTaller() ? { taller: obtenerTaller() } : {}),
             });
             // Entra de inmediato: acaba de elegir sus datos, pedirle que los escriba otra vez
             // en el login sería puro trámite.
@@ -85,7 +95,9 @@ export default function InstalacionScreen({ API, requiereClaveInstalacion, onLis
                             <span style={styles.etiqueta}>Clave de instalación</span>
                             <input type="password" value={claveInstalacion} required
                                 onChange={(e) => setClaveInstalacion(e.target.value)} style={styles.input} />
-                            <span style={styles.ayudaChica}>La definiste como SETUP_TOKEN en el servidor.</span>
+                            <span style={styles.ayudaChica}>{claveDelEnlace()
+                                ? 'Viene del enlace que te mandaron. Ya está puesta.'
+                                : 'La definiste como SETUP_TOKEN en el servidor.'}</span>
                         </label>
                     )}
 

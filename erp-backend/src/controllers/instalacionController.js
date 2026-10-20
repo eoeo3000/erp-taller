@@ -17,6 +17,7 @@ const { comparaSegura } = require('../utils/claveCompartida');
 const { nuevaExpiracion, expiracionAbsoluta } = require('../middlewares/sesion');
 const { obtenerConexion, conexionDeControl } = require('../config/conexiones');
 const { esSlugValido } = require('../config/talleres');
+const { conexionPedida } = require('../middlewares/entorno');
 const { aprovisionarTaller } = require('../servicios/aprovisionamiento');
 const getTaller = require('../models/Taller');
 
@@ -54,8 +55,26 @@ exports.claveInstalacionRequerida = claveInstalacionRequerida;
 //
 // Esa última es la que importa de verdad: sin ella, un enlace viejo que quedó en un correo
 // serviría para crearse un administrador dentro de un taller que ya está operando.
+// De qué taller se está hablando. Viene del cuerpo (`taller`) o, si no, del taller que ya
+// resolvió la pista del navegador (`X-Taller` / `?taller=`, ver middlewares/entorno.js).
+//
+// **Las dos fuentes tienen que mirar lo mismo que `GET /auth/yo`.** Cuando no lo hacían pasó
+// esto, y se veía absurdo desde afuera: `/auth/yo` miraba el taller de la cabecera y decía
+// "falta instalar", el SPA mostraba la pantalla, y al enviarla la instalación caía en el
+// taller por defecto y respondía "este sistema ya está instalado". La pantalla preguntaba por
+// un taller e instalaba en otro.
+//
+// El taller por defecto se devuelve como null a propósito: ese es el camino de siempre —la
+// instalación única, con SETUP_TOKEN— y no el de un cliente nuevo.
+function slugPedido(req) {
+    const delCuerpo = String(req.body?.taller || '').trim().toLowerCase();
+    if (delCuerpo) return delCuerpo;
+    const { taller } = conexionPedida(req);
+    return taller && taller !== tallerPorDefecto() ? taller : '';
+}
+
 async function resolverTallerDelEnlace(req) {
-    const slug = String(req.body?.taller || '').trim().toLowerCase();
+    const slug = slugPedido(req);
     if (!slug) return null;
     if (!esSlugValido(slug)) return { error: 'El identificador del taller no es válido.' };
 
