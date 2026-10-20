@@ -125,9 +125,20 @@ exports.yo = async (req, res) => {
     // la gente a una pantalla que nadie puede pasar (es exactamente lo que pasaba antes de
     // que existiera la instalación: había que entrar al servidor a correr un script). Se
     // ofrece crear la primera cuenta, y esto se apaga solo en cuanto exista una.
-    const { db } = conexionPedida(req);
+    const { db, taller } = conexionPedida(req);
     if (!await hayCuentasDeEscritorio(getUsuario(db))) {
-        return res.json({ usuario: null, requiereInstalacion: true, requiereClaveInstalacion: claveInstalacionRequerida() });
+        // Un taller que no es el por defecto SIEMPRE necesita su clave de instalación, la del
+        // enlace de un solo uso. Sin esto la pantalla se ofrecería sin pedirla y el envío
+        // fallaría con un 403 sin explicación — y peor: si no la pidiera el backend,
+        // cualquiera que supiera el identificador de un cliente nuevo podría quedarse con él
+        // antes que su dueño.
+        const esOtroTaller = taller !== tallerPorDefecto();
+        return res.json({
+            usuario: null,
+            requiereInstalacion: true,
+            requiereClaveInstalacion: esOtroTaller || claveInstalacionRequerida(),
+            taller,
+        });
     }
     // Sin sesión y con el gate todavía apagado, el SPA entra igual que antes de que
     // existiera el login. Esto es lo que hace que el rollout de AUTH_REQUERIDA valga en los

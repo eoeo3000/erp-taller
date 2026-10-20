@@ -56,6 +56,12 @@ for (const [ruta, exports] of [
     ['../src/models/SesionStaff', (conn) => ({ create: async (d) => ({ _id: new ObjectId(), base: conn.name, ...d }) })],
     ['../src/config/conexiones', {
         conexionDeControl: () => ({ name: 'control' }),
+        // `conexionPedida` lo usa para resolver la pista del navegador: sin esto la prueba
+        // falla por el doble incompleto y no por el código.
+        resolverTaller: (slug) => {
+            const t = talleres.find((x) => x.slug === String(slug || '').trim().toLowerCase());
+            return t && t.estado === 'activo' ? t.slug : null;
+        },
         obtenerConexion: (entorno, slug) => {
             const t = talleres.find((x) => x.slug === slug);
             if (!t) throw new Error(`Taller desconocido: ${slug}`);
@@ -78,6 +84,7 @@ for (const [ruta, exports] of [
 
 const contratoRespuesta = require('../src/middlewares/respuestas');
 const instalacionController = require('../src/controllers/instalacionController');
+const authController = require('../src/controllers/authController');
 
 function levantar() {
     const app = express();
@@ -87,6 +94,7 @@ function levantar() {
     // justamente la situación de quien va a instalar un taller nuevo.
     app.use((req, res, siguiente) => { req.db = conexionDe('base-principal'); req.taller = 'principal'; siguiente(); });
     app.post('/api/instalacion', instalacionController.instalar);
+    app.get('/api/auth/yo', authController.yo);
     return new Promise((listo) => {
         const servidor = app.listen(0, () => listo({ servidor, base: `http://127.0.0.1:${servidor.address().port}` }));
     });
@@ -106,11 +114,11 @@ async function sinRuidoEnConsola(fn) {
     try { return await fn(); } finally { console.log = log; console.error = error; }
 }
 
-async function instalar(cuerpo) {
+async function instalar(cuerpo, cabeceras = {}) {
     const { servidor, base } = await levantar();
     try {
         const resp = await sinRuidoEnConsola(() => fetch(`${base}/api/instalacion`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cuerpo),
+            method: 'POST', headers: { 'Content-Type': 'application/json', ...cabeceras }, body: JSON.stringify(cuerpo),
         }));
         return { estado: resp.status, cuerpo: await resp.json().catch(() => null) };
     } finally { servidor.close(); }
@@ -230,4 +238,60 @@ test('SETUP_TOKEN sigue guardando el camino sin taller, y no estorba al del enla
     } finally {
         delete process.env.SETUP_TOKEN;
     }
+});
+
+// --- Que la pantalla y la instalación hablen del MISMO taller ---
+
+async function preguntarYo(cabeceras = {}) {
+    const { servidor, base } = await levantar();
+    try {
+        const resp = await sinRuidoEnConsola(() => fetch(`${base}/api/auth/yo`, { headers: cabeceras }));
+        return { estado: resp.status, cuerpo: await resp.json().catch(() => null) };
+    } finally { servidor.close(); }
+}
+
+test('EL BUG: /auth/yo y la instalación tienen que mirar el mismo taller', async () => {
+    // Lo que se veía desde afuera, y era absurdo: el navegador recordaba un taller nuevo
+    // (`X-Taller`, de haber abierto el enlace), /auth/yo miraba ESA base y decía "falta
+    // instalar", el SPA mostraba la pantalla — y al enviarla la instalación caía en el taller
+    // POR DEFECTO y respondía "este sistema ya está instalado". La pantalla preguntaba por un
+    // taller e instalaba en otro.
+    const cabecera = { 'X-Taller': 'taller-lopez' };
+
+    const yo = await preguntarYo(cabecera);
+    assert.strictEqual(yo.cuerpo.requiereInstalacion, true, 'taller-lopez no tiene cuentas');
+    assert.strictEqual(yo.cuerpo.taller, 'taller-lopez');
+
+    // Y la instalación, con la misma pista, tiene que ir a ESE taller.
+    const { estado } = await instalar({ ...DATOS, claveInstalacion: CLAVE_BUENA }, cabecera);
+    assert.strictEqual(estado, 201, 'instaló en el taller equivocado');
+    assert.strictEqual(usuariosPorBase['base-taller-lopez'].length, 1);
+    assert.strictEqual(usuariosPorBase['base-principal'].length, 1, 'no tocó la base del principal');
+});
+
+test('la pantalla de un taller nuevo SIEMPRE pide la clave del enlace', async () => {
+    // Si no la pidiera, la pantalla se ofrecería sin ella y el envío fallaría con un 403 sin
+    // explicación. Y peor: si el backend tampoco la exigiera, cualquiera que supiera el
+    // identificador de un cliente nuevo podría quedarse con él antes que su dueño.
+    const nuevo = await preguntarYo({ 'X-Taller': 'taller-lopez' });
+    assert.strictEqual(nuevo.cuerpo.requiereClaveInstalacion, true);
+
+    // En el taller por defecto sigue mandando SETUP_TOKEN, como siempre.
+    usuariosPorBase['base-principal'] = [];
+    const porDefecto = await preguntarYo();
+    assert.strictEqual(porDefecto.cuerpo.requiereClaveInstalacion, false);
+});
+
+test('la pista sola no instala: sin la clave del enlace no pasa nadie', async () => {
+    // El slug es ruteo, no autorización — acá también. Si bastara la cabecera, quedarse con
+    // el taller de otro sería escribir su identificador.
+    const { estado } = await instalar(DATOS, { 'X-Taller': 'taller-lopez' });
+    assert.strictEqual(estado, 403);
+    assert.strictEqual(usuariosPorBase['base-taller-lopez'].length, 0);
+});
+
+test('una pista hacia un taller que ya opera no reabre su instalación', async () => {
+    usuariosPorBase['base-taller-lopez'] = [{ passwordHash: 'ya-tiene' }];
+    const { estado } = await instalar({ ...DATOS, claveInstalacion: CLAVE_BUENA }, { 'X-Taller': 'taller-lopez' });
+    assert.strictEqual(estado, 409);
 });

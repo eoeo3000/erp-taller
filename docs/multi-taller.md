@@ -200,12 +200,18 @@ crearía su cuenta adentro de los datos de otro.
 - **Sin `taller` en el cuerpo, `POST /api/instalacion` se comporta exactamente como antes**: la
   instalación única de siempre, sobre `req.db`, con `SETUP_TOKEN`.
 
-**Lo que falta de esta etapa: la pantalla.** `erp-web` tiene que montar `InstalacionScreen` en
-`/instalar` sin sesión (como las rutas de `RUTAS_PUBLICAS`), leer `?taller=` y `?clave=` de la
-URL y mandarlos en el `POST /api/instalacion`. Hoy esa pantalla solo se alcanza cuando
-`GET /auth/yo` responde `requiereInstalacion`, que es la instalación única. Mientras tanto el
-alta se completa llamando a la API — que es como se va a hacer igual con los primeros clientes
-(§8: el alta la hace quien vende, no un formulario de autoservicio).
+**La pantalla ya funciona.** No hizo falta una ruta nueva: `/instalar?taller=&clave=` cae en
+`InstalacionScreen` sola, porque `utils/taller.js` recuerda el `?taller=` y `GET /auth/yo`
+responde `requiereInstalacion` para ESA base. La pantalla toma la clave de `?clave=` y manda el
+taller explícito. Probado de punta a punta en un navegador: se abre el enlace, se escribe
+nombre, correo y clave, y la cuenta queda creada en la base del taller nuevo.
+
+Lo que lo hacía fallar era que **`/auth/yo` y `POST /api/instalacion` miraban talleres
+distintos**: el primero la pista del navegador, el segundo solo el cuerpo — así que la pantalla
+preguntaba por un taller e instalaba en otro, y respondía *"este sistema ya está instalado"*.
+Las dos usan ahora la misma resolución, y un taller que no es el por defecto **siempre** exige
+la clave del enlace: si bastara la pista, quedarse con el taller de otro sería escribir su
+identificador.
 
 ### Etapa 3.5 — Entrar a un taller que no es el principal ✅ HECHA (el backend)
 
