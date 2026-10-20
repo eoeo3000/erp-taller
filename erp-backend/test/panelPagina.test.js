@@ -58,3 +58,32 @@ test('no carga nada de afuera: ni tipografías, ni librerías, ni imágenes remo
 test('pide a los buscadores que no la indexen', async () => {
     assert.match((await traer()).html, /name="robots"[^>]*noindex/);
 });
+
+test('la página ofrece reemitir la instalación SOLO a quien no tiene cuentas', async () => {
+    // Un taller que ya opera no necesita ese enlace nunca más, y el backend lo rechaza con
+    // 409. Ofrecer un botón que va a fallar es peor que no ofrecerlo: parece que se puede.
+    const r = await traer();
+    assert.match(r.html, /t\.cuentas > 0/, 'la decisión tiene que mirar las cuentas');
+    assert.match(r.html, /data-reemitir/);
+    assert.match(r.html, /data-acceso/);
+});
+
+test('el link de acceso se arma con el host que manda el servidor, no escrito a mano', async () => {
+    // Si estuviera escrito en la página, el día que cambie SPA_URL el panel seguiría dando el
+    // link viejo sin que nadie lo note.
+    const r = await traer();
+    assert.match(r.html, /spaUrl/);
+    assert.ok(!r.html.includes('onrender.com'), 'no puede haber un host escrito a mano');
+});
+
+test('el link de acceso lleva el ?taller=, que es lo que lo hace servir', async () => {
+    // Sin él, el correo de esa persona se busca en la base del taller por defecto y no puede
+    // entrar. Es el error más fácil de cometer al mandar el link.
+    assert.match((await traer()).html, /\?taller=\$\{encodeURIComponent/);
+});
+
+test('reemitir avisa antes: el enlace anterior deja de servir', async () => {
+    // Es una acción que rompe algo que ya se mandó. Que pregunte no es trámite: si el dueño
+    // ya tenía el link en el correo, reemitir se lo mata.
+    assert.match((await traer()).html, /confirm\(/);
+});

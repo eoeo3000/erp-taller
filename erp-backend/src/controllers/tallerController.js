@@ -231,6 +231,10 @@ exports.metricas = async (req, res) => {
 
         res.ok({
             talleres: filas,
+            // El host del SPA lo sabe el servidor, no la página: el panel arma con esto el
+            // link de acceso de cada cliente sin tener que repetirlo escrito a mano, que es
+            // como se desactualiza el día que cambie.
+            spaUrl: SPA_URL,
             respaldo,
             // Lo que el panel NO puede mostrar todavía, dicho por el backend para que la
             // pantalla no tenga que adivinarlo ni quede desactualizada cuando llegue.
