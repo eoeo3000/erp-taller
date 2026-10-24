@@ -12,6 +12,8 @@ const express = require('express');
 const { ObjectId } = require('bson');
 
 const CLAVE = 'clave-de-respaldo-para-pruebas';
+// Qué talleres hay activos. Lo lee el doble de config/conexiones de más abajo.
+let TALLERES = ['principal'];
 
 // obtenerConexion() viene de config/conexiones y necesitaría Mongo. Se sustituye el módulo
 // en la caché de require por una base falsa.
@@ -36,7 +38,13 @@ function base() {
 }
 require.cache[rutaConexiones] = {
     id: rutaConexiones, filename: rutaConexiones, loaded: true,
-    exports: { obtenerConexion: () => ({ db: base() }), conexionDisponible: () => true, inicializarConexiones: async () => {} },
+    exports: {
+        obtenerConexion: () => ({ db: base() }),
+        conexionDisponible: () => true,
+        inicializarConexiones: async () => {},
+        // Desde la etapa 5 el respaldo recorre los talleres activos en vez de respaldar uno.
+        talleresActivos: () => TALLERES,
+    },
 };
 
 // Recién ahora, con la conexión ya sustituida.
@@ -94,10 +102,12 @@ test('con la clave correcta crea el respaldo e informa qué guardó', async (t) 
     assert.strictEqual(resp.status, 201);
 
     const datos = await resp.json();
-    assert.strictEqual(datos.documentos, 1);
-    assert.deepStrictEqual(datos.colecciones, { ots: 1 });
-    assert.match(datos.clave, /^respaldos\/produccion\//);
-    assert.ok(datos.tamano > 0);
+    assert.strictEqual(datos.documentos, 1, 'el total va primero: es lo que lee el workflow');
+    assert.strictEqual(datos.talleres.length, 1);
+    assert.deepStrictEqual(datos.talleres[0].colecciones, { ots: 1 });
+    assert.match(datos.talleres[0].clave, /^respaldos\/produccion\/principal\//);
+    assert.ok(datos.talleres[0].tamano > 0);
+    assert.deepStrictEqual(datos.fallados, []);
 
     // La respuesta la lee el workflow de GitHub Actions y queda en su log: tiene que traer
     // el conteo, nunca los datos del taller.
@@ -117,6 +127,37 @@ test('el listado también exige la clave', async (t) => {
     assert.strictEqual(resp.status, 200);
 
     const datos = await resp.json();
-    assert.strictEqual(datos.total, 1);
-    assert.ok(datos.masReciente, 'informa cuándo fue el último — es lo que se mira para saber si el respaldo dejó de correr');
+    assert.strictEqual(datos.talleres.length, 1);
+    assert.strictEqual(datos.talleres[0].total, 1);
+    assert.ok(datos.talleres[0].masReciente, 'informa cuándo fue el último — es lo que se mira para saber si el respaldo dejó de correr');
+});
+
+test('EL RESPALDO DIARIO RECORRE TODOS LOS TALLERES ACTIVOS', async (t) => {
+    // Es el punto de la etapa 5. Si esta ruta siguiera respaldando uno solo, el día que
+    // entre el segundo cliente su base quedaría sin copia y nadie se enteraría hasta
+    // necesitarla.
+    TALLERES = ['principal', 'maestranza-rivas', 'taller-lopez'];
+    const { servidor, base: url } = await levantar();
+    process.env.RESPALDO_TOKEN = CLAVE;
+    t.after(() => { servidor.close(); delete process.env.RESPALDO_TOKEN; TALLERES = ['principal']; return limpiar(); });
+
+    const resp = await fetch(`${url}/api/respaldos`, { method: 'POST', headers: { 'X-Respaldo-Token': CLAVE } });
+    assert.strictEqual(resp.status, 201);
+
+    const datos = await resp.json();
+    assert.deepStrictEqual(datos.talleres.map((r) => r.taller), TALLERES);
+    assert.strictEqual(datos.documentos, 3, 'el total suma los tres');
+    for (const r of datos.talleres) assert.match(r.clave, new RegExp(`^respaldos/produccion/${r.taller}/`));
+});
+
+test('se puede pedir el de un taller puntual, sin respaldar a los demás', async (t) => {
+    // Es lo que sirve antes de tocar algo de un cliente en particular.
+    TALLERES = ['principal', 'maestranza-rivas'];
+    const { servidor, base: url } = await levantar();
+    process.env.RESPALDO_TOKEN = CLAVE;
+    t.after(() => { servidor.close(); delete process.env.RESPALDO_TOKEN; TALLERES = ['principal']; return limpiar(); });
+
+    const resp = await fetch(`${url}/api/respaldos?taller=maestranza-rivas`, { method: 'POST', headers: { 'X-Respaldo-Token': CLAVE } });
+    const datos = await resp.json();
+    assert.deepStrictEqual(datos.talleres.map((r) => r.taller), ['maestranza-rivas']);
 });

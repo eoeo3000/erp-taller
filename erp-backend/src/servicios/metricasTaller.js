@@ -4,18 +4,16 @@
 // aparte del controlador porque es la parte que tiene decisiones adentro —qué contar, qué
 // hacer cuando una base no contesta— y esa parte se prueba.
 //
-// --- Lo que NO se puede medir todavía, y por qué se dice en vez de inventarse ---
-//
-// **Fotos y espacio en disco**: los archivos del bucket R2 todavía no están separados por
-// taller (van a `<clave>` a secas, no a `talleres/<id>/<clave>`; es la etapa 5). Contarlos
-// hoy daría el total de todos los clientes juntos para cada uno, que es peor que no dar
-// ningún número: parece un dato y es mentira.
-//
-// **Respaldos**: viven en `respaldos/<entorno>/`, no por taller — misma etapa. El panel
-// muestra el último del entorno y dice que es compartido.
+// Desde la etapa 5 también se puede medir lo que ocupa cada taller y cuándo fue su último
+// respaldo: los archivos viven en `talleres/<slug>/` y los respaldos en
+// `respaldos/<entorno>/<slug>/`. Antes todo iba junto y el panel decía que no se podía
+// medir, en vez de mostrar el total de todos para cada uno — que parecería un dato y sería
+// mentira.
 const getOT = require('../models/OT');
 const getSolicitud = require('../models/Solicitud');
 const getUsuario = require('../models/Usuario');
+const almacenamiento = require('../config/almacenamiento');
+const { listarRespaldos } = require('./respaldo');
 
 // Cuánto se espera a la base de un taller antes de darla por caída. Que una base dormida o
 // rota no cuelgue el panel entero es el punto: el panel existe justamente para enterarse de
@@ -72,6 +70,29 @@ async function metricasDeTaller(db) {
     }
 }
 
+// Lo que ocupa un taller y cuándo fue su último respaldo. Va aparte de `metricasDeTaller`
+// porque no toca su base: pregunta por el almacén, que puede estar bien cuando la base está
+// caída y al revés. Mezclarlas haría que un bucket con problemas marcara la base como
+// caída, que es decir algo falso sobre dónde está el problema.
+//
+// Devuelve `error` en vez de lanzar, por lo mismo que las métricas de la base: un taller
+// que no se puede medir tiene que salir marcado en su fila, no tumbar la lista entera.
+async function almacenamientoDeTaller(taller, entorno = 'produccion') {
+    const resultado = { archivos: null, respaldo: null, error: null };
+    try {
+        resultado.archivos = await almacenamiento.medir(`${almacenamiento.CARPETA_TALLERES}/${taller}`);
+    } catch (error) {
+        resultado.error = error.message;
+    }
+    try {
+        const respaldos = await listarRespaldos(entorno, taller);
+        resultado.respaldo = { total: respaldos.length, ultimo: respaldos[0]?.fecha || null, clave: respaldos[0]?.clave || null };
+    } catch (error) {
+        resultado.error = resultado.error || error.message;
+    }
+    return resultado;
+}
+
 // Días desde la última señal de vida, o null si nunca hubo ninguna. El panel lo usa para
 // pintar el aviso: un cliente que lleva semanas sin entrar es el que avisa que se va a ir
 // antes de avisarlo.
@@ -82,4 +103,4 @@ function diasSinUsar(fecha, ahora = Date.now()) {
     return Math.max(0, Math.floor((ahora - t) / (24 * 60 * 60 * 1000)));
 }
 
-module.exports = { metricasDeTaller, diasSinUsar, masReciente, MS_ESPERA };
+module.exports = { metricasDeTaller, almacenamientoDeTaller, diasSinUsar, masReciente, MS_ESPERA };

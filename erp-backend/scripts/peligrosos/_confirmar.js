@@ -36,8 +36,12 @@ function preguntar(pregunta) {
 // salta el prompt para quien ya confirmó a mano y quiere repetir el comando (ej. reintentos).
 // `uri` permite confirmar contra una base distinta de MONGO_URI (la demo, por ejemplo).
 // Sin ella se mantiene el comportamiento anterior, que es el de todos los scripts de acá.
-async function confirmarDestructivo(descripcionAccion, uri = process.env.MONGO_URI) {
-    const nombreDB = extraerNombreDB(uri);
+// `nombreBase` se usa cuando quien llama YA sabe el nombre y no tiene la URI a mano — es el
+// caso desde la etapa 5, donde la conexión sale del registro de talleres y la URI es una
+// credencial que el registro no entrega. Dicho de otro modo: lo que hay que confirmar es la
+// base a la que se va a escribir, y acá se puede decir directamente cuál es.
+async function confirmarDestructivo(descripcionAccion, uri = process.env.MONGO_URI, nombreBase = null) {
+    const nombreDB = nombreBase || extraerNombreDB(uri);
     // Si no se pudo determinar el nombre real, se pide una palabra clave fija en vez de
     // repetir el mensaje de error como si fuera la respuesta esperada.
     const palabraClave = nombreDB || 'CONFIRMAR';

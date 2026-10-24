@@ -18,6 +18,8 @@ let yaInstalado = false;
 // Talleres cuya conexión no se puede abrir: así se prueba que el panel los marque en vez de
 // quedarse sin mostrar a nadie.
 let SIN_BASE = [];
+// Archivos que todavía no se migraron a la carpeta de su taller.
+let SUELTOS = [];
 // Lo que devuelve el servicio de métricas para cada taller medible.
 let metricasFalsas = { baseResponde: true, ots: 10, solicitudes: 12, cuentas: 2, ultimaActividad: new Date('2026-10-18T10:00:00Z'), error: null };
 function fabricaTaller() {
@@ -53,10 +55,18 @@ for (const [ruta, exports] of [
     ['../src/models/Taller', () => fabricaTaller()],
     ['../src/servicios/metricasTaller', {
         metricasDeTaller: async () => metricasFalsas,
+        // Desde la etapa 5 el panel también muestra lo que ocupa cada taller y cuándo fue
+        // su último respaldo.
+        almacenamientoDeTaller: async (taller) => ({
+            archivos: { cantidad: 12, bytes: 3 * 1024 * 1024 },
+            respaldo: { total: 7, ultimo: new Date('2026-10-23T08:00:00Z'), clave: `respaldos/produccion/${taller}/2026-10-23T08-00-00.json.gz` },
+            error: null,
+        }),
         diasSinUsar: () => 1,
     }],
-    ['../src/servicios/respaldo', {
-        listarRespaldos: async () => [{ clave: 'respaldos/produccion/2026-10-19.json.gz' }, { clave: 'respaldos/produccion/2026-10-18.json.gz' }],
+    ['../src/config/almacenamiento', {
+        // Los archivos que quedaron en la raíz, de antes de que se separaran por taller.
+        listarSueltos: async () => SUELTOS,
     }],
     ['../src/models/Usuario', (conn) => ({
         exists: async () => (yaInstalado ? { _id: 1 } : null),
@@ -109,6 +119,7 @@ test.beforeEach(() => {
     process.env.PANEL_TOKEN = CLAVE;
     yaInstalado = false;
     SIN_BASE = [];
+    SUELTOS = [];
 });
 test.after(() => { delete process.env.PANEL_TOKEN; delete process.env.MONGO_URI_CONTROL; });
 
@@ -308,13 +319,28 @@ test('un taller suspendido no se mide, y eso no es "base caída"', async () => {
     assert.match(pausa.motivo, /suspendido/);
 });
 
-test('dice qué todavía no puede medir, en vez de inventarlo', async () => {
-    // Las fotos y los respaldos no están separados por taller (etapa 5). Mostrar el total de
-    // todos los clientes para cada uno parecería un dato y sería mentira.
+test('cada taller trae SUS archivos y SU último respaldo', async () => {
+    // Hasta la etapa 5 el panel decía que esto no se podía medir, porque los archivos y los
+    // respaldos iban todos juntos y mostrar el total de todos para cada uno habría parecido
+    // un dato siendo mentira. Ahora cada uno tiene su carpeta y su respaldo.
     const { cuerpo } = await pedir('/api/talleres/metricas');
-    assert.ok(cuerpo.pendienteEtapa5.length >= 2);
-    assert.strictEqual(cuerpo.respaldo.compartido, true, 'el respaldo es del entorno, no del taller');
-    assert.match(cuerpo.respaldo.ultimo, /2026-10-19/, 'y muestra el más reciente');
+    const principal = cuerpo.talleres.find((t) => t.slug === 'principal');
+    assert.strictEqual(principal.archivos.cantidad, 12);
+    assert.strictEqual(principal.archivos.bytes, 3 * 1024 * 1024);
+    assert.match(principal.respaldo.clave, /respaldos\/produccion\/principal\//, 'el respaldo es SUYO');
+    assert.ok(principal.respaldo.ultimo);
+});
+
+test('mientras queden archivos sin separar, el panel lo dice', async () => {
+    // Un número de archivos por taller que no incluye los de antes de la migración se ve
+    // completo y no lo es. Decirlo es más honesto que mostrarlo a secas.
+    SUELTOS = [{ clave: 'a.jpg', tamano: 1024 }, { clave: 'b.jpg', tamano: 2048 }];
+    const { cuerpo } = await pedir('/api/talleres/metricas');
+    assert.strictEqual(cuerpo.sinSeparar.cantidad, 2);
+    assert.strictEqual(cuerpo.sinSeparar.bytes, 3072);
+
+    SUELTOS = [];
+    assert.strictEqual((await pedir('/api/talleres/metricas')).cuerpo.sinSeparar.cantidad, 0, 'migrado del todo: no hay nada que avisar');
 });
 
 // --- Dar de alta escribiendo solo el nombre ---

@@ -19,17 +19,52 @@ const almacenamiento = require('../src/config/almacenamiento');
 function levantarS3Falso() {
     const objetos = new Map();
     const app = express();
+    app.use(express.raw({ type: '*/*', limit: '20mb' }));
 
-    app.put('/:bucket/:clave', express.raw({ type: '*/*', limit: '20mb' }), (req, res) => {
-        objetos.set(req.params.clave, {
-            cuerpo: req.body,
-            contentType: req.headers['content-type'] || 'application/octet-stream',
-        });
-        res.set('ETag', '"falso"').status(200).end();
-    });
+    // Una sola función y no rutas con `:clave`: desde la etapa 5 las claves llevan barras
+    // (`talleres/<slug>/<archivo>`), y un parámetro de Express nunca contiene una barra —
+    // con `/:bucket/:clave` el PUT no entraba y lo que llegaba era el 404 HTML de Express,
+    // que el SDK intentaba leer como XML.
+    app.use((req, res) => {
+        const partes = req.path.split('/').filter(Boolean);
+        const clave = decodeURIComponent(partes.slice(1).join('/'));
 
-    app.get('/:bucket/:clave', (req, res) => {
-        const o = objetos.get(req.params.clave);
+        if (req.method === 'PUT') {
+            objetos.set(clave, {
+                cuerpo: req.body,
+                contentType: req.headers['content-type'] || 'application/octet-stream',
+                fecha: new Date(),
+            });
+            return res.set('ETag', '"falso"').status(200).end();
+        }
+
+        if (req.method === 'DELETE') {
+            objetos.delete(clave);
+            return res.status(204).end();
+        }
+
+        // ListObjectsV2: GET al bucket con ?list-type=2.
+        if (req.query['list-type'] === '2') {
+            const prefijo = String(req.query.prefix || '');
+            const delimitador = String(req.query.delimiter || '');
+            const contenidos = [];
+            const prefijosComunes = new Set();
+            for (const [k, o] of objetos) {
+                if (!k.startsWith(prefijo)) continue;
+                const resto = k.slice(prefijo.length);
+                const corte = delimitador ? resto.indexOf(delimitador) : -1;
+                if (corte >= 0) prefijosComunes.add(prefijo + resto.slice(0, corte + delimitador.length));
+                else contenidos.push([k, o]);
+            }
+            const xml = '<?xml version="1.0"?><ListBucketResult><IsTruncated>false</IsTruncated>'
+                + contenidos.map(([k, o]) => `<Contents><Key>${k}</Key><Size>${o.cuerpo.length}</Size>`
+                    + `<LastModified>${new Date(o.fecha).toISOString()}</LastModified></Contents>`).join('')
+                + [...prefijosComunes].map((p) => `<CommonPrefixes><Prefix>${p}</Prefix></CommonPrefixes>`).join('')
+                + '</ListBucketResult>';
+            return res.status(200).type('application/xml').send(xml);
+        }
+
+        const o = objetos.get(clave);
         // Mismo cuerpo de error que devuelve S3/R2: es lo que el SDK convierte en NoSuchKey.
         if (!o) {
             return res.status(404).type('application/xml')
@@ -70,12 +105,14 @@ async function leerTodo(stream) {
     return Buffer.concat(partes);
 }
 
+const UBICACION = { entorno: 'produccion', taller: 'principal' };
+
 test('con credenciales, el archivo va al bucket y no al disco', async (t) => {
     const falso = await conBucket(t);
     assert.strictEqual(almacenamiento.hayBucket(), true);
 
     const contenido = Buffer.from('foto de evidencia de terreno');
-    const { clave } = await almacenamiento.guardar(contenido, 'evidencia.jpg');
+    const { clave } = await almacenamiento.guardar(contenido, 'evidencia.jpg', UBICACION);
 
     assert.ok(falso.objetos.has(clave), 'quedó guardado en el bucket');
     assert.deepStrictEqual(falso.objetos.get(clave).cuerpo, contenido);
@@ -88,7 +125,7 @@ test('con credenciales, el archivo va al bucket y no al disco', async (t) => {
 test('lo guardado en el bucket se lee de vuelta igual', async (t) => {
     await conBucket(t);
     const contenido = Buffer.from('contenido que tiene que volver intacto');
-    const { clave } = await almacenamiento.guardar(contenido, 'f.png');
+    const { clave } = await almacenamiento.guardar(contenido, 'f.png', UBICACION);
 
     const archivo = await almacenamiento.obtener(clave);
     assert.ok(archivo, 'se encontró en el bucket');
@@ -124,9 +161,75 @@ test('sin credenciales se vuelve al disco, sin tocar el bucket', async (t) => {
     almacenamiento.releerEntorno();
     assert.strictEqual(almacenamiento.hayBucket(), false);
 
-    const { clave } = await almacenamiento.guardar(Buffer.from('al disco'), 'x.jpg');
+    const { clave } = await almacenamiento.guardar(Buffer.from('al disco'), 'x.jpg', UBICACION);
     t.after(() => fs.rm(path.join(almacenamiento.CARPETA_LOCAL, clave), { force: true }));
 
     assert.ok(!falso.objetos.has(clave));
     assert.deepStrictEqual(await leerTodo((await almacenamiento.obtener(clave)).cuerpo), Buffer.from('al disco'));
+});
+
+test('CADA TALLER GUARDA EN SU CARPETA, y la demo en la suya', async (t) => {
+    // Es el punto de la etapa 5. Con todo en el mismo nivel, el respaldo de un taller no
+    // incluye sus archivos, no se puede decir cuánto ocupa cada cliente, y darle de baja a
+    // uno obliga a mirar archivo por archivo de quién es.
+    const falso = await conBucket(t);
+
+    const rivas = await almacenamiento.guardar(Buffer.from('foto de Rivas'), 'a.jpg', { entorno: 'produccion', taller: 'maestranza-rivas' });
+    const lopez = await almacenamiento.guardar(Buffer.from('foto de López'), 'a.jpg', { entorno: 'produccion', taller: 'taller-lopez' });
+    const demo = await almacenamiento.guardar(Buffer.from('foto de demo'), 'a.jpg', { entorno: 'demo', taller: 'maestranza-rivas' });
+
+    assert.ok(rivas.clave.startsWith('talleres/maestranza-rivas/'), rivas.clave);
+    assert.ok(lopez.clave.startsWith('talleres/taller-lopez/'), lopez.clave);
+    // La demo es UNA para todos (§9.2): sus archivos son de prueba y no pueden contar en la
+    // medición de un cliente real ni irse en su respaldo.
+    assert.ok(demo.clave.startsWith('demo/'), demo.clave);
+
+    // Y la URL sigue siendo relativa, que es lo que los clientes saben concatenar.
+    assert.strictEqual(rivas.url, `/uploads/${rivas.clave}`);
+
+    const medida = await almacenamiento.medir('talleres/maestranza-rivas');
+    assert.strictEqual(medida.cantidad, 1, 'mide solo lo suyo');
+    assert.strictEqual(medida.bytes, Buffer.from('foto de Rivas').length);
+    assert.strictEqual((await almacenamiento.medir('talleres/taller-lopez')).cantidad, 1);
+    assert.ok(falso.objetos.has(rivas.clave));
+});
+
+test('SIN TALLER NO SE GUARDA: falla fuerte en vez de dejar el archivo sin dueño', async (t) => {
+    // Una ruta nueva que se olvide de pasar el taller tiene que romperse de inmediato. Si
+    // cayera a la raíz "porque no vino", se acumularían archivos sin dueño durante meses y
+    // recién se notaría al querer respaldar o borrar los de un cliente.
+    await conBucket(t);
+    await assert.rejects(
+        almacenamiento.guardar(Buffer.from('x'), 'a.jpg', { entorno: 'produccion' }),
+        /Falta el taller/,
+    );
+    await assert.rejects(almacenamiento.guardar(Buffer.from('x'), 'a.jpg'), /Falta el taller/);
+});
+
+test('una foto de antes de la etapa 5 se sigue sirviendo, esté movida o no', async (t) => {
+    // Hay miles de URL `/uploads/<clave>` escritas en OT.reportes, OT.tareas[].registro.fotos
+    // y Solicitud.adjuntos. La migración mueve el archivo a talleres/principal/, y la URL de
+    // la base no se toca: si la lectura no entendiera las dos formas, migrar dejaría todas
+    // esas fotos en 404 de golpe.
+    const falso = await conBucket(t);
+    const clave = '1700000000000-123456789.jpg';
+
+    // Antes de migrar: está en la raíz.
+    falso.objetos.set(clave, { cuerpo: Buffer.from('antes de migrar'), contentType: 'image/jpeg', fecha: new Date() });
+    assert.strictEqual((await leerTodo((await almacenamiento.obtener(clave)).cuerpo)).toString(), 'antes de migrar');
+
+    // Después de migrar: la misma URL, el archivo dentro del taller principal.
+    falso.objetos.delete(clave);
+    falso.objetos.set(`talleres/principal/${clave}`, { cuerpo: Buffer.from('ya migrada'), contentType: 'image/jpeg', fecha: new Date() });
+    assert.strictEqual((await leerTodo((await almacenamiento.obtener(clave)).cuerpo)).toString(), 'ya migrada');
+});
+
+test('la raíz del bucket es lo que falta por migrar, y no incluye lo ya separado', async (t) => {
+    const falso = await conBucket(t);
+    falso.objetos.set('1700000000000-1.jpg', { cuerpo: Buffer.from('suelta'), contentType: 'image/jpeg', fecha: new Date() });
+    falso.objetos.set('talleres/principal/1700000000000-2.jpg', { cuerpo: Buffer.from('ya'), contentType: 'image/jpeg', fecha: new Date() });
+    falso.objetos.set('respaldos/produccion/principal/x.json.gz', { cuerpo: Buffer.from('r'), contentType: 'application/gzip', fecha: new Date() });
+
+    const sueltos = await almacenamiento.listarSueltos();
+    assert.deepStrictEqual(sueltos.map((r) => r.clave), ['1700000000000-1.jpg']);
 });

@@ -15,13 +15,18 @@
 // 2. **Un archivo por respaldo, comprimido.** Se lee cada colección completa y se guarda
 //    todo junto. A la escala de un taller son unos pocos MB; cuando deje de serlo habrá que
 //    cambiar a exportar por colección y en streaming, y este comentario será el aviso.
-// 3. **Va al mismo bucket R2 de las fotos**, bajo `respaldos/<entorno>/`. Sin credenciales
-//    cae al disco igual que todo lo demás — útil para probar en local, inútil en Render,
-//    donde el disco se borra en cada deploy (por eso mismo existe el bucket).
+// 3. **Va al mismo bucket R2 de las fotos**, bajo `respaldos/<entorno>/<taller>/`. Sin
+//    credenciales cae al disco igual que todo lo demás — útil para probar en local, inútil
+//    en Render, donde el disco se borra en cada deploy (por eso mismo existe el bucket).
+// 4. **Un respaldo por taller** (etapa 5). Cada cliente tiene su base, así que tiene su
+//    respaldo y su propia retención: treinta del taller A no pueden empujar fuera los del
+//    taller B, que es exactamente lo que pasaría con una sola lista compartida. La demo
+//    queda sin dividir porque es una sola para todos (§9.2).
 const zlib = require('zlib');
 const { promisify } = require('util');
 const { EJSON } = require('bson');
 const almacenamiento = require('../config/almacenamiento');
+const { TALLER_PRINCIPAL, esSlugValido } = require('../config/talleres');
 
 const comprimir = promisify(zlib.gzip);
 const descomprimir = promisify(zlib.gunzip);
@@ -36,19 +41,30 @@ const MAXIMO_RESPALDOS = 30;
 // Las sesiones abiertas no sobreviven a una restauración de todos modos.
 const COLECCIONES_OMITIDAS = new Set(['sesionstaffs', 'sesionportals']);
 
-function prefijoDe(entorno) {
+// Los respaldos de antes de la etapa 5 están en `respaldos/produccion/<fecha>.json.gz`, sin
+// taller. Eran del único taller que existía, el principal.
+function prefijoHeredado(entorno) {
     return `respaldos/${entorno === 'demo' ? 'demo' : 'produccion'}`;
+}
+
+function prefijoDe(entorno, taller = TALLER_PRINCIPAL) {
+    // La demo no se divide por taller: es una sola para todos los clientes (§9.2), así que
+    // dividir su respaldo sería guardar la misma base varias veces.
+    if (entorno === 'demo') return 'respaldos/demo';
+    const limpio = String(taller || '').trim().toLowerCase();
+    if (!esSlugValido(limpio)) throw new Error(`Taller inválido para el respaldo: ${taller}`);
+    return `respaldos/produccion/${limpio}`;
 }
 
 // 2026-09-23T14:05:09.123Z → 2026-09-23T14-05-09. La clave se ordena alfabéticamente igual
 // que cronológicamente, que es lo que hace que listar y podar sean triviales.
-function claveDeRespaldo(entorno, fecha = new Date()) {
+function claveDeRespaldo(entorno, taller = TALLER_PRINCIPAL, fecha = new Date()) {
     const marca = fecha.toISOString().replace(/:/g, '-').replace(/\..+$/, '');
-    return `${prefijoDe(entorno)}/${marca}.json.gz`;
+    return `${prefijoDe(entorno, taller)}/${marca}.json.gz`;
 }
 
 // Arma el contenido del respaldo leyendo todas las colecciones de la conexión.
-async function armarContenido(conexion, entorno) {
+async function armarContenido(conexion, entorno, taller = TALLER_PRINCIPAL) {
     const db = conexion.db;
     const colecciones = (await db.listCollections().toArray())
         .filter((c) => c.type !== 'view' && !COLECCIONES_OMITIDAS.has(c.name.toLowerCase()))
@@ -67,6 +83,11 @@ async function armarContenido(conexion, entorno) {
         contenido: {
             version: VERSION_FORMATO,
             entorno,
+            // De quién es. Un respaldo que no dice de qué taller salió se puede restaurar
+            // sobre la base equivocada sin que nada avise, y eso es pisarle los datos a un
+            // cliente con los de otro. Los respaldos anteriores a la etapa 5 no traen este
+            // campo y se entienden del taller principal, que era el único que había.
+            taller,
             base: db.databaseName,
             fecha: new Date().toISOString(),
             colecciones: datos,
@@ -77,18 +98,19 @@ async function armarContenido(conexion, entorno) {
 
 // Crea un respaldo y lo sube. Devuelve qué se guardó, para que tanto el script como el
 // endpoint puedan informarlo sin repetir lógica.
-async function crearRespaldo(conexion, entorno) {
-    const { contenido, resumen } = await armarContenido(conexion, entorno);
+async function crearRespaldo(conexion, entorno, taller = TALLER_PRINCIPAL) {
+    const { contenido, resumen } = await armarContenido(conexion, entorno, taller);
     const crudo = Buffer.from(EJSON.stringify(contenido, { relaxed: false }), 'utf8');
     const comprimido = await comprimir(crudo, { level: zlib.constants.Z_BEST_COMPRESSION });
 
-    const clave = claveDeRespaldo(entorno);
+    const clave = claveDeRespaldo(entorno, taller);
     await almacenamiento.guardarEn(clave, comprimido, 'application/gzip');
 
-    const podados = await podarAntiguos(entorno);
+    const podados = await podarAntiguos(entorno, taller);
 
     return {
         clave,
+        taller,
         base: contenido.base,
         fecha: contenido.fecha,
         documentos: Object.values(resumen).reduce((a, b) => a + b, 0),
@@ -100,20 +122,58 @@ async function crearRespaldo(conexion, entorno) {
 }
 
 // Borra los respaldos que exceden MAXIMO_RESPALDOS, del más viejo hacia atrás.
-async function podarAntiguos(entorno) {
-    const existentes = await almacenamiento.listar(prefijoDe(entorno));
+async function podarAntiguos(entorno, taller = TALLER_PRINCIPAL) {
+    const existentes = await listarRespaldos(entorno, taller);
     const sobrantes = existentes.slice(MAXIMO_RESPALDOS);
     for (const r of sobrantes) await almacenamiento.borrar(r.clave);
     return sobrantes.map((r) => r.clave);
 }
 
-async function listarRespaldos(entorno) {
-    return almacenamiento.listar(prefijoDe(entorno));
+// Los respaldos de un taller, del más nuevo al más viejo.
+//
+// Al principal se le suman los HEREDADOS: los que se hicieron antes de la etapa 5, cuando
+// las claves no llevaban taller. Si no se contaran, quedarían fuera de la retención y se
+// envejecerían en el bucket para siempre — nadie los borraría nunca. Contándolos, la poda
+// se los lleva sola: son los más viejos de la lista, así que salen primero.
+async function listarRespaldos(entorno, taller = TALLER_PRINCIPAL) {
+    const propios = await almacenamiento.listar(prefijoDe(entorno, taller));
+    if (entorno === 'demo' || taller !== TALLER_PRINCIPAL) return propios;
+
+    const raiz = prefijoHeredado(entorno);
+    // Del listado de la carpeta padre solo sirven las claves de PRIMER nivel: las que
+    // tienen otra barra después son las de los talleres, incluidas las de este mismo, y
+    // contarlas dos veces haría que la poda borrara el doble de lo que debe.
+    const heredados = (await almacenamiento.listar(raiz))
+        .filter((r) => !String(r.clave).slice(raiz.length + 1).includes('/'));
+
+    return [...propios, ...heredados].sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
 }
 
 // Lee un respaldo y devuelve su contenido ya descomprimido y con los tipos de Mongo
 // reconstruidos. Se valida la versión: un archivo de un formato futuro se rechaza en vez de
 // restaurarse a medias.
+// Qué talleres tienen respaldos guardados, mirando SOLO el almacén.
+//
+// No pregunta por el registro ni abre ninguna base a propósito: listar lo que hay guardado
+// no tiene por qué necesitar que Mongo esté arriba. Es justamente el momento en que suele
+// no estarlo —algo se rompió y se está buscando desde cuándo hay copia—, y además así
+// aparecen los respaldos de un taller que ya se dio de baja, que es cuando más importa
+// saber que todavía están.
+async function talleresConRespaldo(entorno = 'produccion') {
+    if (entorno === 'demo') return ['demo'];
+    const raiz = prefijoHeredado('produccion');
+    const todos = await almacenamiento.listar(raiz);
+    const talleres = new Set();
+    for (const r of todos) {
+        const resto = String(r.clave).slice(raiz.length + 1);
+        const barra = resto.indexOf('/');
+        // Sin barra es un respaldo heredado, de antes de que las claves llevaran taller:
+        // era del principal, el único que existía.
+        talleres.add(barra === -1 ? TALLER_PRINCIPAL : resto.slice(0, barra));
+    }
+    return [...talleres].sort();
+}
+
 async function leerRespaldo(clave) {
     const comprimido = await almacenamiento.leer(clave);
     if (!comprimido) return null;
@@ -157,6 +217,6 @@ async function restaurar(conexion, contenido) {
 
 module.exports = {
     crearRespaldo, listarRespaldos, leerRespaldo, restaurar, podarAntiguos,
-    claveDeRespaldo, prefijoDe, armarContenido,
+    claveDeRespaldo, prefijoDe, prefijoHeredado, armarContenido, talleresConRespaldo,
     VERSION_FORMATO, MAXIMO_RESPALDOS, COLECCIONES_OMITIDAS,
 };

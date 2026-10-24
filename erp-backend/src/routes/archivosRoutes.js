@@ -12,12 +12,23 @@ const express = require('express');
 const router = express.Router();
 const almacenamiento = require('../config/almacenamiento');
 
-router.get('/:clave', async (req, res) => {
+// Tres rutas explícitas y ningún comodín, a propósito. Desde la etapa 5 la clave puede
+// llevar carpeta (`talleres/<slug>/<archivo>`, `demo/<archivo>`) además del nombre suelto
+// de antes, y un comodín que acepte cualquier cosa después de /uploads vuelve a abrir la
+// puerta que `..` cerraba: con parámetros separados, ninguno puede contener una barra, así
+// que no hay forma de escaparse de la carpeta.
+//
+// **Que la carpeta venga en la URL no autoriza nada ni lo pretende.** /uploads sigue
+// abierto, igual que antes de esta etapa: para leer una foto hay que saber su nombre, que
+// es una marca de tiempo más un número al azar. Separar por taller es para poder
+// respaldar, medir y borrar por cliente — no es un control de acceso, y tratarlo como si
+// lo fuera sería el error.
+async function servir(clave, req, res) {
     let archivo = null;
     try {
-        archivo = await almacenamiento.obtener(req.params.clave);
+        archivo = await almacenamiento.obtener(clave);
     } catch (error) {
-        console.error('[uploads] error sirviendo', req.params.clave, error.message);
+        console.error('[uploads] error sirviendo', clave, error.message);
     }
     // 404 y no 500 también cuando falla la lectura: para quien mira la pantalla el caso es
     // el mismo (esa foto no está), y el detalle queda en el log del servidor.
@@ -37,10 +48,17 @@ router.get('/:clave', async (req, res) => {
     // destino, así que encadenarlo ahí escucharía a `res` y un corte leyendo del bucket no
     // lo atraparía nadie.
     archivo.cuerpo.on('error', (error) => {
-        console.error('[uploads] se cortó el envío de', req.params.clave, error.message);
+        console.error('[uploads] se cortó el envío de', clave, error.message);
         res.destroy();
     });
     archivo.cuerpo.pipe(res);
-});
+}
+
+// Las formas nuevas, primero: una ruta más específica tiene que ir antes que la general o
+// `/:clave` se tragaría la palabra "talleres" como si fuera un nombre de archivo.
+router.get('/talleres/:taller/:clave', (req, res) => servir(`talleres/${req.params.taller}/${req.params.clave}`, req, res));
+router.get('/demo/:clave', (req, res) => servir(`demo/${req.params.clave}`, req, res));
+// La forma vieja: miles de URL ya escritas en la base. No se puede dejar de entender.
+router.get('/:clave', (req, res) => servir(req.params.clave, req, res));
 
 module.exports = router;

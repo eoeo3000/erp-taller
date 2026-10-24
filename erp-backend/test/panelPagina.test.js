@@ -132,3 +132,27 @@ test('la tabla pinta una celda por columna', async () => {
     const celdas = (r.html.match(/datos\.talleres\.map[\s\S]*?<\/tr>/)[0].match(/<td/g) || []).length;
     assert.strictEqual(celdas, encabezados, `${encabezados} columnas y ${celdas} celdas`);
 });
+
+test('el panel muestra archivos y respaldo DE CADA taller', async () => {
+    // Hasta la etapa 5 decía que esto no se podía medir: los archivos y los respaldos iban
+    // todos juntos, y mostrar el total de todos para cada cliente habría parecido un dato
+    // siendo mentira. Ya no es así, y el cartel tiene que haberse ido con ellos.
+    const r = await traer();
+    assert.match(r.html, /fila\.archivos/);
+    assert.match(r.html, /fila\.respaldo/);
+    assert.ok(!r.html.includes('pendienteEtapa5'), 'el cartel de "todavía no se puede medir" ya no corresponde');
+});
+
+test('un taller sin respaldo se ve en rojo, no en blanco', async () => {
+    // Es el dato que hay que mirar cuando algo se rompe. Un cliente sin respaldo tiene que
+    // saltar a la vista, no pasar como una celda vacía más.
+    assert.match((await traer()).html, /nunca<\/span>/);
+});
+
+test('avisa cuántos archivos quedan sin separar por taller', async () => {
+    // Mientras queden, la cuenta por taller está incompleta — y un número incompleto que se
+    // ve completo es peor que ninguno.
+    const r = await traer();
+    assert.match(r.html, /sinSeparar/);
+    assert.match(r.html, /migrarArchivosPorTaller/);
+});
