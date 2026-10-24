@@ -364,3 +364,42 @@ test('sin MONGO_URI en el servidor, el alta dice por qué en vez de romperse', a
         assert.match(cuerpo.error, /MONGO_URI/);
     } finally { process.env.MONGO_URI = previo; }
 });
+
+test('la marca se edita por partes: el nombre sin pisar el logo, y el logo sin pisar el nombre', async () => {
+    // El panel tiene dos controles separados —un campo de texto y un selector de archivo— y
+    // guardar el nombre no puede obligar a reenviar el logo entero, que son decenas de KB.
+    const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUg==';
+    filas[0].marca = { nombre: 'Maestranza Rivas', logo: PNG };
+
+    const soloNombre = await pedir('/api/talleres/principal', { metodo: 'PATCH', cuerpo: { marca: { nombre: 'Rivas Hermanos' } } });
+    assert.strictEqual(soloNombre.estado, 200);
+    assert.strictEqual(soloNombre.cuerpo.taller.marca.nombre, 'Rivas Hermanos');
+    assert.strictEqual(soloNombre.cuerpo.taller.marca.logo, PNG, 'el logo tiene que quedar donde estaba');
+});
+
+test('quitar el logo se puede, y deja el nombre', async () => {
+    filas[0].marca = { nombre: 'Maestranza Rivas', logo: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUg==' };
+    const { estado, cuerpo } = await pedir('/api/talleres/principal', { metodo: 'PATCH', cuerpo: { marca: { logo: '' } } });
+    assert.strictEqual(estado, 200);
+    assert.strictEqual(cuerpo.taller.marca.logo, '');
+    assert.strictEqual(cuerpo.taller.marca.nombre, 'Maestranza Rivas');
+});
+
+test('un logo que la cotización no podría insertar se rechaza con el motivo, no se guarda a medias', async () => {
+    const { estado, cuerpo } = await pedir('/api/talleres/principal', {
+        metodo: 'PATCH', cuerpo: { marca: { nombre: 'Rivas', logo: 'data:image/webp;base64,UklGRh4AAABXRUJQ' } },
+    });
+    assert.strictEqual(estado, 400);
+    assert.match(cuerpo.error, /PNG o JPEG/);
+    // Y el nombre que venía en la MISMA petición tampoco quedó escrito: o entra todo o no
+    // entra nada, porque si no el panel diría "error" con media cosa ya guardada.
+    assert.notStrictEqual(filas[0].marca?.nombre, 'Rivas');
+});
+
+test('una ficha anterior a la marca se lee sin romperse', async () => {
+    // Los talleres dados de alta antes de que este campo existiera no tienen `marca`. Si la
+    // respuesta llegara sin esas claves, el SPA mostraría "undefined" donde va el nombre.
+    delete filas[0].marca;
+    const { cuerpo } = await pedir('/api/talleres');
+    assert.deepStrictEqual(cuerpo.talleres[0].marca, { nombre: '', logo: '' });
+});

@@ -26,6 +26,9 @@ let sesionesCreadas = [];
 
 const conexionDe = (slug) => ({ name: `base-${slug}`, slug });
 
+// Lo que cada taller eligió mostrar en su app. Vacío = no eligió nada.
+let MARCAS = {};
+
 for (const [ruta, exports] of [
     ['../src/config/conexiones', {
         resolverTaller: (slug) => {
@@ -38,6 +41,8 @@ for (const [ruta, exports] of [
             return conexionDe(slug);
         },
         conexionDisponible: () => true,
+        // La marca del taller, que `/auth/yo` devuelve junto al resto.
+        marcaDeTaller: (slug) => MARCAS[slug] || { nombre: '', logo: '' },
         inicializarConexiones: async () => {},
         conexionDeControl: () => null,
     }],
@@ -193,5 +198,39 @@ test('CON sesión válida, la cabecera NO puede saltar a otra base', async () =>
         // López y devuelto SU cuenta y un token con SU prefijo.
         assert.strictEqual(r.usuario.nombre, 'Jefa de principal', 'la cabecera abrió la base de otro taller');
         assert.strictEqual(separarPrefijo(r.token).taller, 'principal');
+    } finally { servidor.close(); }
+});
+
+test('la marca del taller viaja en /auth/yo, TAMBIÉN cuando responde 401', async () => {
+    // El 401 es justo el que hace aparecer la pantalla de ingreso, que es donde más se ve el
+    // nombre y el logo del taller. Si esa rama se olvidara, la marca andaría en todas las
+    // pantallas menos en la primera — y nadie lo notaría hasta que un cliente preguntara por
+    // qué su login dice "Taller ERP".
+    //
+    // Que resuelva por la pista (`X-Taller`) es el otro punto: sin sesión, el slug del link
+    // es lo único que se sabe del taller.
+    MARCAS = { 'taller-lopez': { nombre: 'Maestranza López', logo: 'data:image/png;base64,iVBOR' } };
+    process.env.AUTH_REQUERIDA = 'true';
+    const { servidor, base } = await levantar();
+    try {
+        const resp = await fetch(`${base}/api/auth/yo`, { headers: { 'X-Taller': 'taller-lopez' } });
+        assert.strictEqual(resp.status, 401, 'con AUTH_REQUERIDA y sin sesión, pide entrar');
+        const cuerpo = await resp.json();
+        assert.strictEqual(cuerpo.marca.nombre, 'Maestranza López');
+        assert.strictEqual(cuerpo.marca.logo, 'data:image/png;base64,iVBOR');
+    } finally {
+        servidor.close();
+        delete process.env.AUTH_REQUERIDA;
+        MARCAS = {};
+    }
+});
+
+test('un taller sin marca devuelve las dos claves vacías, no undefined', async () => {
+    // Es lo que hace que el SPA caiga en el nombre de fábrica sin preguntarse si el objeto
+    // existe. Con `undefined` la pantalla mostraría un hueco.
+    const { servidor, base } = await levantar();
+    try {
+        const cuerpo = await fetch(`${base}/api/auth/yo`, { headers: { 'X-Taller': 'taller-lopez' } }).then((r) => r.json());
+        assert.deepStrictEqual(cuerpo.marca, { nombre: '', logo: '' });
     } finally { servidor.close(); }
 });

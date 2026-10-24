@@ -64,6 +64,7 @@ import useIsMobile from './hooks/useIsMobile';
 import LoginScreen from './screens/LoginScreen';
 import InstalacionScreen from './screens/InstalacionScreen';
 import RestablecerScreen from './screens/RestablecerScreen';
+import MarcaTaller from './components/MarcaTaller';
 import { obtenerEntorno, fijarEntorno } from './utils/entorno';
 // Importado por su efecto al cargar: lee `?taller=` del link (instalación, activación,
 // restablecer), lo recuerda en este navegador y lo manda en todas las llamadas. Sin esto,
@@ -100,6 +101,10 @@ function App() {
   const [acceso, setAcceso] = useState('verificando');
   const [usuario, setUsuario] = useState(null);
   const [requiereClaveInstalacion, setRequiereClaveInstalacion] = useState(false);
+  // El nombre y el logo que eligió este taller, de GET /api/auth/yo. `null` mientras no se
+  // sabe y `{nombre:'', logo:''}` cuando no puso ninguno: las dos cosas caen en el nombre de
+  // fábrica, así que no hay un parpadeo de un nombre a otro al cargar.
+  const [marca, setMarca] = useState(null);
   // Se calcula una sola vez, del path con que se abrió la pestaña: dentro de la app ya
   // logueada, navegar a /portal sigue funcionando por la ruta de siempre.
   const [rutaPublica] = useState(() => RUTAS_PUBLICAS.some(r => window.location.pathname.startsWith(r)));
@@ -165,9 +170,13 @@ function App() {
   // Al arrancar se le pregunta al backend si el token guardado sigue sirviendo. Es también
   // lo que decide si se muestra el login o la app.
   useEffect(() => {
-    if (rutaPublica) return;
+    // Se pregunta también en las rutas públicas (el link del correo de recuperación), pero
+    // ahí solo por la marca: esas pantallas también llevan el nombre y el logo del taller, y
+    // el backend las resuelve por el `?taller=` que el propio link trae.
     axios.get(`${API}/auth/yo`)
       .then(({ data }) => {
+        setMarca(data.marca || null);
+        if (rutaPublica) return;
         if (data.requiereInstalacion) {
           setRequiereClaveInstalacion(!!data.requiereClaveInstalacion);
           return setAcceso('instalacion');
@@ -175,8 +184,14 @@ function App() {
         setUsuario(data.usuario || null);
         setAcceso('adentro'); // con usuario, o sin él si el backend todavía no exige login
       })
-      // 401 (hay que entrar) y también un backend caído: ante la duda, se pide clave.
-      .catch(() => setAcceso('requiere-login'));
+      // 401 (hay que entrar) y también un backend caído: ante la duda, se pide clave. El 401
+      // trae la marca igual —es el que muestra la pantalla de ingreso, justo donde más se
+      // ve—, y un backend caído no trae nada y ahí se usa el nombre de fábrica.
+      .catch((e) => {
+        setMarca(e?.response?.data?.marca || null);
+        if (rutaPublica) return;
+        setAcceso('requiere-login');
+      });
     // Una sesión puede caerse sola (inactividad, tope de 24h, o alguien la revocó desde la
     // oficina): el interceptor de utils/sesion.js avisa acá y la app vuelve al login.
     suscribirCaidaDeSesion(() => { setUsuario(null); setAcceso('requiere-login'); });
@@ -448,8 +463,8 @@ function App() {
       <Router>
         <NotificacionesHost />
         <Routes>
-          <Route path="/restablecer" element={<RestablecerScreen API={API} modo="restablecer" />} />
-          <Route path="/activar" element={<RestablecerScreen API={API} modo="activar" />} />
+          <Route path="/restablecer" element={<RestablecerScreen API={API} modo="restablecer" marca={marca} />} />
+          <Route path="/activar" element={<RestablecerScreen API={API} modo="activar" marca={marca} />} />
         </Routes>
       </Router>
     );
@@ -457,9 +472,9 @@ function App() {
 
   if (acceso === 'verificando') return <div style={styles.esperando}>Cargando…</div>;
   if (acceso === 'instalacion') {
-    return <InstalacionScreen API={API} requiereClaveInstalacion={requiereClaveInstalacion} onListo={entrar} />;
+    return <InstalacionScreen API={API} requiereClaveInstalacion={requiereClaveInstalacion} onListo={entrar} marca={marca} />;
   }
-  if (acceso === 'requiere-login') return <LoginScreen API={API} onIngreso={entrar} />;
+  if (acceso === 'requiere-login') return <LoginScreen API={API} onIngreso={entrar} marca={marca} />;
 
   return (
     <Router>
@@ -470,7 +485,7 @@ function App() {
             <>
               <nav style={{ ...styles.nav, width: navW }}>
                 <div style={styles.navMarca}>
-                  <div style={styles.navMarcaTitulo}>Taller ERP</div>
+                  <MarcaTaller marca={marca} estilo={styles.navMarcaTitulo} />
                 </div>
                 <div style={styles.navGrupo}>
                   <div style={styles.navGrupoLabel}>Operación</div>
@@ -523,7 +538,7 @@ function App() {
             <Route path="/reporte" element={<ReporteTerreno ots={ots} actualizarOtGlobal={actualizarOtGlobal} />} />
             <Route path="/" element={<IngresoScreen solicitudes={solicitudes} liberarSolicitudManual={liberarSolicitudManual} crearSolicitudGlobal={crearSolicitudGlobal} actualizarSolicitudGlobal={actualizarSolicitudGlobal} setSolicitudes={setSolicitudes} cargarDatos={cargarDatos} API={API} ots={ots} clientes={clientes} enviarPortalCliente={enviarPortalCliente} cargando={cargando} errorCarga={errorCarga} guardarDisposicionGlobal={guardarDisposicionGlobal} eliminarDisposicionGlobal={eliminarDisposicionGlobal} />} />
             <Route path="/dashboard" element={<DashboardScreen solicitudes={solicitudes} ots={ots} eliminarOT={eliminarOT} eliminarSolicitud={eliminarSolicitud} actualizarEstadoSolicitud={actualizarEstadoSolicitud} aprobarYCrearOT={aprobarYCrearOT} recursos={recursos} clientes={clientes} API={API} cargando={cargando} errorCarga={errorCarga} cargarDatos={cargarDatos} guardarDisposicionGlobal={guardarDisposicionGlobal} eliminarDisposicionGlobal={eliminarDisposicionGlobal} />} />
-            <Route path="/tratamiento" element={<TratamientoScreen recurso={recursos} puestosDB={puestosDB} componentes={componentes} actualizarOtGlobal={actualizarOtGlobal} editarOtGlobal={editarOtGlobal} cargarDatos={cargarDatos} API={API} recursos={recursos} suministros={suministros} otSeleccionada={otSeleccionada} setOtSeleccionada={setOtSeleccionada} plantillas={plantillas} clientes={clientes} ots={ots} obtenerHorasParaDia={obtenerHorasParaDia} />} />
+            <Route path="/tratamiento" element={<TratamientoScreen marca={marca} recurso={recursos} puestosDB={puestosDB} componentes={componentes} actualizarOtGlobal={actualizarOtGlobal} editarOtGlobal={editarOtGlobal} cargarDatos={cargarDatos} API={API} recursos={recursos} suministros={suministros} otSeleccionada={otSeleccionada} setOtSeleccionada={setOtSeleccionada} plantillas={plantillas} clientes={clientes} ots={ots} obtenerHorasParaDia={obtenerHorasParaDia} />} />
             <Route path="/gantt" element={<GanttScreen ots={ots} recursos={recursos} calendarios={calendarios} obtenerHorasParaDia={obtenerHorasParaDia} actualizarOtGlobal={actualizarOtGlobal} cargarDatos={cargarDatos} />} />
             <Route path="/recursos" element={
               <RecursosScreen

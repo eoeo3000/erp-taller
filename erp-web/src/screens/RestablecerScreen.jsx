@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import axios from 'axios';
+import MarcaTaller from '../components/MarcaTaller';
 
 // Pantalla que abre un link de correo con token. Sirve a dos casos que para el backend son
 // el mismo acto —alguien que demuestra tener el buzón elige una clave— y que solo cambian
@@ -35,7 +36,7 @@ const TEXTOS = {
     },
 };
 
-export default function RestablecerScreen({ API, modo = 'restablecer' }) {
+export default function RestablecerScreen({ API, modo = 'restablecer', marca = null }) {
     const texto = TEXTOS[modo] || TEXTOS.restablecer;
     const parametros = new URLSearchParams(window.location.search);
     const token = parametros.get('token') || '';
@@ -68,7 +69,7 @@ export default function RestablecerScreen({ API, modo = 'restablecer' }) {
     return (
         <div style={styles.raiz}>
             <div style={styles.tarjeta}>
-                <div style={styles.marca}>Taller ERP</div>
+                <MarcaTaller marca={marca} estilo={styles.marca} />
                 <div style={styles.form}>
                     <div style={styles.titulo}>{texto.titulo}</div>
 
