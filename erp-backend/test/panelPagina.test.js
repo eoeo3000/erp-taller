@@ -87,3 +87,48 @@ test('reemitir avisa antes: el enlace anterior deja de servir', async () => {
     // ya tenía el link en el correo, reemitir se lo mata.
     assert.match((await traer()).html, /confirm\(/);
 });
+
+test('se puede entrar al taller desde su fila, y la pestaña nueva no puede tocar esta', async () => {
+    // «Abrir» lleva a la puerta del cliente, no adentro. Y `noopener` no es decoración: sin
+    // él, la pestaña que se abre puede cambiar la dirección de ESTA, que es la que tiene la
+    // clave del panel en su sessionStorage.
+    const r = await traer();
+    assert.match(r.html, /data-abrir/);
+    assert.match(r.html, /window\.open\(.*'noopener'\)/);
+});
+
+test('la marca de cada taller se edita desde el panel', async () => {
+    const r = await traer();
+    assert.match(r.html, /data-marca/);
+    assert.match(r.html, /marca: cambios/, 'tiene que mandarse como PATCH del campo marca');
+});
+
+test('el logo se reduce en el navegador antes de subirlo', async () => {
+    // El tope del servidor son 150 KB. Si la página mandara el archivo tal cual, el logo
+    // original de cualquier taller —que suele venir en 2000px— lo pasaría siempre, y la
+    // persona vería un error sin forma de arreglarlo desde acá.
+    const r = await traer();
+    assert.match(r.html, /LADO_MAXIMO_LOGO/);
+    assert.match(r.html, /toDataURL\('image\/png'\)/);
+    // Y si el PNG no entra en el tope, JPEG sobre blanco: sin pintar el fondo, lo
+    // transparente saldría negro.
+    assert.match(r.html, /destination-over/);
+});
+
+test('quitar el logo avisa antes', async () => {
+    // Deja las cotizaciones de ese cliente sin imagen. No es un cambio que se deshaga solo:
+    // hay que volver a subir el archivo, que quien administra puede no tener a mano.
+    assert.match((await traer()).html, /sus cotizaciones vuelven a salir sin imagen/);
+});
+
+test('la tabla pinta una celda por columna', async () => {
+    // Esto estaba mal desde que nació el panel: el `<th>Base</th>` existía y la función que
+    // decide qué poner ahí también, pero la fila nunca la llamaba. Resultado: todo lo que
+    // venía después salía corrido una columna y la última quedaba vacía — y la columna que
+    // se perdía era justamente la que dice si la base de ese cliente responde, que es de lo
+    // que el panel existe para enterarte.
+    const r = await traer();
+    const encabezados = (r.html.match(/<thead>[\s\S]*?<\/tr>/)[0].match(/<th[ >]/g) || []).length;
+    const celdas = (r.html.match(/datos\.talleres\.map[\s\S]*?<\/tr>/)[0].match(/<td/g) || []).length;
+    assert.strictEqual(celdas, encabezados, `${encabezados} columnas y ${celdas} celdas`);
+});

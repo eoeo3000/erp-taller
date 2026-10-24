@@ -21,6 +21,15 @@ const TallerSchema = new mongoose.Schema({
 
     plan: { type: String, default: '' },
 
+    // La marca que ve la gente de ese taller: el nombre que muestra su app y el logo que sale
+    // en la cotización. Vacía por omisión, y eso significa "la app usa su nombre de siempre"
+    // — ver servicios/marcaTaller.js, donde está escrito por qué no es el `nombre` de arriba
+    // y por qué el logo se guarda como data URI.
+    marca: {
+        nombre: { type: String, default: '', trim: true },
+        logo: { type: String, default: '' },
+    },
+
     // Dónde viven sus datos. **Es una credencial**: lleva usuario y clave de Mongo, así que
     // NUNCA sale por la API (ver tallerController.publico). Guardarla acá es lo que permite
     // mover un taller que creció a su propio clúster cambiando un campo, sin rehacer nada

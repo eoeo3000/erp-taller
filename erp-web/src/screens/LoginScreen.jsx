@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import axios from 'axios';
 import { fijarSesion } from '../utils/sesion';
+import MarcaTaller from '../components/MarcaTaller';
 
 // Pantalla de acceso de la app de escritorio. Hasta que existió, se entraba con solo la URL
 // — y esta es la app que tiene finanzas, contabilidad y los datos de todos los clientes.
@@ -21,7 +22,7 @@ const t = {
     fontUi: '"Helvetica Neue", Helvetica, Arial, sans-serif',
 };
 
-export default function LoginScreen({ API, onIngreso }) {
+export default function LoginScreen({ API, onIngreso, marca = null }) {
     // 'acceso' | 'recuperar' | 'cambiar' (clave inicial que hay que reemplazar sí o sí)
     const [vista, setVista] = useState('acceso');
     const [email, setEmail] = useState('');
@@ -91,7 +92,7 @@ export default function LoginScreen({ API, onIngreso }) {
     return (
         <div style={styles.raiz}>
             <div style={styles.tarjeta}>
-                <div style={styles.marca}>Taller ERP</div>
+                <MarcaTaller marca={marca} estilo={styles.marca} />
 
                 {vista === 'acceso' && (
                     <form onSubmit={entrar} style={styles.form}>

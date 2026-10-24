@@ -4,6 +4,7 @@ import axios from 'axios';
 import useIsMobile from '../hooks/useIsMobile';
 import autoTable from 'jspdf-autotable';
 import jsPDF from 'jspdf';
+import { dibujarMarcaPdf } from '../utils/marcaPdf';
 // html2canvas-pro (no el html2canvas original): la captura del Gantt para el PDF fallaba con
 // "Attempting to parse an unsupported color function 'oklch'" — los tokens de color de toda la
 // app (t.acento/verde/ambar/rojo, ver comunTratamiento.js y cada screen) usan oklch(), y el
@@ -140,6 +141,10 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
     puestosDB: puestosDB = [],
     plantillas = [],
     ots: otsGlobal = [],
+    // El logo y el nombre del taller que emite, para el encabezado de la cotización. Llegan
+    // de GET /api/auth/yo (ver App.jsx); vacíos significan "este taller no puso marca" y el
+    // documento sale como siempre.
+    marca = null,
     obtenerHorasParaDia }) => {
     const isMobile = useIsMobile();
     const { state: datosRecibidos } = useLocation();
@@ -645,28 +650,32 @@ const TratamientoScreen = ({ cargarDatos, API, actualizarOtGlobal, recursos = []
     const generarPDF = async (secciones = seccionesPdf, descargar = true) => {
         const doc = new jsPDF();
         const pageWidth = doc.internal.pageSize.getWidth();
+        // El logo y el nombre del taller, arriba. Devuelve cuánto baja todo lo que sigue, y
+        // devuelve 0 cuando el taller no puso marca: con `m = 0` las coordenadas de abajo son
+        // exactamente las que tenía este encabezado antes de que la marca existiera.
+        const m = dibujarMarcaPdf(doc, marca);
         doc.setFontSize(18); doc.setTextColor(44, 62, 80);
-        doc.text("COTIZACIÓN TÉCNICA Y COMERCIAL", pageWidth / 2, 20, { align: 'center' });
+        doc.text("COTIZACIÓN TÉCNICA Y COMERCIAL", pageWidth / 2, 20 + m, { align: 'center' });
         doc.setFontSize(10); doc.setTextColor(100);
-        doc.text(`OT N°: ${datosRecibidos?.numeroOT || 'N/A'}`, 14, 28);
-        doc.text(`Fecha Emisión: ${new Date().toLocaleDateString()}`, pageWidth - 14, 28, { align: 'right' });
-        doc.setDrawColor(200); doc.line(14, 32, pageWidth - 14, 32);
+        doc.text(`OT N°: ${datosRecibidos?.numeroOT || 'N/A'}`, 14, 28 + m);
+        doc.text(`Fecha Emisión: ${new Date().toLocaleDateString()}`, pageWidth - 14, 28 + m, { align: 'right' });
+        doc.setDrawColor(200); doc.line(14, 32 + m, pageWidth - 14, 32 + m);
         doc.setFontSize(11); doc.setTextColor(44, 62, 80); doc.setFont(undefined, 'bold');
-        doc.text("INFORMACIÓN DEL CLIENTE", 14, 38);
-        doc.text("DETALLES DEL SERVICIO", pageWidth / 2 + 7, 38);
+        doc.text("INFORMACIÓN DEL CLIENTE", 14, 38 + m);
+        doc.text("DETALLES DEL SERVICIO", pageWidth / 2 + 7, 38 + m);
         doc.setFontSize(9); doc.setTextColor(0); doc.setFont(undefined, 'normal');
-        doc.text(`Empresa: ${datosRecibidos?.empresaSolicitante || 'Particular'}`, 14, 45);
-        doc.text(`Solicitante: ${datosRecibidos?.solicitante || '-'}`, 14, 50);
-        doc.text(`Correo: ${datosRecibidos?.correo || '-'}`, 14, 55);
-        doc.text(`Teléfono: ${datosRecibidos?.numero || '-'}`, 14, 60);
+        doc.text(`Empresa: ${datosRecibidos?.empresaSolicitante || 'Particular'}`, 14, 45 + m);
+        doc.text(`Solicitante: ${datosRecibidos?.solicitante || '-'}`, 14, 50 + m);
+        doc.text(`Correo: ${datosRecibidos?.correo || '-'}`, 14, 55 + m);
+        doc.text(`Teléfono: ${datosRecibidos?.numero || '-'}`, 14, 60 + m);
         const col2 = pageWidth / 2 + 7;
-        doc.text(`Origen: ${datosRecibidos?.origen || 'WhatsApp'}`, col2, 45);
-        doc.text(`Fecha Solicitada: ${datosRecibidos?.fechaEjecucionSolicitada ? new Date(datosRecibidos.fechaEjecucionSolicitada).toLocaleDateString() : 'A convenir'}`, col2, 50);
-        doc.text(`Plazo Sugerido: ${datosRecibidos?.plazoEjecucionSugerido || '0'} días`, col2, 55);
+        doc.text(`Origen: ${datosRecibidos?.origen || 'WhatsApp'}`, col2, 45 + m);
+        doc.text(`Fecha Solicitada: ${datosRecibidos?.fechaEjecucionSolicitada ? new Date(datosRecibidos.fechaEjecucionSolicitada).toLocaleDateString() : 'A convenir'}`, col2, 50 + m);
+        doc.text(`Plazo Sugerido: ${datosRecibidos?.plazoEjecucionSugerido || '0'} días`, col2, 55 + m);
         const desc = `Descripción: ${datosRecibidos?.descripcion || 'Sin detalle'}`;
         const splitDesc = doc.splitTextToSize(desc, pageWidth - 28);
-        doc.text(splitDesc, 14, 68);
-        let y = 68 + (splitDesc.length * 5) + 5;
+        doc.text(splitDesc, 14, 68 + m);
+        let y = 68 + m + (splitDesc.length * 5) + 5;
 
         // 1. Detalle por tarea: tarea, HH, materiales, subtotal por línea (no solo el total).
         // Los materiales no están vinculados a una tarea puntual en el modelo (componentes[]

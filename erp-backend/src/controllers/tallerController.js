@@ -19,6 +19,7 @@ const getUsuario = require('../models/Usuario');
 const { metricasDeTaller, diasSinUsar } = require('../servicios/metricasTaller');
 const { listarRespaldos } = require('../servicios/respaldo');
 const { uriParaTaller, slugDesdeNombre } = require('../servicios/baseDelTaller');
+const { normalizarLogo, marcaPublica } = require('../servicios/marcaTaller');
 const { hayCuentasDeEscritorio } = require('./instalacionController');
 
 // Cuánto vive el enlace de instalación. Siete días y no una hora: el alta de un cliente no es
@@ -71,6 +72,11 @@ function publico(t) {
         plan: t.plan || '',
         fechaAlta: t.fechaAlta,
         fechaBaja: t.fechaBaja || null,
+        // El nombre que muestra su app y su logo. No es un secreto —se los ve cualquiera que
+        // abra la app de ese taller— y el panel los necesita enteros para mostrar lo que hay
+        // hoy antes de cambiarlo. El logo va capado en servicios/marcaTaller.js: sin ese tope
+        // esta respuesta crecería un archivo por cliente.
+        marca: marcaPublica(t.marca),
     };
 }
 
@@ -156,6 +162,26 @@ exports.actualizar = async (req, res) => {
             taller.nombre = nombre;
         }
         if (req.body?.plan !== undefined) taller.plan = String(req.body.plan).trim();
+
+        // La marca se manda entera o por partes: `{ marca: { nombre } }` cambia el nombre y
+        // deja el logo como está. Es lo que permite que el panel tenga dos controles
+        // separados sin que uno pise lo del otro.
+        if (req.body?.marca !== undefined) {
+            const marca = req.body.marca || {};
+            // `taller.marca` puede no existir en una ficha anterior a este campo.
+            if (!taller.marca) taller.marca = {};
+            if (marca.nombre !== undefined) taller.marca.nombre = String(marca.nombre).trim();
+            if (marca.logo !== undefined) {
+                // Cadena vacía quita el logo: poner uno se tiene que poder deshacer, igual
+                // que todo lo demás (docs/principio-vuelta-atras.md). El motivo del rechazo
+                // se devuelve tal cual porque es lo único que explica qué archivo sirve.
+                try {
+                    taller.marca.logo = normalizarLogo(marca.logo);
+                } catch (error) {
+                    return res.fail(400, error.message);
+                }
+            }
+        }
 
         if (req.body?.estado !== undefined) {
             const estado = String(req.body.estado).trim();

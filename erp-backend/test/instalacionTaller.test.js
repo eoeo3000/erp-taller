@@ -34,6 +34,9 @@ const docTaller = (d) => ({
 // terminó escribiéndose la cuenta, que es el centro de esta etapa.
 const conexionDe = (nombre) => ({ name: nombre });
 
+// Lo que cada taller eligió mostrar en su app. Vacío = no eligió nada.
+let MARCAS = {};
+
 for (const [ruta, exports] of [
     ['../src/models/Taller', () => ({
         findOne: async ({ slug }) => {
@@ -56,6 +59,8 @@ for (const [ruta, exports] of [
     ['../src/models/SesionStaff', (conn) => ({ create: async (d) => ({ _id: new ObjectId(), base: conn.name, ...d }) })],
     ['../src/config/conexiones', {
         conexionDeControl: () => ({ name: 'control' }),
+        // La marca del taller, que `/auth/yo` devuelve junto al resto.
+        marcaDeTaller: (slug) => MARCAS[slug] || { nombre: '', logo: '' },
         // `conexionPedida` lo usa para resolver la pista del navegador: sin esto la prueba
         // falla por el doble incompleto y no por el código.
         resolverTaller: (slug) => {

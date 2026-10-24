@@ -36,6 +36,17 @@
     .pendiente { border-left: 3px solid var(--ambar); padding-left: 12px; }
     button.fila { padding: 4px 9px; font-size: 12px; margin: 0 4px 4px 0; }
     .oculto { display: none; }
+    /* El logo en la fila: chico, para reconocer de un vistazo quién ya tiene uno puesto. */
+    .logoFila { display: block; max-height: 20px; max-width: 100%; margin-bottom: 4px; }
+    .previa { margin-top: 12px; }
+    /* Fondo a cuadros: un logo PNG con transparencia sobre blanco se vería "sin fondo" y
+       sobre oscuro parecería roto. Así se ve qué parte es transparente de verdad. */
+    .previa img { max-height: 64px; max-width: 240px; padding: 6px; border: 1px solid var(--borde);
+                  border-radius: 6px; background-color: #fff;
+                  background-image: linear-gradient(45deg, #eee 25%, transparent 25%, transparent 75%, #eee 75%),
+                                    linear-gradient(45deg, #eee 25%, transparent 25%, transparent 75%, #eee 75%);
+                  background-size: 14px 14px; background-position: 0 0, 7px 7px; }
+    input[type=file] { padding: 6px; }
     .campos { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; margin-top: 12px; }
     .campo { flex: 1 1 220px; }
     .campo input { width: 100%; }
@@ -107,11 +118,40 @@
                     <thead><tr>
                         <th>Taller</th><th>Estado</th><th>Plan</th><th>Alta</th>
                         <th>Última actividad</th><th class="num">OT</th><th class="num">Solicitudes</th>
-                        <th class="num">Cuentas</th><th>Base</th><th>Enlaces</th>
+                        <th class="num">Cuentas</th><th>Base</th><th>Acciones</th>
                     </tr></thead>
                     <tbody id="filas"></tbody>
                 </table>
             </div>
+        </div>
+
+        <div class="tarjeta oculto" id="tarjetaMarca">
+            <strong>Marca de <span id="marcaDe"></span></strong>
+            <p class="nota">Es lo que ve la gente de ese taller: el nombre en su app y el logo en su cotización.
+               No es el nombre de la columna «Taller» —ese es cómo lo llamas acá—, y si lo dejas vacío la app
+               sigue mostrando el nombre que trae de fábrica.</p>
+            <form id="formMarca">
+                <div class="campos">
+                    <div class="campo">
+                        <label for="marcaNombre">Nombre que muestra la app</label>
+                        <input id="marcaNombre" placeholder="Taller ERP" maxlength="60">
+                    </div>
+                    <div class="campo">
+                        <label for="marcaArchivo">Logo de la cotización</label>
+                        <input id="marcaArchivo" type="file" accept="image/*">
+                    </div>
+                    <div>
+                        <button id="btnMarca" type="submit">Guardar</button>
+                        <button id="btnQuitarLogo" class="secundario" type="button">Quitar logo</button>
+                        <button id="btnCerrarMarca" class="secundario" type="button">Cerrar</button>
+                    </div>
+                </div>
+                <p class="nota">La imagen se reduce acá mismo a 600px antes de subirla, así que da igual de
+                   qué tamaño venga el archivo. Se guarda como PNG (o JPEG si pesa mucho), que son los dos
+                   formatos que entiende el generador de la cotización.</p>
+                <div id="marcaPrevia" class="previa"></div>
+                <p id="errorMarca" class="aviso"></p>
+            </form>
         </div>
 
         <div class="tarjeta">
@@ -163,11 +203,18 @@ function base(fila) {
 //
 // `cuentas` cuenta las que pueden entrar por el login, la misma definición que usa el backend
 // para decidir si una instalación sigue abierta. Así los dos lados no pueden contradecirse.
-function enlaces(t) {
-    if (!t.medible) return '<span class="nota">—</span>';
-    const acceso = `<button class="secundario fila" type="button" data-acceso="${t.slug}">Link de acceso</button>`;
-    if (t.cuentas > 0) return acceso;
-    return `<button class="secundario fila" type="button" data-reemitir="${t.slug}">Reemitir instalación</button>${acceso}`;
+// «Abrir» lleva a la puerta de ese cliente, no adentro: PANEL_TOKEN es la clave del panel y
+// no una cuenta en la base del taller, así que lo que aparece es su pantalla de ingreso (ya
+// con su marca). Entrar a mirar los datos de un cliente sería otra cosa, y una decisión
+// distinta: hoy nadie puede hacerlo, y que no se pueda es una propiedad del diseño, no algo
+// que falte.
+function acciones(t) {
+    const marca = `<button class="secundario fila" type="button" data-marca="${t.slug}">Marca</button>`;
+    if (!t.medible) return marca;
+    const abrir = `<button class="secundario fila" type="button" data-abrir="${t.slug}">Abrir</button>`;
+    const link = `<button class="secundario fila" type="button" data-acceso="${t.slug}">Link</button>`;
+    if (t.cuentas > 0) return `${abrir}${link}${marca}`;
+    return `<button class="secundario fila" type="button" data-reemitir="${t.slug}">Reemitir instalación</button>${abrir}${link}${marca}`;
 }
 
 async function pedir(ruta) {
@@ -179,9 +226,13 @@ async function pedir(ruta) {
 
 function pintar(datos) {
     spaUrl = datos.spaUrl || '';
+    // La marca de cada taller se guarda acá para que el editor muestre lo que hay HOY sin
+    // volver a pedirlo. Se repuebla en cada pintada, así que no puede quedar vieja.
+    marcas = new Map(datos.talleres.map((t) => [t.slug, t.marca || { nombre: '', logo: '' }]));
     $('filas').innerHTML = datos.talleres.map((t) => `
         <tr>
-            <td><strong>${texto(t.nombre)}</strong><br><span class="nota">${texto(t.slug)}</span></td>
+            <td>${(t.marca && t.marca.logo) ? `<img class="logoFila" src="${t.marca.logo}" alt="">` : ''}<strong>${texto(t.nombre)}</strong>
+                <br><span class="nota">${texto(t.slug)}${(t.marca && t.marca.nombre) ? ` · la app dice «${t.marca.nombre}»` : ''}</span></td>
             <td>${texto(t.estado)}</td>
             <td>${texto(t.plan)}</td>
             <td>${fecha(t.fechaAlta)}</td>
@@ -189,7 +240,8 @@ function pintar(datos) {
             <td class="num">${texto(t.ots)}</td>
             <td class="num">${texto(t.solicitudes)}</td>
             <td class="num">${texto(t.cuentas)}</td>
-            <td>${enlaces(t)}</td>
+            <td>${base(t)}</td>
+            <td>${acciones(t)}</td>
         </tr>`).join('') || '<tr><td colspan="10" class="nota">Todavía no hay talleres.</td></tr>';
 
     const r = datos.respaldo || {};
@@ -287,6 +339,8 @@ $('formAlta').addEventListener('submit', async (e) => {
 // El recuadro del enlace lo comparten el alta, la reemisión y el link de acceso: es un solo
 // lugar donde mirar y un solo botón de copiar.
 let spaUrl = '';
+// slug -> { nombre, logo } tal como está guardado hoy. La llena `pintar`.
+let marcas = new Map();
 const AYUDA_INSTALACION = 'Mándaselo al dueño del taller. Vence a los 7 días y se consume al usarse. '
     + 'Si se pierde, se reemite desde la fila y el anterior deja de servir.';
 const AYUDA_ACCESO = 'El «?taller=» no es decorativo: es lo que hace que su correo se busque en SU base. '
@@ -305,6 +359,13 @@ function mostrarEnlace(url, titulo, ayuda = AYUDA_INSTALACION) {
 $('filas').addEventListener('click', async (e) => {
     const paraAcceso = e.target.dataset?.acceso;
     const paraReemitir = e.target.dataset?.reemitir;
+    const paraAbrir = e.target.dataset?.abrir;
+    const paraMarca = e.target.dataset?.marca;
+
+    // `noopener` no es decoración: sin él la pestaña que se abre puede cambiar la dirección de
+    // ESTA, que es la que tiene la clave del panel en su sessionStorage.
+    if (paraAbrir) return window.open(`${spaUrl}/?taller=${encodeURIComponent(paraAbrir)}`, '_blank', 'noopener');
+    if (paraMarca) return abrirMarca(paraMarca);
 
     if (paraAcceso) {
         // El `?taller=` no es decorativo: es lo que hace que el correo de esa persona se
@@ -330,6 +391,153 @@ $('filas').addEventListener('click', async (e) => {
         }
     }
 });
+
+// --- La marca de un taller: el nombre que muestra su app y el logo de su cotización ---
+
+// Lado del lado más largo, en píxeles. Un logo en la cotización ocupa ~26mm de ancho, que a
+// 300dpi son ~300px: 600 deja margen para que no se vea pixelado y mantiene el archivo chico.
+const LADO_MAXIMO_LOGO = 600;
+// Un poco por debajo del tope del servidor (150 KB), para que lo que pase de acá no sea
+// rechazado allá por un par de bytes.
+const PESO_MAXIMO_LOGO = 140 * 1024;
+
+let marcaEditando = null;   // slug del taller abierto en el editor
+let logoNuevo = null;       // data URI recién elegido, o null si no se tocó el archivo
+
+// Reduce la imagen y la devuelve como data URI listo para guardar.
+//
+// Se hace en el navegador y no en el servidor a propósito: así el tope del backend nunca se
+// topa con el archivo que la persona eligió —que puede ser el logo original de 4 MB— sino con
+// uno ya del tamaño que de verdad se necesita. El servidor igual valida: esto es comodidad,
+// no el control.
+function reducirLogo(archivo) {
+    return new Promise((listo, falla) => {
+        const lector = new FileReader();
+        lector.onerror = () => falla(new Error('No se pudo leer el archivo.'));
+        lector.onload = () => {
+            const img = new Image();
+            img.onerror = () => falla(new Error('Ese archivo no es una imagen que el navegador pueda mostrar.'));
+            img.onload = () => {
+                // Un SVG sin ancho y alto escritos adentro no tiene tamaño propio, y el canvas
+                // quedaría de 0×0: un logo invisible que recién se notaría en la cotización.
+                if (!img.naturalWidth || !img.naturalHeight) {
+                    return falla(new Error('Esa imagen no declara su tamaño (pasa con algunos SVG). Conviértela a PNG y vuelve a intentar.'));
+                }
+                const escala = Math.min(1, LADO_MAXIMO_LOGO / Math.max(img.naturalWidth, img.naturalHeight));
+                const lienzo = document.createElement('canvas');
+                lienzo.width = Math.max(1, Math.round(img.naturalWidth * escala));
+                lienzo.height = Math.max(1, Math.round(img.naturalHeight * escala));
+                const ctx = lienzo.getContext('2d');
+                ctx.drawImage(img, 0, 0, lienzo.width, lienzo.height);
+
+                // PNG primero: conserva la transparencia, que es lo que hace que un logo se
+                // vea bien sobre el papel y sobre el fondo oscuro del menú.
+                const png = lienzo.toDataURL('image/png');
+                if (png.length <= PESO_MAXIMO_LOGO) return listo(png);
+
+                // Demasiado pesado (pasa con logos que son casi una foto). JPEG sobre BLANCO:
+                // JPEG no tiene transparencia, y sin pintar el fondo antes lo transparente
+                // saldría negro.
+                ctx.globalCompositeOperation = 'destination-over';
+                ctx.fillStyle = '#fff';
+                ctx.fillRect(0, 0, lienzo.width, lienzo.height);
+                const jpeg = lienzo.toDataURL('image/jpeg', 0.82);
+                if (jpeg.length > PESO_MAXIMO_LOGO) {
+                    return falla(new Error('La imagen sigue pesando demasiado incluso reducida. Probá con un logo más simple o recortado.'));
+                }
+                listo(jpeg);
+            };
+            img.src = lector.result;
+        };
+        lector.readAsDataURL(archivo);
+    });
+}
+
+function pintarPrevia(logo) {
+    $('marcaPrevia').innerHTML = logo
+        ? `<img src="${logo}" alt="Logo del taller"><p class="nota">Así va a salir en la cotización, a escala.</p>`
+        : '<p class="nota">Sin logo. La cotización sale como hasta ahora, sin encabezado de imagen.</p>';
+}
+
+function abrirMarca(slug) {
+    marcaEditando = slug;
+    logoNuevo = null;
+    const marca = marcas.get(slug) || { nombre: '', logo: '' };
+    $('marcaDe').textContent = slug;
+    $('marcaNombre').value = marca.nombre || '';
+    $('marcaArchivo').value = '';
+    $('errorMarca').textContent = '';
+    pintarPrevia(marca.logo || '');
+    $('tarjetaMarca').classList.remove('oculto');
+    $('tarjetaMarca').scrollIntoView({ block: 'nearest' });
+}
+
+function cerrarMarca() {
+    marcaEditando = null;
+    logoNuevo = null;
+    $('tarjetaMarca').classList.add('oculto');
+}
+
+// Guarda solo lo que cambió. Si nadie tocó el archivo, el logo NO viaja: mandarlo de vuelta
+// serían decenas de KB en cada corrección de un nombre, y además reescribiría el mismo valor.
+async function guardarMarca(cambios) {
+    const slug = marcaEditando;
+    $('errorMarca').textContent = '';
+    $('btnMarca').disabled = true;
+    $('btnQuitarLogo').disabled = true;
+    try {
+        const resp = await fetch(`/api/talleres/${encodeURIComponent(slug)}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json', 'X-Panel-Token': sessionStorage.getItem(CLAVE) || '' },
+            body: JSON.stringify({ marca: cambios }),
+        });
+        const cuerpo = await resp.json().catch(() => ({}));
+        if (!resp.ok) throw new Error(cuerpo.error || `Error ${resp.status}`);
+        await cargar();
+        // `cargar` repinta y repuebla `marcas`, así que el editor se reabre con lo guardado:
+        // es la confirmación de que quedó, y no un cartel que lo diga.
+        if (marcas.has(slug)) abrirMarca(slug);
+    } catch (err) {
+        $('errorMarca').textContent = err.message;
+    } finally {
+        $('btnMarca').disabled = false;
+        $('btnQuitarLogo').disabled = false;
+    }
+}
+
+$('marcaArchivo').addEventListener('change', async (e) => {
+    const archivo = e.target.files && e.target.files[0];
+    if (!archivo) return;
+    $('errorMarca').textContent = '';
+    try {
+        logoNuevo = await reducirLogo(archivo);
+        pintarPrevia(logoNuevo);
+    } catch (err) {
+        logoNuevo = null;
+        e.target.value = '';
+        $('errorMarca').textContent = err.message;
+        pintarPrevia((marcas.get(marcaEditando) || {}).logo || '');
+    }
+});
+
+$('formMarca').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const cambios = { nombre: $('marcaNombre').value.trim() };
+    if (logoNuevo !== null) cambios.logo = logoNuevo;
+    guardarMarca(cambios);
+});
+
+// Quitar el logo es una operación legítima, no un error: poner uno se tiene que poder
+// deshacer igual que todo lo demás.
+$('btnQuitarLogo').addEventListener('click', () => {
+    if (!((marcas.get(marcaEditando) || {}).logo || logoNuevo)) return;
+    if (!confirm('Se queda sin logo y sus cotizaciones vuelven a salir sin imagen. ¿Seguir?')) return;
+    logoNuevo = null;
+    $('marcaArchivo').value = '';
+    guardarMarca({ logo: '' });
+});
+
+$('btnCerrarMarca').addEventListener('click', cerrarMarca);
 
 $('copiarEnlace').addEventListener('click', async () => {
     const texto = $('enlaceInstalacion').textContent;

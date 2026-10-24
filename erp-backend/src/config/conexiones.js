@@ -32,6 +32,7 @@
 const mongoose = require('mongoose');
 const { TALLER_PRINCIPAL } = require('./talleres');
 const getTaller = require('../models/Taller');
+const { marcaPublica } = require('../servicios/marcaTaller');
 
 // Tope de conexiones simultáneas por taller. Cada conexión abre un pool, y diez pools con el
 // tamaño por omisión de Mongoose (100) se comerían el límite del clúster.
@@ -75,7 +76,7 @@ async function refrescarRegistro() {
     const filas = await Taller.find().lean();
     registro.clear();
     for (const t of filas) {
-        registro.set(t.slug, { slug: t.slug, nombre: t.nombre, estado: t.estado, mongoUri: t.mongoUri });
+        registro.set(t.slug, { slug: t.slug, nombre: t.nombre, estado: t.estado, mongoUri: t.mongoUri, marca: marcaPublica(t.marca) });
     }
     return registro;
 }
@@ -201,6 +202,19 @@ function resolverTaller(slug) {
     return ficha && ficha.estado === 'activo' ? ficha.slug : null;
 }
 
+// La marca de un taller: el nombre que muestra su app y el logo de su cotización. Sale del
+// registro en memoria y NO de la base, por lo mismo que `obtenerConexion` es síncrona: la
+// pide `GET /auth/yo` en cada arranque del SPA, y un `findOne` acá tarda 600-800ms.
+//
+// Un taller sin marca escrita devuelve las dos claves vacías, que es lo que el SPA entiende
+// como "usá tu nombre de siempre". Un slug desconocido también: esto no es el lugar donde
+// enterarse de que un taller no existe —eso lo decide `resolverTaller`— y lanzar acá dejaría
+// la pantalla de ingreso en blanco por un dato decorativo.
+function marcaDeTaller(slug) {
+    const ficha = registro.get(String(slug || '').trim().toLowerCase());
+    return marcaPublica(ficha?.marca);
+}
+
 function conexionDisponible(entorno, taller = TALLER_PRINCIPAL) {
     if (entorno === 'demo') return !!conexionDemo;
     const ficha = registro.get(taller);
@@ -233,6 +247,7 @@ module.exports = {
     obtenerConexion,
     conexionDisponible,
     resolverTaller,
+    marcaDeTaller,
     conexionDeControl,
     refrescarRegistro,
     hayBaseDeControl,

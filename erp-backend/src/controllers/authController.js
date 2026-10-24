@@ -9,6 +9,8 @@ const { nuevaExpiracion, expiracionAbsoluta, authRequerida, MINUTOS_INACTIVIDAD 
 // Qué base mirar cuando todavía no hay sesión (entrar, recuperar, restablecer). El slug
 // viaja como pista y la credencial igual tiene que existir ahí — ver middlewares/entorno.js.
 const { conexionPedida } = require('../middlewares/entorno');
+// La marca del taller sale del registro EN MEMORIA, así que esto no agrega un viaje a Mongo.
+const { marcaDeTaller } = require('../config/conexiones');
 const { hayCuentasDeEscritorio, claveInstalacionRequerida } = require('./instalacionController');
 const transporter = require('../config/mailer');
 const { SPA_URL } = require('../config/urls');
@@ -116,9 +118,22 @@ exports.logout = async (req, res) => {
 
 // GET /api/auth/yo — quién está conectado. El SPA la llama al arrancar para decidir si
 // muestra el login o la app.
+// La marca viaja en LAS CUATRO respuestas, incluida la de 401. El 401 es justamente el que
+// hace aparecer la pantalla de ingreso, que es donde más se ve el nombre y el logo del
+// taller: si se le olvidara a esa rama, la marca andaría en todas las pantallas menos en la
+// primera. Hay prueba de eso.
+//
+// Qué revela: el nombre que ese taller eligió mostrar, para un slug que hay que acertar. El
+// slug se deriva del nombre (servicios/baseDelTaller.js), así que acertarlo ya implica
+// conocerlo — esto no agrega una forma de averiguar qué clientes existen.
 exports.yo = async (req, res) => {
     if (req.usuario) {
-        return res.json({ usuario: usuarioPublico(req.usuario), expira: req.sesion?.expira || null, authRequerida: authRequerida() });
+        return res.json({
+            usuario: usuarioPublico(req.usuario),
+            expira: req.sesion?.expira || null,
+            authRequerida: authRequerida(),
+            marca: marcaDeTaller(req.taller),
+        });
     }
 
     // Sin NINGUNA cuenta con clave no hay con qué entrar, así que pedir login sería mandar a
@@ -126,6 +141,7 @@ exports.yo = async (req, res) => {
     // que existiera la instalación: había que entrar al servidor a correr un script). Se
     // ofrece crear la primera cuenta, y esto se apaga solo en cuanto exista una.
     const { db, taller } = conexionPedida(req);
+    const marca = marcaDeTaller(taller);
     if (!await hayCuentasDeEscritorio(getUsuario(db))) {
         // Un taller que no es el por defecto SIEMPRE necesita su clave de instalación, la del
         // enlace de un solo uso. Sin esto la pantalla se ofrecería sin pedirla y el envío
@@ -138,6 +154,7 @@ exports.yo = async (req, res) => {
             requiereInstalacion: true,
             requiereClaveInstalacion: esOtroTaller || claveInstalacionRequerida(),
             taller,
+            marca,
         });
     }
     // Sin sesión y con el gate todavía apagado, el SPA entra igual que antes de que
@@ -145,9 +162,9 @@ exports.yo = async (req, res) => {
     // DOS lados: si acá se respondiera 401 siempre, desplegar esta versión dejaría a la
     // oficina mirando una pantalla de acceso que nadie puede pasar todavía, porque las
     // cuentas con clave se crean después (scripts/crearAdmin.js).
-    if (!authRequerida()) return res.json({ usuario: null, authRequerida: false });
+    if (!authRequerida()) return res.json({ usuario: null, authRequerida: false, marca });
 
-    res.status(401).json({ error: 'Sesión requerida' });
+    res.status(401).json({ error: 'Sesión requerida', marca });
 };
 
 // POST /api/auth/cambiar-password — { passwordActual, passwordNueva }
