@@ -22,9 +22,12 @@ async function leerTodo(stream) {
     return Buffer.concat(partes);
 }
 
+// Desde la etapa 5 hay que decir de quién es el archivo: va a `talleres/<slug>/`.
+const UBICACION = { entorno: 'produccion', taller: 'principal' };
+
 test('lo que se guarda se puede volver a leer igual', async (t) => {
     const contenido = Buffer.from('contenido de una foto de prueba');
-    const { clave, url } = await almacenamiento.guardar(contenido, 'evidencia.jpg');
+    const { clave, url } = await almacenamiento.guardar(contenido, 'evidencia.jpg', UBICACION);
     t.after(() => fs.rm(path.join(almacenamiento.CARPETA_LOCAL, clave), { force: true }));
 
     assert.strictEqual(url, `/uploads/${clave}`, 'devuelve ruta relativa, no URL absoluta');
@@ -39,15 +42,15 @@ test('la URL devuelta es relativa: los clientes le anteponen el origen del backe
     // erp-web/src/utils/fotos.js y erp-pwa-operativa/src/api.js hacen
     // `BACKEND_ORIGIN + data.url`. Si esto devolviera la URL del bucket, quedaría pegada
     // detrás del origen y toda PWA ya instalada guardaría una URL rota.
-    const { clave, url } = await almacenamiento.guardar(Buffer.from('x'), 'f.png');
+    const { clave, url } = await almacenamiento.guardar(Buffer.from('x'), 'f.png', UBICACION);
     t.after(() => fs.rm(path.join(almacenamiento.CARPETA_LOCAL, clave), { force: true }));
     assert.ok(url.startsWith('/uploads/'));
     assert.ok(!url.includes('://'));
 });
 
 test('dos archivos subidos seguidos no se pisan', async (t) => {
-    const a = await almacenamiento.guardar(Buffer.from('primero'), 'foto.jpg');
-    const b = await almacenamiento.guardar(Buffer.from('segundo'), 'foto.jpg');
+    const a = await almacenamiento.guardar(Buffer.from('primero'), 'foto.jpg', UBICACION);
+    const b = await almacenamiento.guardar(Buffer.from('segundo'), 'foto.jpg', UBICACION);
     t.after(() => Promise.all([a, b].map((x) => fs.rm(path.join(almacenamiento.CARPETA_LOCAL, x.clave), { force: true }))));
 
     assert.notStrictEqual(a.clave, b.clave);
@@ -55,7 +58,7 @@ test('dos archivos subidos seguidos no se pisan', async (t) => {
 });
 
 test('se conserva la extensión del archivo original', async (t) => {
-    const { clave } = await almacenamiento.guardar(Buffer.from('x'), 'informe.PDF');
+    const { clave } = await almacenamiento.guardar(Buffer.from('x'), 'informe.PDF', UBICACION);
     t.after(() => fs.rm(path.join(almacenamiento.CARPETA_LOCAL, clave), { force: true }));
     assert.ok(clave.endsWith('.pdf'), `la clave fue ${clave}`);
     assert.strictEqual(almacenamiento.tipoPorNombre(clave), 'application/pdf');

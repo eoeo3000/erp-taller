@@ -248,13 +248,28 @@ el módulo que tiene el registro, y una prueba con dos talleres.
 
 ### Etapa 5 — Operación
 
-- El respaldo diario recorre los talleres en vez de respaldar uno.
-- Los archivos en R2 se separan por taller: `talleres/<id>/<clave>` en vez de `<clave>` a
-  secas. **Ojo**: hay URL ya escritas en la base con el formato viejo, así que la lectura
-  tiene que seguir entendiendo las dos — el mismo criterio que se usó al pasar del disco al
-  bucket.
+**Hecho:**
+
+- ✅ El respaldo diario recorre los talleres en vez de respaldar uno. La lista sale del
+  registro (`talleresActivos()`), así que un cliente nuevo se respalda solo. Cada taller
+  tiene su propia retención de 30: con una sola compartida, el cliente grande dejaría sin
+  copias al chico. Un taller que falla no corta la vuelta. El archivo además dice de qué
+  taller salió, que es lo que permite avisar antes de restaurarlo sobre otro.
+- ✅ Los archivos en R2 se separan por taller: `talleres/<slug>/<clave>` en vez de `<clave>`
+  a secas, y `demo/<clave>` para la demo, que es una sola. La lectura **sigue entendiendo
+  las dos formas** —hay miles de URL ya escritas en la base— y los archivos que quedaron
+  sueltos se mueven con `scripts/migrarArchivosPorTaller.js`, sin tocar esas URL. El panel
+  dice cuántos quedan.
+- ✅ El panel muestra, por cliente, cuántos archivos tiene, cuánto ocupan y cuándo fue su
+  último respaldo. Hasta acá decía que eso no se podía medir.
+
+**Falta:**
+
 - Baja de un cliente según lo definido en §9.4: suspender, 10 días de descarga (respaldo
   técnico + planillas), borrado de base, respaldos y archivos a los 30, reversible hasta ahí.
+  Va aparte a propósito: es el único paso de todo esto que **borra datos de un cliente**, y
+  los plazos son una decisión de contrato que hay que confirmar antes de escribirla en
+  código (ver la nota de §9.4 sobre la ley 21.719).
 - La demo compartida se restaura sola cada noche (§9.2).
 
 ## 6. El orden importa

@@ -14,8 +14,13 @@ const uploadRoutes = require('../src/routes/uploadRoutes');
 const almacenamiento = require('../src/config/almacenamiento');
 
 // Mismo montaje que server.js: los archivos se sirven fuera de /api y se suben dentro.
-function levantar() {
+function levantar(taller = 'principal', entorno = 'produccion') {
     const app = express();
+    // Lo que deja `middlewares/entorno.js` en cada request. Se pone a mano para no tener
+    // que abrir una Mongo de verdad, pero tiene que estar: desde la etapa 5 el archivo va a
+    // la carpeta del taller, y sin esto la subida falla — que es exactamente lo que se
+    // quiere que pase si alguien monta una ruta de subida fuera de esa cadena.
+    app.use((req, res, siguiente) => { req.entorno = entorno; req.taller = taller; siguiente(); });
     app.use('/uploads', archivosRoutes);
     app.use('/api/uploads', uploadRoutes);
     return new Promise((resolve) => {
@@ -43,7 +48,8 @@ test('una foto subida se puede volver a bajar por la URL que devolvió', async (
 
     const { resp, datos } = await subir(base, JPEG);
     assert.strictEqual(resp.status, 201);
-    assert.match(datos.url, /^\/uploads\/[0-9]+-[0-9]+\.jpg$/, `url devuelta: ${datos.url}`);
+    // Desde la etapa 5 la ruta lleva la carpeta del taller: /uploads/talleres/<slug>/<archivo>.
+    assert.match(datos.url, /^\/uploads\/talleres\/principal\/[0-9]+-[0-9]+\.jpg$/, `url devuelta: ${datos.url}`);
     t.after(() => limpiar(datos.url.replace('/uploads/', '')));
 
     const bajada = await fetch(`${base}${datos.url}`);
@@ -112,4 +118,41 @@ test('subir sin archivo avisa en vez de guardar algo vacío', async (t) => {
     const resp = await fetch(`${base}/api/uploads/foto`, { method: 'POST', body: new FormData() });
     assert.strictEqual(resp.status, 400);
     assert.match((await resp.json()).error, /Falta el archivo/);
+});
+
+test('la foto queda en la carpeta del taller que la subió, y se baja por esa misma URL', async (t) => {
+    // El contrato de la etapa 5 visto de punta a punta: sube erp-pwa-operativa de un taller,
+    // y lo que vuelve es una ruta que lleva su identificador. Si la ruta de subida dejara de
+    // pasar el taller, esto se pone rojo.
+    const { servidor, base } = await levantar('maestranza-rivas');
+    t.after(() => servidor.close());
+
+    const { resp, datos } = await subir(base, JPEG);
+    assert.strictEqual(resp.status, 201);
+    assert.strictEqual(datos.url, '/uploads/' + datos.url.split('/uploads/')[1]);
+    assert.ok(datos.url.startsWith('/uploads/talleres/maestranza-rivas/'), datos.url);
+    t.after(() => limpiar(datos.url.replace('/uploads/', '')));
+
+    // Y se baja por la misma ruta: es lo que los clientes guardan en la base.
+    const bajada = await fetch(`${base}${datos.url}`);
+    assert.strictEqual(bajada.status, 200);
+    assert.strictEqual(bajada.headers.get('content-type'), 'image/jpeg');
+    assert.deepStrictEqual(Buffer.from(await bajada.arrayBuffer()), JPEG);
+});
+
+test('no se puede salir de la carpeta del taller por la URL', async (t) => {
+    // La clave ahora lleva barras, así que la ruta tiene más partes de donde agarrarse. Con
+    // parámetros separados ninguno puede contener una barra, pero igual se prueba: es el
+    // tipo de cosa que se rompe al "simplificar" la ruta con un comodín.
+    const { servidor, base } = await levantar();
+    t.after(() => servidor.close());
+
+    for (const intento of [
+        '/uploads/talleres/principal/..%2F..%2F..%2Fetc%2Fpasswd',
+        '/uploads/talleres/..%2F..%2Fetc%2Fpasswd/x.jpg',
+        '/uploads/..%2F..%2Fetc%2Fpasswd',
+    ]) {
+        const resp = await fetch(`${base}${intento}`);
+        assert.strictEqual(resp.status, 404, `debería rechazar ${intento}`);
+    }
 });

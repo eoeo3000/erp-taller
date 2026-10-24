@@ -28,7 +28,10 @@ const recibirFoto = (req, res, next) => upload.single('foto')(req, res, (error) 
 router.post('/foto', recibirFoto, async (req, res) => {
     if (!req.file) return res.status(400).json({ error: 'Falta el archivo "foto"' });
     try {
-        const { url } = await almacenamiento.guardar(req.file.buffer, req.file.originalname);
+        // El taller sale de la request (middlewares/entorno.js), nunca del cuerpo: es lo
+        // que decide en qué carpeta del bucket queda la foto y, con ella, en el respaldo de
+        // quién entra y a quién se le borra el día que se vaya.
+        const { url } = await almacenamiento.guardar(req.file.buffer, req.file.originalname, { entorno: req.entorno, taller: req.taller });
         res.status(201).json({ url });
     } catch (error) {
         console.error('[uploads] no se pudo guardar la foto:', error.message);

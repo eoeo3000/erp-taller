@@ -22,12 +22,12 @@ Subir:  PWA/SPA → POST /api/uploads/foto → almacenamiento.guardar() → buck
                                                     ↓ (si no hay credenciales)
                                                   disco local
 
-Leer:   <img src=".../uploads/1738-123.jpg"> → GET /uploads/:clave → bucket R2
+Leer:   <img src=".../uploads/talleres/rivas/1738-123.jpg"> → GET /uploads/… → bucket R2
                                                     ↓ (si no está ahí)
                                                   disco local → 404
 ```
 
-Tres decisiones que conviene entender antes de tocar esto:
+Cuatro decisiones que conviene entender antes de tocar esto:
 
 **1. La forma de la URL no cambió.** Se sigue guardando `/uploads/<clave>` en la base. No es
 un detalle estético: los dos clientes arman la URL absoluta con `BACKEND_ORIGIN + data.url`
@@ -41,7 +41,31 @@ instalaciones de los clientes del taller, no material público. El costo es que 
 pasa por Render; a la escala de este sistema (≈5.000 fotos, ~1 GB) es despreciable, y el
 encabezado `Cache-Control: immutable` hace que el navegador no vuelva a pedir la misma foto.
 
-**3. Sin credenciales funciona igual que antes.** Mismo criterio que `API_KEY` y
+**3. Cada taller tiene su carpeta.** Desde la etapa 5 de [multi-taller.md](multi-taller.md)
+los archivos van a `talleres/<slug>/<archivo>` en vez de al mismo nivel para todos. No es
+orden por el orden: con todo junto, el respaldo de un taller no incluye sus archivos, no se
+puede decir cuánto ocupa cada cliente, y darle de baja a uno obliga a mirar archivo por
+archivo de quién es. La demo va a `demo/`, aparte, porque es una sola para todos (§9.2) y
+sus archivos de prueba no pueden contar en la medición de un cliente real.
+
+El taller sale de la request (`middlewares/entorno.js`), **nunca del cuerpo ni de la URL**.
+Y si no viene, `guardar()` lanza en vez de escribir en la raíz: una ruta nueva que se olvide
+de pasarlo tiene que romperse de inmediato, no acumular archivos sin dueño durante meses.
+
+Que la carpeta aparezca en la URL **no autoriza nada ni lo pretende**: `/uploads` sigue
+abierto igual que antes, y para leer una foto hay que saber su nombre, que es una marca de
+tiempo más un número al azar. Separar por taller es para respaldar, medir y borrar por
+cliente; tratarlo como un control de acceso sería el error.
+
+**Lo anterior sigue funcionando.** La lectura entiende las dos formas: si la clave de la URL
+no está donde dice, se busca dentro del taller principal, que era el único que existía
+cuando esas URL se escribieron. Los archivos que quedaron sueltos se mueven con
+`node scripts/migrarArchivosPorTaller.js` (sin `--hacerlo` solo muestra qué haría; copia,
+verifica y recién entonces borra el original). **Las URL de la base no se tocan**: reescribir
+miles de rutas en `OT.reportes`, `OT.tareas[].registro.fotos` y `Solicitud.adjuntos` sería un
+riesgo enorme para cero beneficio. El panel de talleres dice cuántas quedan sin migrar.
+
+**4. Sin credenciales funciona igual que antes.** Mismo criterio que `API_KEY` y
 `AUTH_REQUERIDA`: si faltan las variables, se usa el disco y se avisa por consola. El entorno
 de desarrollo no necesita cuenta en ningún lado.
 

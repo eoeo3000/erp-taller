@@ -146,8 +146,11 @@ test('el respaldo va comprimido y queda bajo el prefijo de su entorno', async (t
     const prod = await respaldo.crearRespaldo(conexionFalsa(baseFalsa({ ots: muchos })), 'produccion');
     const demo = await respaldo.crearRespaldo(conexionFalsa(baseFalsa({ ots: [] })), 'demo');
 
-    assert.match(prod.clave, /^respaldos\/produccion\/\d{4}-\d{2}-\d{2}T[\d-]+\.json\.gz$/, prod.clave);
-    assert.match(demo.clave, /^respaldos\/demo\//, demo.clave);
+    // Desde la etapa 5 la clave de producción lleva el taller. La demo no: es una sola
+    // para todos los clientes (§9.2), así que dividirla sería guardar la misma base varias
+    // veces.
+    assert.match(prod.clave, /^respaldos\/produccion\/principal\/\d{4}-\d{2}-\d{2}T[\d-]+\.json\.gz$/, prod.clave);
+    assert.match(demo.clave, /^respaldos\/demo\/\d{4}-/, demo.clave);
     assert.ok(prod.tamano < prod.tamanoSinComprimir / 2, `comprimido ${prod.tamano} vs crudo ${prod.tamanoSinComprimir}`);
 });
 
@@ -175,7 +178,7 @@ test('la retención borra los más viejos y conserva los más nuevos', async (t)
     const claves = [];
     for (let i = 0; i < total; i++) {
         const fecha = new Date(Date.UTC(2026, 0, 1 + i, 8, 0, 0));
-        const clave = respaldo.claveDeRespaldo('produccion', fecha);
+        const clave = respaldo.claveDeRespaldo('produccion', 'principal', fecha);
         await almacenamiento.guardarEn(clave, Buffer.from(`respaldo ${i}`), 'application/gzip');
         claves.push(clave);
         // El listado local ordena por mtime; se separan para que el orden sea determinista.
@@ -196,4 +199,48 @@ test('una clave con salto de directorio se rechaza', async () => {
     await assert.rejects(() => almacenamiento.guardarEn('../fuera.json', Buffer.from('x')), /inválida/);
     await assert.rejects(() => almacenamiento.borrar('respaldos/../../server.js'), /inválida/);
     assert.strictEqual(await almacenamiento.leer('respaldos/../../server.js'), null);
+});
+
+test('CADA TALLER TIENE SU RESPALDO Y SU PROPIA RETENCIÓN', async (t) => {
+    // Con una sola lista compartida, treinta respaldos del taller A empujarían fuera los del
+    // taller B: el cliente chico se quedaría sin ninguno sin que nadie lo note. Y un respaldo
+    // guardado sin decir de quién es se puede restaurar sobre la base equivocada.
+    t.after(() => limpiarRespaldos());
+
+    const rivas = await respaldo.crearRespaldo(conexionFalsa(baseFalsa({ ots: [{ _id: new ObjectId() }] })), 'produccion', 'maestranza-rivas');
+    const lopez = await respaldo.crearRespaldo(conexionFalsa(baseFalsa({ ots: [] })), 'produccion', 'taller-lopez');
+
+    assert.match(rivas.clave, /^respaldos\/produccion\/maestranza-rivas\//, rivas.clave);
+    assert.match(lopez.clave, /^respaldos\/produccion\/taller-lopez\//, lopez.clave);
+    assert.strictEqual(rivas.taller, 'maestranza-rivas');
+
+    // El archivo dice de quién es: es lo que impide restaurarlo encima de otro cliente sin
+    // darse cuenta (ver scripts/peligrosos/restaurar.js).
+    const contenido = await respaldo.leerRespaldo(rivas.clave);
+    assert.strictEqual(contenido.taller, 'maestranza-rivas');
+
+    // Y cada uno ve solo lo suyo.
+    assert.strictEqual((await respaldo.listarRespaldos('produccion', 'maestranza-rivas')).length, 1);
+    assert.strictEqual((await respaldo.listarRespaldos('produccion', 'taller-lopez')).length, 1);
+});
+
+test('los respaldos de antes de la etapa 5 cuentan como del principal, y la poda se los lleva', async (t) => {
+    // Quedaron en `respaldos/produccion/<fecha>.json.gz`, sin taller. Si no se contaran,
+    // nadie los borraría nunca: se quedarían envejeciendo en el bucket para siempre.
+    t.after(() => limpiarRespaldos());
+    const viejo = 'respaldos/produccion/2026-01-01T08-00-00.json.gz';
+    await almacenamiento.guardarEn(viejo, Buffer.from('respaldo heredado'), 'application/gzip');
+
+    const lista = await respaldo.listarRespaldos('produccion', 'principal');
+    assert.ok(lista.some((r) => r.clave === viejo), 'el heredado aparece entre los del principal');
+
+    // Pero NO entre los de otro taller: son del principal, que era el único que había.
+    assert.strictEqual((await respaldo.listarRespaldos('produccion', 'taller-lopez')).length, 0);
+});
+
+test('un taller no se puede meter en la clave del respaldo de otro', async () => {
+    // La clave se arma con el slug. Si aceptara cualquier cosa, un `../` ahí escribiría
+    // fuera de su carpeta.
+    assert.throws(() => respaldo.prefijoDe('produccion', '../otro'), /Taller inválido/);
+    assert.throws(() => respaldo.prefijoDe('produccion', ''), /Taller inválido/);
 });

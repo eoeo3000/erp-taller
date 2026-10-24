@@ -16,8 +16,8 @@ const { generarToken, hashToken } = require('../utils/tokens');
 const { SPA_URL } = require('../config/urls');
 const getTaller = require('../models/Taller');
 const getUsuario = require('../models/Usuario');
-const { metricasDeTaller, diasSinUsar } = require('../servicios/metricasTaller');
-const { listarRespaldos } = require('../servicios/respaldo');
+const { metricasDeTaller, almacenamientoDeTaller, diasSinUsar } = require('../servicios/metricasTaller');
+const almacenamiento = require('../config/almacenamiento');
 const { uriParaTaller, slugDesdeNombre } = require('../servicios/baseDelTaller');
 const { normalizarLogo, marcaPublica } = require('../servicios/marcaTaller');
 const { hayCuentasDeEscritorio } = require('./instalacionController');
@@ -234,25 +234,38 @@ exports.metricas = async (req, res) => {
             if (t.estado !== 'activo') {
                 return { ...base, medible: false, motivo: `Está ${t.estado}`, baseResponde: null };
             }
-            try {
-                const metricas = await metricasDeTaller(obtenerConexion('produccion', t.slug));
-                return { ...base, medible: true, ...metricas, diasSinUsar: diasSinUsar(metricas.ultimaActividad) };
-            } catch (error) {
-                return { ...base, medible: false, motivo: error.message, baseResponde: false };
-            }
+            // Las dos mediciones son independientes y van en paralelo: la base de un
+            // taller puede estar caída con su bucket intacto, y al revés. Que una falle no
+            // puede borrar el dato de la otra — de hecho, los archivos y el último respaldo
+            // de un cliente cuya base no responde son justo lo que se quiere mirar en ese
+            // momento.
+            const [datos, almacen] = await Promise.all([
+                (async () => metricasDeTaller(obtenerConexion('produccion', t.slug)))()
+                    .catch((error) => ({ medible: false, motivo: error.message, baseResponde: false })),
+                almacenamientoDeTaller(t.slug, 'produccion'),
+            ]);
+            return {
+                medible: true,
+                ...base,
+                ...datos,
+                diasSinUsar: diasSinUsar(datos.ultimaActividad),
+                archivos: almacen.archivos,
+                respaldo: almacen.respaldo,
+                errorAlmacen: almacen.error,
+            };
         }));
 
-        // El último respaldo es del ENTORNO, no de cada taller: todavía no están separados
-        // (etapa 5). Se devuelve igual, marcado como compartido, porque saber que el respaldo
-        // diario dejó de correr sirve aunque no esté desglosado — y mentir diciendo que es
-        // de cada taller sería peor que no mostrarlo.
-        let respaldo = { compartido: true, ultimo: null, error: null };
+        // Los archivos que quedaron en la raíz del bucket, del formato anterior a la etapa
+        // 5. Mientras existan, la cuenta de archivos de cada taller está incompleta — y un
+        // número incompleto que se ve completo es peor que ninguno, así que el panel lo
+        // dice. Se van con scripts/migrarArchivosPorTaller.js.
+        let sinSeparar = { cantidad: 0, bytes: 0, error: null };
         try {
-            const copias = await listarRespaldos('produccion');
-            const ultima = copias.sort((a, b) => String(b.clave || b).localeCompare(String(a.clave || a)))[0];
-            respaldo.ultimo = ultima ? (ultima.clave || ultima) : null;
+            const sueltos = await almacenamiento.listarSueltos();
+            sinSeparar.cantidad = sueltos.length;
+            sinSeparar.bytes = sueltos.reduce((a, r) => a + (r.tamano || 0), 0);
         } catch (error) {
-            respaldo.error = error.message;
+            sinSeparar.error = error.message;
         }
 
         res.ok({
@@ -261,10 +274,7 @@ exports.metricas = async (req, res) => {
             // link de acceso de cada cliente sin tener que repetirlo escrito a mano, que es
             // como se desactualiza el día que cambie.
             spaUrl: SPA_URL,
-            respaldo,
-            // Lo que el panel NO puede mostrar todavía, dicho por el backend para que la
-            // pantalla no tenga que adivinarlo ni quede desactualizada cuando llegue.
-            pendienteEtapa5: ['Fotos y espacio por taller', 'Respaldo por taller'],
+            sinSeparar,
         });
     } catch (error) {
         res.fail(500, error.message);

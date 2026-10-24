@@ -21,13 +21,60 @@
 const fs = require('fs');
 const fsp = require('fs/promises');
 const path = require('path');
+const { TALLER_PRINCIPAL, esSlugValido } = require('./talleres');
 
 const CARPETA_LOCAL = path.join(__dirname, '..', '..', 'uploads');
 
-// Las claves viajan en la URL y terminan en una ruta de disco: sin esto, un `..` en el
-// nombre deja leer cualquier archivo del servidor. Sin barras a propósito: los archivos
-// públicos viven todos en el mismo nivel.
-const CLAVE_VALIDA = /^[A-Za-z0-9._-]{1,120}$/;
+// --- Dónde vive el archivo de cada taller (etapa 5 de docs/multi-taller.md) ---
+//
+// Antes todos los archivos de todos los clientes iban al mismo nivel del bucket. Mientras
+// hubo un solo taller daba igual; con dos deja de dar igual por tres razones concretas:
+// el respaldo de un taller no incluye sus archivos, no se puede decir cuánto ocupa cada
+// cliente, y dar de baja a uno obliga a mirar archivo por archivo de quién es.
+//
+// Ahora van a `talleres/<slug>/<archivo>`. La demo es aparte y NO por taller: es una sola
+// para todos (§9.2), así que sus archivos —que son de prueba y se borran— no pueden
+// mezclarse con los de un cliente real ni contar en su medición.
+//
+// **La lectura entiende las dos formas.** Hay miles de URL con el formato viejo ya escritas
+// en OT.reportes, OT.tareas[].registro.fotos y Solicitud.adjuntos; cambiar la forma sin
+// seguir entendiendo la anterior dejaría esas fotos en 404. Mismo criterio que se usó al
+// pasar del disco al bucket.
+const CARPETA_DEMO = 'demo';
+const CARPETA_TALLERES = 'talleres';
+
+// Lo que puede venir en la URL de /uploads: un nombre suelto (el formato viejo) o uno
+// precedido de su carpeta. Sin `..` posible, porque el nombre no admite barras.
+const NOMBRE_VALIDO = /^[A-Za-z0-9._-]{1,120}$/;
+// Se mantiene el nombre de antes porque lo usan las pruebas y archivosRoutes: valida el
+// nombre del archivo, que es la parte que puede venir de afuera.
+const CLAVE_VALIDA = NOMBRE_VALIDO;
+
+// Dónde guardar lo que sube este taller. Lanza si no le dicen cuál: escribir en la raíz
+// compartida "porque no vino el taller" es exactamente el estado que esta etapa viene a
+// terminar, y una ruta nueva que se olvide de pasarlo tiene que fallar fuerte y de
+// inmediato, no acumular archivos sin dueño durante meses.
+function prefijoDeArchivos(ubicacion) {
+    const entorno = String(ubicacion?.entorno || 'produccion');
+    if (entorno === 'demo') return CARPETA_DEMO;
+
+    const taller = String(ubicacion?.taller || '').trim().toLowerCase();
+    if (!esSlugValido(taller)) {
+        throw new Error('Falta el taller al guardar un archivo: sin él no se sabría de quién es ni se podría respaldar ni borrar con él.');
+    }
+    return `${CARPETA_TALLERES}/${taller}`;
+}
+
+// Las claves que se pueden pedir por /uploads. Una clave vieja (nombre suelto) puede haber
+// sido movida por scripts/migrarArchivosPorTaller.js, así que si no está donde dice la URL
+// se busca también dentro del taller principal — que es el único que existía cuando esas
+// URL se escribieron. No se adivina ningún otro taller: eso sí sería dejar que la URL
+// eligiera de quién son los datos.
+function candidatos(clave) {
+    const texto = String(clave || '');
+    if (NOMBRE_VALIDO.test(texto)) return [texto, `${CARPETA_TALLERES}/${TALLER_PRINCIPAL}/${texto}`];
+    return rutaSegura(texto) ? [texto] : [];
+}
 
 // Las claves internas (respaldos) sí llevan prefijo con barras — `respaldos/produccion/...`.
 // Nunca vienen de una URL ni de nada que escriba un usuario, pero igual se valida: son las
@@ -102,8 +149,11 @@ function nombreUnico(nombreOriginal) {
     return `${Date.now()}-${Math.round(Math.random() * 1e9)}${extension}`;
 }
 
-async function guardar(buffer, nombreOriginal) {
-    const clave = nombreUnico(nombreOriginal);
+// `ubicacion` es `{ entorno, taller }` — de dónde viene quien sube. En las rutas es
+// `{ entorno: req.entorno, taller: req.taller }`, que `middlewares/entorno.js` deja puesto
+// en toda request.
+async function guardar(buffer, nombreOriginal, ubicacion) {
+    const clave = `${prefijoDeArchivos(ubicacion)}/${nombreUnico(nombreOriginal)}`;
     const contentType = tipoPorNombre(clave);
 
     if (hayBucket()) {
@@ -112,8 +162,11 @@ async function guardar(buffer, nombreOriginal) {
             Bucket: config.bucket, Key: clave, Body: buffer, ContentType: contentType,
         }));
     } else {
-        await fsp.mkdir(CARPETA_LOCAL, { recursive: true });
-        await fsp.writeFile(path.join(CARPETA_LOCAL, clave), buffer);
+        // La clave ahora lleva carpeta (`talleres/<slug>/…`), así que hay que crearla: antes
+        // bastaba con `uploads/` porque todos los archivos iban al mismo nivel.
+        const ruta = path.join(CARPETA_LOCAL, clave);
+        await fsp.mkdir(path.dirname(ruta), { recursive: true });
+        await fsp.writeFile(ruta, buffer);
     }
 
     // Ruta relativa, no URL absoluta: es lo que los clientes esperan concatenar.
@@ -123,8 +176,18 @@ async function guardar(buffer, nombreOriginal) {
 // Devuelve `{ cuerpo, contentType, largo }` o null si no está en ninguna parte. `cuerpo` es
 // un stream, así que una foto grande no se carga entera en memoria para servirla.
 async function obtener(clave) {
-    if (!CLAVE_VALIDA.test(String(clave || ''))) return null;
+    // Se prueba la clave tal como viene y, si es del formato viejo, también dentro del
+    // taller principal: una foto de antes de esta etapa puede estar en cualquiera de los
+    // dos lugares según si ya corrió la migración. Bucket primero y disco después, para
+    // cada candidata.
+    for (const candidata of candidatos(clave)) {
+        const encontrado = await obtenerExacta(candidata);
+        if (encontrado) return encontrado;
+    }
+    return null;
+}
 
+async function obtenerExacta(clave) {
     if (hayBucket()) {
         try {
             const { GetObjectCommand } = require('@aws-sdk/client-s3');
@@ -244,6 +307,71 @@ async function borrar(clave) {
     await fsp.rm(path.join(CARPETA_LOCAL, clave), { force: true });
 }
 
+// Cuántos archivos hay bajo un prefijo y cuánto ocupan. Va aparte de `listar` porque no
+// arma la lista: un taller con miles de fotos no tiene por qué construir un arreglo de
+// miles de objetos para responder "2.413 archivos, 310 MB", que es todo lo que el panel
+// necesita.
+async function medir(prefijo) {
+    if (!rutaSegura(prefijo)) throw new Error(`Prefijo inválido: ${prefijo}`);
+    let cantidad = 0;
+    let bytes = 0;
+
+    if (hayBucket()) {
+        const { ListObjectsV2Command } = require('@aws-sdk/client-s3');
+        let continuacion;
+        do {
+            const r = await cliente().send(new ListObjectsV2Command({
+                Bucket: config.bucket, Prefix: `${prefijo}/`, ContinuationToken: continuacion,
+            }));
+            for (const o of r.Contents || []) { cantidad += 1; bytes += o.Size || 0; }
+            continuacion = r.IsTruncated ? r.NextContinuationToken : null;
+        } while (continuacion);
+        return { cantidad, bytes };
+    }
+
+    const carpeta = path.join(CARPETA_LOCAL, prefijo);
+    try {
+        for (const nombre of await fsp.readdir(carpeta)) {
+            const info = await fsp.stat(path.join(carpeta, nombre));
+            if (info.isFile()) { cantidad += 1; bytes += info.size; }
+        }
+    } catch { /* la carpeta no existe todavía: cero archivos, que es la respuesta correcta */ }
+    return { cantidad, bytes };
+}
+
+// Los archivos que quedaron en la raíz, del formato anterior a esta etapa. Sirve para una
+// sola cosa: saber si la migración ya terminó. Mientras devuelva algo distinto de cero, la
+// cuenta de archivos de cada taller está incompleta, y el panel lo dice en vez de mostrar
+// un número que parece completo y no lo es.
+async function listarSueltos() {
+    if (hayBucket()) {
+        const { ListObjectsV2Command } = require('@aws-sdk/client-s3');
+        const sueltos = [];
+        let continuacion;
+        do {
+            // `Delimiter: '/'` hace que el bucket devuelva SOLO las claves del primer nivel
+            // y agrupe el resto como prefijos: justo lo que define a un archivo suelto.
+            const r = await cliente().send(new ListObjectsV2Command({
+                Bucket: config.bucket, Delimiter: '/', ContinuationToken: continuacion,
+            }));
+            for (const o of r.Contents || []) sueltos.push({ clave: o.Key, tamano: o.Size, fecha: o.LastModified });
+            continuacion = r.IsTruncated ? r.NextContinuationToken : null;
+        } while (continuacion);
+        return sueltos;
+    }
+
+    try {
+        const sueltos = [];
+        for (const nombre of await fsp.readdir(CARPETA_LOCAL)) {
+            const info = await fsp.stat(path.join(CARPETA_LOCAL, nombre));
+            if (info.isFile()) sueltos.push({ clave: nombre, tamano: info.size, fecha: info.mtime });
+        }
+        return sueltos;
+    } catch {
+        return [];
+    }
+}
+
 function avisarConfiguracion() {
     if (hayBucket()) {
         console.log(`📦 Archivos en bucket R2 "${config.bucket}" (el disco queda de respaldo de lectura)`);
@@ -259,5 +387,6 @@ function avisarConfiguracion() {
 module.exports = {
     guardar, obtener, nombreUnico, tipoPorNombre, hayBucket, avisarConfiguracion, releerEntorno,
     guardarEn, leer, listar, borrar, rutaSegura,
-    CLAVE_VALIDA, CARPETA_LOCAL,
+    prefijoDeArchivos, candidatos, medir, listarSueltos,
+    CLAVE_VALIDA, CARPETA_LOCAL, CARPETA_TALLERES, CARPETA_DEMO,
 };

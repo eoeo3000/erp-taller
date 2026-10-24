@@ -118,7 +118,7 @@
                     <thead><tr>
                         <th>Taller</th><th>Estado</th><th>Plan</th><th>Alta</th>
                         <th>Última actividad</th><th class="num">OT</th><th class="num">Solicitudes</th>
-                        <th class="num">Cuentas</th><th>Base</th><th>Acciones</th>
+                        <th class="num">Cuentas</th><th class="num">Archivos</th><th>Respaldo</th><th>Base</th><th>Acciones</th>
                     </tr></thead>
                     <tbody id="filas"></tbody>
                 </table>
@@ -187,6 +187,36 @@ function actividad(fila) {
     return `<span class="punto ${color}"></span>${cuando}`;
 }
 
+function tamano(bytes) {
+    if (!bytes) return '0';
+    if (bytes >= 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024 / 1024).toFixed(1)} GB`;
+    if (bytes >= 1024 * 1024) return `${Math.round(bytes / 1024 / 1024)} MB`;
+    return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+}
+
+// Cuántas fotos y adjuntos tiene ese cliente, y cuánto ocupan. Desde la etapa 5 sus
+// archivos viven en `talleres/<slug>/`, así que esto es suyo y de nadie más.
+function archivos(fila) {
+    if (!fila.archivos) return '<span class="nota">—</span>';
+    // Sin archivos no se muestra el tamaño: "0" arriba y "0" abajo se lee como un error de
+    // la página, no como un taller que todavía no subió nada.
+    if (!fila.archivos.cantidad) return '<span class="nota">0</span>';
+    return `${fila.archivos.cantidad}<br><span class="nota">${tamano(fila.archivos.bytes)}</span>`;
+}
+
+// Cuándo fue el último respaldo DE ESE TALLER. Es la fila que hay que mirar cuando algo se
+// rompe, así que se pinta: verde el mismo día, ámbar hasta tres, rojo después. Un cliente
+// sin respaldo desde hace una semana es un problema aunque todo lo demás se vea bien.
+function respaldoDe(fila) {
+    const r = fila.respaldo;
+    if (!r) return `<span class="nota">${texto(fila.errorAlmacen) }</span>`;
+    if (!r.ultimo) return '<span class="punto mal"></span><span class="aviso">nunca</span>';
+    const dias = Math.floor((Date.now() - new Date(r.ultimo).getTime()) / 86400000);
+    const color = dias <= 1 ? 'ok' : dias <= 3 ? 'tibio' : 'mal';
+    const cuando = dias === 0 ? 'hoy' : dias === 1 ? 'ayer' : `hace ${dias} días`;
+    return `<span class="punto ${color}"></span>${cuando}<br><span class="nota">${r.total} guardado(s)</span>`;
+}
+
 function base(fila) {
     if (fila.baseResponde === null) return '<span class="nota">—</span>';
     return fila.baseResponde
@@ -240,19 +270,25 @@ function pintar(datos) {
             <td class="num">${texto(t.ots)}</td>
             <td class="num">${texto(t.solicitudes)}</td>
             <td class="num">${texto(t.cuentas)}</td>
+            <td class="num">${archivos(t)}</td>
+            <td>${respaldoDe(t)}</td>
             <td>${base(t)}</td>
             <td>${acciones(t)}</td>
-        </tr>`).join('') || '<tr><td colspan="10" class="nota">Todavía no hay talleres.</td></tr>';
+        </tr>`).join('') || '<tr><td colspan="12" class="nota">Todavía no hay talleres.</td></tr>';
 
-    const r = datos.respaldo || {};
-    $('respaldo').textContent = r.error
-        ? `No se pudo leer: ${r.error}`
-        : `Último: ${texto(r.ultimo)}${r.compartido ? ' — del entorno completo, todavía no separado por taller.' : ''}`;
+    const s = datos.sinSeparar || {};
+    $('respaldo').textContent = s.error
+        ? `No se pudo revisar el almacén: ${s.error}`
+        : 'Cada taller tiene su propio respaldo diario y su propia carpeta de archivos. La columna «Respaldo» de arriba dice cuándo fue el último de cada uno.';
 
-    $('pendientes').innerHTML = (datos.pendienteEtapa5 || []).length
-        ? `<strong>Todavía no se puede medir por taller:</strong> ${datos.pendienteEtapa5.join(' · ')}.
-           Los archivos del bucket y los respaldos no están separados por cliente (etapa 5).
-           Mostrar el total de todos para cada uno parecería un dato y sería mentira.`
+    // Los archivos de antes de la etapa 5 siguen en la raíz del bucket. Mientras queden, la
+    // cuenta por taller está incompleta, y decirlo es más honesto que mostrar un número que
+    // parece completo.
+    $('pendientes').innerHTML = s.cantidad
+        ? `<strong>${s.cantidad} archivo(s) todavía sin separar por taller</strong> (${tamano(s.bytes)}).
+           Son de antes de que los archivos se guardaran por cliente: siguen sirviéndose sin problema,
+           pero no se cuentan en la columna «Archivos» de ningún taller.
+           Se mueven con <code>node scripts/migrarArchivosPorTaller.js</code>.`
         : '';
 }
 

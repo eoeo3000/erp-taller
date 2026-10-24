@@ -6,7 +6,8 @@
 // llamada desde afuera (ver .github/workflows/respaldo.yml) además despierta el servicio.
 const { comparaSegura } = require('../utils/claveCompartida');
 const { crearRespaldo, listarRespaldos } = require('../servicios/respaldo');
-const { obtenerConexion } = require('../config/conexiones');
+const { obtenerConexion, talleresActivos } = require('../config/conexiones');
+const { TALLER_PRINCIPAL } = require('../config/talleres');
 
 // A diferencia de API_KEY y AUTH_REQUERIDA, que sin configurar DEJAN PASAR para poder
 // desplegarlos por etapas, acá sin clave se cierra. La diferencia es que aquellos protegían
@@ -41,35 +42,86 @@ function entornoPedido(req) {
     return String(req.query.entorno || req.body?.entorno || 'produccion') === 'demo' ? 'demo' : 'produccion';
 }
 
+// Qué talleres respaldar. **Sin indicar ninguno se respaldan TODOS los activos**, que es lo
+// que corre todas las noches: desde la etapa 5 hay un respaldo por cliente, y si esta ruta
+// siguiera respaldando uno solo, el día que entre el segundo taller su base quedaría sin
+// copia sin que nadie lo note. Se puede pedir uno puntual con `?taller=`, que es lo que
+// sirve antes de tocar algo de un cliente en particular.
+//
+// La demo es una sola para todos (§9.2), así que ahí "todos los talleres" es uno.
+function talleresPedidos(req, entorno) {
+    if (entorno === 'demo') return [TALLER_PRINCIPAL];
+    const pedido = String(req.query.taller || req.body?.taller || '').trim().toLowerCase();
+    if (pedido) return [pedido];
+    const activos = talleresActivos();
+    return activos.length ? activos : [TALLER_PRINCIPAL];
+}
+
 // POST /api/respaldos — crea uno nuevo
 exports.crear = async (req, res) => {
     if (!autorizar(req, res)) return;
     const entorno = entornoPedido(req);
-    try {
-        const inicio = Date.now();
-        const resultado = await crearRespaldo(obtenerConexion(entorno), entorno);
-        console.log(`[respaldo] ${entorno}: ${resultado.documentos} documentos, `
-            + `${Math.round(resultado.tamano / 1024)} KB, ${Date.now() - inicio} ms → ${resultado.clave}`);
-        res.ok({ ...resultado, duracionMs: Date.now() - inicio }, 201);
-    } catch (error) {
-        // Se registra completo en el log del servidor: si el respaldo falla en silencio, el
-        // día que haga falta no va a estar y nadie va a saber desde cuándo.
-        console.error(`[respaldo] FALLÓ el respaldo de ${entorno}:`, error);
-        res.fail(500, `No se pudo crear el respaldo: ${error.message}`);
+    const talleres = talleresPedidos(req, entorno);
+    const inicio = Date.now();
+
+    // Uno por uno y no en paralelo: cada respaldo lee la base entera y la comprime al
+    // máximo, así que diez a la vez compiten por la memoria del contenedor —que en Render
+    // es poca— para terminar unos segundos antes. Acá no hay apuro: esto corre de
+    // madrugada, llamado desde afuera.
+    const hechos = [];
+    const fallados = [];
+    for (const taller of talleres) {
+        try {
+            const r = await crearRespaldo(obtenerConexion(entorno, taller), entorno, taller);
+            console.log(`[respaldo] ${entorno}/${taller}: ${r.documentos} documentos, `
+                + `${Math.round(r.tamano / 1024)} KB → ${r.clave}`);
+            hechos.push(r);
+        } catch (error) {
+            // Un taller que falla NO corta la vuelta: si la base de uno está caída, los
+            // demás igual tienen que quedar respaldados esa noche. Lo que no puede pasar es
+            // que falle en silencio, así que queda en el log y en la respuesta, y el
+            // resultado es 500 para que la tarea programada se ponga roja.
+            console.error(`[respaldo] FALLÓ el respaldo de ${entorno}/${taller}:`, error);
+            fallados.push({ taller, error: error.message });
+        }
     }
+
+    const cuerpo = {
+        // Primero el total, porque es lo que lee el workflow de GitHub Actions.
+        documentos: hechos.reduce((a, r) => a + r.documentos, 0),
+        entorno,
+        talleres: hechos,
+        fallados,
+        duracionMs: Date.now() - inicio,
+    };
+    if (fallados.length) {
+        // No se usa `res.fail` acá: ese contrato devuelve solo `{ error }`, y lo que hace
+        // falta saber cuando falla un taller de cinco es cuáles SÍ quedaron respaldados.
+        // La clave `error` va igual, así que quien solo lea eso funciona como siempre.
+        return res.status(500).json({
+            ...cuerpo,
+            error: `No se pudo respaldar: ${fallados.map((f) => `${f.taller} (${f.error})`).join(', ')}`,
+        });
+    }
+    res.ok(cuerpo, 201);
 };
 
 // GET /api/respaldos — qué respaldos hay
 exports.listar = async (req, res) => {
     if (!autorizar(req, res)) return;
+    const entorno = entornoPedido(req);
     try {
-        const respaldos = await listarRespaldos(entornoPedido(req));
-        res.ok({
-            entorno: entornoPedido(req),
-            total: respaldos.length,
-            masReciente: respaldos[0]?.fecha || null,
-            respaldos,
-        });
+        const porTaller = [];
+        for (const taller of talleresPedidos(req, entorno)) {
+            const respaldos = await listarRespaldos(entorno, taller);
+            porTaller.push({
+                taller,
+                total: respaldos.length,
+                masReciente: respaldos[0]?.fecha || null,
+                respaldos,
+            });
+        }
+        res.ok({ entorno, talleres: porTaller });
     } catch (error) {
         res.fail(500, error.message);
     }

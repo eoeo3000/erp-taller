@@ -61,7 +61,7 @@ exports.crearSolicitud = async (req, res) => {
         // entrega a config/almacenamiento.js, que lo manda al bucket (o al disco si no hay
         // credenciales). Se sigue guardando la ruta relativa, igual que antes.
         if (req.file) {
-            const { url } = await almacenamiento.guardar(req.file.buffer, req.file.originalname);
+            const { url } = await almacenamiento.guardar(req.file.buffer, req.file.originalname, { entorno: req.entorno, taller: req.taller });
             data.adjuntos = url;
         }
 

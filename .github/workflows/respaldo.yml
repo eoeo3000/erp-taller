@@ -1,4 +1,10 @@
-# Respaldo diario de la base de datos.
+# Respaldo diario de las bases de datos.
+#
+# Desde la etapa 5 de docs/multi-taller.md esta llamada respalda TODOS los talleres activos,
+# uno por uno: el backend recorre el registro. No hay nada que agregar acá cuando entre un
+# cliente nuevo, que es justamente el punto — una lista de talleres escrita en este archivo
+# se habría quedado atrás sin que nadie lo note, y "nadie lo note" en un respaldo significa
+# enterarse el día que haga falta.
 #
 # Por qué acá y no dentro del backend: en el plan gratis de Render el servicio se duerme
 # cuando nadie lo usa, así que un temporizador dentro del proceso no correría — y el
@@ -40,7 +46,8 @@ jobs:
             -H "X-Respaldo-Token: ${{ secrets.RESPALDO_TOKEN }}")
 
           echo "HTTP $codigo"
-          # La respuesta trae el conteo por colección, no datos del taller.
+          # La respuesta trae los conteos por taller y por colección, nunca datos de la
+          # base: hay una prueba que lo verifica (test/respaldoEndpoint.test.js).
           cat respuesta.json
           echo
 
@@ -49,5 +56,8 @@ jobs:
             exit 1
           fi
 
-          documentos=$(grep -o '"documentos":[0-9]*' respuesta.json | cut -d: -f2)
-          echo "::notice::Respaldo creado con ${documentos:-?} documentos."
+          # El total va PRIMERO en la respuesta, antes de los conteos de cada taller, así
+          # que el primer match es el total. Lo asegura el controlador, no la suerte.
+          documentos=$(grep -o '"documentos":[0-9]*' respuesta.json | head -1 | cut -d: -f2)
+          talleres=$(grep -o '"taller":"[^"]*"' respuesta.json | wc -l)
+          echo "::notice::Respaldo creado: ${documentos:-?} documentos de ${talleres:-?} taller(es)."

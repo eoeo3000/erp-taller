@@ -215,6 +215,18 @@ function marcaDeTaller(slug) {
     return marcaPublica(ficha?.marca);
 }
 
+// Los talleres que pueden operar hoy, en el orden en que se dieron de alta. Lo usa el
+// respaldo diario para recorrerlos: desde la etapa 5 hay un respaldo por cliente, y la
+// lista tiene que salir del registro y no de una constante — si no, el taller que se dé de
+// alta mañana no se respaldaría y nadie se enteraría hasta necesitarlo.
+//
+// Un taller suspendido queda afuera a propósito: no se le puede abrir conexión (ese corte
+// vive en `obtenerConexion`), así que pedirle un respaldo sería pedir un error. Su último
+// respaldo sigue guardado, que es lo que importa mientras dure la suspensión.
+function talleresActivos() {
+    return [...registro.values()].filter((f) => f.estado === 'activo').map((f) => f.slug);
+}
+
 function conexionDisponible(entorno, taller = TALLER_PRINCIPAL) {
     if (entorno === 'demo') return !!conexionDemo;
     const ficha = registro.get(taller);
@@ -248,6 +260,7 @@ module.exports = {
     conexionDisponible,
     resolverTaller,
     marcaDeTaller,
+    talleresActivos,
     conexionDeControl,
     refrescarRegistro,
     hayBaseDeControl,
