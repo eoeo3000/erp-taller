@@ -7,6 +7,9 @@ const getUsuario = require('../models/Usuario');
 const getRecurso = require('../models/Recurso');
 const transporter = require('../config/mailer');
 const { PWA_OPERATIVA_URL } = require('../config/urls');
+const { resolverUsuarioPorToken } = require('../middlewares/identidad');
+const { conPrefijo, tokenMovilDeLaRequest } = require('../utils/tokens');
+const { tallerPorDefecto } = require('../config/talleres');
 
 function generarToken() {
     return crypto.randomBytes(20).toString('hex');
@@ -19,8 +22,16 @@ function generarToken() {
 // con select('-token')) — devolver el link acá es la ÚNICA oportunidad de entregarlo si no
 // hay correo para mandarlo solo. Sin esto, un Recurso sin correo quedaba con un token creado
 // pero irrecuperable: nadie podía compartírselo por ningún otro medio.
+// El token sale con el prefijo de su taller delante (`rivas.a3f9…`). El prefijo es RUTEO,
+// no parte del secreto: le dice al backend en qué base buscar a esta persona antes de poder
+// buscarla, igual que en el token de sesión del escritorio. Sin él, el acceso de alguien de
+// un taller que no es el principal se buscaría en la base del principal y esa persona no
+// podría entrar nunca (etapa 4 de docs/multi-taller.md).
+//
+// En la base se guarda el token PELADO; el prefijo se agrega acá, al entregarlo.
 function armarLink(usuario, entorno) {
-    return `${PWA_OPERATIVA_URL}/?token=${usuario.token}&entorno=${entorno}`;
+    const taller = usuario.tallerId || tallerPorDefecto();
+    return `${PWA_OPERATIVA_URL}/?token=${conPrefijo(taller, usuario.token)}&entorno=${entorno}`;
 }
 
 async function enviarCorreoToken(usuario, recurso, link) {
@@ -57,6 +68,11 @@ exports.crear = async (req, res) => {
             nombre, puesto: puesto || '', rol,
             recursoId: recursoId || undefined,
             token: generarToken(),
+            // De qué taller es esta persona. Faltaba: las cuentas de oficina ya lo
+            // guardaban (cuentasController, instalacionController) y las de la PWA no, así
+            // que un acceso de terreno emitido en un taller nuevo quedaba sin dueño y la
+            // comprobación de pertenencia lo habría dado por del taller por defecto.
+            tallerId: req.taller || tallerPorDefecto(),
         });
 
         if (recursoId) await Recurso.findByIdAndUpdate(recursoId, { usuarioId: usuario._id });
@@ -79,12 +95,11 @@ exports.crear = async (req, res) => {
 exports.whoami = async (req, res) => {
     const Usuario = getUsuario(req.db);
     try {
-        // Sin este descarte, un token vacío viaja a Mongo como { token: null }, y null hace
-        // match con los documentos que no tienen el campo — desde que existe el login de
-        // escritorio, eso son justamente las cuentas de oficina.
-        if (!req.query.token) return res.status(403).json({ error: 'Token inválido o revocado' });
-
-        const usuario = await Usuario.findOne({ token: req.query.token, estado: 'activo' });
+        // Por la definición única (middlewares/identidad.js) y no por un `findOne` propio:
+        // ahí viven el descarte del token vacío —sin él, `{ token: null }` hace match con
+        // las cuentas de oficina, que no tienen el campo—, el prefijo del taller y la
+        // comprobación de que la persona pertenezca al taller cuya base se abrió.
+        const usuario = await resolverUsuarioPorToken(Usuario, tokenMovilDeLaRequest(req), req.taller);
         if (!usuario) return res.status(403).json({ error: 'Token inválido o revocado' });
         // recursoId viaja para que el informe de evaluación pueda registrar a QUIÉN se le
         // atribuye el levantamiento por id y no solo por nombre — así el escritorio puede
@@ -192,3 +207,7 @@ exports.eliminar = async (req, res) => {
         res.status(500).json({ error: error.message });
     }
 };
+
+// Para las pruebas: acá vive la regla de que el acceso de terreno sale con el prefijo de su
+// taller. Sin él, el teléfono manda un token que el backend no sabe en qué base buscar.
+exports.armarLink = armarLink;

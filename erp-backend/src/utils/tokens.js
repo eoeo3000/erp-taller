@@ -51,4 +51,32 @@ function separarPrefijo(tokenCompleto) {
     return { taller: texto.slice(0, corte), token: texto.slice(corte + 1) };
 }
 
-module.exports = { generarToken, hashToken, conPrefijo, separarPrefijo };
+// El token tal como se guarda en la base: sin el prefijo de ruteo.
+//
+// Se usa en el momento de BUSCAR. Lo que se guarda —`Usuario.token`, el hash de
+// `SesionPortal`, el de `SesionStaff`— es siempre el token pelado; el prefijo es algo que se
+// le agrega al entregarlo y que viaja de vuelta en cada llamada. Comparar sin sacarlo
+// significa no encontrar nunca nada.
+//
+// Un token sin punto vuelve igual, que es lo que hace que los que ya están en los teléfonos
+// y en los links que la gente guardó sigan sirviendo después de desplegar esto.
+function sinPrefijo(tokenCompleto) {
+    return separarPrefijo(tokenCompleto).token;
+}
+
+// --- Dónde viaja el token de las PWAs ---
+//
+// La PWA Operativa y el portal del cliente no usan `Authorization: Bearer`: arman sus
+// llamadas con `fetch()` a mano y mandan `?token=` (ver erp-pwa-operativa/src/api.js). Se
+// acepta además por cabecera, que es donde debería estar, para que la PWA pueda migrar sin
+// que el backend tenga que cambiar otra vez.
+//
+// Vive acá y no en un middleware porque lo necesitan DOS: `middlewares/entorno.js`, para
+// saber de qué taller es la request antes de abrir ninguna base, y `middlewares/identidad.js`,
+// para saber quién llama. Dos copias de "de dónde sale el token" es la forma en que una se
+// queda atrás el día que la PWA cambie de lugar.
+function tokenMovilDeLaRequest(req) {
+    return String(req?.query?.token || req?.headers?.['x-token-operativo'] || '').trim();
+}
+
+module.exports = { generarToken, hashToken, conPrefijo, separarPrefijo, sinPrefijo, tokenMovilDeLaRequest };

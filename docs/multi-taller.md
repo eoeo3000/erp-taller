@@ -243,8 +243,26 @@ el módulo que tiene el registro, y una prueba con dos talleres.
 
 ### Etapa 4 — Las PWAs
 
-- El token de una persona ya identifica a esa persona; pasa a identificar también su taller.
-- Deja de hacer falta que la PWA mande el entorno, que es como se elige hoy.
+**Hecho:**
+
+- ✅ El token de una persona ya identificaba a esa persona; ahora identifica también su
+  taller. Sale con prefijo (`<taller>.<token>`), igual que el de sesión, y `entorno.js`
+  mira **las dos credenciales** —`Authorization: Bearer` y `?token=`— en vez de solo la
+  primera. Lo mismo para el token del portal del cliente, donde el prefijo se saca antes de
+  hashear.
+- ✅ La comprobación de pertenencia que ya tenía la sesión de escritorio ahora también
+  corre para el token de PWA: la persona tiene que pertenecer al taller cuya base se abrió.
+- ✅ `Usuario.tallerId` se escribe al emitir un acceso de terreno. Antes solo lo guardaban
+  las cuentas de oficina.
+- ✅ **Las PWAs no se tocaron ni hay que redesplegarlas**: guardan el token como una cadena
+  opaca y lo devuelven tal cual. Los que ya están instalados son los de antes del prefijo,
+  no lo llevan, y siguen resolviendo al taller por defecto — que es donde de verdad están.
+
+**Falta:**
+
+- Que deje de hacer falta que la PWA mande el entorno, que es como se elige hoy. Es
+  cosmético comparado con lo anterior: `?entorno=` elige entre producción y demo **del
+  mismo dueño**, no entre clientes.
 
 ### Etapa 5 — Operación
 

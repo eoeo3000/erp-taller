@@ -8,6 +8,8 @@ const otController = require('./otController');
 const { registrosDeTarea } = require('./otController');
 const transporter = require('../config/mailer');
 const { PWA_CLIENTE_URL } = require('../config/urls');
+const { sinPrefijo, conPrefijo } = require('../utils/tokens');
+const { tallerPorDefecto } = require('../config/talleres');
 
 const DIAS_VIGENCIA_TOKEN = 30; // sesión autoservicio/emitida
 const DIAS_VIGENCIA_LOTE = 90;  // token pre-generado sin asignar (Requiere confirmación → confirmado con el usuario)
@@ -31,8 +33,18 @@ function normalizarTelefono(t) {
 }
 
 // SesionPortal guarda el hash, nunca el token en claro (ver models/SesionPortal.js).
+//
+// **El prefijo del taller se saca acá.** El link del cliente viaja como
+// `?token=rivas.a3f9…`: el prefijo es ruteo —le dice al backend en qué base buscar la
+// sesión antes de poder buscarla— y lo que está guardado es el hash del token pelado. Si no
+// se sacara, el hash nunca coincidiría y el cliente de cualquier taller que no sea el
+// principal no podría abrir su portal.
+//
+// Va dentro de `hashToken` y no en cada una de las ocho llamadas que lo usan porque es la
+// única puerta por la que pasan todas: al guardar la sesión y al buscarla. Al guardar, el
+// token recién generado no tiene punto y vuelve igual, así que no cambia nada.
 function hashToken(token) {
-    return crypto.createHash('sha256').update(String(token || '')).digest('hex');
+    return crypto.createHash('sha256').update(sinPrefijo(token)).digest('hex');
 }
 
 async function generarNumeroSolicitud(conn) {
@@ -415,8 +427,12 @@ exports.emitirSesionParaTelefono = async function emitirSesionParaTelefono(conn,
 // (tokenHash es lo único que se guarda) — devolver `link` en esa respuesta es la única forma
 // de poder compartirlo por otro medio (WhatsApp, etc.) cuando no hay correo, o simplemente
 // porque el llamador (ej. enviarPortalCliente, App.jsx) prefiere WhatsApp antes que el correo.
-function armarLinkPortalCliente(token, entorno) {
-    return `${PWA_CLIENTE_URL}/?token=${token}${entorno ? `&entorno=${entorno}` : ''}`;
+// El token sale con el prefijo de su taller delante. Es ruteo, no parte del secreto: sin él
+// el link de un cliente de otro taller se buscaría en la base del principal y no abriría
+// nunca (etapa 4 de docs/multi-taller.md).
+function armarLinkPortalCliente(token, entorno, taller) {
+    const conTaller = conPrefijo(taller || tallerPorDefecto(), token);
+    return `${PWA_CLIENTE_URL}/?token=${conTaller}${entorno ? `&entorno=${entorno}` : ''}`;
 }
 
 // Despacha el correo de acceso — reutilizado por emisión, regeneración y reenvío. Texto
@@ -490,7 +506,7 @@ exports.emitirTokenContacto = async (req, res) => {
             emitidoEn: new Date(), emitidoPor: req.body.emitidoPor || '',
         });
 
-        const link = armarLinkPortalCliente(token, entorno);
+        const link = armarLinkPortalCliente(token, entorno, req.taller);
         const correoEnviado = await enviarCorreoAcceso({ correo, nombre: nombreContacto, empresa: empresaSolicitante, link });
 
         res.json({ token, link, expira, empresaSolicitante, sesionId: sesion._id, correoEnviado });
@@ -515,7 +531,7 @@ exports.regenerarToken = async (req, res) => {
         anterior.ultimoAcceso = null;
         await anterior.save();
 
-        const link = armarLinkPortalCliente(token, req.body.entorno);
+        const link = armarLinkPortalCliente(token, req.body.entorno, req.taller);
         const correoEnviado = await enviarCorreoAcceso({
             correo: req.body.correo, empresa: anterior.empresaSolicitante, link,
         });
@@ -1038,3 +1054,10 @@ exports.actualizarHes = async (req, res) => {
         res.status(err.status || 500).json({ error: err.message });
     }
 };
+
+// Para las pruebas: las dos funciones donde vive la regla del prefijo del taller. Si el
+// hash se calculara con el prefijo adentro, o el link saliera sin él, el portal de cualquier
+// cliente que no sea del taller principal dejaría de abrir — y el síntoma sería "no existe
+// esa sesión", que no apunta a ningún lado.
+exports.hashToken = hashToken;
+exports.armarLinkPortalCliente = armarLinkPortalCliente;
