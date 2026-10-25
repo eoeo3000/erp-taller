@@ -48,6 +48,28 @@ async function ultimaActividad(Usuario) {
     return masReciente([spa?.ultimoAccesoSpa, movil?.ultimoAcceso]);
 }
 
+// Cuánto ocupa la base de este taller. Es el techo que de verdad aprieta: el clúster de
+// Atlas tiene un tope para TODAS las bases juntas, así que lo que ocupa cada cliente le
+// resta a los demás.
+//
+// **Se usa `dataSize` y no `storageSize`**, porque es el número que Atlas compara contra el
+// tope del plan: su propia pantalla del clúster dice "Data size: 3.92 MB / 512 MB". Medir
+// otra cosa daría un panel que no coincide con lo que muestra el proveedor, y la diferencia
+// no es cosmética — WiredTiger comprime, así que `storageSize` suele ser bastante MENOR que
+// `dataSize`. Usarlo haría que el panel diga "te queda espacio" justo cuando Atlas ya no te
+// deja escribir, que es el peor error posible en un aviso de capacidad.
+//
+// (Primero se midió `storageSize + indexSize`, razonando que un plan cobra lo que ocupa en
+// disco. Es cierto para un plan pago y falso para el tope del gratuito, que es contra el que
+// hoy avisa esto.)
+//
+// `dbStats` es un comando de la base y no una consulta, así que no recorre nada: es barato
+// aunque el taller tenga miles de OT.
+async function tamanoDeBase(conexion) {
+    const stats = await conexion.db.command({ dbStats: 1 });
+    return stats.dataSize || 0;
+}
+
 // Las cuentas y los conteos de un taller. Devuelve `baseResponde: false` en vez de lanzar:
 // un cliente con la base caída tiene que aparecer en la lista marcado en rojo, no hacer que
 // la lista entera falle.
@@ -57,16 +79,21 @@ async function metricasDeTaller(db) {
         const Solicitud = getSolicitud(db);
         const Usuario = getUsuario(db);
 
-        const [ots, solicitudes, cuentas, actividad] = await conTope(Promise.all([
+        const [ots, solicitudes, cuentas, actividad, bytesBase] = await conTope(Promise.all([
             OT.countDocuments(),
             Solicitud.countDocuments(),
             Usuario.countDocuments({ passwordHash: { $exists: true, $ne: '' } }),
             ultimaActividad(Usuario),
+            // Con su propio `catch`: el tamaño es un dato de gestión, no una señal de
+            // salud. Si `dbStats` no estuviera disponible en algún plan, un taller
+            // perfectamente sano quedaría marcado como caído por no poder medirlo — y el
+            // panel diría que la base de un cliente no responde cuando sí responde.
+            tamanoDeBase(db).catch(() => null),
         ]));
 
-        return { baseResponde: true, ots, solicitudes, cuentas, ultimaActividad: actividad, error: null };
+        return { baseResponde: true, ots, solicitudes, cuentas, ultimaActividad: actividad, bytesBase, error: null };
     } catch (error) {
-        return { baseResponde: false, ots: null, solicitudes: null, cuentas: null, ultimaActividad: null, error: error.message };
+        return { baseResponde: false, ots: null, solicitudes: null, cuentas: null, ultimaActividad: null, bytesBase: null, error: error.message };
     }
 }
 
@@ -103,4 +130,4 @@ function diasSinUsar(fecha, ahora = Date.now()) {
     return Math.max(0, Math.floor((ahora - t) / (24 * 60 * 60 * 1000)));
 }
 
-module.exports = { metricasDeTaller, almacenamientoDeTaller, diasSinUsar, masReciente, MS_ESPERA };
+module.exports = { metricasDeTaller, almacenamientoDeTaller, tamanoDeBase, diasSinUsar, masReciente, MS_ESPERA };

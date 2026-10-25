@@ -9,14 +9,15 @@
 // omisión no conservaría un estado anterior, regalaría la lista de todos los clientes y la
 // capacidad de suspenderlos. No usa `requiereSesion` porque no la llama una persona con
 // sesión en el SPA de un taller: la llama quien administra el producto.
-const { conexionDeControl, refrescarRegistro, hayBaseDeControl, obtenerConexion } = require('../config/conexiones');
+const { conexionDeControl, refrescarRegistro, hayBaseDeControl, obtenerConexion, conexionDisponible } = require('../config/conexiones');
 const { esSlugValido, TALLER_PRINCIPAL } = require('../config/talleres');
 const { comparaSegura } = require('../utils/claveCompartida');
 const { generarToken, hashToken } = require('../utils/tokens');
 const { SPA_URL } = require('../config/urls');
 const getTaller = require('../models/Taller');
 const getUsuario = require('../models/Usuario');
-const { metricasDeTaller, almacenamientoDeTaller, diasSinUsar } = require('../servicios/metricasTaller');
+const { metricasDeTaller, almacenamientoDeTaller, tamanoDeBase, diasSinUsar } = require('../servicios/metricasTaller');
+const { uso, topeDeBases, topeDeArchivos, AL_PASAR_BASE, AL_PASAR_ARCHIVOS } = require('../servicios/limites');
 const almacenamiento = require('../config/almacenamiento');
 const { uriParaTaller, slugDesdeNombre } = require('../servicios/baseDelTaller');
 const { normalizarLogo, marcaPublica } = require('../servicios/marcaTaller');
@@ -275,11 +276,49 @@ exports.metricas = async (req, res) => {
             // como se desactualiza el día que cambie.
             spaUrl: SPA_URL,
             sinSeparar,
+            totales: await totalesDeUso(filas, sinSeparar),
         });
     } catch (error) {
         res.fail(500, error.message);
     }
 };
+
+// El uso de TODO contra los techos del plan contratado, que es lo que no se puede deducir
+// mirando fila por fila: los límites de Atlas y de R2 son del clúster y del bucket
+// enteros, no de cada cliente. Un taller en verde no dice nada si entre todos ya se llenó.
+//
+// Mide y no corta — ver servicios/limites.js, donde está escrito por qué.
+async function totalesDeUso(filas, sinSeparar) {
+    const bytesTalleres = filas.reduce((a, f) => a + (f.bytesBase || 0), 0);
+    const archivosTalleres = filas.reduce((a, f) => a + (f.archivos?.bytes || 0), 0);
+
+    // La base de control y la demo también viven en el clúster y también ocupan. Dejarlas
+    // afuera daría un total que se ve bien y no lo es.
+    const otrasBases = { control: null, demo: null, error: null };
+    try {
+        const control = conexionDeControl();
+        if (control) otrasBases.control = await tamanoDeBase(control);
+    } catch (error) { otrasBases.error = error.message; }
+    try {
+        if (conexionDisponible('demo')) otrasBases.demo = await tamanoDeBase(obtenerConexion('demo'));
+    } catch (error) { otrasBases.error = otrasBases.error || error.message; }
+
+    // Lo mismo del lado del bucket: los respaldos y los archivos de la demo ocupan igual.
+    const otrosArchivos = { respaldos: null, demo: null, error: null };
+    try {
+        otrosArchivos.respaldos = (await almacenamiento.medir('respaldos')).bytes;
+        otrosArchivos.demo = (await almacenamiento.medir(almacenamiento.CARPETA_DEMO)).bytes;
+    } catch (error) { otrosArchivos.error = error.message; }
+
+    const bases = bytesTalleres + (otrasBases.control || 0) + (otrasBases.demo || 0);
+    const archivos = archivosTalleres + (sinSeparar.bytes || 0)
+        + (otrosArchivos.respaldos || 0) + (otrosArchivos.demo || 0);
+
+    return {
+        bases: { ...uso(bases, topeDeBases(), AL_PASAR_BASE), talleres: bytesTalleres, ...otrasBases },
+        archivos: { ...uso(archivos, topeDeArchivos(), AL_PASAR_ARCHIVOS), talleres: archivosTalleres, sinSeparar: sinSeparar.bytes || 0, ...otrosArchivos },
+    };
+}
 
 // POST /api/talleres/:slug/instalacion — reemitir el enlace de instalación.
 //

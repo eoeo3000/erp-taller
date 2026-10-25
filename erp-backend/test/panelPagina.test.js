@@ -156,3 +156,33 @@ test('avisa cuántos archivos quedan sin separar por taller', async () => {
     assert.match(r.html, /sinSeparar/);
     assert.match(r.html, /migrarArchivosPorTaller/);
 });
+
+test('el panel muestra el uso total contra el techo del plan', async () => {
+    // Los topes de Atlas y de R2 son del clúster y del bucket enteros, así que mirar fila
+    // por fila no alcanza: un taller en verde no dice nada si entre todos ya se llenó.
+    const r = await traer();
+    assert.match(r.html, /pintarUso/);
+    assert.match(r.html, /totales\.bases|datos\.totales/);
+    assert.match(r.html, /LIMITE_BASE_MB/, 'dice de dónde salen los topes');
+});
+
+test('el panel MIDE y no corta', async () => {
+    // Si alguna vez se agregara un corte por cuota, este texto tendría que cambiar — y es
+    // una decisión que no debería pasar sin que alguien la escriba. Lo que se subiría al
+    // tope son las fotos de evidencia: rechazarlas deja a un supervisor en terreno sin
+    // poder guardar su trabajo.
+    assert.match((await traer()).html, /no corta nada/);
+});
+
+test('cada fila dice cuánto ocupa su base', async () => {
+    assert.match((await traer()).html, /fila\.bytesBase/);
+});
+
+test('el panel dice qué pasa al pasar cada tope, y el rojo queda para lo que se rompe', async () => {
+    // Un tope que solo cobra pintado de rojo entrena a ignorar el rojo: la primera vez que
+    // resulta ser "te van a cobrar 20 centavos", el rojo dejó de significar algo.
+    const r = await traer();
+    assert.match(r.html, /deja de poder escribir/);
+    assert.match(r.html, /empieza a cobrarse por uso/);
+    assert.match(r.html, /LIMITE_ARCHIVOS_AL_PASAR/, 'dice de dónde sale cuál es cuál');
+});

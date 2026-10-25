@@ -91,3 +91,26 @@ test('hay un tope de espera, y es corto', () => {
     // Sin tope, una base dormida cuelga el panel entero hasta que Mongo se rinda solo.
     assert.ok(MS_ESPERA > 0 && MS_ESPERA <= 15000, 'el tope tiene que existir y ser corto');
 });
+
+test('mide la base con el MISMO número que Atlas compara contra el tope', async () => {
+    // Atlas muestra "Data size: X / 512 MB" en la pantalla del clúster, así que `dataSize`
+    // es lo que cuenta. La diferencia no es cosmética: WiredTiger comprime, y acá
+    // `storageSize` es la décima parte de `dataSize`. Medir el de disco diría "te queda
+    // espacio" justo cuando Atlas ya no deja escribir.
+    base = { ots: 1, solicitudes: 1, cuentas: 1 };
+    const conexion = { db: { command: async () => ({ dataSize: 4_100_000, storageSize: 410_000, indexSize: 90_000 }) } };
+    const m = await metricasDeTaller(conexion);
+    assert.strictEqual(m.bytesBase, 4_100_000);
+});
+
+test('si no se puede medir el tamaño, el taller NO queda marcado como caído', async () => {
+    // El tamaño es un dato de gestión, no una señal de salud. Si `dbStats` no estuviera
+    // disponible en algún plan, un taller perfectamente sano quedaría en rojo y el panel
+    // diría que la base de un cliente no responde cuando sí responde.
+    base = { ots: 7, solicitudes: 2, cuentas: 1 };
+    const conexion = { db: { command: async () => { throw new Error('no autorizado'); } } };
+    const m = await metricasDeTaller(conexion);
+    assert.strictEqual(m.baseResponde, true, 'sigue respondiendo');
+    assert.strictEqual(m.ots, 7, 'y los conteos siguen sirviendo');
+    assert.strictEqual(m.bytesBase, null, 'solo falta el tamaño');
+});
