@@ -224,7 +224,7 @@ exports.cerrar = async (req, res) => {
         if (!asignacion) return res.status(404).json({ error: 'Asignación no encontrada' });
 
         if (req.query.token) {
-            const usuario = await resolverUsuarioPorToken(Usuario, req.query.token);
+            const usuario = await resolverUsuarioPorToken(Usuario, req.query.token, req.taller);
             if (!usuario) return res.status(403).json({ error: 'Token inválido' });
             if (String(usuario._id) !== String(asignacion.usuarioId)) {
                 return res.status(403).json({ error: 'Esta asignación no te pertenece' });
@@ -308,7 +308,7 @@ exports.miDia = async (req, res) => {
     const Usuario = getUsuario(req.db);
     const OT = getOT(req.db);
     try {
-        const usuario = await resolverUsuarioPorToken(Usuario, req.query.token);
+        const usuario = await resolverUsuarioPorToken(Usuario, req.query.token, req.taller);
         if (!usuario) return res.status(403).json({ error: 'Token inválido o revocado' });
 
         const tiposPermitidos = TIPOS_POR_ROL[usuario.rol] || [];
@@ -338,7 +338,7 @@ exports.miSemana = async (req, res) => {
     const Usuario = getUsuario(req.db);
     const OT = getOT(req.db);
     try {
-        const usuario = await resolverUsuarioPorToken(Usuario, req.query.token);
+        const usuario = await resolverUsuarioPorToken(Usuario, req.query.token, req.taller);
         if (!usuario) return res.status(403).json({ error: 'Token inválido o revocado' });
 
         const tiposPermitidos = TIPOS_POR_ROL[usuario.rol] || [];
@@ -373,7 +373,7 @@ exports.miPanel = async (req, res) => {
     const OT = getOT(req.db);
     const Solicitud = getSolicitud(req.db);
     try {
-        const usuario = await resolverUsuarioPorToken(Usuario, req.query.token);
+        const usuario = await resolverUsuarioPorToken(Usuario, req.query.token, req.taller);
         if (!usuario) return res.status(403).json({ error: 'Token inválido o revocado' });
         if (usuario.rol !== 'supervisor') return res.status(403).json({ error: 'Mi panel es solo para supervisores' });
 
@@ -446,7 +446,7 @@ exports.solicitudesSinInforme = async (req, res) => {
     const Solicitud = getSolicitud(req.db);
     const OT = getOT(req.db);
     try {
-        const usuario = await resolverUsuarioPorToken(Usuario, req.query.token);
+        const usuario = await resolverUsuarioPorToken(Usuario, req.query.token, req.taller);
         if (!usuario) return res.status(403).json({ error: 'Token inválido o revocado' });
         if (usuario.rol !== 'supervisor') return res.status(403).json({ error: 'Solo para supervisores' });
 
@@ -474,7 +474,7 @@ exports.tomarSolicitud = async (req, res) => {
     const Asignacion = getAsignacion(req.db);
     const Solicitud = getSolicitud(req.db);
     try {
-        const usuario = await resolverUsuarioPorToken(Usuario, req.query.token);
+        const usuario = await resolverUsuarioPorToken(Usuario, req.query.token, req.taller);
         if (!usuario) return res.status(403).json({ error: 'Token inválido o revocado' });
         if (usuario.rol !== 'supervisor') return res.status(403).json({ error: 'Solo para supervisores' });
 
@@ -524,7 +524,7 @@ exports.misInformes = async (req, res) => {
     const Solicitud = getSolicitud(req.db);
     const OT = getOT(req.db);
     try {
-        const usuario = await resolverUsuarioPorToken(Usuario, req.query.token);
+        const usuario = await resolverUsuarioPorToken(Usuario, req.query.token, req.taller);
         if (!usuario) return res.status(403).json({ error: 'Token inválido o revocado' });
         if (usuario.rol !== 'supervisor') return res.status(403).json({ error: 'Solo para supervisores' });
 
@@ -581,7 +581,7 @@ exports.misTrabajos = async (req, res) => {
     const Usuario = getUsuario(req.db);
     const OT = getOT(req.db);
     try {
-        const usuario = await resolverUsuarioPorToken(Usuario, req.query.token);
+        const usuario = await resolverUsuarioPorToken(Usuario, req.query.token, req.taller);
         if (!usuario) return res.status(403).json({ error: 'Token inválido o revocado' });
         if (usuario.rol !== 'supervisor') return res.status(403).json({ error: 'Solo para supervisores' });
 
@@ -618,7 +618,7 @@ exports.ejecutadas = async (req, res) => {
     const Usuario = getUsuario(req.db);
     const OT = getOT(req.db);
     try {
-        const usuario = await resolverUsuarioPorToken(Usuario, req.query.token);
+        const usuario = await resolverUsuarioPorToken(Usuario, req.query.token, req.taller);
         if (!usuario) return res.status(403).json({ error: 'Token inválido o revocado' });
         if (usuario.rol !== 'supervisor') return res.status(403).json({ error: 'Solo para supervisores' });
 

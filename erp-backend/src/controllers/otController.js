@@ -3,6 +3,8 @@ const getRecurso = require('../models/Recurso');
 const getUsuario = require('../models/Usuario');
 const getAsignacion = require('../models/Asignacion');
 const { guardarAdjuntoSiEsBase64 } = require('../utils/adjuntos');
+const { resolverUsuarioPorToken } = require('../middlewares/identidad');
+const { tokenMovilDeLaRequest } = require('../utils/tokens');
 const { prefijoAnual, patronDelPrefijo, proximoCorrelativo } = require('../utils/correlativos');
 
 // Los 3 documentos del flujo chileno de pago (Orden de Compra → Estado de Pago/EDP → Hoja de
@@ -850,15 +852,15 @@ exports.accionMovil = async (req, res) => {
     const Asignacion = getAsignacion(req.db);
     try {
         const { id } = req.params;
-        const { token } = req.query;
 
-        // Sin este descarte, un token vacío viaja a Mongo como { token: null }, y null hace
-        // match con los documentos que no tienen el campo — desde que existe el login de
-        // escritorio, eso son las cuentas de oficina (y esta ruta ejecuta acciones sobre la
-        // OT, no solo lecturas).
-        if (!token) return res.status(403).json({ error: 'Token inválido o revocado' });
-
-        const usuario = await Usuario.findOne({ token, estado: 'activo' });
+        // Por `resolverUsuarioPorToken` y no por un `findOne` propio: es la ÚNICA definición
+        // de "a quién corresponde este token" (middlewares/identidad.js), y ahí viven tres
+        // cosas que acá estaban sueltas o faltaban — el descarte del token vacío (sin él,
+        // `{ token: null }` hace match con las cuentas de oficina, que no tienen el campo),
+        // el prefijo del taller, y la comprobación de que la persona pertenezca al taller
+        // cuya base se abrió. Esta ruta EJECUTA acciones sobre la OT, así que es la última
+        // donde conviene tener una copia que se quede atrás.
+        const usuario = await resolverUsuarioPorToken(Usuario, tokenMovilDeLaRequest(req), req.taller);
         if (!usuario) return res.status(403).json({ error: 'Token inválido o revocado' });
 
         const ot = await OT.findById(id);

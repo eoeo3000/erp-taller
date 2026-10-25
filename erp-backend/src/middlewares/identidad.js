@@ -26,6 +26,8 @@
 // de trabajo. El orden correcto es: desplegar esto, desplegar la PWA que manda el token,
 // confirmar en un teléfono de verdad, y recién ahí encender la variable.
 const getUsuario = require('../models/Usuario');
+const { sinPrefijo, tokenMovilDeLaRequest } = require('../utils/tokens');
+const { tallerPorDefecto } = require('../config/talleres');
 
 let avisoEmitido = false;
 
@@ -43,9 +45,29 @@ function identidadRequerida() {
 // el campo — desde que existe el login de escritorio, eso son justamente las cuentas de
 // oficina. Sin esta línea, una llamada sin token se identificaría como la primera cuenta
 // administrativa que encuentre.
-async function resolverUsuarioPorToken(Usuario, token) {
+// `taller` es el de la request (`req.taller`), el que ya eligió la base. No es opcional: un
+// valor por omisión que se saltara la comprobación sería exactamente el olvido que convierte
+// un sistema multi-cliente en una filtración.
+async function resolverUsuarioPorToken(Usuario, tokenCompleto, taller) {
+    // El token viaja con el prefijo del taller delante (`rivas.a3f9…`) y en la base está
+    // guardado pelado. Sin sacarlo no se encuentra nunca a nadie. Un token sin punto vuelve
+    // igual: son los que ya están instalados en los teléfonos.
+    const token = sinPrefijo(tokenCompleto);
     if (!token) return null;
     const usuario = await Usuario.findOne({ token, estado: 'activo' });
+
+    // El cierre de la cadena, igual que en middlewares/sesion.js: la persona tiene que
+    // pertenecer al taller cuya base se abrió. El prefijo eligió la base, pero es dato que
+    // manda el cliente; esto lo confronta con lo que dice la base. Sin `tallerId` son accesos
+    // anteriores a que el campo existiera y se resuelven como del taller por defecto.
+    if (usuario) {
+        const tallerDelUsuario = usuario.tallerId || tallerPorDefecto();
+        if (tallerDelUsuario !== (taller || tallerPorDefecto())) {
+            console.warn(`[identidad] token de una persona de "${tallerDelUsuario}" llegó resuelto al taller "${taller}" — se rechaza`);
+            return null;
+        }
+    }
+
     if (usuario) {
         // No se espera este guardado: es una marca informativa de "último acceso" y cada
         // request de la PWA pasa por acá — esperarlo duplica el round-trip a Mongo de CADA
@@ -57,13 +79,9 @@ async function resolverUsuarioPorToken(Usuario, token) {
     return usuario;
 }
 
-// El token de la PWA viaja en la query (`?token=`) porque esas llamadas se arman con
-// `fetch()` a mano, sin axios.defaults — ver erp-pwa-operativa/src/api.js. Se acepta
-// además por header, que es donde debería estar, para que la PWA pueda migrar sin que el
-// backend tenga que cambiar otra vez.
-function tokenMovilDeLaRequest(req) {
-    return String(req.query?.token || req.headers['x-token-operativo'] || '').trim();
-}
+// `tokenMovilDeLaRequest` vive en utils/tokens.js: lo necesita también
+// `middlewares/entorno.js`, que tiene que saber de qué taller es la request antes de que
+// exista ninguna base abierta donde buscar a nadie.
 
 // Deja `req.usuarioMovil` cuando la identidad vino por token de PWA. A propósito NO escribe
 // `req.usuario`: ese lo pone `identificar` y significa "sesión de escritorio". Mezclarlos
@@ -73,7 +91,7 @@ async function requiereIdentidad(req, res, next) {
     if (req.usuario) return next();
 
     try {
-        const usuario = await resolverUsuarioPorToken(getUsuario(req.db), tokenMovilDeLaRequest(req));
+        const usuario = await resolverUsuarioPorToken(getUsuario(req.db), tokenMovilDeLaRequest(req), req.taller);
         if (usuario) {
             req.usuarioMovil = usuario;
             return next();

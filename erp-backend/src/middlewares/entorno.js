@@ -28,19 +28,37 @@
 // desde ahora, para que cuando haya dos ya lleve meses funcionando.
 const { obtenerConexion, resolverTaller } = require('../config/conexiones');
 const { tallerPorDefecto } = require('../config/talleres');
-const { separarPrefijo } = require('../utils/tokens');
+const { separarPrefijo, tokenMovilDeLaRequest } = require('../utils/tokens');
 
+// De qué taller es esta request. **Las DOS credenciales del sistema llevan prefijo**, y
+// acá se miran las dos:
+//
+//   1. `Authorization: Bearer <taller>.<token>` — la sesión de escritorio (erp-web).
+//   2. `?token=<taller>.<token>` — el token permanente de una persona en la PWA Operativa y
+//      el del portal del cliente.
+//
+// Antes solo se miraba la primera, y eso dejaba a las PWAs resolviendo SIEMPRE al taller por
+// defecto. Con un solo cliente no se notaba. Con dos, la gente de terreno del segundo y sus
+// clientes buscaban su token en la base del primero, no lo encontraban, y no podían entrar —
+// la app de escritorio andaba y las dos PWAs no, sin un solo error que lo explicara. Es la
+// etapa 4 de docs/multi-taller.md.
+//
+// El orden importa: con sesión de escritorio manda el prefijo de la sesión. Mandar las dos a
+// la vez no es un caso real (son clientes distintos), y si pasara, la sesión es la
+// credencial más fuerte de las dos.
 function tallerDeLaRequest(req) {
     const cabecera = req.headers.authorization || '';
-    if (!cabecera.startsWith('Bearer ')) return tallerPorDefecto();
+    const pedido = cabecera.startsWith('Bearer ')
+        ? separarPrefijo(cabecera.slice(7).trim()).taller
+        : separarPrefijo(tokenMovilDeLaRequest(req)).taller;
 
-    const { taller } = separarPrefijo(cabecera.slice(7).trim());
-    // Sin prefijo: una sesión emitida antes de que existiera. Con un prefijo que no nombra
-    // ningún taller conocido: basura o un intento de colarse. En los dos casos se usa el
-    // taller por defecto y se sigue — el token se validará (o no) contra esa base, que es
-    // donde la request queda frenada si no corresponde. Cortar acá con un error rompería
-    // las llamadas que no necesitan sesión (las PWAs, el portal del cliente).
-    return resolverTaller(taller) || tallerPorDefecto();
+    // Sin prefijo: una sesión o un token emitidos antes de que existiera —los que ya están
+    // en los teléfonos de la gente—. Con un prefijo que no nombra ningún taller conocido:
+    // basura o un intento de colarse. En los dos casos se usa el taller por defecto y se
+    // sigue — el token se validará (o no) contra esa base, que es donde la request queda
+    // frenada si no corresponde. Cortar acá con un error rompería las llamadas que no
+    // necesitan sesión (las PWAs, el portal del cliente).
+    return resolverTaller(pedido) || tallerPorDefecto();
 }
 
 module.exports = function resolverEntorno(req, res, next) {
