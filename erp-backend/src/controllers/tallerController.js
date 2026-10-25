@@ -17,7 +17,7 @@ const { SPA_URL } = require('../config/urls');
 const getTaller = require('../models/Taller');
 const getUsuario = require('../models/Usuario');
 const { metricasDeTaller, almacenamientoDeTaller, tamanoDeBase, diasSinUsar } = require('../servicios/metricasTaller');
-const { uso, topeDeBases, topeDeArchivos } = require('../servicios/limites');
+const { uso, topeDeBases, topeDeArchivos, AL_PASAR_BASE, AL_PASAR_ARCHIVOS } = require('../servicios/limites');
 const almacenamiento = require('../config/almacenamiento');
 const { uriParaTaller, slugDesdeNombre } = require('../servicios/baseDelTaller');
 const { normalizarLogo, marcaPublica } = require('../servicios/marcaTaller');
@@ -315,8 +315,8 @@ async function totalesDeUso(filas, sinSeparar) {
         + (otrosArchivos.respaldos || 0) + (otrosArchivos.demo || 0);
 
     return {
-        bases: { ...uso(bases, topeDeBases()), talleres: bytesTalleres, ...otrasBases },
-        archivos: { ...uso(archivos, topeDeArchivos()), talleres: archivosTalleres, sinSeparar: sinSeparar.bytes || 0, ...otrosArchivos },
+        bases: { ...uso(bases, topeDeBases(), AL_PASAR_BASE), talleres: bytesTalleres, ...otrasBases },
+        archivos: { ...uso(archivos, topeDeArchivos(), AL_PASAR_ARCHIVOS), talleres: archivosTalleres, sinSeparar: sinSeparar.bytes || 0, ...otrosArchivos },
     };
 }
 

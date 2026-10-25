@@ -177,3 +177,12 @@ test('el panel MIDE y no corta', async () => {
 test('cada fila dice cuánto ocupa su base', async () => {
     assert.match((await traer()).html, /fila\.bytesBase/);
 });
+
+test('el panel dice qué pasa al pasar cada tope, y el rojo queda para lo que se rompe', async () => {
+    // Un tope que solo cobra pintado de rojo entrena a ignorar el rojo: la primera vez que
+    // resulta ser "te van a cobrar 20 centavos", el rojo dejó de significar algo.
+    const r = await traer();
+    assert.match(r.html, /deja de poder escribir/);
+    assert.match(r.html, /empieza a cobrarse por uso/);
+    assert.match(r.html, /LIMITE_ARCHIVOS_AL_PASAR/, 'dice de dónde sale cuál es cuál');
+});

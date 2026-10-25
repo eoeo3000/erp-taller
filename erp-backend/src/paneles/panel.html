@@ -48,7 +48,7 @@
                   background-size: 14px 14px; background-position: 0 0, 7px 7px; }
     input[type=file] { padding: 6px; }
     /* La barra de uso: una línea por recurso, con el color del nivel. */
-    .uso { display: grid; grid-template-columns: 170px 1fr 200px; gap: 12px; align-items: center; margin: 10px 0; }
+    .uso { display: grid; grid-template-columns: 250px 1fr 200px; gap: 14px; align-items: center; margin: 14px 0; }
     .riel { height: 10px; border-radius: 5px; background: var(--borde); overflow: hidden; }
     .relleno { height: 100%; border-radius: 5px; }
     .relleno.ok { background: var(--verde); } .relleno.tibio { background: var(--ambar); } .relleno.mal { background: var(--rojo); }
@@ -169,7 +169,10 @@
             <p class="nota">Esto <strong>no corta nada</strong>, y es a propósito: lo que se subiría al tope son las
                fotos de evidencia, y rechazarlas dejaría a un supervisor en terreno sin poder guardar su trabajo.
                Acá se mira para cambiar de plan a tiempo; si un cliente consume de más, eso se conversa.
-               Los topes salen de <code>LIMITE_BASE_MB</code> y <code>LIMITE_ARCHIVOS_GB</code>.</p>
+               Los topes salen de <code>LIMITE_BASE_MB</code> y <code>LIMITE_ARCHIVOS_GB</code>, y qué pasa al
+               pasarlos —si se rompe o si se cobra— de <code>LIMITE_BASE_AL_PASAR</code> y
+               <code>LIMITE_ARCHIVOS_AL_PASAR</code>. <strong>El rojo está reservado para lo que se rompe</strong>:
+               un tope que solo cobra avisa en ámbar al cruzarlo y no antes.</p>
         </div>
 
         <div class="tarjeta">
@@ -318,14 +321,23 @@ function pintar(datos) {
 // Una línea por recurso: qué es, la barra, y "usado de tope (porcentaje)". Sin tope
 // configurado se informa el uso y nada más — inventar un porcentaje contra un número que
 // nadie puso sería peor que no mostrarlo.
+// Qué pasa al pasar el tope. No es un matiz: con un tope que solo cobra, la barra roja
+// entrena a ignorar el rojo — la primera vez que resulta ser "te van a cobrar 20 centavos",
+// el rojo dejó de significar algo. Por eso el rojo queda para lo que se rompe.
+const QUE_PASA = {
+    rompe: 'al pasarlo deja de poder escribir',
+    cobra: 'al pasarlo empieza a cobrarse por uso',
+};
+
 function lineaDeUso(rotulo, u, detalle) {
     if (!u) return '';
     const ancho = u.porcentaje === null ? 0 : Math.min(100, u.porcentaje);
     const cifra = u.tope
         ? `${tamano(u.bytes)} de ${tamano(u.tope)} · ${u.porcentaje}%`
         : `${tamano(u.bytes)} · sin tope configurado`;
+    const consecuencia = u.tope ? `<br><span class="nota">${QUE_PASA[u.alPasar] || QUE_PASA.rompe}</span>` : '';
     return `<div class="uso">
-        <div><strong>${rotulo}</strong><br><span class="nota">${detalle}</span></div>
+        <div><strong>${rotulo}</strong>${consecuencia}<br><span class="nota">${detalle}</span></div>
         <div class="riel"><div class="relleno ${u.nivel}" style="width:${ancho}%"></div></div>
         <div class="cifra ${u.nivel === 'mal' ? 'aviso' : ''}">${cifra}</div>
     </div>`;

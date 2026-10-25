@@ -29,16 +29,48 @@ test('los topes se cambian desde el entorno', () => {
     assert.strictEqual(l.topeDeArchivos(), 100 * l.GB);
 });
 
-test('el color avisa ANTES de que no quede espacio', () => {
+test('un tope que ROMPE avisa antes de que no quede espacio', () => {
     // Ámbar en 90 y no en 95: entre que alguien lo nota y que cambia de plan pasan días, y
     // el bucket no espera.
     const l = recargar();
-    assert.strictEqual(l.nivel(0), 'ok');
-    assert.strictEqual(l.nivel(69.9), 'ok');
-    assert.strictEqual(l.nivel(70), 'tibio');
-    assert.strictEqual(l.nivel(89.9), 'tibio');
-    assert.strictEqual(l.nivel(90), 'mal');
-    assert.strictEqual(l.nivel(150), 'mal', 'pasarse del tope no vuelve a verde');
+    assert.strictEqual(l.nivel(0, 'rompe'), 'ok');
+    assert.strictEqual(l.nivel(69.9, 'rompe'), 'ok');
+    assert.strictEqual(l.nivel(70, 'rompe'), 'tibio');
+    assert.strictEqual(l.nivel(89.9, 'rompe'), 'tibio');
+    assert.strictEqual(l.nivel(90, 'rompe'), 'mal');
+    assert.strictEqual(l.nivel(150, 'rompe'), 'mal', 'pasarse del tope no vuelve a verde');
+});
+
+test('UN TOPE QUE SOLO COBRA NUNCA SE PINTA DE ROJO', () => {
+    // Pasarse de los 10 GB gratuitos de R2 teniendo el plan pago no rompe nada: cuesta unos
+    // centavos por GB. Pintarlo igual que un clúster lleno entrena a ignorar el rojo — la
+    // primera vez que el rojo resulta ser "te van a cobrar 20 centavos", el rojo dejó de
+    // significar algo.
+    const l = recargar();
+    assert.strictEqual(l.nivel(0, 'cobra'), 'ok');
+    assert.strictEqual(l.nivel(70, 'cobra'), 'ok', 'antes de cruzarlo no pasa nada: avisar sería ruido');
+    assert.strictEqual(l.nivel(99.9, 'cobra'), 'ok');
+    assert.strictEqual(l.nivel(100, 'cobra'), 'tibio', 'cruzarlo se avisa');
+    assert.strictEqual(l.nivel(400, 'cobra'), 'tibio', 'pero nunca es una emergencia');
+});
+
+test('por omisión los dos topes rompen: se avisa de más, no de menos', () => {
+    // Cuál es cuál depende del plan contratado, que solo sabe quien paga. Si alguien se
+    // olvida de configurarlo, el error seguro es el que avisa.
+    const l = recargar({ LIMITE_BASE_AL_PASAR: '', LIMITE_ARCHIVOS_AL_PASAR: '' });
+    assert.strictEqual(l.AL_PASAR_BASE, 'rompe');
+    assert.strictEqual(l.AL_PASAR_ARCHIVOS, 'rompe');
+    assert.strictEqual(l.nivel(95), 'mal', 'y sin decir cuál, se asume el que rompe');
+
+    const pagado = recargar({ LIMITE_ARCHIVOS_AL_PASAR: 'COBRA' });
+    assert.strictEqual(pagado.AL_PASAR_ARCHIVOS, 'cobra', 'no distingue mayúsculas');
+    assert.strictEqual(recargar({ LIMITE_ARCHIVOS_AL_PASAR: 'cualquier cosa' }).AL_PASAR_ARCHIVOS, 'rompe');
+});
+
+test('el uso dice qué pasa al pasar el tope, para que el panel no tenga que adivinarlo', () => {
+    const l = recargar();
+    assert.strictEqual(l.uso(l.MB, 2 * l.MB, 'cobra').alPasar, 'cobra');
+    assert.strictEqual(l.uso(l.MB, 2 * l.MB).alPasar, 'rompe');
 });
 
 test('sin tope configurado se informa el uso y no se inventa un porcentaje', () => {
