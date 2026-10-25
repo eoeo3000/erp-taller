@@ -21,7 +21,7 @@ let SIN_BASE = [];
 // Archivos que todavía no se migraron a la carpeta de su taller.
 let SUELTOS = [];
 // Lo que devuelve el servicio de métricas para cada taller medible.
-let metricasFalsas = { baseResponde: true, ots: 10, solicitudes: 12, cuentas: 2, ultimaActividad: new Date('2026-10-18T10:00:00Z'), error: null };
+let metricasFalsas = { baseResponde: true, ots: 10, solicitudes: 12, cuentas: 2, ultimaActividad: new Date('2026-10-18T10:00:00Z'), bytesBase: 8 * 1024 * 1024, error: null };
 function fabricaTaller() {
     const doc = (d) => ({
         ...d,
@@ -55,6 +55,9 @@ for (const [ruta, exports] of [
     ['../src/models/Taller', () => fabricaTaller()],
     ['../src/servicios/metricasTaller', {
         metricasDeTaller: async () => metricasFalsas,
+        // Cuánto ocupa cada base. El doble lo usa el total, que es lo que de verdad importa
+        // mirar: los topes de Atlas y de R2 son del clúster y del bucket enteros.
+        tamanoDeBase: async () => 8 * 1024 * 1024,
         // Desde la etapa 5 el panel también muestra lo que ocupa cada taller y cuándo fue
         // su último respaldo.
         almacenamientoDeTaller: async (taller) => ({
@@ -67,12 +70,15 @@ for (const [ruta, exports] of [
     ['../src/config/almacenamiento', {
         // Los archivos que quedaron en la raíz, de antes de que se separaran por taller.
         listarSueltos: async () => SUELTOS,
+        medir: async (prefijo) => ({ cantidad: 1, bytes: prefijo === 'respaldos' ? 4 * 1024 * 1024 : 1024 * 1024 }),
+        CARPETA_DEMO: 'demo',
     }],
     ['../src/models/Usuario', (conn) => ({
         exists: async () => (yaInstalado ? { _id: 1 } : null),
     })],
     ['../src/config/conexiones', {
         conexionDeControl: () => ({}),
+        conexionDisponible: () => true,
         obtenerConexion: (entorno, slug) => {
             if (SIN_BASE.includes(slug)) throw new Error(`Taller desconocido: ${slug}`);
             return { name: `base-${slug}` };
@@ -428,4 +434,38 @@ test('una ficha anterior a la marca se lee sin romperse', async () => {
     delete filas[0].marca;
     const { cuerpo } = await pedir('/api/talleres');
     assert.deepStrictEqual(cuerpo.talleres[0].marca, { nombre: '', logo: '' });
+});
+
+test('el panel suma el uso de TODO contra el techo del plan', async () => {
+    // Es lo que no se puede deducir mirando fila por fila: los límites de Atlas y de R2 son
+    // del clúster y del bucket enteros. Un taller en verde no dice nada si entre todos ya
+    // se llenó, y enterarse tarde de eso es quedarse sin poder escribir.
+    filas.push({ slug: 'taller-lopez', nombre: 'L', estado: 'activo', plan: '', mongoUri: 'mongodb://servidor/lopez', fechaAlta: new Date(), fechaBaja: null });
+    SUELTOS = [{ clave: 'a.jpg', tamano: 1024 }];
+
+    const { cuerpo } = await pedir('/api/talleres/metricas');
+    const MB = 1024 * 1024;
+
+    // Dos talleres de 8 MB + control 8 + demo 8 = 32 MB.
+    assert.strictEqual(cuerpo.totales.bases.talleres, 16 * MB);
+    assert.strictEqual(cuerpo.totales.bases.bytes, 32 * MB);
+    assert.strictEqual(cuerpo.totales.bases.tope, 512 * MB, 'el tope por omisión: el clúster M0');
+
+    // Y del lado del bucket: lo de cada taller, los respaldos, la demo y lo sin separar.
+    assert.strictEqual(cuerpo.totales.archivos.respaldos, 4 * MB);
+    assert.strictEqual(cuerpo.totales.archivos.sinSeparar, 1024);
+    assert.ok(cuerpo.totales.archivos.bytes > cuerpo.totales.archivos.talleres,
+        'el total tiene que incluir respaldos y demo, o se vería más vacío de lo que está');
+});
+
+test('la base de control y la demo también cuentan', async () => {
+    // Viven en el mismo clúster y ocupan igual. Dejarlas afuera daría un total que se ve
+    // bien y no lo es.
+    const { cuerpo } = await pedir('/api/talleres/metricas');
+    assert.ok(cuerpo.totales.bases.control > 0);
+    assert.ok(cuerpo.totales.bases.demo > 0);
+    assert.strictEqual(
+        cuerpo.totales.bases.bytes,
+        cuerpo.totales.bases.talleres + cuerpo.totales.bases.control + cuerpo.totales.bases.demo,
+    );
 });

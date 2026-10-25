@@ -47,6 +47,13 @@
                                     linear-gradient(45deg, #eee 25%, transparent 25%, transparent 75%, #eee 75%);
                   background-size: 14px 14px; background-position: 0 0, 7px 7px; }
     input[type=file] { padding: 6px; }
+    /* La barra de uso: una línea por recurso, con el color del nivel. */
+    .uso { display: grid; grid-template-columns: 170px 1fr 200px; gap: 12px; align-items: center; margin: 10px 0; }
+    .riel { height: 10px; border-radius: 5px; background: var(--borde); overflow: hidden; }
+    .relleno { height: 100%; border-radius: 5px; }
+    .relleno.ok { background: var(--verde); } .relleno.tibio { background: var(--ambar); } .relleno.mal { background: var(--rojo); }
+    .cifra { font-variant-numeric: tabular-nums; text-align: right; }
+    @media (max-width: 620px) { .uso { grid-template-columns: 1fr; gap: 4px; } .cifra { text-align: left; } }
     .campos { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; margin-top: 12px; }
     .campo { flex: 1 1 220px; }
     .campo input { width: 100%; }
@@ -155,6 +162,17 @@
         </div>
 
         <div class="tarjeta">
+            <strong>Uso total</strong>
+            <p class="nota">Los topes son del clúster y del bucket <em>enteros</em>, no de cada cliente: lo que ocupa
+               uno le resta a los demás. Por eso un taller en verde no dice nada si entre todos ya se llenó.</p>
+            <div id="usoTotal"></div>
+            <p class="nota">Esto <strong>no corta nada</strong>, y es a propósito: lo que se subiría al tope son las
+               fotos de evidencia, y rechazarlas dejaría a un supervisor en terreno sin poder guardar su trabajo.
+               Acá se mira para cambiar de plan a tiempo; si un cliente consume de más, eso se conversa.
+               Los topes salen de <code>LIMITE_BASE_MB</code> y <code>LIMITE_ARCHIVOS_GB</code>.</p>
+        </div>
+
+        <div class="tarjeta">
             <strong>Respaldo</strong>
             <p id="respaldo" class="nota"></p>
             <div id="pendientes" class="pendiente nota"></div>
@@ -219,9 +237,12 @@ function respaldoDe(fila) {
 
 function base(fila) {
     if (fila.baseResponde === null) return '<span class="nota">—</span>';
-    return fila.baseResponde
-        ? '<span class="punto ok"></span>responde'
-        : `<span class="punto mal"></span><span class="aviso">${texto(fila.error || fila.motivo)}</span>`;
+    if (!fila.baseResponde) return `<span class="punto mal"></span><span class="aviso">${texto(fila.error || fila.motivo)}</span>`;
+    // Cuánto ocupa su base. El tope de Atlas es del clúster ENTERO, así que lo que ocupa
+    // este cliente le resta a los demás: por eso el número va por fila y también sumado
+    // en «Uso total».
+    const ocupa = fila.bytesBase ? `<br><span class="nota">${tamano(fila.bytesBase)}</span>` : '';
+    return `<span class="punto ok"></span>responde${ocupa}`;
 }
 
 // Qué se puede hacer con cada fila.
@@ -276,6 +297,8 @@ function pintar(datos) {
             <td>${acciones(t)}</td>
         </tr>`).join('') || '<tr><td colspan="12" class="nota">Todavía no hay talleres.</td></tr>';
 
+    pintarUso(datos.totales);
+
     const s = datos.sinSeparar || {};
     $('respaldo').textContent = s.error
         ? `No se pudo revisar el almacén: ${s.error}`
@@ -290,6 +313,40 @@ function pintar(datos) {
            pero no se cuentan en la columna «Archivos» de ningún taller.
            Se mueven con <code>node scripts/migrarArchivosPorTaller.js</code>.`
         : '';
+}
+
+// Una línea por recurso: qué es, la barra, y "usado de tope (porcentaje)". Sin tope
+// configurado se informa el uso y nada más — inventar un porcentaje contra un número que
+// nadie puso sería peor que no mostrarlo.
+function lineaDeUso(rotulo, u, detalle) {
+    if (!u) return '';
+    const ancho = u.porcentaje === null ? 0 : Math.min(100, u.porcentaje);
+    const cifra = u.tope
+        ? `${tamano(u.bytes)} de ${tamano(u.tope)} · ${u.porcentaje}%`
+        : `${tamano(u.bytes)} · sin tope configurado`;
+    return `<div class="uso">
+        <div><strong>${rotulo}</strong><br><span class="nota">${detalle}</span></div>
+        <div class="riel"><div class="relleno ${u.nivel}" style="width:${ancho}%"></div></div>
+        <div class="cifra ${u.nivel === 'mal' ? 'aviso' : ''}">${cifra}</div>
+    </div>`;
+}
+
+function pintarUso(totales) {
+    if (!totales) return;
+    const b = totales.bases || {};
+    const a = totales.archivos || {};
+    const parte = (bytes, que) => (bytes ? `${que} ${tamano(bytes)}` : '');
+    const juntar = (...partes) => partes.filter(Boolean).join(' · ') || '—';
+
+    $('usoTotal').innerHTML =
+        lineaDeUso('Bases de datos', b, juntar(
+            parte(b.talleres, 'talleres'), parte(b.control, 'control'), parte(b.demo, 'demo'),
+        ))
+        + lineaDeUso('Archivos y respaldos', a, juntar(
+            parte(a.talleres, 'talleres'), parte(a.respaldos, 'respaldos'),
+            parte(a.demo, 'demo'), parte(a.sinSeparar, 'sin separar'),
+        ))
+        + ((b.error || a.error) ? `<p class="aviso">No se pudo medir todo: ${texto(b.error || a.error)}</p>` : '');
 }
 
 async function cargar() {

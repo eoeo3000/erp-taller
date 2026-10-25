@@ -156,3 +156,24 @@ test('avisa cuántos archivos quedan sin separar por taller', async () => {
     assert.match(r.html, /sinSeparar/);
     assert.match(r.html, /migrarArchivosPorTaller/);
 });
+
+test('el panel muestra el uso total contra el techo del plan', async () => {
+    // Los topes de Atlas y de R2 son del clúster y del bucket enteros, así que mirar fila
+    // por fila no alcanza: un taller en verde no dice nada si entre todos ya se llenó.
+    const r = await traer();
+    assert.match(r.html, /pintarUso/);
+    assert.match(r.html, /totales\.bases|datos\.totales/);
+    assert.match(r.html, /LIMITE_BASE_MB/, 'dice de dónde salen los topes');
+});
+
+test('el panel MIDE y no corta', async () => {
+    // Si alguna vez se agregara un corte por cuota, este texto tendría que cambiar — y es
+    // una decisión que no debería pasar sin que alguien la escriba. Lo que se subiría al
+    // tope son las fotos de evidencia: rechazarlas deja a un supervisor en terreno sin
+    // poder guardar su trabajo.
+    assert.match((await traer()).html, /no corta nada/);
+});
+
+test('cada fila dice cuánto ocupa su base', async () => {
+    assert.match((await traer()).html, /fila\.bytesBase/);
+});

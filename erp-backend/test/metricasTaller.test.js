@@ -91,3 +91,25 @@ test('hay un tope de espera, y es corto', () => {
     // Sin tope, una base dormida cuelga el panel entero hasta que Mongo se rinda solo.
     assert.ok(MS_ESPERA > 0 && MS_ESPERA <= 15000, 'el tope tiene que existir y ser corto');
 });
+
+test('mide cuánto ocupa la base, con sus índices', async () => {
+    // Se suman `storageSize` e `indexSize` y no `dataSize`: lo que cuenta un plan es lo que
+    // ocupa en disco con sus índices, no el tamaño lógico de los documentos. Confundirlos
+    // haría que el panel diga que queda espacio cuando ya no queda.
+    base = { ots: 1, solicitudes: 1, cuentas: 1 };
+    const conexion = { db: { command: async () => ({ storageSize: 1000, indexSize: 240, dataSize: 999999 }) } };
+    const m = await metricasDeTaller(conexion);
+    assert.strictEqual(m.bytesBase, 1240);
+});
+
+test('si no se puede medir el tamaño, el taller NO queda marcado como caído', async () => {
+    // El tamaño es un dato de gestión, no una señal de salud. Si `dbStats` no estuviera
+    // disponible en algún plan, un taller perfectamente sano quedaría en rojo y el panel
+    // diría que la base de un cliente no responde cuando sí responde.
+    base = { ots: 7, solicitudes: 2, cuentas: 1 };
+    const conexion = { db: { command: async () => { throw new Error('no autorizado'); } } };
+    const m = await metricasDeTaller(conexion);
+    assert.strictEqual(m.baseResponde, true, 'sigue respondiendo');
+    assert.strictEqual(m.ots, 7, 'y los conteos siguen sirviendo');
+    assert.strictEqual(m.bytesBase, null, 'solo falta el tamaño');
+});
