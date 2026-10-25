@@ -92,14 +92,15 @@ test('hay un tope de espera, y es corto', () => {
     assert.ok(MS_ESPERA > 0 && MS_ESPERA <= 15000, 'el tope tiene que existir y ser corto');
 });
 
-test('mide cuánto ocupa la base, con sus índices', async () => {
-    // Se suman `storageSize` e `indexSize` y no `dataSize`: lo que cuenta un plan es lo que
-    // ocupa en disco con sus índices, no el tamaño lógico de los documentos. Confundirlos
-    // haría que el panel diga que queda espacio cuando ya no queda.
+test('mide la base con el MISMO número que Atlas compara contra el tope', async () => {
+    // Atlas muestra "Data size: X / 512 MB" en la pantalla del clúster, así que `dataSize`
+    // es lo que cuenta. La diferencia no es cosmética: WiredTiger comprime, y acá
+    // `storageSize` es la décima parte de `dataSize`. Medir el de disco diría "te queda
+    // espacio" justo cuando Atlas ya no deja escribir.
     base = { ots: 1, solicitudes: 1, cuentas: 1 };
-    const conexion = { db: { command: async () => ({ storageSize: 1000, indexSize: 240, dataSize: 999999 }) } };
+    const conexion = { db: { command: async () => ({ dataSize: 4_100_000, storageSize: 410_000, indexSize: 90_000 }) } };
     const m = await metricasDeTaller(conexion);
-    assert.strictEqual(m.bytesBase, 1240);
+    assert.strictEqual(m.bytesBase, 4_100_000);
 });
 
 test('si no se puede medir el tamaño, el taller NO queda marcado como caído', async () => {

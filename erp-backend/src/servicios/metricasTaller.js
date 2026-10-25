@@ -52,15 +52,22 @@ async function ultimaActividad(Usuario) {
 // Atlas tiene un tope para TODAS las bases juntas, así que lo que ocupa cada cliente le
 // resta a los demás.
 //
-// Se suman `storageSize` e `indexSize` y no `dataSize`: lo que cuenta un plan es lo que
-// ocupa en disco con sus índices, no el tamaño lógico de los documentos. Son números
-// distintos y confundirlos haría que el panel diga que queda espacio cuando ya no queda.
+// **Se usa `dataSize` y no `storageSize`**, porque es el número que Atlas compara contra el
+// tope del plan: su propia pantalla del clúster dice "Data size: 3.92 MB / 512 MB". Medir
+// otra cosa daría un panel que no coincide con lo que muestra el proveedor, y la diferencia
+// no es cosmética — WiredTiger comprime, así que `storageSize` suele ser bastante MENOR que
+// `dataSize`. Usarlo haría que el panel diga "te queda espacio" justo cuando Atlas ya no te
+// deja escribir, que es el peor error posible en un aviso de capacidad.
 //
-// `dbStats` es un comando de la base y no una consulta, así que no recorre nada: es
-// barato aunque el taller tenga miles de OT.
+// (Primero se midió `storageSize + indexSize`, razonando que un plan cobra lo que ocupa en
+// disco. Es cierto para un plan pago y falso para el tope del gratuito, que es contra el que
+// hoy avisa esto.)
+//
+// `dbStats` es un comando de la base y no una consulta, así que no recorre nada: es barato
+// aunque el taller tenga miles de OT.
 async function tamanoDeBase(conexion) {
     const stats = await conexion.db.command({ dbStats: 1 });
-    return (stats.storageSize || 0) + (stats.indexSize || 0);
+    return stats.dataSize || 0;
 }
 
 // Las cuentas y los conteos de un taller. Devuelve `baseResponde: false` en vez de lanzar:
