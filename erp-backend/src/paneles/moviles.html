@@ -1,0 +1,262 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Probador de las apps móviles</title>
+<style>
+    :root {
+        --fondo: #faf9f7; --papel: #fff; --borde: #e3e0d9; --texto: #27251f;
+        --suave: #76726a; --rojo: #a8322d; --verde: #2f6b45; --ambar: #8a6414;
+        --carcasa: #1f1e1c;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 20px 16px 40px; background: var(--fondo); color: var(--texto);
+           font: 14px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+    main { max-width: 1180px; margin: 0 auto; }
+    h1 { font-size: 20px; margin: 0 0 4px; }
+    .sub { color: var(--suave); margin: 0 0 20px; }
+    .tarjeta { background: var(--papel); border: 1px solid var(--borde); border-radius: 8px; padding: 16px; margin-bottom: 18px; }
+    label { display: block; font-weight: 600; margin-bottom: 6px; }
+    input { width: 100%; padding: 9px 10px; border: 1px solid var(--borde); border-radius: 6px;
+            font: inherit; background: var(--papel); color: inherit; }
+    button { padding: 8px 14px; border: 1px solid var(--texto); background: var(--texto); color: var(--papel);
+             border-radius: 6px; font: inherit; cursor: pointer; }
+    button.secundario { background: var(--papel); color: var(--texto); }
+    button.chico { padding: 4px 9px; font-size: 12px; }
+    button[aria-pressed="true"] { background: var(--texto); color: var(--papel); }
+    .campos { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; }
+    .campo { flex: 1 1 360px; min-width: 0; }
+    .nota { color: var(--suave); font-size: 12.5px; }
+    .aviso { color: var(--ambar); }
+    .barra { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 14px; }
+    .barra .separador { width: 1px; height: 22px; background: var(--borde); margin: 0 4px; }
+
+    /* Los dos teléfonos, uno al lado del otro. Se envuelven en pantallas angostas en vez de
+       encogerse: un teléfono a medio tamaño ya no prueba lo que se quiere probar. */
+    .banco { display: flex; gap: 28px; flex-wrap: wrap; justify-content: center; align-items: flex-start; }
+    .telefono { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+    .rotulo { font-weight: 600; }
+    .carcasa { background: var(--carcasa); border-radius: 34px; padding: 12px; box-shadow: 0 10px 30px rgba(0,0,0,.18); }
+    .parlante { width: 54px; height: 5px; border-radius: 3px; background: #4a4845; margin: 2px auto 8px; }
+    .pantalla { border: 0; border-radius: 22px; background: #fff; display: block; }
+    .pie { display: flex; gap: 6px; align-items: center; }
+    .vacia { display: flex; align-items: center; justify-content: center; text-align: center;
+             padding: 24px; color: var(--suave); font-size: 13px; background: #fff; border-radius: 22px; }
+    @media (prefers-color-scheme: dark) {
+        :root { --fondo: #1b1a18; --papel: #232220; --borde: #3a3834; --texto: #ece9e3;
+                --suave: #a09b92; --rojo: #e08b86; --verde: #8ecfa8; --ambar: #e0bb70; }
+    }
+</style>
+</head>
+<body>
+<main>
+    <h1>Probador de las apps móviles</h1>
+    <p class="sub">Los dos teléfonos en una pantalla: el de terreno (supervisor) y el del cliente.</p>
+
+    <div class="tarjeta">
+        <div class="campos">
+            <div class="campo">
+                <label for="linkOperativa">Link del supervisor</label>
+                <input id="linkOperativa" placeholder="Pégalo desde «Bodega de tokens» al emitir el acceso" spellcheck="false">
+            </div>
+            <div class="campo">
+                <label for="linkCliente">Link del cliente</label>
+                <input id="linkCliente" placeholder="Pégalo desde «Emitir acceso cliente»" spellcheck="false">
+            </div>
+            <div><button id="cargar" type="button">Cargar</button></div>
+        </div>
+
+        <p class="nota" style="margin-top:10px">
+            <strong>Estos links llevan el token de esa persona</strong>, que es su acceso permanente: no los
+            pegues en un chat ni los dejes a la vista en una pantalla compartida. Esta página no los manda a
+            ninguna parte —los carga en el marco y nada más— y los recuerda solo mientras esta pestaña siga
+            abierta.
+        </p>
+
+        <div class="barra">
+            <span class="nota">Tamaño:</span>
+            <button class="secundario chico" type="button" data-medida="375x667">iPhone SE · 375×667</button>
+            <button class="secundario chico" type="button" data-medida="390x844">iPhone 14 · 390×844</button>
+            <button class="secundario chico" type="button" data-medida="412x915">Pixel 7 · 412×915</button>
+            <button class="secundario chico" id="rotar" type="button">Rotar</button>
+            <span class="separador"></span>
+            <span class="nota">Entorno:</span>
+            <button class="secundario chico" type="button" data-entorno="produccion">Producción</button>
+            <button class="secundario chico" type="button" data-entorno="demo">Demostración</button>
+            <span id="avisoEntorno" class="nota">Sin elegir: cada link va al entorno que ya trae.</span>
+        </div>
+    </div>
+
+    <div class="banco">
+        <div class="telefono">
+            <div class="rotulo">Supervisor · terreno</div>
+            <div class="carcasa"><div class="parlante"></div><div id="marcoOperativa"></div></div>
+            <div class="pie">
+                <button class="secundario chico" type="button" data-recargar="operativa">Recargar</button>
+                <button class="secundario chico" type="button" data-aparte="operativa">Abrir aparte</button>
+            </div>
+        </div>
+
+        <div class="telefono">
+            <div class="rotulo">Cliente</div>
+            <div class="carcasa"><div class="parlante"></div><div id="marcoCliente"></div></div>
+            <div class="pie">
+                <button class="secundario chico" type="button" data-recargar="cliente">Recargar</button>
+                <button class="secundario chico" type="button" data-aparte="cliente">Abrir aparte</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="tarjeta" style="margin-top:22px">
+        <strong>Dos cosas que conviene saber antes de que confundan</strong>
+        <p class="nota">
+            <strong>La sesión de adentro no es la de afuera.</strong> El navegador guarda el almacenamiento de
+            una página incrustada por separado del de esa misma página abierta en su pestaña. O sea: entrar acá
+            no te deja entrado allá, ni al revés. Para el probador es cómodo —los dos teléfonos no se pisan— pero
+            explica por qué «ya había entrado» a veces no vale.
+        </p>
+        <p class="nota">
+            <strong>Si un teléfono queda en blanco</strong>, es que ese servidor no permite que lo incrusten.
+            No es un error de la app: usa «Abrir aparte» y pruébala en su propia pestaña.
+        </p>
+    </div>
+</main>
+
+<script>
+// Pensada para probar, no para operar: no habla con la API, no pide ninguna clave y no
+// guarda nada en el servidor. Son dos marcos y los controles para manejarlos.
+//
+// Los links se recuerdan en sessionStorage y no en localStorage a propósito: llevan el token
+// de una persona adentro, que es su acceso permanente. Mismo criterio que la clave del panel
+// de talleres — muere al cerrar la pestaña.
+const CLAVE = 'probadorMoviles.links';
+const $ = (id) => document.getElementById(id);
+
+// Las direcciones configuradas en el servidor, para no tener que acordarse de ellas. Son
+// públicas (es donde vive cada app), así que no hay nada que proteger acá.
+const CONFIGURADAS = window.__PWA_URLS__ || { operativa: '', cliente: '' };
+
+let medida = { ancho: 390, alto: 844 };
+let horizontal = false;
+let entorno = '';
+const urls = { operativa: '', cliente: '' };
+
+function dimensiones() {
+    return horizontal ? { ancho: medida.alto, alto: medida.ancho } : medida;
+}
+
+// Agrega o reemplaza `?entorno=` sin tocar el resto del link. Se arma sobre URL y no
+// pegando texto: un link que ya trae `?token=` necesita `&`, y uno que ya trae `entorno`
+// terminaría con el parámetro dos veces.
+function conEntorno(url) {
+    if (!entorno) return url;
+    try {
+        const u = new URL(url);
+        u.searchParams.set('entorno', entorno);
+        return u.toString();
+    } catch {
+        return url;
+    }
+}
+
+function pintar(cual) {
+    const contenedor = $(cual === 'operativa' ? 'marcoOperativa' : 'marcoCliente');
+    const { ancho, alto } = dimensiones();
+    const url = urls[cual];
+
+    if (!url) {
+        contenedor.innerHTML = `<div class="vacia" style="width:${ancho}px;height:${alto}px">
+            Pega arriba el link de esta app y aprieta «Cargar».</div>`;
+        return;
+    }
+
+    // Se vuelve a crear el marco en vez de cambiarle el `src`: cambiar el src de un marco ya
+    // cargado deja la entrada anterior en el historial de ESTA página, y después el botón
+    // «atrás» del navegador se va navegando por los teléfonos en vez de salir del probador.
+    const marco = document.createElement('iframe');
+    marco.className = 'pantalla';
+    marco.width = ancho;
+    marco.height = alto;
+    marco.src = conEntorno(url);
+    // Mismo permiso que tendría la app abierta sola: cámara para las fotos de terreno y
+    // ubicación. Sin esto el marco se las niega y la app parece rota sin decir por qué.
+    marco.allow = 'camera; geolocation; clipboard-write';
+    contenedor.replaceChildren(marco);
+}
+
+function cargar() {
+    urls.operativa = $('linkOperativa').value.trim();
+    urls.cliente = $('linkCliente').value.trim();
+    try {
+        sessionStorage.setItem(CLAVE, JSON.stringify(urls));
+    } catch { /* en privado puede no dejar guardar: la página funciona igual */ }
+    pintar('operativa');
+    pintar('cliente');
+}
+
+function marcarActivo(atributo, valor) {
+    for (const b of document.querySelectorAll(`[data-${atributo}]`)) {
+        b.setAttribute('aria-pressed', String(b.dataset[atributo] === valor));
+    }
+}
+
+$('cargar').addEventListener('click', cargar);
+
+for (const boton of document.querySelectorAll('[data-medida]')) {
+    boton.addEventListener('click', () => {
+        const [ancho, alto] = boton.dataset.medida.split('x').map(Number);
+        medida = { ancho, alto };
+        marcarActivo('medida', boton.dataset.medida);
+        pintar('operativa');
+        pintar('cliente');
+    });
+}
+
+$('rotar').addEventListener('click', () => {
+    horizontal = !horizontal;
+    $('rotar').setAttribute('aria-pressed', String(horizontal));
+    pintar('operativa');
+    pintar('cliente');
+});
+
+for (const boton of document.querySelectorAll('[data-entorno]')) {
+    boton.addEventListener('click', () => {
+        entorno = boton.dataset.entorno;
+        marcarActivo('entorno', entorno);
+        // Que se vea cuál está puesto no es adorno: probar en producción creyendo estar en la
+        // demo es borrar datos de un cliente de verdad.
+        $('avisoEntorno').innerHTML = entorno === 'demo'
+            ? 'Los dos teléfonos van a la base de demostración.'
+            : '<span class="aviso">Ojo: datos reales.</span>';
+        pintar('operativa');
+        pintar('cliente');
+    });
+}
+
+document.addEventListener('click', (e) => {
+    const recargar = e.target.dataset?.recargar;
+    const aparte = e.target.dataset?.aparte;
+    if (recargar) return pintar(recargar);
+    // `noopener`: la pestaña que se abre no puede cambiar la dirección de esta.
+    if (aparte && urls[aparte]) window.open(conEntorno(urls[aparte]), '_blank', 'noopener');
+});
+
+// Al abrir: lo último que se usó en esta pestaña, o las direcciones configuradas como pista.
+try {
+    const guardado = JSON.parse(sessionStorage.getItem(CLAVE) || '{}');
+    $('linkOperativa').value = guardado.operativa || '';
+    $('linkCliente').value = guardado.cliente || '';
+} catch { /* nada guardado */ }
+$('linkOperativa').placeholder = CONFIGURADAS.operativa
+    ? `${CONFIGURADAS.operativa}/?token=…` : $('linkOperativa').placeholder;
+$('linkCliente').placeholder = CONFIGURADAS.cliente
+    ? `${CONFIGURADAS.cliente}/?token=…` : $('linkCliente').placeholder;
+
+marcarActivo('medida', '390x844');
+if ($('linkOperativa').value || $('linkCliente').value) cargar();
+else { pintar('operativa'); pintar('cliente'); }
+</script>
+</body>
+</html>
