@@ -46,6 +46,10 @@ require('./src/middlewares/identidad').avisarConfiguracion();
 // datos — los pide a /api/talleres con la clave, así la clave no viaja en la dirección.
 app.use('/panel', require('./src/routes/panelRoutes'));
 
+// El probador de las apps móviles: los dos teléfonos en una pantalla. También una página, y
+// tampoco trae datos — los links los pega quien prueba. Ver movilesRoutes.js.
+app.use('/moviles', require('./src/routes/movilesRoutes'));
+
 app.use('/api', resolverEntorno, demoSoloLectura, apiRoutes);
 
 const PORT = process.env.PORT || 5000;
