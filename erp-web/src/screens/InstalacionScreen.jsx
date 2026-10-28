@@ -17,6 +17,13 @@ const claveDelEnlace = () => new URLSearchParams(window.location.search).get('cl
 // Antes se adivinaba mirando si la URL traía `?clave=`, y eso fallaba justo en el caso más
 // probable: el dueño de un taller nuevo que abre su enlace de ACCESO —el que no la trae— en
 // vez del de instalación. Le decía que buscara un SETUP_TOKEN que para él no existe.
+// La etiqueta también cambia, y no es cosmético: "Clave de instalación" suena a algo del
+// servidor, que es justo lo que el dueño de un taller nuevo no tiene. Nombrar el enlace dice
+// dónde buscarla.
+function ETIQUETA_CLAVE(motivo) {
+    return motivo === 'enlace' ? 'Clave del enlace' : 'Clave de instalación';
+}
+
 function AYUDA_CLAVE(delEnlace, motivo) {
     if (delEnlace) return 'Viene del enlace que te mandaron. Ya está puesta.';
     if (motivo === 'enlace') {
@@ -110,7 +117,7 @@ export default function InstalacionScreen({ API, requiereClaveInstalacion, motiv
 
                     {requiereClaveInstalacion && (
                         <label style={styles.campo}>
-                            <span style={styles.etiqueta}>Clave de instalación</span>
+                            <span style={styles.etiqueta}>{ETIQUETA_CLAVE(motivoClaveInstalacion)}</span>
                             <input type="password" value={claveInstalacion} required
                                 onChange={(e) => setClaveInstalacion(e.target.value)} style={styles.input} />
                             <span style={styles.ayudaChica}>{AYUDA_CLAVE(claveDelEnlace(), motivoClaveInstalacion)}</span>
