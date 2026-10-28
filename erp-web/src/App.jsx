@@ -101,6 +101,9 @@ function App() {
   const [acceso, setAcceso] = useState('verificando');
   const [usuario, setUsuario] = useState(null);
   const [requiereClaveInstalacion, setRequiereClaveInstalacion] = useState(false);
+  // 'enlace' | 'setup' — cuál de las dos claves se está pidiendo. Lo dice el backend, que es
+  // el único que lo sabe; ver authController.yo.
+  const [motivoClaveInstalacion, setMotivoClaveInstalacion] = useState('setup');
   // El nombre y el logo que eligió este taller, de GET /api/auth/yo. `null` mientras no se
   // sabe y `{nombre:'', logo:''}` cuando no puso ninguno: las dos cosas caen en el nombre de
   // fábrica, así que no hay un parpadeo de un nombre a otro al cargar.
@@ -179,6 +182,7 @@ function App() {
         if (rutaPublica) return;
         if (data.requiereInstalacion) {
           setRequiereClaveInstalacion(!!data.requiereClaveInstalacion);
+          setMotivoClaveInstalacion(data.motivoClaveInstalacion || 'setup');
           return setAcceso('instalacion');
         }
         setUsuario(data.usuario || null);
@@ -472,7 +476,7 @@ function App() {
 
   if (acceso === 'verificando') return <div style={styles.esperando}>Cargando…</div>;
   if (acceso === 'instalacion') {
-    return <InstalacionScreen API={API} requiereClaveInstalacion={requiereClaveInstalacion} onListo={entrar} marca={marca} />;
+    return <InstalacionScreen API={API} requiereClaveInstalacion={requiereClaveInstalacion} motivoClaveInstalacion={motivoClaveInstalacion} onListo={entrar} marca={marca} />;
   }
   if (acceso === 'requiere-login') return <LoginScreen API={API} onIngreso={entrar} marca={marca} />;
 

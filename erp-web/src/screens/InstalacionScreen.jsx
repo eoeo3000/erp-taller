@@ -9,6 +9,23 @@ import MarcaTaller from '../components/MarcaTaller';
 // acá para que quien lo abre no tenga que copiarla a mano de la barra de direcciones.
 const claveDelEnlace = () => new URLSearchParams(window.location.search).get('clave') || '';
 
+// Son DOS claves distintas y hay que decir cuál. `SETUP_TOKEN` es del servidor y la sabe
+// quien administra el producto; la del enlace es de un solo uso y le llegó al dueño de ese
+// taller. Cuál corresponde lo dice el backend (`motivoClaveInstalacion`), que es el único
+// que lo sabe: depende de si este taller es el por defecto o uno nuevo.
+//
+// Antes se adivinaba mirando si la URL traía `?clave=`, y eso fallaba justo en el caso más
+// probable: el dueño de un taller nuevo que abre su enlace de ACCESO —el que no la trae— en
+// vez del de instalación. Le decía que buscara un SETUP_TOKEN que para él no existe.
+function AYUDA_CLAVE(delEnlace, motivo) {
+    if (delEnlace) return 'Viene del enlace que te mandaron. Ya está puesta.';
+    if (motivo === 'enlace') {
+        return 'Es la clave del enlace de instalación que te mandaron, no una que elijas acá. '
+            + 'Si no lo tienes a mano, pídela de nuevo: al reemitirlo, el anterior deja de servir.';
+    }
+    return 'La definiste como SETUP_TOKEN en el servidor.';
+}
+
 // Primera puesta en marcha. Aparece solo cuando la base no tiene ninguna cuenta con clave, y
 // desaparece para siempre en cuanto se crea la primera (ver instalacionController). Es lo que
 // evita tener que entrar al servidor a correr un script para arrancar.
@@ -24,7 +41,7 @@ const t = {
     fontUi: '"Helvetica Neue", Helvetica, Arial, sans-serif',
 };
 
-export default function InstalacionScreen({ API, requiereClaveInstalacion, onListo, marca = null }) {
+export default function InstalacionScreen({ API, requiereClaveInstalacion, motivoClaveInstalacion = 'setup', onListo, marca = null }) {
     const [nombre, setNombre] = useState('');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
@@ -96,9 +113,7 @@ export default function InstalacionScreen({ API, requiereClaveInstalacion, onLis
                             <span style={styles.etiqueta}>Clave de instalación</span>
                             <input type="password" value={claveInstalacion} required
                                 onChange={(e) => setClaveInstalacion(e.target.value)} style={styles.input} />
-                            <span style={styles.ayudaChica}>{claveDelEnlace()
-                                ? 'Viene del enlace que te mandaron. Ya está puesta.'
-                                : 'La definiste como SETUP_TOKEN en el servidor.'}</span>
+                            <span style={styles.ayudaChica}>{AYUDA_CLAVE(claveDelEnlace(), motivoClaveInstalacion)}</span>
                         </label>
                     )}
 

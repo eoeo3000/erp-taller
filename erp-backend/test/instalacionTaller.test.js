@@ -300,3 +300,30 @@ test('una pista hacia un taller que ya opera no reabre su instalación', async (
     const { estado } = await instalar({ ...DATOS, claveInstalacion: CLAVE_BUENA }, { 'X-Taller': 'taller-lopez' });
     assert.strictEqual(estado, 409);
 });
+
+test('/auth/yo dice CUÁL de las dos claves está pidiendo', async () => {
+    // Son dos claves distintas: la del enlace de un solo uso, que le llegó al dueño de un
+    // taller nuevo, y SETUP_TOKEN, que es del servidor y la sabe quien administra. La
+    // pantalla no tiene cómo saber cuál corresponde — depende de si el taller es el por
+    // defecto o no— y antes lo adivinaba mirando si la URL traía `?clave=`.
+    //
+    // Eso fallaba justo en el caso más probable: el dueño de un taller nuevo que abre su
+    // enlace de ACCESO (`/?taller=x`, sin clave) en vez del de instalación. La pantalla le
+    // decía que buscara un SETUP_TOKEN que para él no existe.
+    const otro = await preguntarYo({ 'X-Taller': 'taller-lopez' });
+    assert.strictEqual(otro.cuerpo.requiereClaveInstalacion, true);
+    assert.strictEqual(otro.cuerpo.motivoClaveInstalacion, 'enlace');
+
+    // Y en el principal sin instalar, con SETUP_TOKEN puesto, la clave que corresponde es
+    // la otra.
+    usuariosPorBase['base-principal'] = [];
+    process.env.SETUP_TOKEN = 'clave-del-servidor';
+    try {
+        const principal = await preguntarYo();
+        assert.strictEqual(principal.cuerpo.requiereClaveInstalacion, true);
+        assert.strictEqual(principal.cuerpo.motivoClaveInstalacion, 'setup',
+            'el taller por defecto se instala con SETUP_TOKEN, no con un enlace');
+    } finally {
+        delete process.env.SETUP_TOKEN;
+    }
+});

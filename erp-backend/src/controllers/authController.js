@@ -153,6 +153,13 @@ exports.yo = async (req, res) => {
             usuario: null,
             requiereInstalacion: true,
             requiereClaveInstalacion: esOtroTaller || claveInstalacionRequerida(),
+            // **Por qué** se pide la clave, no solo que se pide. Son dos claves distintas y
+            // la pantalla no tiene cómo saber cuál: la del enlace de un solo uso que se le
+            // mandó al dueño de un taller nuevo, o `SETUP_TOKEN`, que es del servidor y la
+            // sabe quien administra. Sin esto el SPA adivinaba mirando si la URL traía
+            // `?clave=`, y al abrir el enlace de ACCESO de un taller nuevo —que no la
+            // trae— le decía a su dueño que buscara un SETUP_TOKEN que no existe para él.
+            motivoClaveInstalacion: esOtroTaller ? 'enlace' : 'setup',
             taller,
             marca,
         });
