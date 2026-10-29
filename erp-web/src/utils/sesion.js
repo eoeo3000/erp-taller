@@ -51,8 +51,11 @@ export function fijarSesion(token, usuario) {
     // el navegador venía recordando. Sin esto, abrir una vez el enlace de instalación de un
     // cliente deja el navegador apuntando a ese taller para siempre: quien administra visita
     // varios enlaces y después no puede volver a entrar al suyo. Entrar lo corrige solo.
+    // `durable: true`: esta es la ÚNICA escritura de la memoria durable del navegador. Un
+    // link solo puede dejar una pista de pestaña (ver utils/taller.js), así que visitar al
+    // cliente de otro ya no puede dejar este computador apuntando ahí para siempre.
     const punto = String(token || '').indexOf('.');
-    if (punto > 0) fijarTaller(token.slice(0, punto));
+    if (punto > 0) fijarTaller(token.slice(0, punto), { durable: true });
 }
 
 export function limpiarSesion() {
