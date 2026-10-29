@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import axios from 'axios';
 import { fijarSesion } from '../utils/sesion';
 import MarcaTaller from '../components/MarcaTaller';
+import { obtenerTaller, olvidarTaller } from '../utils/taller';
 
 // Pantalla de acceso de la app de escritorio. Hasta que existió, se entraba con solo la URL
 // — y esta es la app que tiene finanzas, contabilidad y los datos de todos los clientes.
@@ -35,6 +36,26 @@ export default function LoginScreen({ API, onIngreso, marca = null }) {
     const [enviando, setEnviando] = useState(false);
 
     const mensajeDeError = (e, porDefecto) => e?.response?.data?.error || porDefecto;
+
+    // A qué taller apunta ESTE navegador. Se lee una vez al montar: lo único que lo cambia es
+    // el botón de abajo, que recarga.
+    const [tallerApuntado] = useState(obtenerTaller);
+
+    // La salida de un callejón sin salida real. Entrar ocurre sin sesión, así que el taller
+    // sale de la pista guardada (ver utils/taller.js). Quien administra varios clientes abre
+    // el enlace de uno y este navegador queda apuntando ahí: al volver al suyo, su correo se
+    // busca en la base del otro y el backend responde «Correo o clave incorrectos» — correcto
+    // de su lado, porque distinguirlo diría qué correos existen en qué cliente, pero describe
+    // mal lo que pasó. La clave estaba bien; la base no.
+    //
+    // `fijarSesion` corrige la pista al entrar, pero eso es DESPUÉS de entrar, que es
+    // justamente lo que acá no se puede hacer. Por eso la salida tiene que estar en esta
+    // pantalla. Solo se ofrece tras un error: mostrarlo siempre invitaría a tocarlo a quien
+    // no tiene ningún problema.
+    const salirDelTaller = () => {
+        olvidarTaller();
+        window.location.href = window.location.pathname;
+    };
 
     const entrar = async (evento) => {
         evento.preventDefault();
@@ -107,7 +128,21 @@ export default function LoginScreen({ API, onIngreso, marca = null }) {
                             <input type="password" value={password} required autoComplete="current-password"
                                 onChange={(e) => setPassword(e.target.value)} style={styles.input} />
                         </label>
-                        {error && <div style={styles.error}>{error}</div>}
+                        {error && (
+                            <div style={styles.error}>
+                                {error}
+                                {tallerApuntado && (
+                                    <div style={styles.pista}>
+                                        Este navegador está entrando al taller «{tallerApuntado}». Si tu cuenta
+                                        es de otro, la clave correcta igual va a fallar: se busca en la base
+                                        equivocada.
+                                        <button type="button" onClick={salirDelTaller} style={styles.btnPista}>
+                                            Entrar a otro taller
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                        )}
                         <button type="submit" disabled={enviando} style={styles.btnPrimario}>
                             {enviando ? 'Entrando…' : 'Entrar'}
                         </button>
@@ -192,6 +227,12 @@ const styles = {
         height: 30, minWidth: 0, padding: '0 9px', border: `1px solid ${t.bordeInput}`,
         background: t.superficie, fontFamily: 'inherit', fontSize: 12.5,
         color: t.textoPrincipal, outline: 'none', borderRadius: 2,
+    },
+    pista: { marginTop: 7, paddingTop: 7, borderTop: '1px solid rgba(0,0,0,.09)', fontSize: 11, lineHeight: 1.45, color: t.textoAtenuado2 },
+    btnPista: {
+        display: 'block', marginTop: 5, padding: 0, border: 'none', background: 'none',
+        color: t.acento, fontSize: 11, fontWeight: 700, cursor: 'pointer',
+        fontFamily: 'inherit', textDecoration: 'underline',
     },
     error: { padding: '7px 10px', background: 'rgba(0,0,0,.03)', borderLeft: `2px solid ${t.error}`, fontSize: 11.5, lineHeight: 1.45 },
     aviso: { padding: '7px 10px', background: 'rgba(0,0,0,.03)', borderLeft: `2px solid ${t.ok}`, fontSize: 11.5, lineHeight: 1.45 },
