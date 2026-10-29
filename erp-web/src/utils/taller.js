@@ -18,15 +18,37 @@ import axios from 'axios';
 const CLAVE = 'erpTaller.taller';
 
 export function obtenerTaller() {
-    return localStorage.getItem(CLAVE) || '';
+    // try/catch porque en una ventana privada —o con el almacenamiento bloqueado— leer lanza,
+    // y eso tumbaría la app entera al importar el módulo. Sin memoria, taller por defecto.
+    try { return localStorage.getItem(CLAVE) || ''; } catch { return ''; }
 }
 
 export function fijarTaller(slug) {
     const limpio = String(slug || '').trim().toLowerCase();
     if (!limpio) return '';
-    localStorage.setItem(CLAVE, limpio);
+    try { localStorage.setItem(CLAVE, limpio); } catch { /* sin memoria, vale para esta visita */ }
     axios.defaults.headers.common['X-Taller'] = limpio;
     return limpio;
+}
+
+// Olvidar a qué taller apunta este navegador, para volver al de por omisión.
+//
+// Existe por un callejón sin salida real: entrar, recuperar la clave y activar una invitación
+// pasan SIN sesión, así que el taller sale de esta pista. Quien administra varios clientes
+// abre el enlace de uno, este navegador queda apuntando ahí, y al volver a entrar al suyo su
+// correo se busca en la base del otro — donde no está. El backend responde "Correo o clave
+// incorrectos", que es lo correcto de su lado (distinguirlo diría qué correos existen en qué
+// cliente), pero describe mal lo que pasó: la clave estaba bien, la base no.
+//
+// `fijarSesion` corrige la pista con el prefijo del token, que es la autoridad — pero eso
+// solo ocurre DESPUÉS de entrar, que es justo lo que acá no se puede hacer. De ahí que la
+// salida tenga que estar en la pantalla de ingreso.
+//
+// Olvidar no revela nada ni abre nada: deja este navegador como uno recién estrenado, en el
+// taller por defecto, donde las credenciales de otro tampoco valen.
+export function olvidarTaller() {
+    try { localStorage.removeItem(CLAVE); } catch { /* sin almacenamiento no hay nada que olvidar */ }
+    delete axios.defaults.headers.common['X-Taller'];
 }
 
 export function headerTaller() {
