@@ -20,6 +20,8 @@ const { esSlugValido } = require('../config/talleres');
 const { conexionPedida } = require('../middlewares/entorno');
 const { aprovisionarTaller } = require('../servicios/aprovisionamiento');
 const getTaller = require('../models/Taller');
+const transporter = require('../config/mailer');
+const { armarAviso } = require('../servicios/avisoInstalacion');
 
 const LARGO_MINIMO_PASSWORD = 8;
 
@@ -104,6 +106,36 @@ async function resolverTallerDelEnlace(req) {
     return { taller, db, slug };
 }
 
+// Avisar que un cliente instaló. Solo en el camino del enlace: en el taller por defecto quien
+// instala es quien administra el producto, y mandarse un correo a sí mismo es ruido.
+//
+// Va DESPUÉS de crear la cuenta y de consumir el enlace, con su propio try, y a propósito: la
+// instalación ya es un hecho irreversible en ese punto, así que un correo que no sale no puede
+// dejar a un cliente nuevo afuera. Si fuera antes, un Brevo caído sería un taller sin instalar.
+//
+// Al log va solo el dominio, nunca la dirección completa — misma regla que la recuperación de
+// clave (ver docs/correo.md): los logs de Render los lee cualquiera con acceso al panel. En el
+// CORREO sí va la dirección: ese es justamente el dato que se quiere saber, y va a un buzón.
+async function avisarAlOperador(delEnlace, usuario) {
+    try {
+        const mensaje = armarAviso({
+            slug: delEnlace.slug,
+            nombreTaller: delEnlace.taller.nombre,
+            nombre: usuario.nombre,
+            email: usuario.email,
+        });
+        if (!mensaje) {
+            console.log(`[instalacion] taller "${delEnlace.slug}" instalado; sin aviso (falta EMAIL_OPERADOR).`);
+            return;
+        }
+        await transporter.sendMail(mensaje);
+        console.log(`[instalacion] taller "${delEnlace.slug}" instalado; aviso enviado.`);
+    } catch (error) {
+        const dominio = String(usuario.email || '').split('@')[1] || '?';
+        console.error(`[instalacion] taller "${delEnlace.slug}" instalado por @${dominio}, pero el aviso no salió: ${error.message}`);
+    }
+}
+
 // POST /api/instalacion — { nombre, email, password, claveInstalacion?, taller? }
 // Crea la primera cuenta Y su sesión, para que quien instala entre de inmediato sin tener
 // que escribir de nuevo lo que acaba de elegir.
@@ -179,6 +211,7 @@ exports.instalar = async (req, res) => {
             delEnlace.taller.instalacionHash = '';
             delEnlace.taller.instalacionExpira = null;
             await delEnlace.taller.save();
+            await avisarAlOperador(delEnlace, usuario);
         }
 
         res.ok({

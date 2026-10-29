@@ -37,6 +37,11 @@ const conexionDe = (nombre) => ({ name: nombre });
 // Lo que cada taller eligió mostrar en su app. Vacío = no eligió nada.
 let MARCAS = {};
 
+// Los avisos de instalación que salieron, y un interruptor para hacer fallar el envío: lo que
+// importa probar es que un correo caído no deje a un cliente nuevo sin instalar.
+let correosEnviados = [];
+let fallaElCorreo = false;
+
 for (const [ruta, exports] of [
     ['../src/models/Taller', () => ({
         findOne: async ({ slug }) => {
@@ -75,6 +80,13 @@ for (const [ruta, exports] of [
         },
         refrescarRegistro: async () => {},
         hayBaseDeControl: () => true,
+    }],
+    ['../src/config/mailer', {
+        sendMail: async (mensaje) => {
+            if (fallaElCorreo) throw new Error('Brevo no responde');
+            correosEnviados.push(mensaje);
+            return { messageId: 'x' };
+        },
     }],
     ['../src/servicios/aprovisionamiento', {
         aprovisionarTaller: async (conn) => {
@@ -139,6 +151,9 @@ test.beforeEach(() => {
     // El taller principal ya opera: tiene una cuenta con clave.
     usuariosPorBase = { 'base-principal': [{ passwordHash: 'x' }], 'base-taller-lopez': [] };
     aprovisionadas = [];
+    correosEnviados = [];
+    fallaElCorreo = false;
+    delete process.env.EMAIL_OPERADOR;
 });
 
 test('el taller nuevo se instala en SU base, no en la del principal', async () => {
@@ -299,4 +314,97 @@ test('una pista hacia un taller que ya opera no reabre su instalación', async (
     usuariosPorBase['base-taller-lopez'] = [{ passwordHash: 'ya-tiene' }];
     const { estado } = await instalar({ ...DATOS, claveInstalacion: CLAVE_BUENA }, { 'X-Taller': 'taller-lopez' });
     assert.strictEqual(estado, 409);
+});
+
+test('/auth/yo dice CUÁL de las dos claves está pidiendo', async () => {
+    // Son dos claves distintas: la del enlace de un solo uso, que le llegó al dueño de un
+    // taller nuevo, y SETUP_TOKEN, que es del servidor y la sabe quien administra. La
+    // pantalla no tiene cómo saber cuál corresponde — depende de si el taller es el por
+    // defecto o no— y antes lo adivinaba mirando si la URL traía `?clave=`.
+    //
+    // Eso fallaba justo en el caso más probable: el dueño de un taller nuevo que abre su
+    // enlace de ACCESO (`/?taller=x`, sin clave) en vez del de instalación. La pantalla le
+    // decía que buscara un SETUP_TOKEN que para él no existe.
+    const otro = await preguntarYo({ 'X-Taller': 'taller-lopez' });
+    assert.strictEqual(otro.cuerpo.requiereClaveInstalacion, true);
+    assert.strictEqual(otro.cuerpo.motivoClaveInstalacion, 'enlace');
+
+    // Y en el principal sin instalar, con SETUP_TOKEN puesto, la clave que corresponde es
+    // la otra.
+    usuariosPorBase['base-principal'] = [];
+    process.env.SETUP_TOKEN = 'clave-del-servidor';
+    try {
+        const principal = await preguntarYo();
+        assert.strictEqual(principal.cuerpo.requiereClaveInstalacion, true);
+        assert.strictEqual(principal.cuerpo.motivoClaveInstalacion, 'setup',
+            'el taller por defecto se instala con SETUP_TOKEN, no con un enlace');
+    } finally {
+        delete process.env.SETUP_TOKEN;
+    }
+});
+
+// --- El aviso al operador: que un cliente instaló ---
+//
+// No es una aprobación y no puede serlo: cuando esto sale, la persona ya entró. Lo que estas
+// pruebas cuidan es que el aviso nunca pueda ser el motivo de que una instalación falle.
+
+test('cuando un cliente instala, le llega un aviso a quien arrienda el sistema', async () => {
+    process.env.EMAIL_OPERADOR = 'operador@erp.cl';
+    const { estado } = await instalar({ ...DATOS, taller: 'taller-lopez', claveInstalacion: CLAVE_BUENA });
+
+    assert.strictEqual(estado, 201);
+    assert.strictEqual(correosEnviados.length, 1);
+    const aviso = correosEnviados[0];
+    assert.strictEqual(aviso.to, 'operador@erp.cl');
+    assert.match(aviso.subject, /Taller López/, 'el asunto dice qué cliente, no solo que "alguien" instaló');
+    assert.match(aviso.text, /taller-lopez/);
+    assert.match(aviso.text, new RegExp(DATOS.email), 'quién se creó la cuenta es el dato que se quiere saber');
+});
+
+test('un correo caído NO deja al cliente nuevo sin instalar', async () => {
+    // El aviso va después de crear la cuenta, de la sesión y de consumir el enlace, con su
+    // propio catch. Si fuera antes —o sin catch— un Brevo caído sería un taller sin instalar,
+    // y el cliente vería un error en la única pantalla que no puede reintentar: el enlace ya
+    // se consumió o, peor, no se consumió y queda vivo.
+    process.env.EMAIL_OPERADOR = 'operador@erp.cl';
+    fallaElCorreo = true;
+    const { estado, cuerpo } = await instalar({ ...DATOS, taller: 'taller-lopez', claveInstalacion: CLAVE_BUENA });
+
+    assert.strictEqual(estado, 201, 'la instalación tiene que completarse igual');
+    assert.strictEqual(usuariosPorBase['base-taller-lopez'].length, 1);
+    assert.ok(cuerpo.token, 'y la persona entra, que es lo que vino a hacer');
+});
+
+test('sin EMAIL_OPERADOR no se manda nada y la instalación sigue igual', async () => {
+    // Variable opcional, mismo criterio que EMAIL_REPLY_TO: exigirla haría que un despliegue
+    // que todavía no la definió no pueda instalar un taller.
+    const { estado } = await instalar({ ...DATOS, taller: 'taller-lopez', claveInstalacion: CLAVE_BUENA });
+    assert.strictEqual(estado, 201);
+    assert.strictEqual(correosEnviados.length, 0);
+});
+
+test('instalar el taller por defecto no manda aviso: sería mandárselo a uno mismo', async () => {
+    process.env.EMAIL_OPERADOR = 'operador@erp.cl';
+    usuariosPorBase['base-principal'] = [];
+    const { estado } = await instalar(DATOS);
+    assert.strictEqual(estado, 201);
+    assert.strictEqual(correosEnviados.length, 0);
+});
+
+test('el aviso dice cómo deshacerlo, porque la cuenta ya existe', async () => {
+    // El principio de vuelta atrás (docs/principio-vuelta-atras.md): si no hay aprobación
+    // previa, el correo tiene que decir dónde está la palanca. Es suspender el taller desde
+    // el panel, que corta en el registro y no en los controladores.
+    const { armarAviso } = require('../src/servicios/avisoInstalacion');
+    const aviso = armarAviso(
+        { slug: 'rivas', nombreTaller: 'Taller Rivas', nombre: 'Ana', email: 'ana@rivas.cl' },
+        { EMAIL_OPERADOR: 'operador@erp.cl' },
+    );
+    assert.match(aviso.text, /suspende el taller desde el panel/i);
+    assert.match(aviso.text, /no una aprobación/i, 'que ya está adentro tiene que quedar claro');
+    assert.strictEqual(
+        armarAviso({ slug: 'rivas', nombre: 'Ana', email: 'ana@rivas.cl' }, {}),
+        null,
+        'sin destinatario no hay mensaje que armar',
+    );
 });
