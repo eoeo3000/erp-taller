@@ -68,6 +68,40 @@ test('la página ofrece reemitir la instalación SOLO a quien no tiene cuentas',
     assert.match(r.html, /data-acceso/);
 });
 
+// `acciones()` se saca de la página y se corre de verdad: es puro armado de texto, sin DOM.
+// Mirar el HTML con una expresión regular diría que los dos botones están —y están, cada uno
+// en su rama—, que es justo lo que no se quiere probar acá.
+async function accionesDe(fila) {
+    const { html } = await traer();
+    const fuente = html.match(/function acciones\(t\) \{[\s\S]*?\n\}/)[0];
+    // eslint-disable-next-line no-new-func
+    return new Function(`${fuente}; return acciones(arguments[0]);`)(fila);
+}
+
+test('a un taller sin instalar NO se le ofrece el link de acceso: no lleva la clave', async () => {
+    // Esto pasó de verdad. La fila de un taller nuevo ofrecía las dos cosas, se compartió el
+    // link de acceso —que no lleva `?clave=`— y el dueño cayó en la pantalla de instalación
+    // con el campo vacío y sin nada que escribir ahí: la clave no se puede recuperar, solo
+    // reemitir. Mientras el taller no esté instalado, lo único que sirve es su enlace de
+    // instalación, y es lo único que la fila ofrece.
+    const sinInstalar = await accionesDe({ slug: 'taller-nuevo', cuentas: 0, medible: true });
+    assert.match(sinInstalar, /data-reemitir/, 'tiene que ofrecer el enlace de instalación');
+    assert.ok(!sinInstalar.includes('data-acceso'), 'y NO el de acceso, que lo deja a mitad de camino');
+
+    // Instalado es al revés: el de instalación ya no sirve y el backend lo rechaza con 409.
+    const operando = await accionesDe({ slug: 'taller-viejo', cuentas: 3, medible: true });
+    assert.match(operando, /data-acceso/);
+    assert.ok(!operando.includes('data-reemitir'));
+});
+
+test('el botón del enlace de instalación dice qué entrega, no el verbo interno', async () => {
+    // Quien administra no está "reemitiendo" nada la primera vez que lo necesita: está
+    // buscando el enlace para mandárselo al cliente. Que el botón se llame por el mecanismo
+    // es lo que hace que no se encuentre cuando se lo busca.
+    const sinInstalar = await accionesDe({ slug: 'taller-nuevo', cuentas: 0, medible: true });
+    assert.match(sinInstalar, />Enlace de instalación</);
+});
+
 test('el link de acceso se arma con el host que manda el servidor, no escrito a mano', async () => {
     // Si estuviera escrito en la página, el día que cambie SPA_URL el panel seguiría dando el
     // link viejo sin que nadie lo note.

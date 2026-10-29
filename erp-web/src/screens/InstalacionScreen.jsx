@@ -1,13 +1,30 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { fijarSesion } from '../utils/sesion';
 import { obtenerTaller } from '../utils/taller';
 import MarcaTaller from '../components/MarcaTaller';
 
 // El enlace de instalación de un taller nuevo trae los dos datos: `?taller=` (que
-// utils/taller.js ya recordó y manda en cada llamada) y `?clave=`, la de un solo uso. Se lee
-// acá para que quien lo abre no tenga que copiarla a mano de la barra de direcciones.
-const claveDelEnlace = () => new URLSearchParams(window.location.search).get('clave') || '';
+// utils/taller.js ya recordó y manda en cada llamada) y `?clave=`, la de un solo uso.
+//
+// Se lee UNA sola vez, al cargar el módulo, y no en cada render: `limpiarUrl` la borra de la
+// barra de direcciones en cuanto la pantalla monta, así que una segunda lectura daría vacío.
+const CLAVE_DEL_ENLACE = new URLSearchParams(window.location.search).get('clave') || '';
+
+// Cuando la clave viene en el enlace, el cliente no tiene que verla ni escribirla: el campo
+// no se muestra y la clave viaja igual en el envío. Un campo que ya está lleno y que él no
+// puede corregir solo invita a borrarlo.
+//
+// Y de paso se saca de la barra de direcciones. Es una credencial: ahí queda a la vista de
+// quien mire la pantalla, se va en el `Referer` de cualquier recurso externo y se cuela en
+// una captura o en un link copiado. Dura un uso y 7 días, pero ninguna de las dos cosas la
+// hace menos credencial. `?taller=` se conserva: eso es ruteo y hay que recordarlo.
+function limpiarUrl() {
+    const url = new URL(window.location.href);
+    if (!url.searchParams.has('clave')) return;
+    url.searchParams.delete('clave');
+    window.history.replaceState(null, '', url.pathname + (url.search || '') + url.hash);
+}
 
 // Son DOS claves distintas y hay que decir cuál. `SETUP_TOKEN` es del servidor y la sabe
 // quien administra el producto; la del enlace es de un solo uso y le llegó al dueño de ese
@@ -16,16 +33,18 @@ const claveDelEnlace = () => new URLSearchParams(window.location.search).get('cl
 //
 // Antes se adivinaba mirando si la URL traía `?clave=`, y eso fallaba justo en el caso más
 // probable: el dueño de un taller nuevo que abre su enlace de ACCESO —el que no la trae— en
-// vez del de instalación. Le decía que buscara un SETUP_TOKEN que para él no existe.
+// vez del de instalación. Le decía que buscara un SETUP_TOKEN que para él no existe. El
+// panel ya no ofrece ese enlace mientras el taller no esté instalado, pero el texto se queda:
+// un enlace de acceso puede llegarle igual, reenviado o guardado de antes.
 // La etiqueta también cambia, y no es cosmético: "Clave de instalación" suena a algo del
 // servidor, que es justo lo que el dueño de un taller nuevo no tiene. Nombrar el enlace dice
-// dónde buscarla.
+// dónde buscarla. Esto se ve solo en el camino de respaldo —el enlace sin clave—, porque con
+// la clave adentro el campo no se muestra.
 function ETIQUETA_CLAVE(motivo) {
     return motivo === 'enlace' ? 'Clave del enlace' : 'Clave de instalación';
 }
 
-function AYUDA_CLAVE(delEnlace, motivo) {
-    if (delEnlace) return 'Viene del enlace que te mandaron. Ya está puesta.';
+function AYUDA_CLAVE(motivo) {
     if (motivo === 'enlace') {
         return 'Es la clave del enlace de instalación que te mandaron, no una que elijas acá. '
             + 'Si no lo tienes a mano, pídela de nuevo: al reemitirlo, el anterior deja de servir.';
@@ -53,9 +72,18 @@ export default function InstalacionScreen({ API, requiereClaveInstalacion, motiv
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [repetida, setRepetida] = useState('');
-    const [claveInstalacion, setClaveInstalacion] = useState(claveDelEnlace);
+    const [claveInstalacion, setClaveInstalacion] = useState(CLAVE_DEL_ENLACE);
     const [error, setError] = useState('');
     const [enviando, setEnviando] = useState(false);
+
+    // La clave ya está en el estado; de la barra de direcciones se va.
+    useEffect(limpiarUrl, []);
+
+    // Con la clave en el enlace no hay campo que mostrar. Y si esa clave resulta estar
+    // vencida, tampoco hay nada que el cliente pueda escribir para arreglarlo: lo único que
+    // sirve es un enlace nuevo, así que eso es lo que hay que decirle en vez de dejarlo
+    // mirando un error sin salida.
+    const claveOculta = requiereClaveInstalacion && !!CLAVE_DEL_ENLACE;
 
     const instalar = async (evento) => {
         evento.preventDefault();
@@ -115,16 +143,26 @@ export default function InstalacionScreen({ API, requiereClaveInstalacion, motiv
                     </label>
                     <div style={styles.ayudaChica}>Mínimo 8 caracteres.</div>
 
-                    {requiereClaveInstalacion && (
+                    {requiereClaveInstalacion && !claveOculta && (
                         <label style={styles.campo}>
                             <span style={styles.etiqueta}>{ETIQUETA_CLAVE(motivoClaveInstalacion)}</span>
                             <input type="password" value={claveInstalacion} required
                                 onChange={(e) => setClaveInstalacion(e.target.value)} style={styles.input} />
-                            <span style={styles.ayudaChica}>{AYUDA_CLAVE(claveDelEnlace(), motivoClaveInstalacion)}</span>
+                            <span style={styles.ayudaChica}>{AYUDA_CLAVE(motivoClaveInstalacion)}</span>
                         </label>
                     )}
 
-                    {error && <div style={styles.error}>{error}</div>}
+                    {error && (
+                        <div style={styles.error}>
+                            {error}
+                            {claveOculta && (
+                                <div style={styles.ayudaChica}>
+                                    Si dice que el enlace venció, pídele uno nuevo a quien te lo mandó: desde
+                                    acá no se puede arreglar.
+                                </div>
+                            )}
+                        </div>
+                    )}
                     <button type="submit" disabled={enviando} style={styles.btnPrimario}>
                         {enviando ? 'Creando…' : 'Crear cuenta y entrar'}
                     </button>

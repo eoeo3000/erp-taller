@@ -268,7 +268,11 @@ function acciones(t) {
     const abrir = `<button class="secundario fila" type="button" data-abrir="${t.slug}">Abrir</button>`;
     const link = `<button class="secundario fila" type="button" data-acceso="${t.slug}">Link</button>`;
     if (t.cuentas > 0) return `${abrir}${link}${marca}`;
-    return `<button class="secundario fila" type="button" data-reemitir="${t.slug}">Reemitir instalación</button>${abrir}${link}${marca}`;
+    // Sin cuentas, el link de acceso NO se ofrece: no lleva la clave, así que el dueño del
+    // taller nuevo cae en la pantalla de instalación con el campo vacío y sin forma de
+    // llenarlo. Eso pasó de verdad. Lo que se comparte acá es el enlace de instalación, que
+    // sí la lleva — y es el único que sirve mientras el taller no esté instalado.
+    return `<button class="secundario fila" type="button" data-reemitir="${t.slug}">Enlace de instalación</button>${abrir}${marca}`;
 }
 
 async function pedir(ruta) {
@@ -446,8 +450,9 @@ $('formAlta').addEventListener('submit', async (e) => {
 let spaUrl = '';
 // slug -> { nombre, logo } tal como está guardado hoy. La llena `pintar`.
 let marcas = new Map();
-const AYUDA_INSTALACION = 'Mándaselo al dueño del taller. Vence a los 7 días y se consume al usarse. '
-    + 'Si se pierde, se reemite desde la fila y el anterior deja de servir.';
+const AYUDA_INSTALACION = 'Mándaselo al dueño del taller: lleva la clave adentro, así que él no tiene que '
+    + 'escribir nada. Vence a los 7 días y se consume al usarse. Si se pierde, se emite otro desde la fila '
+    + 'y el anterior deja de servir.';
 const AYUDA_ACCESO = 'El «?taller=» no es decorativo: es lo que hace que su correo se busque en SU base. '
     + 'Con abrirlo una vez basta — después el navegador lo recuerda y puede guardar el marcador normal.';
 
@@ -480,7 +485,8 @@ $('filas').addEventListener('click', async (e) => {
     }
 
     if (paraReemitir) {
-        if (!confirm(`Al reemitir, el enlace anterior de "${paraReemitir}" deja de servir. ¿Seguir?`)) return;
+        if (!confirm(`Se emite un enlace NUEVO para "${paraReemitir}" y el anterior deja de servir.`
+            + ' Si ya le mandaste uno y todavía no lo usa, este lo invalida. ¿Seguir?')) return;
         e.target.disabled = true;
         try {
             const resp = await fetch(`/api/talleres/${encodeURIComponent(paraReemitir)}/instalacion`, {
