@@ -25,7 +25,7 @@ export default function TableroSupervisoresScreen({ API }) {
 
     return (
         <div style={{ padding: '16px 20px', height: '100%', overflow: 'auto', boxSizing: 'border-box' }}>
-            <h1 style={{ fontSize: 18, fontWeight: 700, margin: '0 0 4px' }}>Tablero de supervisores</h1>
+            <h1 data-guia="tablero.titulo" style={{ fontSize: 18, fontWeight: 700, margin: '0 0 4px' }}>Tablero de supervisores</h1>
             <div style={{ fontSize: 11, color: t.textoAtenuado1, marginBottom: 14 }}>Evaluaciones, ejecuciones e informes de cada supervisor.</div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 11 }}>

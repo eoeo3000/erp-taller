@@ -453,7 +453,7 @@ const IngresoScreen = ({ solicitudes = [], liberarSolicitudManual, cargarDatos, 
                             </div>
                         </div>
                     ) : (
-                    <div style={{ padding: '13px 16px 8px' }}>
+                    <div data-guia="ingreso.nueva" style={{ padding: '13px 16px 8px' }}>
                         <div style={styles.tituloBloque}>{editandoId ? 'Editar solicitud' : 'Nueva solicitud de servicio'}</div>
                         <div style={styles.formGrid}>
                             {campos.map(c => (
@@ -595,7 +595,7 @@ const IngresoScreen = ({ solicitudes = [], liberarSolicitudManual, cargarDatos, 
                         )}
                     </div>
 
-                    <div style={styles.barraFiltros}>
+                    <div data-guia="ingreso.lista" style={styles.barraFiltros}>
                         <span style={styles.etiquetaBarra}>Solicitudes ingresadas</span>
                         <input
                             value={filtroTexto}

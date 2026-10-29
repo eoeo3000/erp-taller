@@ -277,7 +277,7 @@ const GanttScreen = ({ recursos = [], ots = [], calendarios = [], obtenerHorasPa
                 </div>
             )}
             <header style={styles.header}>
-                <h1 style={styles.h1}>Programación</h1>
+                <h1 data-guia="gantt.titulo" style={styles.h1}>Programación</h1>
                 <span style={styles.subtitulo}>Plano de ejecución y capacidad real del taller</span>
             </header>
 

@@ -206,7 +206,7 @@ const RecursosScreen = ({
             `}</style>
 
             <header style={styles.header}>
-                <h1 style={styles.h1}>Recursos</h1>
+                <h1 data-guia="recursos.titulo" style={styles.h1}>Recursos</h1>
                 <span style={styles.subtitulo}>Personal, activos, catálogo y turnos que alimentan la programación</span>
             </header>
 

@@ -65,6 +65,8 @@ import LoginScreen from './screens/LoginScreen';
 import InstalacionScreen from './screens/InstalacionScreen';
 import RestablecerScreen from './screens/RestablecerScreen';
 import MarcaTaller from './components/MarcaTaller';
+import Guia from './guia/Guia';
+import { yaVioLaGuia, marcarGuiaVista } from './guia/vista';
 import { obtenerEntorno, fijarEntorno } from './utils/entorno';
 // Importado por su efecto al cargar: lee `?taller=` del link (instalación, activación,
 // restablecer), lo recuerda en este navegador y lo manda en todas las llamadas. Sin esto,
@@ -443,6 +445,14 @@ function App() {
   const otsProgramables = ots.filter(o => o.estado === 'Planificada' || o.estado === 'Programada').length;
   const horaSync = ultimaSync ? ultimaSync.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' }) : '—';
 
+  // El modo guía. `invitacion` es el aviso chico de la primera visita: abrir el recorrido
+  // encima de alguien que entra a trabajar sería secuestrarle la pantalla, y la primera vez
+  // es justamente cuando no se sabe si quien entra viene a mirar o a hacer algo.
+  const [guiaAbierta, setGuiaAbierta] = useState(false);
+  const [invitacion, setInvitacion] = useState(() => !yaVioLaGuia());
+  const abrirGuia = () => { setInvitacion(false); marcarGuiaVista(); setGuiaAbierta(true); };
+  const descartarInvitacion = () => { setInvitacion(false); marcarGuiaVista(); };
+
   const navOperacion = [
     { to: '/', label: 'Ingreso', count: solicitudesSinOT },
     { to: '/dashboard', label: 'Panel de control', count: ots.length },
@@ -491,7 +501,7 @@ function App() {
                 <div style={styles.navMarca}>
                   <MarcaTaller marca={marca} estilo={styles.navMarcaTitulo} />
                 </div>
-                <div style={styles.navGrupo}>
+                <div data-guia="nav.operacion" style={styles.navGrupo}>
                   <div style={styles.navGrupoLabel}>Operación</div>
                   {navOperacion.map(item => (
                     <NavLink key={item.to} to={item.to}
@@ -518,6 +528,9 @@ function App() {
                     <div onClick={cerrarSesionUsuario} style={styles.navUsuarioSalir}>Cerrar sesión</div>
                   </div>
                 )}
+                <div onClick={abrirGuia} style={styles.navGuia} title="Recorrido guiado por el sistema">
+                  Guía del sistema
+                </div>
                 <div style={styles.navPie}>Sincronizado {horaSync}</div>
               </nav>
               <div
@@ -535,6 +548,15 @@ function App() {
             {navOculta ? '›' : '‹'}
           </div>
         </>
+
+        <Guia abierta={guiaAbierta} onCerrar={() => setGuiaAbierta(false)} />
+        {invitacion && !guiaAbierta && (
+          <div style={styles.invitacion}>
+            <span>¿Primera vez acá? Hay un recorrido de dos minutos por el sistema.</span>
+            <button type="button" onClick={abrirGuia} style={styles.invitacionVer}>Ver</button>
+            <button type="button" onClick={descartarInvitacion} style={styles.invitacionNo}>Ahora no</button>
+          </div>
+        )}
 
         <main style={styles.main}>
           <BannerDemo entorno={entornoActivo} onVolver={volverAProduccion} />
@@ -632,6 +654,27 @@ const styles = {
   navUsuarioSalir: {
     fontSize: '10.5px', color: 'rgba(255,255,255,.38)', cursor: 'pointer',
     textDecoration: 'underline', whiteSpace: 'nowrap',
+  },
+  navGuia: {
+    padding: '7px 14px', fontSize: '11px', color: '#9a9992', cursor: 'pointer',
+    borderTop: '1px solid rgba(255,255,255,.07)', letterSpacing: '.02em',
+  },
+  // Abajo a la derecha y angosto: tiene que verse sin tapar la pantalla de quien entró a
+  // trabajar y no a mirar.
+  invitacion: {
+    position: 'fixed', right: 16, bottom: 16, zIndex: 8000, maxWidth: 330,
+    display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 8,
+    padding: '10px 13px', background: '#1c1d1b', color: '#e8e7e3',
+    borderRadius: 3, boxShadow: '0 8px 26px rgba(0,0,0,.3)', fontSize: '11.5px', lineHeight: 1.45,
+  },
+  invitacionVer: {
+    height: 25, padding: '0 11px', border: '1px solid oklch(0.48 0.10 250)',
+    background: 'oklch(0.48 0.10 250)', color: '#fff', fontSize: '11px', fontWeight: 700,
+    cursor: 'pointer', borderRadius: 2, fontFamily: 'inherit',
+  },
+  invitacionNo: {
+    height: 25, padding: '0 8px', border: 'none', background: 'none',
+    color: '#9a9992', fontSize: '11px', cursor: 'pointer', fontFamily: 'inherit',
   },
   navPie: {
     // `marginTop: auto` acá y en navUsuario: el primero de los dos que exista se lleva el

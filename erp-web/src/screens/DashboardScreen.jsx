@@ -601,7 +601,7 @@ const DashboardScreen = ({ ots = [], solicitudes = [], eliminarOT, eliminarSolic
         <div style={styles.raiz}>
             {/* Header */}
             <header style={styles.header}>
-                <h1 style={styles.h1}>Panel de control</h1>
+                <h1 data-guia="dashboard.titulo" style={styles.h1}>Panel de control</h1>
                 <span style={styles.subtitulo}>Solicitudes y órdenes de trabajo activas</span>
                 <div style={styles.headerAcciones}>
                     <input
