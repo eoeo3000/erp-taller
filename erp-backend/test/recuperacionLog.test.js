@@ -22,7 +22,13 @@ let fallarEnvio = null;
 
 for (const [ruta, exports] of [
     ['../src/models/Usuario', () => ({
-        findOne: async ({ email, estado }) => (cuenta && cuenta.email === email && cuenta.estado === estado ? { ...cuenta } : null),
+        findOne: async ({ email, estado }) => {
+            if (!cuenta || cuenta.email !== email) return null;
+            // Sin `estado` en el filtro, la busca igual: es la consulta que el controlador
+            // hace SOLO para saber si la cuenta existe aunque esté revocada.
+            if (estado === undefined) return { ...cuenta };
+            return cuenta.estado === estado ? { ...cuenta } : null;
+        },
         updateOne: async () => ({}),
     })],
     ['../src/config/mailer', {
@@ -40,7 +46,7 @@ for (const [ruta, exports] of [
 const authController = require('../src/controllers/authController');
 
 // Corre `recuperar` capturando lo que escribe en el log.
-async function pedirRecuperacion(email) {
+async function pedirRecuperacion(email, taller = 'principal') {
     cuenta = cuenta || null;
     enviados = [];
     const lineas = [];
@@ -55,7 +61,7 @@ async function pedirRecuperacion(email) {
         status: (c) => { cuerpo = { ...(cuerpo || {}), _status: c }; return res; },
     };
     try {
-        await authController.recuperar({ db: {}, entorno: 'produccion', body: { email } }, res);
+        await authController.recuperar({ db: {}, entorno: 'produccion', taller, body: { email } }, res);
     } finally {
         console.log = log;
         console.warn = warn;
@@ -73,8 +79,31 @@ const RESPUESTA_UNICA = 'Si el correo está registrado, te llegará un mensaje c
 test('cuando no existe la cuenta, el log lo dice', async () => {
     cuenta = null;
     const { log, cuerpo } = await pedirRecuperacion('nadie@hotmail.com');
-    assert.match(log, /ninguna cuenta activa/);
+    assert.match(log, /ninguna cuenta con ese correo/);
     assert.strictEqual(cuerpo.mensaje, RESPUESTA_UNICA, 'la respuesta al navegador no cambia');
+});
+
+test('el log dice EN QUÉ TALLER buscó', async () => {
+    // Sin esto, la línea más común del log no se puede interpretar. Recuperar pasa sin
+    // sesión, así que la base sale de la pista del navegador (`X-Taller`/`?taller=`): si esa
+    // pista apunta al cliente equivocado —pasa con quien visita los enlaces de varios—, el
+    // correo se busca donde no está y el log dice exactamente lo mismo que si la cuenta no
+    // existiera. Horas perdidas mirando la base correcta mientras el servidor miraba otra.
+    cuenta = null;
+    const { log } = await pedirRecuperacion('nadie@hotmail.com', 'taller-lopez');
+    assert.match(log, /taller taller-lopez/);
+});
+
+test('una cuenta REVOCADA no se confunde con una que no existe', async () => {
+    // Las dos daban la misma línea, y mandan a lugares distintos: "no existe" manda a revisar
+    // el correo o el taller; "revocada" manda a Cuentas de oficina a reactivarla. A quien
+    // pregunta se le responde lo mismo igual, que es lo que no se puede tocar.
+    cuenta = { ...cuentaActiva('eliseo@hotmail.com', true), estado: 'revocado' };
+    const { log, cuerpo, enviados } = await pedirRecuperacion('eliseo@hotmail.com');
+    assert.match(log, /revocada/);
+    assert.ok(!/ninguna cuenta con ese correo/.test(log), 'no puede decir que no existe');
+    assert.strictEqual(enviados.length, 0, 'a una cuenta revocada no se le manda nada');
+    assert.strictEqual(cuerpo.mensaje, RESPUESTA_UNICA);
 });
 
 test('cuando la cuenta existe pero es una invitación sin activar, el log lo distingue', async () => {
