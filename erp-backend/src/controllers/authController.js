@@ -221,9 +221,17 @@ exports.cambiarPassword = async (req, res) => {
 //     quedaría ahí una lista de quién tiene cuenta.
 //   - Sí el dominio, que es lo que de verdad sirve para diagnosticar: el error típico es
 //     escribir el correo de otra cuenta (un gmail cuando la cuenta es de hotmail).
-function registrarRecuperacion(resultado, email) {
+//
+// **Y el taller**, porque sin él la línea más común del log —"ninguna cuenta con ese correo"—
+// no se puede interpretar: recuperar pasa SIN sesión, así que la base sale de la pista
+// `X-Taller`/`?taller=` del navegador (ver `conexionPedida`). Si esa pista apunta al cliente
+// equivocado, el correo se busca donde no está y el log dice exactamente lo mismo que si la
+// cuenta no existiera. Pasó: alguien que visita los enlaces de varios clientes queda con el
+// navegador apuntando al último. El slug no es un secreto —no abre nada— y es lo único que
+// distingue "este correo no tiene cuenta" de "buscamos en la base equivocada".
+function registrarRecuperacion(resultado, email, taller) {
     const dominio = String(email || '').split('@')[1] || '(sin dominio)';
-    console.log(`[auth] recuperación: ${resultado} (@${dominio})`);
+    console.log(`[auth] recuperación: ${resultado} (@${dominio}, taller ${taller || '(por defecto)'})`);
 }
 
 exports.recuperar = async (req, res) => {
@@ -235,19 +243,28 @@ exports.recuperar = async (req, res) => {
         // de averiguar qué correos están registrados (mismo criterio que CREDENCIAL_INVALIDA).
         const respuesta = { ok: true, mensaje: 'Si el correo está registrado, te llegará un mensaje con las instrucciones.' };
         if (!email) {
-            registrarRecuperacion('pedida sin correo', email);
+            registrarRecuperacion('pedida sin correo', email, taller);
             return res.json(respuesta);
         }
 
         const usuario = await Usuario.findOne({ email, estado: 'activo' });
         if (!usuario) {
-            registrarRecuperacion('NO se envió — ninguna cuenta activa con ese correo', email);
+            // Las dos razones por las que no hay cuenta activa se separan SOLO en el log —a
+            // quien pregunta se le responde lo mismo igual— porque mandan a lugares
+            // distintos: "no existe" manda a revisar el correo o el taller, y "revocada"
+            // manda a Cuentas de oficina a reactivarla. Diagnosticar una como la otra hace
+            // perder la tarde buscando donde no es. La consulta extra solo ocurre en el
+            // camino que ya falló.
+            const revocada = await Usuario.findOne({ email }).catch(() => null);
+            registrarRecuperacion(revocada
+                ? 'NO se envió — la cuenta existe pero está revocada (se reactiva en Cuentas de oficina)'
+                : 'NO se envió — ninguna cuenta con ese correo en este taller', email, taller);
             return res.json(respuesta);
         }
         if (!usuario.passwordHash) {
             // Una invitación que todavía no se activó. Reponer la clave no aplica: lo que
             // corresponde es reenviar la invitación desde Cuentas de oficina.
-            registrarRecuperacion('NO se envió — la cuenta existe pero aún no tiene clave (invitación sin activar)', email);
+            registrarRecuperacion('NO se envió — la cuenta existe pero aún no tiene clave (invitación sin activar)', email, taller);
             return res.json(respuesta);
         }
 
@@ -271,12 +288,12 @@ exports.recuperar = async (req, res) => {
                     + `El link vence en ${MINUTOS_VALIDEZ_RESET} minutos y sirve una sola vez.\n`
                     + `Si no fuiste tú, ignora este correo: tu clave actual sigue funcionando.`,
             });
-            registrarRecuperacion('correo entregado al proveedor', email);
+            registrarRecuperacion('correo entregado al proveedor', email, taller);
         } catch (eCorreo) {
             // Mismo criterio que usuarioController al emitir tokens: el fallo de correo se
             // registra pero no se le informa a quien llama, para no filtrar si existe o no.
             console.warn('[auth] no se pudo enviar el correo de recuperación:', eCorreo.message);
-            registrarRecuperacion(`FALLÓ el envío — ${eCorreo.message}`, email);
+            registrarRecuperacion(`FALLÓ el envío — ${eCorreo.message}`, email, taller);
         }
 
         res.json(respuesta);
