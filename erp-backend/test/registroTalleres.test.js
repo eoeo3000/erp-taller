@@ -20,6 +20,9 @@ let yaInstalado = false;
 let SIN_BASE = [];
 // Archivos que todavía no se migraron a la carpeta de su taller.
 let SUELTOS = [];
+// Las cuentas de oficina de cada base, y las bases que no responden al listarlas.
+let CUENTAS = {};
+let SIN_CUENTAS = [];
 // Lo que devuelve el servicio de métricas para cada taller medible.
 let metricasFalsas = { baseResponde: true, ots: 10, solicitudes: 12, cuentas: 2, ultimaActividad: new Date('2026-10-18T10:00:00Z'), bytesBase: 8 * 1024 * 1024, error: null };
 function fabricaTaller() {
@@ -75,6 +78,19 @@ for (const [ruta, exports] of [
     }],
     ['../src/models/Usuario', (conn) => ({
         exists: async () => (yaInstalado ? { _id: 1 } : null),
+        // La cadena que usa `listarCuentas`. El doble devuelve los documentos ENTEROS —con
+        // passwordHash y token— a propósito: así la prueba verifica que lo que los esconde
+        // sea el código y no la casualidad de que el doble no los tenga.
+        find: () => ({
+            select: () => ({
+                limit: () => ({
+                    lean: async () => {
+                        if (SIN_CUENTAS.includes(conn.name)) throw new Error('base caída');
+                        return CUENTAS[conn.name] || [];
+                    },
+                }),
+            }),
+        }),
     })],
     ['../src/config/conexiones', {
         conexionDeControl: () => ({}),
@@ -126,6 +142,8 @@ test.beforeEach(() => {
     yaInstalado = false;
     SIN_BASE = [];
     SUELTOS = [];
+    CUENTAS = {};
+    SIN_CUENTAS = [];
 });
 test.after(() => { delete process.env.PANEL_TOKEN; delete process.env.MONGO_URI_CONTROL; });
 
@@ -468,4 +486,109 @@ test('la base de control y la demo también cuentan', async () => {
         cuerpo.totales.bases.bytes,
         cuerpo.totales.bases.talleres + cuerpo.totales.bases.control + cuerpo.totales.bases.demo,
     );
+});
+
+// --- Quiénes pueden entrar, y a qué taller (GET /api/talleres/cuentas) ---
+//
+// Existe por una pregunta de soporte que no se podía contestar sin entrar a la Shell:
+// «¿esta persona tiene cuenta, y en cuál de mis clientes?». Lo que estas pruebas cuidan es
+// que responderla no se convierta en una forma de repartir accesos.
+
+const CUENTA = (email, nombre, extra = {}) => ({
+    _id: `id-${email}`, email, nombre, estado: 'activo',
+    passwordHash: 'HASH-SECRETO', token: 'TOKEN-DE-LA-PWA', resetHash: 'RESET-SECRETO',
+    ...extra,
+});
+
+test('lista las cuentas de todos los talleres, diciendo de cuál es cada una', async () => {
+    filas.push({ slug: 'taller-lopez', nombre: 'Taller López', estado: 'activo', mongoUri: 'mongodb://servidor/lopez', fechaAlta: new Date() });
+    CUENTAS['base-principal'] = [CUENTA('ana@erp.cl', 'Ana')];
+    CUENTAS['base-taller-lopez'] = [CUENTA('eliseo@hotmail.com', 'Eliseo')];
+
+    const { estado, cuerpo } = await pedir('/api/talleres/cuentas');
+    assert.strictEqual(estado, 200);
+    assert.deepStrictEqual(
+        cuerpo.cuentas.map((c) => [c.taller, c.email]),
+        [['principal', 'ana@erp.cl'], ['taller-lopez', 'eliseo@hotmail.com']],
+    );
+});
+
+test('NUNCA devuelve credenciales, por más que la base las traiga', async () => {
+    // La razón por la que esto no se parece a una exportación. El `token` de la PWA entra a
+    // la app SIN clave: publicarlo acá sería regalar accesos para ahorrar un clic. El doble
+    // devuelve los documentos enteros a propósito, así lo que los esconde es el código.
+    CUENTAS['base-principal'] = [CUENTA('ana@erp.cl', 'Ana')];
+    const { cuerpo } = await pedir('/api/talleres/cuentas');
+    const texto = JSON.stringify(cuerpo);
+    assert.ok(!texto.includes('HASH-SECRETO'), 'no puede salir el passwordHash');
+    assert.ok(!texto.includes('TOKEN-DE-LA-PWA'), 'no puede salir el token de la PWA');
+    assert.ok(!texto.includes('RESET-SECRETO'), 'no puede salir el hash de recuperación');
+});
+
+test('se puede buscar por parte del correo o del nombre', async () => {
+    // El caso real no siempre es «¿está este correo?» sino «no me acuerdo con cuál la creé».
+    // Ahí una búsqueda exacta no sirve de nada.
+    CUENTAS['base-principal'] = [CUENTA('ana@erp.cl', 'Ana'), CUENTA('eliseo@hotmail.com', 'Eliseo')];
+
+    const porCorreo = await pedir('/api/talleres/cuentas?texto=hotmail');
+    assert.deepStrictEqual(porCorreo.cuerpo.cuentas.map((c) => c.email), ['eliseo@hotmail.com']);
+
+    const porNombre = await pedir('/api/talleres/cuentas?texto=ana');
+    assert.deepStrictEqual(porNombre.cuerpo.cuentas.map((c) => c.email), ['ana@erp.cl']);
+});
+
+test('una base caída no corta la consulta: se marca y las demás se muestran igual', async () => {
+    // Enterarse de eso es justamente para lo que existe el panel. Y además: contestar «no
+    // está» con una base sin revisar manda a invitar una cuenta que ya existe.
+    filas.push({ slug: 'taller-lopez', nombre: 'Taller López', estado: 'activo', mongoUri: 'mongodb://servidor/lopez', fechaAlta: new Date() });
+    CUENTAS['base-principal'] = [CUENTA('ana@erp.cl', 'Ana')];
+    SIN_CUENTAS = ['base-taller-lopez'];
+
+    const { cuerpo } = await pedir('/api/talleres/cuentas');
+    assert.deepStrictEqual(cuerpo.cuentas.map((c) => c.email), ['ana@erp.cl']);
+    assert.deepStrictEqual(cuerpo.fallidos.map((f) => f.taller), ['taller-lopez']);
+});
+
+test('un taller suspendido se nombra en vez de desaparecer', async () => {
+    // Un taller suspendido no obtiene conexión, y el corte está en el registro. Omitirlo en
+    // silencio haría creer que se revisó todo — y la cuenta buscada puede estar justo ahí.
+    filas.push({ slug: 'taller-123', nombre: 'Taller 123', estado: 'activo', mongoUri: 'mongodb://servidor/123', fechaAlta: new Date() });
+    SIN_BASE = ['taller-123'];
+    CUENTAS['base-principal'] = [CUENTA('ana@erp.cl', 'Ana')];
+
+    const { cuerpo } = await pedir('/api/talleres/cuentas');
+    assert.deepStrictEqual(cuerpo.fallidos.map((f) => f.taller), ['taller-123']);
+    assert.deepStrictEqual(cuerpo.revisados, ['principal']);
+});
+
+test('se puede acotar a un solo taller', async () => {
+    filas.push({ slug: 'taller-lopez', nombre: 'Taller López', estado: 'activo', mongoUri: 'mongodb://servidor/lopez', fechaAlta: new Date() });
+    CUENTAS['base-principal'] = [CUENTA('ana@erp.cl', 'Ana')];
+    CUENTAS['base-taller-lopez'] = [CUENTA('eliseo@hotmail.com', 'Eliseo')];
+
+    const { cuerpo } = await pedir('/api/talleres/cuentas?taller=taller-lopez');
+    assert.deepStrictEqual(cuerpo.revisados, ['taller-lopez']);
+    assert.deepStrictEqual(cuerpo.cuentas.map((c) => c.email), ['eliseo@hotmail.com']);
+});
+
+test('sin la clave del panel no se lista nada', async () => {
+    // Es la regla que sostiene todo lo anterior: esto ensancha lo que vale PANEL_TOKEN, así
+    // que la puerta tiene que ser exactamente la misma que la del resto del panel.
+    CUENTAS['base-principal'] = [CUENTA('ana@erp.cl', 'Ana')];
+    const { estado } = await pedir('/api/talleres/cuentas', { clave: null });
+    assert.strictEqual(estado, 401);
+});
+
+test('distingue quién puede entrar de quién tiene la invitación sin activar', async () => {
+    CUENTAS['base-principal'] = [
+        CUENTA('activa@erp.cl', 'Activa'),
+        { _id: 'x', email: 'pendiente@erp.cl', nombre: 'Pendiente', estado: 'activo' },
+        CUENTA('fuera@erp.cl', 'Fuera', { estado: 'revocado' }),
+    ];
+    const { cuerpo } = await pedir('/api/talleres/cuentas');
+    const por = Object.fromEntries(cuerpo.cuentas.map((c) => [c.email, c]));
+    assert.strictEqual(por['activa@erp.cl'].puedeEntrar, true);
+    assert.strictEqual(por['pendiente@erp.cl'].invitacionSinActivar, true);
+    assert.strictEqual(por['fuera@erp.cl'].puedeEntrar, false);
+    assert.strictEqual(por['fuera@erp.cl'].estado, 'revocado');
 });

@@ -220,3 +220,48 @@ test('el panel dice qué pasa al pasar cada tope, y el rojo queda para lo que se
     assert.match(r.html, /empieza a cobrarse por uso/);
     assert.match(r.html, /LIMITE_ARCHIVOS_AL_PASAR/, 'dice de dónde sale cuál es cuál');
 });
+
+test('la tarjeta de cuentas existe y pregunta por la API, no trae datos', async () => {
+    // Misma regla que el resto del panel: la página es un formulario y el código que pinta.
+    const r = await traer();
+    assert.match(r.html, /id="formCuentas"/);
+    assert.match(r.html, /\/api\/talleres\/cuentas/);
+    // Con forma de correo: `@media` del CSS no cuenta, una dirección de verdad sí.
+    const correos = r.html.match(/[\w.+-]+@[\w-]+\.[\w.]+/g) || [];
+    assert.deepStrictEqual(correos, [], `hay correos incrustados: ${correos.join(', ')}`);
+});
+
+test('el texto que escriben OTROS se escapa antes de pintarlo', async () => {
+    // Hasta esta tarjeta, todo lo que pintaba la página lo había escrito quien administra.
+    // Los nombres de las cuentas no: los escribe la gente de cada taller, en su propia app, y
+    // ESTA página es la que guarda PANEL_TOKEN en su sessionStorage. Un nombre con una
+    // etiqueta adentro correría acá y se llevaría esa clave, y quien lo pusiera no necesitaría
+    // más que una cuenta en su propio taller.
+    const r = await traer();
+    assert.match(r.html, /const seguro =/, 'tiene que existir el escapado');
+    const filaCuenta = r.html.match(/function filaCuenta\(c\) \{[\s\S]*?\n\}/)[0];
+    for (const campo of ['c.email', 'c.nombre', 'c.taller', 'c.estado']) {
+        assert.ok(
+            !filaCuenta.includes(`texto(${campo})`),
+            `${campo} se pinta con texto() en vez de seguro(): eso es HTML sin escapar`,
+        );
+    }
+    assert.match(filaCuenta, /seguro\(c\.email\)/);
+    assert.match(filaCuenta, /seguro\(c\.nombre\)/);
+});
+
+test('escapar de verdad convierte una etiqueta en texto', async () => {
+    // Que la función exista no basta: tiene que hacer lo que dice. Se saca de la página y se
+    // corre, igual que `acciones()`.
+    const { html } = await traer();
+    const fuente = html.match(/const seguro = [\s\S]*?\n\)\);/)[0];
+    // eslint-disable-next-line no-new-func
+    const seguro = new Function(`
+        const texto = (v) => (v === null || v === undefined || v === '' ? '—' : String(v));
+        ${fuente}
+        return seguro(arguments[0]);
+    `);
+    assert.strictEqual(seguro('<img src=x onerror=robar()>'), '&lt;img src=x onerror=robar()&gt;');
+    assert.strictEqual(seguro('a & b'), 'a &amp; b');
+    assert.strictEqual(seguro('"comillas"'), '&quot;comillas&quot;');
+});
