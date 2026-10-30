@@ -544,8 +544,15 @@ function filaCuenta(c) {
         ? '<span class="nota">invitación sin activar</span>'
         : (c.puedeEntrar ? '<span class="punto ok"></span>puede entrar'
             : `<span class="punto mal"></span>${seguro(c.estado)}`);
+    // Si alguna vez entró. Es la columna que cierra la discusión de «creo que yo sí había
+    // entrado con esa cuenta»: una invitación sin activar y una cuenta que se usó y se rompió
+    // se ven idénticas sin esto.
+    const entro = c.ultimoAcceso
+        ? `último ingreso ${fecha(c.ultimoAcceso)}`
+        : '<span class="aviso">nunca entró</span>';
     return `<tr><td>${seguro(c.email)}</td><td>${seguro(c.nombre)}</td>`
-        + `<td><code>${seguro(c.taller)}</code></td><td>${comoEsta}</td></tr>`;
+        + `<td><code>${seguro(c.taller)}</code></td><td>${comoEsta}</td>`
+        + `<td>${entro}<br><span class="nota">creada ${fecha(c.creada)}</span></td></tr>`;
 }
 
 async function buscarCuentas(busqueda, soloTaller = '') {
@@ -562,7 +569,7 @@ async function buscarCuentas(busqueda, soloTaller = '') {
             $('tablaCuentas').innerHTML = '<p class="nota">Ninguna cuenta coincide.</p>';
         } else {
             $('tablaCuentas').innerHTML = '<table><thead><tr><th>Correo</th><th>Nombre</th>'
-                + '<th>Taller</th><th>Cómo está</th></tr></thead><tbody>'
+                + '<th>Taller</th><th>Cómo está</th><th>Uso</th></tr></thead><tbody>'
                 + datos.cuentas.map(filaCuenta).join('') + '</tbody></table>';
         }
 

@@ -88,3 +88,25 @@ test('NUNCA devuelve credenciales', async () => {
     assert.ok(!texto.includes('hash-secreto'), 'no puede salir el passwordHash');
     assert.ok(!texto.includes('token-de-la-pwa'), 'no puede salir el token de la PWA');
 });
+
+test('dice si alguna vez entró, y cuándo', async () => {
+    // «Creo que yo sí había entrado con esa cuenta» es lo primero que se piensa cuando una
+    // invitación aparece sin activar, y sin esto no había forma de contestarlo: una cuenta
+    // que nunca usó su link y una que se usó y se rompió se ven idénticas.
+    const entrada = new Date('2026-10-20T12:00:00Z');
+    const creada = new Date('2026-10-18T09:00:00Z');
+    const { talleres, getUsuario } = bases({
+        principal: [
+            { ...activa('usada@erp.cl'), ultimoAccesoSpa: entrada, createdAt: creada },
+            { email: 'nunca@erp.cl', nombre: 'Nunca', estado: 'activo', createdAt: creada },
+        ],
+    });
+
+    const usada = await buscarCuenta('usada@erp.cl', talleres, getUsuario);
+    assert.deepStrictEqual(usada.hallazgos[0].ultimoAcceso, entrada);
+    assert.deepStrictEqual(usada.hallazgos[0].creada, creada);
+
+    const nunca = await buscarCuenta('nunca@erp.cl', talleres, getUsuario);
+    assert.strictEqual(nunca.hallazgos[0].ultimoAcceso, null, 'nunca entró tiene que ser null, no undefined');
+    assert.strictEqual(nunca.hallazgos[0].invitacionSinActivar, true);
+});

@@ -571,6 +571,23 @@ test('se puede acotar a un solo taller', async () => {
     assert.deepStrictEqual(cuerpo.cuentas.map((c) => c.email), ['eliseo@hotmail.com']);
 });
 
+test('la lista dice si cada cuenta entró alguna vez, y cuándo se creó', async () => {
+    // Es lo que cierra «creo que yo sí había entrado con esa cuenta»: una invitación que
+    // nunca se activó y una cuenta que se usó y se rompió se ven idénticas sin esto. Y la
+    // fecha de creación descarta de una lo otro que se sospecha enseguida, que algo la borró.
+    const entrada = new Date('2026-10-20T12:00:00Z');
+    const creada = new Date('2026-10-18T09:00:00Z');
+    CUENTAS['base-principal'] = [
+        { ...CUENTA('usada@erp.cl', 'Usada'), ultimoAccesoSpa: entrada, createdAt: creada },
+        { _id: 'y', email: 'nunca@erp.cl', nombre: 'Nunca', estado: 'activo', createdAt: creada },
+    ];
+    const { cuerpo } = await pedir('/api/talleres/cuentas');
+    const por = Object.fromEntries(cuerpo.cuentas.map((c) => [c.email, c]));
+    assert.strictEqual(new Date(por['usada@erp.cl'].ultimoAcceso).toISOString(), entrada.toISOString());
+    assert.strictEqual(new Date(por['usada@erp.cl'].creada).toISOString(), creada.toISOString());
+    assert.strictEqual(por['nunca@erp.cl'].ultimoAcceso, null, 'nunca entró tiene que ser null');
+});
+
 test('sin la clave del panel no se lista nada', async () => {
     // Es la regla que sostiene todo lo anterior: esto ensancha lo que vale PANEL_TOKEN, así
     // que la puerta tiene que ser exactamente la misma que la del resto del panel.
