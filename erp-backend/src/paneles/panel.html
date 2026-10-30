@@ -162,6 +162,22 @@
         </div>
 
         <div class="tarjeta">
+            <strong>Cuentas</strong>
+            <p class="nota">Quién puede entrar, y a qué taller. Contesta la pregunta de soporte que antes
+               obligaba a entrar al servidor: «¿esta persona tiene cuenta, y en cuál de mis clientes?».
+               Se puede buscar por parte del correo o del nombre. Vacío los lista todos.</p>
+            <form id="formCuentas" class="fila">
+                <input id="textoCuentas" type="search" placeholder="correo, o parte de él" autocomplete="off">
+                <button type="submit" id="btnCuentas">Buscar</button>
+            </form>
+            <p id="estadoCuentas" class="nota"></p>
+            <div id="tablaCuentas"></div>
+            <p class="nota"><strong>Esto no da acceso a los datos de un cliente</strong> —sus OT, sus precios,
+               sus solicitudes siguen siendo suyos—: muestra quién puede entrar, que es lo que hace falta para
+               sostenerlo. Nunca salen claves ni el token de la app de terreno.</p>
+        </div>
+
+        <div class="tarjeta">
             <strong>Uso total</strong>
             <p class="nota">Los topes son del clúster y del bucket <em>enteros</em>, no de cada cliente: lo que ocupa
                uno le resta a los demás. Por eso un taller en verde no dice nada si entre todos ya se llenó.</p>
@@ -190,6 +206,18 @@
 const CLAVE = 'panelTalleres.clave';
 const $ = (id) => document.getElementById(id);
 const texto = (v) => (v === null || v === undefined || v === '' ? '—' : String(v));
+
+// Texto que viene de otra persona, puesto dentro de HTML.
+//
+// Hasta la tarjeta de Cuentas, todo lo que pintaba esta página lo había escrito quien
+// administra: el nombre del taller, el de la marca. Los nombres de las cuentas no: los
+// escribe la gente DE CADA TALLER, en su propia app, y esta página es la que guarda
+// PANEL_TOKEN en su sessionStorage. Un nombre con una etiqueta adentro correría acá y se
+// llevaría esa clave — y el que lo pusiera no necesitaría más que una cuenta en su propio
+// taller. Por eso todo lo que venga de la API y lleve texto de terceros pasa por acá.
+const seguro = (v) => texto(v).replace(/[&<>"']/g, (c) => (
+    { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+));
 
 function fecha(valor) {
     if (!valor) return '—';
@@ -265,14 +293,15 @@ function base(fila) {
 function acciones(t) {
     const marca = `<button class="secundario fila" type="button" data-marca="${t.slug}">Marca</button>`;
     if (!t.medible) return marca;
+    const cuentas = `<button class="secundario fila" type="button" data-cuentas="${t.slug}">Cuentas</button>`;
     const abrir = `<button class="secundario fila" type="button" data-abrir="${t.slug}">Abrir</button>`;
     const link = `<button class="secundario fila" type="button" data-acceso="${t.slug}">Link</button>`;
-    if (t.cuentas > 0) return `${abrir}${link}${marca}`;
+    if (t.cuentas > 0) return `${abrir}${link}${cuentas}${marca}`;
     // Sin cuentas, el link de acceso NO se ofrece: no lleva la clave, así que el dueño del
     // taller nuevo cae en la pantalla de instalación con el campo vacío y sin forma de
     // llenarlo. Eso pasó de verdad. Lo que se comparte acá es el enlace de instalación, que
     // sí la lleva — y es el único que sirve mientras el taller no esté instalado.
-    return `<button class="secundario fila" type="button" data-reemitir="${t.slug}">Enlace de instalación</button>${abrir}${marca}`;
+    return `<button class="secundario fila" type="button" data-reemitir="${t.slug}">Enlace de instalación</button>${abrir}${cuentas}${marca}`;
 }
 
 async function pedir(ruta) {
@@ -471,6 +500,8 @@ $('filas').addEventListener('click', async (e) => {
     const paraReemitir = e.target.dataset?.reemitir;
     const paraAbrir = e.target.dataset?.abrir;
     const paraMarca = e.target.dataset?.marca;
+    const paraCuentas = e.target.dataset?.cuentas;
+    if (paraCuentas) return buscarCuentas('', paraCuentas);
 
     // `noopener` no es decoración: sin él la pestaña que se abre puede cambiar la dirección de
     // ESTA, que es la que tiene la clave del panel en su sessionStorage.
@@ -501,6 +532,59 @@ $('filas').addEventListener('click', async (e) => {
             e.target.disabled = false;
         }
     }
+});
+
+// --- Cuentas: quién puede entrar, y a qué taller ---
+//
+// Lo que se pinta viene de /api/talleres/cuentas, que ya se encarga de no mandar ni el
+// passwordHash ni el token de la PWA. Acá no hay nada que esconder: si algo llegara, saldría.
+// La prueba de que no llegan está del lado del backend, que es donde se decide.
+function filaCuenta(c) {
+    const comoEsta = c.invitacionSinActivar
+        ? '<span class="nota">invitación sin activar</span>'
+        : (c.puedeEntrar ? '<span class="punto ok"></span>puede entrar'
+            : `<span class="punto mal"></span>${seguro(c.estado)}`);
+    return `<tr><td>${seguro(c.email)}</td><td>${seguro(c.nombre)}</td>`
+        + `<td><code>${seguro(c.taller)}</code></td><td>${comoEsta}</td></tr>`;
+}
+
+async function buscarCuentas(busqueda, soloTaller = '') {
+    $('estadoCuentas').textContent = 'Buscando en cada taller…';
+    $('tablaCuentas').innerHTML = '';
+    $('btnCuentas').disabled = true;
+    try {
+        const parametros = new URLSearchParams();
+        if (busqueda) parametros.set('texto', busqueda);
+        if (soloTaller) parametros.set('taller', soloTaller);
+        const datos = await pedir(`/api/talleres/cuentas?${parametros}`);
+
+        if (!datos.cuentas.length) {
+            $('tablaCuentas').innerHTML = '<p class="nota">Ninguna cuenta coincide.</p>';
+        } else {
+            $('tablaCuentas').innerHTML = '<table><thead><tr><th>Correo</th><th>Nombre</th>'
+                + '<th>Taller</th><th>Cómo está</th></tr></thead><tbody>'
+                + datos.cuentas.map(filaCuenta).join('') + '</tbody></table>';
+        }
+
+        // Qué talleres NO se pudieron revisar. Va junto al resultado y no en un rincón: decir
+        // «no está» con una base sin revisar manda a invitar una cuenta que ya existe.
+        const revisados = datos.revisados.length ? datos.revisados.join(', ') : 'ninguno';
+        const falla = datos.fallidos.length
+            ? ` <span class="aviso">Sin revisar: ${datos.fallidos.map((f) => seguro(f.taller)).join(', ')}
+                 — la respuesta está incompleta.</span>`
+            : '';
+        $('estadoCuentas').innerHTML = `${datos.cuentas.length} cuenta(s). Revisados: ${seguro(revisados)}.${falla}`;
+    } catch (e) {
+        $('estadoCuentas').innerHTML = `<span class="aviso">${e.message}</span>`;
+        if (/401|incorrecta/i.test(e.message)) salir();
+    } finally {
+        $('btnCuentas').disabled = false;
+    }
+}
+
+$('formCuentas').addEventListener('submit', (e) => {
+    e.preventDefault();
+    buscarCuentas($('textoCuentas').value.trim());
 });
 
 // --- La marca de un taller: el nombre que muestra su app y el logo de su cotización ---

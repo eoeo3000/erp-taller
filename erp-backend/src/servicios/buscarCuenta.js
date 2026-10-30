@@ -51,6 +51,45 @@ async function buscarCuenta(email, talleres, getUsuario) {
     return { email: buscado, hallazgos, fallidos };
 }
 
+// Lo mismo, pero listando en vez de buscando una exacta. Lo usa el panel, donde el caso real
+// no siempre es «¿está este correo?» sino «no me acuerdo con cuál la creé»: ahí una búsqueda
+// exacta no sirve de nada.
+//
+// `texto` vacío devuelve todas las cuentas del taller. Con texto, filtra por lo que contenga
+// el correo o el nombre — la comparación se hace EN MEMORIA y no con una expresión regular en
+// Mongo, porque un `$regex` armado con lo que escribe alguien es una forma conocida de colgar
+// una base con un patrón patológico, y acá son decenas de documentos por taller.
+//
+// **Solo cuentas con correo**, igual que `cuentasController.listar`: un `Usuario` con solo
+// `token` es alguien de terreno que entra por la PWA, no tiene correo ni clave, y mezclarlos
+// haría que la lista de «cuentas de oficina» no signifique nada.
+const TOPE_POR_TALLER = 500;
+
+async function listarCuentas({ texto = '', talleres, getUsuario }) {
+    const buscado = String(texto || '').trim().toLowerCase();
+    const cuentas = [];
+    const fallidos = [];
+    for (const { slug, conexion } of talleres) {
+        try {
+            const encontrados = await getUsuario(conexion)
+                .find({ email: { $exists: true, $ne: '' } })
+                .select('-passwordHash -token -resetHash')
+                .limit(TOPE_POR_TALLER)
+                .lean();
+            for (const u of encontrados || []) {
+                const email = String(u.email || '').toLowerCase();
+                const nombre = String(u.nombre || '').toLowerCase();
+                if (buscado && !email.includes(buscado) && !nombre.includes(buscado)) continue;
+                cuentas.push({ taller: slug, email: u.email, ...resumen(u) });
+            }
+        } catch (error) {
+            fallidos.push({ taller: slug, error: error.message });
+        }
+    }
+    cuentas.sort((a, b) => a.taller.localeCompare(b.taller) || a.email.localeCompare(b.email));
+    return { texto: buscado, cuentas, fallidos };
+}
+
 // Qué hacer con lo que se encontró, en una frase. Es el valor de esto: el dato suelto todavía
 // obliga a pensar, y a esa altura ya se perdió media hora.
 function queHacer({ hallazgos, fallidos }, tallerDondeBusco) {
@@ -81,4 +120,4 @@ function queHacer({ hallazgos, fallidos }, tallerDondeBusco) {
         + ' revisar el log por «FALLÓ el envío» y la bandeja de spam.';
 }
 
-module.exports = { buscarCuenta, queHacer };
+module.exports = { buscarCuenta, listarCuentas, queHacer, TOPE_POR_TALLER };

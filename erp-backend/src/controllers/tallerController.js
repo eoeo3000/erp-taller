@@ -22,6 +22,7 @@ const almacenamiento = require('../config/almacenamiento');
 const { uriParaTaller, slugDesdeNombre } = require('../servicios/baseDelTaller');
 const { normalizarLogo, marcaPublica } = require('../servicios/marcaTaller');
 const { hayCuentasDeEscritorio } = require('./instalacionController');
+const { listarCuentas } = require('../servicios/buscarCuenta');
 
 // Cuánto vive el enlace de instalación. Siete días y no una hora: el alta de un cliente no es
 // un trámite de un rato — se le manda el link al dueño del taller y puede sentarse a hacerlo
@@ -319,6 +320,61 @@ async function totalesDeUso(filas, sinSeparar) {
         archivos: { ...uso(archivos, topeDeArchivos(), AL_PASAR_ARCHIVOS), talleres: archivosTalleres, sinSeparar: sinSeparar.bytes || 0, ...otrosArchivos },
     };
 }
+
+// GET /api/talleres/cuentas?texto=&taller= — quiénes pueden entrar, y a qué taller.
+//
+// Existe por una pregunta de soporte que no se podía contestar sin entrar a la Shell del
+// servidor: «¿esta persona tiene cuenta, y en cuál de mis clientes?». El log de la
+// recuperación dice en qué taller buscó, pero no puede decir dónde SÍ está — y las dos
+// salidas son distintas: invitarla, o mandarle el enlace `?taller=` de su taller.
+//
+// --- Dónde está el límite, y por qué este lado de la raya ---
+//
+// Quien administra NO puede entrar a mirar los datos de un cliente: sus OT, sus precios, sus
+// solicitudes. Eso es una propiedad del diseño y no cambia acá. Lo que esto muestra es quién
+// puede entrar, que es infraestructura —la misma que ya se ve en la Shell con las
+// credenciales del servidor en la mano— y lo que hace falta para sostener a un cliente.
+//
+// Igual **ensancha lo que vale `PANEL_TOKEN`**: antes, perderla exponía nombres de clientes,
+// contadores y la marca; ahora expone también la lista de correos de la gente de cada taller,
+// que son datos personales de terceros. Esa es la razón de las tres reglas de abajo, y la
+// razón por la que esto no se parece en nada a una exportación.
+//
+//   - Nunca sale `passwordHash`, `token` ni `resetHash`. El `token` de la PWA entra a la app
+//     sin clave: publicarlo acá sería regalar accesos para ahorrar un clic.
+//   - Solo cuentas CON correo. Un `Usuario` con solo `token` es alguien de terreno, no tiene
+//     cuenta de oficina, y meterlo haría que esta lista no signifique nada.
+//   - Un taller caído no corta la consulta, pero la respuesta dice cuál falló: contestar
+//     «no está» con una base sin revisar manda a invitar una cuenta que ya existe.
+exports.cuentas = async (req, res) => {
+    if (!autorizar(req, res)) return;
+    try {
+        const texto = String(req.query?.texto || '').trim();
+        const soloTaller = String(req.query?.taller || '').trim().toLowerCase();
+
+        const Taller = getTaller(conexionDeControl());
+        const fichas = await Taller.find().sort({ fechaAlta: 1 }).lean();
+
+        const talleres = [];
+        const sinBase = [];
+        for (const t of fichas) {
+            if (soloTaller && t.slug !== soloTaller) continue;
+            // Un taller suspendido o de baja no obtiene conexión, y eso se decide en el
+            // registro. Se nombra aparte en vez de omitirlo en silencio: una cuenta puede
+            // estar justamente ahí, y creer que se revisó todo sería lo peor que podría pasar.
+            try {
+                talleres.push({ slug: t.slug, conexion: obtenerConexion('produccion', t.slug) });
+            } catch (error) {
+                sinBase.push({ taller: t.slug, error: error.message });
+            }
+        }
+
+        const { cuentas, fallidos } = await listarCuentas({ texto, talleres, getUsuario });
+        res.ok({ texto, cuentas, fallidos: [...fallidos, ...sinBase], revisados: talleres.map((t) => t.slug) });
+    } catch (error) {
+        res.fail(500, error.message);
+    }
+};
 
 // POST /api/talleres/:slug/instalacion — reemitir el enlace de instalación.
 //
