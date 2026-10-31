@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { identificar, requiereSesion } = require('../middlewares/sesion');
+const { requiereIdentidad } = require('../middlewares/identidad');
 
 // Importar todas las rutas individuales
 const authRoutes = require('./authRoutes');
@@ -69,17 +70,38 @@ router.use('/disposiciones', requiereSesion, disposicionRoutes);
 router.use('/demo', requiereSesion, demoRoutes);
 router.use('/clientes', requiereSesion, clienteRoutes);
 
-// --- Rutas compartidas con las PWAs: siguen abiertas ---
-// Las dos PWAs las llaman con su propio token (Usuario.token / SesionPortal) o, en el caso
-// de los catálogos y de las lecturas de OT/Solicitud, sin ningún token. Cerrarlas acá
-// dejaría a las apps móviles fuera de servicio, así que la protección de este grupo es el
-// paso siguiente y requiere tocar erp-pwa-operativa para que mande su token en esas
-// llamadas. Mientras tanto siguen con el gate de apiKey donde ya lo tenían.
+// --- Rutas compartidas con las PWAs ---
+// Las llaman dos clientes con dos pruebas de identidad distintas: erp-web manda
+// `Authorization: Bearer` y erp-pwa-operativa manda el token permanente en `?token=`. Por
+// eso el gate es `requiereIdentidad` y no `requiereSesion`: el segundo dejaría a la PWA
+// fuera de servicio. `/ots` y `/solicitudes` lo aplican ruta por ruta (ahí conviven rutas
+// de las dos clases, ver solicitudRoutes.js).
 router.use('/ots', otRoutes);
 router.use('/solicitudes', solicitudRoutes);
 router.use('/portal', portalRoutes);
 router.use('/asignaciones', asignacionRoutes);
-router.use('/uploads', uploadRoutes);
+
+// Subir archivos. El gate va **en el montaje y no en la ruta**, al revés que en
+// solicitudRoutes: este router no tiene ninguna ruta que deba quedar abierta, así que
+// cerrarlo entero hace que la próxima ruta de subida que alguien agregue nazca cerrada en
+// vez de nacer abierta. Es lo contrario de lo que pasó con `/solicitudes`, donde el router
+// entero estaba sin gate porque UNA de sus rutas la usaba la PWA.
+//
+// Lo que esto cierra: `POST /api/uploads/foto` no pedía ninguna credencial, así que
+// cualquiera que supiera la URL del backend podía llenar el bucket — y el bucket se mide
+// contra el tope del plan, que es del bucket entero y no de cada cliente.
+//
+// Y arregla algo que no era un agujero sino un extravío: sin credencial,
+// `middlewares/entorno.js` resuelve al taller por defecto, así que TODA foto subida por
+// cualquier taller caía en `talleres/principal/`. La carpeta por cliente existe para
+// respaldar, medir y borrar por cliente; sin identidad en la request no podía funcionar.
+// Cerrar la ruta y archivar bien la foto son el mismo arreglo.
+//
+// El gate va ANTES de multer a propósito: así una subida sin identidad se rechaza sin
+// haber leído 12MB a memoria.
+router.use('/uploads', requiereIdentidad, uploadRoutes);
+
+// Abiertas de verdad: catálogos que no son de nadie en particular.
 router.use('/tipos-trabajo', tipoTrabajoRoutes);
 router.use('/catalogos-transversales', catalogoTransversalRoutes);
 // Mixto: /whoami la llama la PWA Operativa por token; el resto es administración desde el

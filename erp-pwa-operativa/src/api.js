@@ -198,7 +198,18 @@ function comprimirABlob(archivo) {
 async function subirBlob(blob) {
     const formData = new FormData();
     formData.append('foto', blob, 'foto.jpg');
-    const resp = await fetch(`${API}/uploads/foto`, { method: 'POST', body: formData });
+    // `conEntorno` y no `${API}` pelado, que era lo que había. Esta llamada se quedó fuera
+    // cuando el token pasó a viajar en todas las demás, y era la única que subía algo:
+    //
+    //   - Sin token, `POST /uploads/foto` no sabía quién era y aceptaba a cualquiera.
+    //   - Sin token, el backend resuelve al taller por defecto, así que la foto de un
+    //     supervisor de CUALQUIER taller quedaba archivada en la carpeta del principal.
+    //   - Sin `entorno=`, una foto tomada en modo demo caía en producción.
+    //
+    // Las tres se arreglan con la misma línea, porque las tres salían de no decir quién
+    // llama. No se pone `Content-Type`: con `FormData` lo arma el navegador con su
+    // `boundary`, y escribirlo a mano rompe la subida.
+    const resp = await fetch(conEntorno('/uploads/foto'), { method: 'POST', body: formData });
     const data = await resp.json().catch(() => ({}));
     if (!resp.ok) throw new Error(data.error || `Error ${resp.status}`);
     return `${BACKEND_ORIGIN}${data.url}`;
