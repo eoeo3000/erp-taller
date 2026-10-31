@@ -2,6 +2,7 @@
 // token por persona (Usuario.token) y por dispositivo (SesionPortal), sin clave.
 const getUsuario = require('../models/Usuario');
 const getSesionStaff = require('../models/SesionStaff');
+const bitacora = require('../servicios/bitacoraCuentas');
 const { hashPassword, verificarPassword } = require('../utils/password');
 const { generarToken, hashToken, conPrefijo } = require('../utils/tokens');
 const { tallerPorDefecto } = require('../config/talleres');
@@ -87,6 +88,11 @@ exports.login = async (req, res) => {
             if (intentos >= MAX_INTENTOS) {
                 cambios.bloqueadoHasta = new Date(Date.now() + MINUTOS_BLOQUEO * 60 * 1000);
                 cambios.intentosFallidos = 0;
+                // Solo el bloqueo, no cada intento fallido: una línea por intento convertiría
+                // la bitácora en el registro de quien se equivoca al escribir, y taparía lo
+                // que de verdad hay que ver.
+                await bitacora.registrar(db, { accion: 'ingreso-bloqueado', usuario, req,
+                    detalle: `${MAX_INTENTOS} intentos fallidos — bloqueada ${MINUTOS_BLOQUEO} min` });
             }
             await Usuario.updateOne({ _id: usuario._id }, cambios);
             return res.status(401).json({ error: CREDENCIAL_INVALIDA });
@@ -96,6 +102,9 @@ exports.login = async (req, res) => {
         await Usuario.updateOne({ _id: usuario._id }, {
             intentosFallidos: 0, bloqueadoHasta: null, ultimoAccesoSpa: new Date(),
         });
+        // `ultimoAccesoSpa` guarda la ÚLTIMA vez y pisa la anterior; esto guarda cada una.
+        // La pregunta que no se podía contestar era «¿entró alguna vez, y desde dónde?».
+        await bitacora.registrar(db, { accion: 'ingreso', usuario, req });
 
         res.json({ token, usuario: usuarioPublico(usuario), minutosInactividad: MINUTOS_INACTIVIDAD });
     } catch (error) {
@@ -196,6 +205,7 @@ exports.cambiarPassword = async (req, res) => {
         // Se cierran las demás sesiones, no la actual: cambiar la clave es lo que hace
         // alguien que sospecha que otro la tiene, y el efecto esperado es echar a ese otro
         // sin echarse a sí mismo de la pestaña donde está trabajando.
+        await bitacora.registrar(req.db, { accion: 'clave-cambiada', usuario: req.usuario, req });
         await getSesionStaff(req.db).updateMany(
             { usuarioId: req.usuario._id, estado: 'activa', _id: { $ne: req.sesion?._id } },
             { estado: 'cerrada' },
@@ -342,6 +352,14 @@ exports.restablecer = async (req, res) => {
         // Acá sí se cierran TODAS: quien restablece la clave no tiene ninguna sesión que
         // conservar, y si alguien más estaba dentro con la clave vieja, queda afuera.
         await getSesionStaff(db).updateMany({ usuarioId: usuario._id, estado: 'activa' }, { estado: 'cerrada' });
+
+        // La misma ruta activa una invitación y repone una clave olvidada: lo que las separa
+        // es si esa cuenta YA tenía clave. Sin distinguirlas, el día que alguien pregunte
+        // «¿cuándo activó su cuenta?» la bitácora diría «cambió la clave» y no es lo mismo.
+        await bitacora.registrar(db, {
+            accion: usuario.passwordHash ? 'clave-restablecida' : 'activada',
+            usuario, req,
+        });
 
         res.json({ ok: true });
     } catch (error) {

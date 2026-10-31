@@ -131,3 +131,20 @@ test('ningún aviso de correo incluye el valor de BREVO_API_KEY', () => {
         assert.ok(!texto.includes(clave));
     }
 });
+
+test('el servidor confía en UN proxy, no en la cadena entera', async () => {
+    // Render pone un proxy delante, así que sin `trust proxy` req.ip es la dirección de ese
+    // proxy: todas las sesiones y todas las líneas de bitácora con la misma IP, que no es la
+    // de nadie. Una dirección equivocada en un registro de accesos es peor que ninguna.
+    //
+    // Y el valor importa: con `true` Express confía en la cadena ENTERA de X-Forwarded-For,
+    // que la escribe quien llama — cualquiera podría anteponer la IP que quisiera y dejarla
+    // escrita en la bitácora. Con 1 se toma el último tramo, el que escribió el proxy de
+    // Render, que es el único que no se puede falsificar desde afuera.
+    const fs = require('node:fs');
+    const path = require('node:path');
+    const servidor = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
+
+    assert.match(servidor, /app\.set\('trust proxy',\s*1\)/, 'falta declarar trust proxy');
+    assert.ok(!/trust proxy['"],\s*true/.test(servidor), 'con `true` la IP se puede falsificar');
+});

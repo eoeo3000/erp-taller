@@ -284,8 +284,11 @@ test('la tabla de cuentas ofrece solo acciones REVERSIBLES', async () => {
     // existir, y esta prueba es lo que impide que alguien lo agregue sin pensarlo.
     const r = await traer();
     // Las acciones se nombran al llamar a `boton(...)`; el atributo las arma con `${accion}`.
+    // Lista explícita a propósito: agregar una acción obliga a pasar por acá y decidir si es
+    // reversible. `bitacora` solo lee, así que no necesita vuelta atrás.
+    const PERMITIDAS = ['bitacora', 'reactivar', 'reenviar', 'revocar'];
     const acciones = [...r.html.matchAll(/boton\('([a-z]+)'/g)].map((m) => m[1]);
-    assert.deepStrictEqual([...new Set(acciones)].sort(), ['reactivar', 'reenviar', 'revocar']);
+    assert.deepStrictEqual([...new Set(acciones)].sort(), PERMITIDAS);
     assert.ok(!/boton\('(eliminar|borrar)'/.test(r.html), 'no puede haber un borrado de cuentas');
     assert.ok(!/cuentas\/[^'"`]*\/(eliminar|borrar)/.test(r.html), 'ni una llamada a borrar');
 });
@@ -300,4 +303,46 @@ test('revocar y reenviar preguntan antes, porque rompen algo que ya está andand
         assert.ok(aviso.includes(`${accion}:`), `falta el aviso de ${accion}`);
     }
     assert.match(r.html, /if \(!confirm\(AVISO_ACCION\[accion\]\(correo\)\)\) return;/);
+});
+
+test('la bitácora se muestra pero NO se puede tocar', async () => {
+    // Un registro de lo que pasó que se pueda editar o borrar desde la misma pantalla no es
+    // un registro: es una nota. La página solo lo lee (GET) y lo pinta.
+    const r = await traer();
+    assert.match(r.html, /cuentas\/\$\{encodeURIComponent\(id\)\}\/bitacora/);
+    const verBitacora = r.html.match(/async function verBitacora\([\s\S]*?\n\}/)[0];
+    assert.ok(!/method:\s*'(POST|PUT|PATCH|DELETE)'/.test(verBitacora), 'la bitácora solo se lee');
+});
+
+test('el historial escapa lo que viene de la API, incluida la IP', async () => {
+    // Misma razón que la tabla de cuentas: el nombre lo escribe la gente de cada taller y
+    // esta página guarda PANEL_TOKEN. El detalle y la IP vienen del servidor, pero pasan por
+    // el mismo lugar — una excepción «esto viene del backend, es seguro» es cómo vuelve.
+    const r = await traer();
+    const verBitacora = r.html.match(/async function verBitacora\([\s\S]*?\n\}/)[0];
+    for (const campo of ['l.detalle', 'l.ip', 'l.porNombre || l.porEmail']) {
+        assert.ok(verBitacora.includes(`seguro(${campo})`), `${campo} se pinta sin escapar`);
+    }
+});
+
+test('el historial escapa los valores de la API y NO el markup propio', async () => {
+    // La primera versión escapaba la celda entera —el valor de la API junto con el `<span>`
+    // del caso «nadie lo hizo por ella», que lo escribe esta misma página— y en pantalla
+    // salía el `<span class="nota">…</span>` crudo. Las dos pruebas de escapado no lo vieron
+    // porque las dos preguntan si el dato de la API va escapado, y sí iba: lo que estaba de
+    // más era lo propio. Se vio mirando la página en un navegador.
+    const r = await traer();
+    const verBitacora = r.html.match(/async function verBitacora\([\s\S]*?\n\}/)[0];
+    assert.ok(!/seguro\(quien\)/.test(verBitacora), 'se escapa la celda entera, markup propio incluido');
+    assert.match(verBitacora, /\$\{quien\}/, 'el markup propio tiene que salir sin escapar');
+});
+
+test('desde el historial se puede volver a la lista que se estaba mirando', async () => {
+    // El historial reemplaza la tabla de cuentas. Sin una vuelta, la única salida es buscar
+    // otra vez, y quien llegó apretando «Cuentas» en la fila de un taller perdía ese filtro.
+    // Por eso vuelve con la MISMA búsqueda y no con la lista entera.
+    const r = await traer();
+    const verBitacora = r.html.match(/async function verBitacora\([\s\S]*?\n\}/)[0];
+    assert.match(verBitacora, /data-volver/, 'el historial no ofrece cómo volver');
+    assert.match(r.html, /buscarCuentas\(ultimaBusqueda\.texto, ultimaBusqueda\.taller\)/);
 });

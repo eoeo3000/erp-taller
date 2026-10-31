@@ -25,6 +25,7 @@ const { hayCuentasDeEscritorio } = require('./instalacionController');
 const { listarCuentas } = require('../servicios/buscarCuenta');
 const { reenviarInvitacion, revocarCuenta, reactivarCuenta } = require('../servicios/cuentasDeTaller');
 const getSesionStaff = require('../models/SesionStaff');
+const bitacora = require('../servicios/bitacoraCuentas');
 
 // Cuánto vive el enlace de instalación. Siete días y no una hora: el alta de un cliente no es
 // un trámite de un rato — se le manda el link al dueño del taller y puede sentarse a hacerlo
@@ -415,6 +416,9 @@ exports.reenviarInvitacionDeCuenta = async (req, res) => {
             entorno: 'produccion', taller: destino.slug,
         });
         if (r.error) return res.fail(r.estado, r.error);
+        // `origen: 'panel'` es la mitad de la respuesta: sin eso, «invitación reenviada» no
+        // dice si fue la oficina del taller o quien arrienda el sistema.
+        await bitacora.registrar(destino.db, { accion: 'invitacion-reenviada', usuario: r.usuario, req, origen: 'panel' });
         res.ok({ correoEnviado: r.correoEnviado, link: r.link });
     } catch (error) {
         res.fail(500, error.message);
@@ -431,6 +435,7 @@ exports.revocarCuentaDeTaller = async (req, res) => {
             Usuario: getUsuario(destino.db), SesionStaff: getSesionStaff(destino.db), id: req.params.id,
         });
         if (r.error) return res.fail(r.estado, r.error);
+        await bitacora.registrar(destino.db, { accion: 'revocada', usuario: r.usuario, req, origen: 'panel' });
         res.ok({ cuenta: { estado: r.usuario.estado } });
     } catch (error) {
         res.fail(500, error.message);
@@ -445,7 +450,28 @@ exports.reactivarCuentaDeTaller = async (req, res) => {
     try {
         const r = await reactivarCuenta({ Usuario: getUsuario(destino.db), id: req.params.id });
         if (r.error) return res.fail(r.estado, r.error);
+        await bitacora.registrar(destino.db, { accion: 'reactivada', usuario: r.usuario, req, origen: 'panel' });
         res.ok({ cuenta: { estado: r.usuario.estado } });
+    } catch (error) {
+        res.fail(500, error.message);
+    }
+};
+
+// GET /api/talleres/:slug/cuentas/:id/bitacora — qué pasó con esta cuenta.
+//
+// Es la pregunta que no se podía contestar: «¿entró alguna vez?», «¿quién la revocó?»,
+// «¿cuándo activó su invitación?». `ultimoAccesoSpa` guarda solo la última vez y pisa la
+// anterior; esto guarda cada una, con quién la hizo y desde dónde.
+//
+// Nunca trae credenciales porque la bitácora no las guarda: lo que se registra es que algo
+// pasó, no con qué se hizo.
+exports.bitacoraDeCuenta = async (req, res) => {
+    if (!autorizar(req, res)) return;
+    const destino = conexionDelTaller(req, res);
+    if (!destino) return;
+    try {
+        const lineas = await bitacora.leer(destino.db, { usuarioId: req.params.id, limite: 50 });
+        res.ok({ lineas });
     } catch (error) {
         res.fail(500, error.message);
     }
