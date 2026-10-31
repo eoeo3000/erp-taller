@@ -229,9 +229,19 @@ exports.cambiarPassword = async (req, res) => {
 // cuenta no existiera. Pasó: alguien que visita los enlaces de varios clientes queda con el
 // navegador apuntando al último. El slug no es un secreto —no abre nada— y es lo único que
 // distingue "este correo no tiene cuenta" de "buscamos en la base equivocada".
-function registrarRecuperacion(resultado, email, taller) {
+// **Y el entorno**, porque un taller tiene DOS bases —producción y demo— y la elige el
+// navegador, no el servidor: `utils/entorno.js` lo guarda en localStorage y lo manda como
+// `X-Entorno` en cada llamada, igual que hacía la pista del taller. Un navegador que quedó
+// en demo busca el correo en la base de demostración, donde esa cuenta no existe, y hasta
+// acá el log decía exactamente lo mismo que si no existiera en ninguna parte.
+//
+// Y es peor que con el taller: la pantalla de ingreso **no muestra el banner de demo** —vive
+// dentro del shell de la app, no en el login—, así que desde ahí no hay ninguna señal de en
+// qué base se está buscando. Esta línea es la única.
+function registrarRecuperacion(resultado, email, taller, entorno) {
     const dominio = String(email || '').split('@')[1] || '(sin dominio)';
-    console.log(`[auth] recuperación: ${resultado} (@${dominio}, taller ${taller || '(por defecto)'})`);
+    const donde = `taller ${taller || '(por defecto)'}, ${entorno || 'produccion'}`;
+    console.log(`[auth] recuperación: ${resultado} (@${dominio}, ${donde})`);
 }
 
 exports.recuperar = async (req, res) => {
@@ -243,7 +253,7 @@ exports.recuperar = async (req, res) => {
         // de averiguar qué correos están registrados (mismo criterio que CREDENCIAL_INVALIDA).
         const respuesta = { ok: true, mensaje: 'Si el correo está registrado, te llegará un mensaje con las instrucciones.' };
         if (!email) {
-            registrarRecuperacion('pedida sin correo', email, taller);
+            registrarRecuperacion('pedida sin correo', email, taller, req.entorno);
             return res.json(respuesta);
         }
 
@@ -258,13 +268,13 @@ exports.recuperar = async (req, res) => {
             const revocada = await Usuario.findOne({ email }).catch(() => null);
             registrarRecuperacion(revocada
                 ? 'NO se envió — la cuenta existe pero está revocada (se reactiva en Cuentas de oficina)'
-                : 'NO se envió — ninguna cuenta con ese correo en este taller', email, taller);
+                : 'NO se envió — ninguna cuenta con ese correo en este taller', email, taller, req.entorno);
             return res.json(respuesta);
         }
         if (!usuario.passwordHash) {
             // Una invitación que todavía no se activó. Reponer la clave no aplica: lo que
             // corresponde es reenviar la invitación desde Cuentas de oficina.
-            registrarRecuperacion('NO se envió — la cuenta existe pero aún no tiene clave (invitación sin activar)', email, taller);
+            registrarRecuperacion('NO se envió — la cuenta existe pero aún no tiene clave (invitación sin activar)', email, taller, req.entorno);
             return res.json(respuesta);
         }
 
@@ -288,12 +298,12 @@ exports.recuperar = async (req, res) => {
                     + `El link vence en ${MINUTOS_VALIDEZ_RESET} minutos y sirve una sola vez.\n`
                     + `Si no fuiste tú, ignora este correo: tu clave actual sigue funcionando.`,
             });
-            registrarRecuperacion('correo entregado al proveedor', email, taller);
+            registrarRecuperacion('correo entregado al proveedor', email, taller, req.entorno);
         } catch (eCorreo) {
             // Mismo criterio que usuarioController al emitir tokens: el fallo de correo se
             // registra pero no se le informa a quien llama, para no filtrar si existe o no.
             console.warn('[auth] no se pudo enviar el correo de recuperación:', eCorreo.message);
-            registrarRecuperacion(`FALLÓ el envío — ${eCorreo.message}`, email, taller);
+            registrarRecuperacion(`FALLÓ el envío — ${eCorreo.message}`, email, taller, req.entorno);
         }
 
         res.json(respuesta);
