@@ -27,6 +27,16 @@ function resumen(usuario) {
         // que nunca se usó, o reactivar la cuenta en Cuentas de oficina.
         puedeEntrar: !!usuario.passwordHash && (usuario.estado || 'activo') === 'activo',
         invitacionSinActivar: !usuario.passwordHash,
+        // **Si alguna vez entró, y cuándo.** Lo decide `ultimoAccesoSpa`, que escribe el
+        // login de escritorio. Existe porque «creo que yo sí había entrado con esa cuenta»
+        // es lo primero que se piensa cuando una invitación aparece sin activar, y no había
+        // forma de contestarlo: la cuenta se ve igual si nunca se usó el link o si se usó y
+        // algo falló. Una fecha lo cierra; una opinión no.
+        //
+        // `creada` sale de `timestamps: true` y sirve para lo otro que se sospecha enseguida:
+        // si la cuenta es de hoy, nadie la borró — es nueva.
+        ultimoAcceso: usuario.ultimoAccesoSpa || null,
+        creada: usuario.createdAt || null,
     };
 }
 

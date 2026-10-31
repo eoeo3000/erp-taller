@@ -265,3 +265,13 @@ test('escapar de verdad convierte una etiqueta en texto', async () => {
     assert.strictEqual(seguro('a & b'), 'a &amp; b');
     assert.strictEqual(seguro('"comillas"'), '&quot;comillas&quot;');
 });
+
+test('la tabla de cuentas pinta una celda por columna', async () => {
+    // Mismo cuidado que con la tabla de talleres, donde la columna Base existía en el <th> y
+    // la fila nunca la llamaba: todo salía corrido y lo que se perdía era el dato que importa.
+    const r = await traer();
+    const encabezados = (r.html.match(/<th>Correo<\/th>[\s\S]*?<\/tr>/)[0].match(/<th>/g) || []).length;
+    const filaCuenta = r.html.match(/function filaCuenta\(c\) \{[\s\S]*?\n\}/)[0];
+    const celdas = (filaCuenta.match(/<td>/g) || []).length;
+    assert.strictEqual(celdas, encabezados, `${encabezados} columnas y ${celdas} celdas`);
+});
