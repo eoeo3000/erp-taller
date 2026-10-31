@@ -539,6 +539,14 @@ $('filas').addEventListener('click', async (e) => {
 // Lo que se pinta viene de /api/talleres/cuentas, que ya se encarga de no mandar ni el
 // passwordHash ni el token de la PWA. Acá no hay nada que esconder: si algo llegara, saldría.
 // La prueba de que no llegan está del lado del backend, que es donde se decide.
+// El id y el taller viajan en el botón, no en una variable de arriba: las filas se vuelven a
+// pintar en cada búsqueda y un índice guardado apuntaría a otra cuenta.
+function boton(accion, c, etiqueta) {
+    return `<button class="secundario fila" type="button" data-cuenta-accion="${accion}"`
+        + ` data-cuenta-id="${seguro(c.id)}" data-cuenta-taller="${seguro(c.taller)}"`
+        + ` data-cuenta-correo="${seguro(c.email)}">${etiqueta}</button>`;
+}
+
 function filaCuenta(c) {
     const comoEsta = c.invitacionSinActivar
         ? '<span class="nota">invitación sin activar</span>'
@@ -550,9 +558,22 @@ function filaCuenta(c) {
     const entro = c.ultimoAcceso
         ? `último ingreso ${fecha(c.ultimoAcceso)}`
         : '<span class="aviso">nunca entró</span>';
+    // Qué se puede hacer con esta cuenta. Las tres son reversibles, y por eso están: reenviar
+    // emite otro link y mata el anterior, revocar se deshace con reactivar. Borrar no está —
+    // borrar la última cuenta de un taller reabre su ventana de instalación.
+    const acciones = [
+        // Reenviar solo si la cuenta está activa: `POST /auth/restablecer` exige
+        // `estado: 'activo'`, así que una invitación a una cuenta revocada sale con un link
+        // que no va a funcionar. Ofrecer un botón que va a fallar es peor que no ofrecerlo
+        // — mismo criterio que el enlace de instalación de un taller que ya opera.
+        (c.invitacionSinActivar && c.estado !== 'revocado') ? boton('reenviar', c, 'Reenviar invitación') : '',
+        c.estado === 'revocado' ? boton('reactivar', c, 'Reactivar') : boton('revocar', c, 'Revocar'),
+    ].join('');
+
     return `<tr><td>${seguro(c.email)}</td><td>${seguro(c.nombre)}</td>`
         + `<td><code>${seguro(c.taller)}</code></td><td>${comoEsta}</td>`
-        + `<td>${entro}<br><span class="nota">creada ${fecha(c.creada)}</span></td></tr>`;
+        + `<td>${entro}<br><span class="nota">creada ${fecha(c.creada)}</span></td>`
+        + `<td>${acciones}</td></tr>`;
 }
 
 async function buscarCuentas(busqueda, soloTaller = '') {
@@ -569,7 +590,7 @@ async function buscarCuentas(busqueda, soloTaller = '') {
             $('tablaCuentas').innerHTML = '<p class="nota">Ninguna cuenta coincide.</p>';
         } else {
             $('tablaCuentas').innerHTML = '<table><thead><tr><th>Correo</th><th>Nombre</th>'
-                + '<th>Taller</th><th>Cómo está</th><th>Uso</th></tr></thead><tbody>'
+                + '<th>Taller</th><th>Cómo está</th><th>Uso</th><th>Acciones</th></tr></thead><tbody>'
                 + datos.cuentas.map(filaCuenta).join('') + '</tbody></table>';
         }
 
@@ -592,6 +613,48 @@ async function buscarCuentas(busqueda, soloTaller = '') {
 $('formCuentas').addEventListener('submit', (e) => {
     e.preventDefault();
     buscarCuentas($('textoCuentas').value.trim());
+});
+
+// Qué se le avisa a quien aprieta, antes de apretar. Revocar corta el acceso en el acto —se
+// deshace, pero mientras tanto esa persona no entra— y reenviar mata el link anterior, que
+// puede estar ya en el buzón de alguien que lo iba a usar hoy.
+const AVISO_ACCION = {
+    revocar: (correo) => `${correo} va a dejar de entrar de inmediato y se le cierran las sesiones abiertas.`
+        + ' Se deshace con Reactivar. ¿Seguir?',
+    reenviar: (correo) => `Se emite una invitación nueva para ${correo} y la anterior deja de servir.`
+        + ' Si ya tenía el link y no lo usó, este se lo invalida. ¿Seguir?',
+    reactivar: (correo) => `${correo} vuelve a poder entrar con su misma clave. ¿Seguir?`,
+};
+
+// Los botones se escuchan en la tabla y no uno por uno: las filas se vuelven a pintar en cada
+// búsqueda y los listeners puestos sobre ellas morirían con ellas.
+$('tablaCuentas').addEventListener('click', async (e) => {
+    const accion = e.target.dataset?.cuentaAccion;
+    if (!accion) return;
+    const { cuentaId: id, cuentaTaller: taller, cuentaCorreo: correo } = e.target.dataset;
+    if (!confirm(AVISO_ACCION[accion](correo))) return;
+
+    e.target.disabled = true;
+    try {
+        const resp = await fetch(
+            `/api/talleres/${encodeURIComponent(taller)}/cuentas/${encodeURIComponent(id)}/${accion}`,
+            { method: 'POST', headers: { 'X-Panel-Token': sessionStorage.getItem(CLAVE) || '' } },
+        );
+        const cuerpo = await resp.json().catch(() => ({}));
+        if (!resp.ok) throw new Error(cuerpo.error || `Error ${resp.status}`);
+
+        // Si el correo no salió, el link se entrega a mano en vez de dejar la cuenta
+        // inservible: es el mismo criterio del alta, y acá se ve en el recuadro de siempre.
+        if (accion === 'reenviar' && cuerpo.correoEnviado === false) {
+            mostrarEnlace(cuerpo.link, 'El correo no salió. Entrégale este link a mano:',
+                'Vence en 7 días y sirve una sola vez. Al abrirlo, esa persona elige su clave.');
+        }
+        await buscarCuentas($('textoCuentas').value.trim(), taller);
+    } catch (err) {
+        $('estadoCuentas').innerHTML = `<span class="aviso">${seguro(err.message)}</span>`;
+    } finally {
+        e.target.disabled = false;
+    }
 });
 
 // --- La marca de un taller: el nombre que muestra su app y el logo de su cotización ---
