@@ -101,16 +101,29 @@ for (const [ruta, exports] of [
         // La cadena que usa `listarCuentas`. El doble devuelve los documentos ENTEROS —con
         // passwordHash y token— a propósito: así la prueba verifica que lo que los esconde
         // sea el código y no la casualidad de que el doble no los tenga.
-        find: () => ({
-            select: () => ({
-                limit: () => ({
-                    lean: async () => {
-                        if (SIN_CUENTAS.includes(conn.name)) throw new Error('base caída');
-                        return CUENTAS[conn.name] || [];
-                    },
-                }),
-            }),
-        }),
+        // El doble HONRA `select()`, y eso no es un detalle: mientras lo ignoraba, una
+        // consulta que excluía `passwordHash` pasaba todas las pruebas aunque dejaba al
+        // código sin el campo que usa para decidir si una cuenta puede entrar. El panel
+        // mostraba TODAS las cuentas como «invitación sin activar» y las pruebas en verde.
+        find: () => {
+            let excluidos = [];
+            const cadena = {
+                select: (sel) => {
+                    excluidos = String(sel || '').split(/\s+/).filter((c) => c.startsWith('-')).map((c) => c.slice(1));
+                    return cadena;
+                },
+                limit: () => cadena,
+                lean: async () => {
+                    if (SIN_CUENTAS.includes(conn.name)) throw new Error('base caída');
+                    return (CUENTAS[conn.name] || []).map((u) => {
+                        const copia = { ...u };
+                        for (const campo of excluidos) delete copia[campo];
+                        return copia;
+                    });
+                },
+            };
+            return cadena;
+        },
     })],
     ['../src/models/SesionStaff', (conn) => ({
         updateMany: async (filtro, cambios) => { SESIONES_CERRADAS.push({ base: conn.name, filtro, cambios }); return {}; },
@@ -753,4 +766,24 @@ test('no se reenvía invitación a una cuenta revocada: ese link nacería muerto
     assert.strictEqual(estado, 409);
     assert.match(cuerpo.error, /revocada/);
     assert.strictEqual(CORREOS.length, 0);
+});
+
+test('una cuenta ACTIVA se ve como activa, no como invitación sin activar', async () => {
+    // El bug que costó días: la consulta excluía `passwordHash` para no filtrarlo, pero
+    // `resumen()` lo lee para decidir si esa cuenta puede entrar. Sin el campo, TODA cuenta
+    // salía como «invitación sin activar» — incluidas las que entran todos los días. Se creyó
+    // que una cuenta perfectamente buena estaba rota, y se buscó el problema donde no estaba.
+    //
+    // Lo que impide que el hash salga no es la consulta sino `resumen()`, que nombra sus
+    // campos uno por uno. La prueba de más arriba («NUNCA devuelve credenciales») cuida eso.
+    CUENTAS['base-principal'] = [
+        CUENTA('activa@erp.cl', 'Activa'),
+        { _id: 'p', email: 'pendiente@erp.cl', nombre: 'Pendiente', estado: 'activo' },
+    ];
+    const { cuerpo } = await pedir('/api/talleres/cuentas');
+    const por = Object.fromEntries(cuerpo.cuentas.map((c) => [c.email, c]));
+
+    assert.strictEqual(por['activa@erp.cl'].puedeEntrar, true, 'tiene clave: tiene que poder entrar');
+    assert.strictEqual(por['activa@erp.cl'].invitacionSinActivar, false);
+    assert.strictEqual(por['pendiente@erp.cl'].invitacionSinActivar, true, 'esta sí es una invitación');
 });

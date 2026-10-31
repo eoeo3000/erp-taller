@@ -46,7 +46,7 @@ for (const [ruta, exports] of [
 const authController = require('../src/controllers/authController');
 
 // Corre `recuperar` capturando lo que escribe en el log.
-async function pedirRecuperacion(email, taller = 'principal') {
+async function pedirRecuperacion(email, taller = 'principal', entorno = 'produccion') {
     cuenta = cuenta || null;
     enviados = [];
     const lineas = [];
@@ -61,7 +61,7 @@ async function pedirRecuperacion(email, taller = 'principal') {
         status: (c) => { cuerpo = { ...(cuerpo || {}), _status: c }; return res; },
     };
     try {
-        await authController.recuperar({ db: {}, entorno: 'produccion', taller, body: { email } }, res);
+        await authController.recuperar({ db: {}, entorno, taller, body: { email } }, res);
     } finally {
         console.log = log;
         console.warn = warn;
@@ -92,6 +92,20 @@ test('el log dice EN QUÉ TALLER buscó', async () => {
     cuenta = null;
     const { log } = await pedirRecuperacion('nadie@hotmail.com', 'taller-lopez');
     assert.match(log, /taller taller-lopez/);
+});
+
+test('el log dice EN QUÉ ENTORNO buscó, no solo en qué taller', async () => {
+    // Un taller tiene DOS bases, producción y demo, y la elige el NAVEGADOR: utils/entorno.js
+    // lo guarda en localStorage y lo manda como X-Entorno en cada llamada — la misma trampa
+    // que ya costó caro con la pista del taller. Un navegador que quedó en demo busca el
+    // correo en la base de demostración, donde esa cuenta no existe, y sin esto el log decía
+    // exactamente lo mismo que si no existiera en ninguna parte.
+    //
+    // Peor que con el taller: la pantalla de ingreso no muestra el banner de demo (vive
+    // dentro del shell de la app), así que desde ahí no hay NINGUNA otra señal.
+    cuenta = null;
+    const { log } = await pedirRecuperacion('nadie@hotmail.com', 'principal', 'demo');
+    assert.match(log, /taller principal, demo/);
 });
 
 test('una cuenta REVOCADA no se confunde con una que no existe', async () => {
