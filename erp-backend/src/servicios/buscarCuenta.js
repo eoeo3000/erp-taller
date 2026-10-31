@@ -83,7 +83,17 @@ async function listarCuentas({ texto = '', talleres, getUsuario }) {
         try {
             const encontrados = await getUsuario(conexion)
                 .find({ email: { $exists: true, $ne: '' } })
-                .select('-passwordHash -token -resetHash')
+                // **`passwordHash` SE TRAE, y no se devuelve.** Excluirlo acá parecía lo
+                // prudente y era un error grave: `resumen()` lo lee para decidir
+                // `puedeEntrar` e `invitacionSinActivar`, así que sin el campo esas dos
+                // salían `false`/`true` SIEMPRE — el panel mostraba todas las cuentas como
+                // «invitación sin activar», incluidas las que entran todos los días. Se
+                // creyó durante días que una cuenta perfectamente activa estaba rota.
+                //
+                // Lo que impide que salga no es la consulta sino `resumen()`, que arma un
+                // objeto con campos nombrados uno por uno. `token` y `resetHash` sí se
+                // excluyen: nadie los lee acá, así que ni siquiera hace falta traerlos.
+                .select('-token -resetHash')
                 .limit(TOPE_POR_TALLER)
                 .lean();
             for (const u of encontrados || []) {
