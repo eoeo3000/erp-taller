@@ -17,5 +17,10 @@ router.post('/', ctrl.crear);
 router.patch('/:slug', ctrl.actualizar);
 // Reemitir el enlace de instalación (el anterior deja de servir).
 router.post('/:slug/instalacion', ctrl.reemitirInstalacion);
+// Las tres acciones sobre una cuenta de un taller. Todas reversibles — borrar no está, y la
+// razón está escrita en el controlador.
+router.post('/:slug/cuentas/:id/reenviar', ctrl.reenviarInvitacionDeCuenta);
+router.post('/:slug/cuentas/:id/revocar', ctrl.revocarCuentaDeTaller);
+router.post('/:slug/cuentas/:id/reactivar', ctrl.reactivarCuentaDeTaller);
 
 module.exports = router;

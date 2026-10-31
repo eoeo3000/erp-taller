@@ -8,14 +8,14 @@
 // quien autoriza es la oficina. Ver la nota de rutas en cuentasRoutes.js.
 const getUsuario = require('../models/Usuario');
 const getSesionStaff = require('../models/SesionStaff');
-const { generarToken, hashToken } = require('../utils/tokens');
-const transporter = require('../config/mailer');
-const { SPA_URL } = require('../config/urls');
 const { tallerPorDefecto } = require('../config/talleres');
-
-// Más larga que la de recuperar clave (1h): una invitación se manda a alguien que capaz
-// recién entra el lunes, no a alguien que está mirando la pantalla en este momento.
-const DIAS_VALIDEZ_INVITACION = 7;
+// Las tres acciones viven en el servicio porque ahora también las llama el panel, que opera
+// sobre la base de otro taller y sin sesión. Duplicarlas sería repetir el error de las tres
+// versiones de `fechasDeTrabajo`: la segunda copia no se arregla cuando se arregla la primera.
+const {
+    reenviarInvitacion, revocarCuenta, reactivarCuenta,
+    emitirInvitacion, enviarCorreoInvitacion, DIAS_VALIDEZ_INVITACION,
+} = require('../servicios/cuentasDeTaller');
 
 function cuentaPublica(usuario) {
     return {
@@ -30,35 +30,6 @@ function cuentaPublica(usuario) {
         ultimoAccesoSpa: usuario.ultimoAccesoSpa || null,
         createdAt: usuario.createdAt,
     };
-}
-
-async function emitirInvitacion(Usuario, usuario, entorno, taller) {
-    const token = generarToken();
-    await Usuario.updateOne({ _id: usuario._id }, {
-        resetHash: hashToken(token),
-        resetExpira: new Date(Date.now() + DIAS_VALIDEZ_INVITACION * 24 * 60 * 60 * 1000),
-    });
-    // Misma maquinaria que recuperar clave (POST /auth/restablecer valida este token y
-    // graba la clave): activar una cuenta nueva y reponer una olvidada son el mismo acto
-    // desde el punto de vista del backend — alguien que demuestra tener el buzón elige una
-    // clave. Lo único que cambia es el texto del correo y el título de la pantalla.
-    // El taller va en el link por el mismo motivo que en el de recuperación: quien lo abre
-    // todavía no tiene sesión, y sin ese dato el SPA mandaría la activación a la base del
-    // taller por defecto, donde esta invitación no existe.
-    return `${SPA_URL}/activar?token=${token}&entorno=${entorno}&taller=${encodeURIComponent(taller)}`;
-}
-
-async function enviarCorreoInvitacion(usuario, link, invitadoPor) {
-    await transporter.sendMail({
-        from: `"ERP - Gestión de Trabajo" <${process.env.EMAIL_FROM}>`,
-        to: usuario.email,
-        subject: 'Tu acceso al ERP del taller',
-        text: `Hola ${usuario.nombre},\n\n`
-            + `${invitadoPor} te dio acceso al sistema del taller. Entra a este link para elegir tu clave y activar tu cuenta:\n\n`
-            + `${link}\n\n`
-            + `El link vence en ${DIAS_VALIDEZ_INVITACION} días. Si vence antes de que alcances a usarlo, pídele a la oficina que te lo reenvíe.\n`
-            + `Si no esperabas este correo, ignóralo: sin entrar a ese link la cuenta no queda activa.`,
-    });
 }
 
 // POST /api/cuentas/invitar — { nombre, email }
@@ -166,22 +137,14 @@ exports.actualizar = async (req, res) => {
 
 // POST /api/cuentas/:id/reenviar — nueva invitación (invalida la anterior)
 exports.reenviar = async (req, res) => {
-    const Usuario = getUsuario(req.db);
     try {
-        const usuario = await Usuario.findById(req.params.id);
-        if (!usuario || !usuario.email) return res.fail(404, 'Cuenta no encontrada');
-        if (usuario.passwordHash) return res.fail(409, 'Esa cuenta ya está activa — si perdió la clave, que use "Olvidé mi clave" en la pantalla de ingreso.');
-
-        const link = await emitirInvitacion(Usuario, usuario, req.entorno, req.taller || tallerPorDefecto());
-        let correoEnviado = true;
-        try {
-            await enviarCorreoInvitacion(usuario, link, req.usuario?.nombre || 'La oficina');
-        } catch (eCorreo) {
-            console.warn('[cuentas] no se pudo reenviar la invitación:', eCorreo.message);
-            correoEnviado = false;
-        }
-
-        res.ok({ correoEnviado, link: correoEnviado ? '' : link });
+        const r = await reenviarInvitacion({
+            Usuario: getUsuario(req.db), id: req.params.id,
+            entorno: req.entorno, taller: req.taller || tallerPorDefecto(),
+            invitadoPor: req.usuario?.nombre || 'La oficina',
+        });
+        if (r.error) return res.fail(r.estado, r.error);
+        res.ok({ correoEnviado: r.correoEnviado, link: r.link });
     } catch (error) {
         res.fail(500, error.message);
     }
@@ -189,21 +152,19 @@ exports.reenviar = async (req, res) => {
 
 // POST /api/cuentas/:id/revocar — deja de poder entrar, de inmediato
 exports.revocar = async (req, res) => {
-    const Usuario = getUsuario(req.db);
     try {
-        // Quedarse sin ninguna cuenta activa dejaría al taller afuera de su propio sistema,
-        // y recuperarlo exigiría entrar al servidor a correr scripts/crearAdmin.js.
+        // Desde la app el candado es «nadie puede revocarse a sí mismo»: quien revoca es una
+        // de las cuentas que pueden entrar, así que no puede dejar al taller sin ninguna. El
+        // servicio comprueba además esa condición de fondo, que es la que importa cuando el
+        // que revoca NO tiene cuenta en esa base (el panel).
         if (String(req.params.id) === String(req.usuario._id)) {
             return res.fail(409, 'No puedes revocar tu propia cuenta — pídeselo a otra persona de la oficina.');
         }
-
-        const usuario = await Usuario.findByIdAndUpdate(req.params.id, { estado: 'revocado' }, { new: true });
-        if (!usuario) return res.fail(404, 'Cuenta no encontrada');
-
-        // No se espera al próximo request suyo para echarla: se cierran sus sesiones ya.
-        await getSesionStaff(req.db).updateMany({ usuarioId: usuario._id, estado: 'activa' }, { estado: 'cerrada' });
-
-        res.ok({ cuenta: cuentaPublica(usuario) });
+        const r = await revocarCuenta({
+            Usuario: getUsuario(req.db), SesionStaff: getSesionStaff(req.db), id: req.params.id,
+        });
+        if (r.error) return res.fail(r.estado, r.error);
+        res.ok({ cuenta: cuentaPublica(r.usuario) });
     } catch (error) {
         res.fail(500, error.message);
     }
@@ -211,11 +172,10 @@ exports.revocar = async (req, res) => {
 
 // POST /api/cuentas/:id/reactivar — vuelve a habilitarla con su misma clave
 exports.reactivar = async (req, res) => {
-    const Usuario = getUsuario(req.db);
     try {
-        const usuario = await Usuario.findByIdAndUpdate(req.params.id, { estado: 'activo' }, { new: true });
-        if (!usuario) return res.fail(404, 'Cuenta no encontrada');
-        res.ok({ cuenta: cuentaPublica(usuario) });
+        const r = await reactivarCuenta({ Usuario: getUsuario(req.db), id: req.params.id });
+        if (r.error) return res.fail(r.estado, r.error);
+        res.ok({ cuenta: cuentaPublica(r.usuario) });
     } catch (error) {
         res.fail(500, error.message);
     }

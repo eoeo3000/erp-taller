@@ -275,3 +275,29 @@ test('la tabla de cuentas pinta una celda por columna', async () => {
     const celdas = (filaCuenta.match(/<td>/g) || []).length;
     assert.strictEqual(celdas, encabezados, `${encabezados} columnas y ${celdas} celdas`);
 });
+
+test('la tabla de cuentas ofrece solo acciones REVERSIBLES', async () => {
+    // Reenviar emite otro link (el anterior muere, que es el punto) y revocar se deshace con
+    // reactivar. Borrar no está y no debe estar: borrar la última cuenta de un taller hace
+    // que GET /auth/yo vuelva a responder requiereInstalacion, o sea reabre la ventana de
+    // instalación de ese cliente. Un botón que puede hacer eso por accidente no debería
+    // existir, y esta prueba es lo que impide que alguien lo agregue sin pensarlo.
+    const r = await traer();
+    // Las acciones se nombran al llamar a `boton(...)`; el atributo las arma con `${accion}`.
+    const acciones = [...r.html.matchAll(/boton\('([a-z]+)'/g)].map((m) => m[1]);
+    assert.deepStrictEqual([...new Set(acciones)].sort(), ['reactivar', 'reenviar', 'revocar']);
+    assert.ok(!/boton\('(eliminar|borrar)'/.test(r.html), 'no puede haber un borrado de cuentas');
+    assert.ok(!/cuentas\/[^'"`]*\/(eliminar|borrar)/.test(r.html), 'ni una llamada a borrar');
+});
+
+test('revocar y reenviar preguntan antes, porque rompen algo que ya está andando', async () => {
+    // Revocar corta el acceso en el acto —se deshace, pero mientras tanto esa persona no
+    // entra— y reenviar mata el link anterior, que puede estar ya en el buzón de alguien que
+    // lo iba a usar hoy.
+    const r = await traer();
+    const aviso = r.html.match(/const AVISO_ACCION = \{[\s\S]*?\n\};/)[0];
+    for (const accion of ['revocar', 'reenviar', 'reactivar']) {
+        assert.ok(aviso.includes(`${accion}:`), `falta el aviso de ${accion}`);
+    }
+    assert.match(r.html, /if \(!confirm\(AVISO_ACCION\[accion\]\(correo\)\)\) return;/);
+});

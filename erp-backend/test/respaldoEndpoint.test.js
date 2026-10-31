@@ -52,6 +52,23 @@ const contratoRespuesta = require('../src/middlewares/respuestas');
 const respaldoRoutes = require('../src/routes/respaldoRoutes');
 const almacenamiento = require('../src/config/almacenamiento');
 
+// `servicios/respaldo.js` escribe en consola lo que guardó («[respaldo] produccion/principal:
+// 1 documentos…»), y eso desde una prueba es un problema de verdad: `node --test` habla con
+// sus procesos hijos por un protocolo binario sobre stdout, y un texto suelto le corrompe el
+// marco cada tantas corridas. Se ve como un fallo intermitente con un error de
+// deserialización que no tiene nada que ver con lo que la prueba verifica — pasó acá mismo,
+// en la prueba del 401, que no toca el respaldo. Por eso toda llamada al servidor va
+// envuelta. Es la regla de CLAUDE.md, y esta era la que faltaba.
+async function sinRuidoEnConsola(fn) {
+    const log = console.log;
+    const warn = console.warn;
+    const error = console.error;
+    console.log = () => {};
+    console.warn = () => {};
+    console.error = () => {};
+    try { return await fn(); } finally { console.log = log; console.warn = warn; console.error = error; }
+}
+
 function levantar() {
     const app = express();
     app.use(express.json());
@@ -72,7 +89,7 @@ test('sin RESPALDO_TOKEN configurado, la ruta está cerrada', async (t) => {
 
     // Cerrado y no abierto: al revés que API_KEY y AUTH_REQUERIDA, esta ruta nace hoy, así
     // que dejarla pasar por omisión sería regalar acceso, no mantener el estado anterior.
-    const resp = await fetch(`${url}/api/respaldos`, { method: 'POST' });
+    const resp = await sinRuidoEnConsola(() => fetch(`${url}/api/respaldos`, { method: 'POST' }));
     assert.strictEqual(resp.status, 503);
     assert.match((await resp.json()).error, /no están configurados/);
 });
@@ -83,9 +100,9 @@ test('con la clave equivocada responde 401 y no respalda nada', async (t) => {
     t.after(() => { servidor.close(); delete process.env.RESPALDO_TOKEN; return limpiar(); });
 
     for (const intento of ['', 'otra-cosa', CLAVE.slice(0, -1), `${CLAVE} `.repeat(2)]) {
-        const resp = await fetch(`${url}/api/respaldos`, {
+        const resp = await sinRuidoEnConsola(() => fetch(`${url}/api/respaldos`, {
             method: 'POST', headers: intento ? { 'X-Respaldo-Token': intento } : {},
-        });
+        }));
         assert.strictEqual(resp.status, 401, `"${intento}" respondió ${resp.status}`);
     }
     assert.strictEqual((await almacenamiento.listar('respaldos/produccion')).length, 0);
@@ -96,9 +113,9 @@ test('con la clave correcta crea el respaldo e informa qué guardó', async (t) 
     process.env.RESPALDO_TOKEN = CLAVE;
     t.after(() => { servidor.close(); delete process.env.RESPALDO_TOKEN; return limpiar(); });
 
-    const resp = await fetch(`${url}/api/respaldos`, {
+    const resp = await sinRuidoEnConsola(() => fetch(`${url}/api/respaldos`, {
         method: 'POST', headers: { 'X-Respaldo-Token': CLAVE },
-    });
+    }));
     assert.strictEqual(resp.status, 201);
 
     const datos = await resp.json();
@@ -120,10 +137,10 @@ test('el listado también exige la clave', async (t) => {
     process.env.RESPALDO_TOKEN = CLAVE;
     t.after(() => { servidor.close(); delete process.env.RESPALDO_TOKEN; return limpiar(); });
 
-    assert.strictEqual((await fetch(`${url}/api/respaldos`)).status, 401);
+    assert.strictEqual((await sinRuidoEnConsola(() => fetch(`${url}/api/respaldos`))).status, 401);
 
-    await fetch(`${url}/api/respaldos`, { method: 'POST', headers: { 'X-Respaldo-Token': CLAVE } });
-    const resp = await fetch(`${url}/api/respaldos`, { headers: { 'X-Respaldo-Token': CLAVE } });
+    await sinRuidoEnConsola(() => fetch(`${url}/api/respaldos`, { method: 'POST', headers: { 'X-Respaldo-Token': CLAVE } }));
+    const resp = await sinRuidoEnConsola(() => fetch(`${url}/api/respaldos`, { headers: { 'X-Respaldo-Token': CLAVE } }));
     assert.strictEqual(resp.status, 200);
 
     const datos = await resp.json();
@@ -141,7 +158,7 @@ test('EL RESPALDO DIARIO RECORRE TODOS LOS TALLERES ACTIVOS', async (t) => {
     process.env.RESPALDO_TOKEN = CLAVE;
     t.after(() => { servidor.close(); delete process.env.RESPALDO_TOKEN; TALLERES = ['principal']; return limpiar(); });
 
-    const resp = await fetch(`${url}/api/respaldos`, { method: 'POST', headers: { 'X-Respaldo-Token': CLAVE } });
+    const resp = await sinRuidoEnConsola(() => fetch(`${url}/api/respaldos`, { method: 'POST', headers: { 'X-Respaldo-Token': CLAVE } }));
     assert.strictEqual(resp.status, 201);
 
     const datos = await resp.json();
@@ -157,7 +174,7 @@ test('se puede pedir el de un taller puntual, sin respaldar a los demás', async
     process.env.RESPALDO_TOKEN = CLAVE;
     t.after(() => { servidor.close(); delete process.env.RESPALDO_TOKEN; TALLERES = ['principal']; return limpiar(); });
 
-    const resp = await fetch(`${url}/api/respaldos?taller=maestranza-rivas`, { method: 'POST', headers: { 'X-Respaldo-Token': CLAVE } });
+    const resp = await sinRuidoEnConsola(() => fetch(`${url}/api/respaldos?taller=maestranza-rivas`, { method: 'POST', headers: { 'X-Respaldo-Token': CLAVE } }));
     const datos = await resp.json();
     assert.deepStrictEqual(datos.talleres.map((r) => r.taller), ['maestranza-rivas']);
 });

@@ -23,6 +23,8 @@ const { uriParaTaller, slugDesdeNombre } = require('../servicios/baseDelTaller')
 const { normalizarLogo, marcaPublica } = require('../servicios/marcaTaller');
 const { hayCuentasDeEscritorio } = require('./instalacionController');
 const { listarCuentas } = require('../servicios/buscarCuenta');
+const { reenviarInvitacion, revocarCuenta, reactivarCuenta } = require('../servicios/cuentasDeTaller');
+const getSesionStaff = require('../models/SesionStaff');
 
 // Cuánto vive el enlace de instalación. Siete días y no una hora: el alta de un cliente no es
 // un trámite de un rato — se le manda el link al dueño del taller y puede sentarse a hacerlo
@@ -371,6 +373,79 @@ exports.cuentas = async (req, res) => {
 
         const { cuentas, fallidos } = await listarCuentas({ texto, talleres, getUsuario });
         res.ok({ texto, cuentas, fallidos: [...fallidos, ...sinBase], revisados: talleres.map((t) => t.slug) });
+    } catch (error) {
+        res.fail(500, error.message);
+    }
+};
+
+// Las tres acciones sobre una cuenta, desde el panel.
+//
+// Hacen falta porque quien arrienda el sistema **no tiene cuenta dentro de la app de sus
+// clientes** —y que no la tenga es una propiedad del diseño, no algo que falte—, así que hoy
+// no puede ayudar a alguien de un taller que quedó con su invitación sin activar. Para el
+// taller principal se entra a la app y listo; para los demás, no había nada.
+//
+// Las tres son **reversibles**, y eso es lo que decide cuáles existen acá y cuáles no:
+// reenviar emite otro link (el anterior muere, que es el punto), revocar se deshace con
+// reactivar. **Borrar no está y no va a estar**: es irreversible, y borrar la última cuenta
+// de un taller haría que `GET /auth/yo` vuelva a responder `requiereInstalacion` — o sea,
+// reabriría la ventana de instalación de ese cliente. Un botón que puede hacer eso por
+// accidente no debería existir.
+//
+// La lógica es la MISMA que usa la app (`servicios/cuentasDeTaller.js`): dos copias de esto
+// se habrían separado a la primera corrección.
+function conexionDelTaller(req, res) {
+    const slug = String(req.params.slug || '').trim().toLowerCase();
+    try {
+        return { slug, db: obtenerConexion('produccion', slug) };
+    } catch (error) {
+        res.fail(404, error.message);
+        return null;
+    }
+}
+
+// POST /api/talleres/:slug/cuentas/:id/reenviar
+exports.reenviarInvitacionDeCuenta = async (req, res) => {
+    if (!autorizar(req, res)) return;
+    const destino = conexionDelTaller(req, res);
+    if (!destino) return;
+    try {
+        const r = await reenviarInvitacion({
+            Usuario: getUsuario(destino.db), id: req.params.id,
+            entorno: 'produccion', taller: destino.slug,
+        });
+        if (r.error) return res.fail(r.estado, r.error);
+        res.ok({ correoEnviado: r.correoEnviado, link: r.link });
+    } catch (error) {
+        res.fail(500, error.message);
+    }
+};
+
+// POST /api/talleres/:slug/cuentas/:id/revocar
+exports.revocarCuentaDeTaller = async (req, res) => {
+    if (!autorizar(req, res)) return;
+    const destino = conexionDelTaller(req, res);
+    if (!destino) return;
+    try {
+        const r = await revocarCuenta({
+            Usuario: getUsuario(destino.db), SesionStaff: getSesionStaff(destino.db), id: req.params.id,
+        });
+        if (r.error) return res.fail(r.estado, r.error);
+        res.ok({ cuenta: { estado: r.usuario.estado } });
+    } catch (error) {
+        res.fail(500, error.message);
+    }
+};
+
+// POST /api/talleres/:slug/cuentas/:id/reactivar
+exports.reactivarCuentaDeTaller = async (req, res) => {
+    if (!autorizar(req, res)) return;
+    const destino = conexionDelTaller(req, res);
+    if (!destino) return;
+    try {
+        const r = await reactivarCuenta({ Usuario: getUsuario(destino.db), id: req.params.id });
+        if (r.error) return res.fail(r.estado, r.error);
+        res.ok({ cuenta: { estado: r.usuario.estado } });
     } catch (error) {
         res.fail(500, error.message);
     }

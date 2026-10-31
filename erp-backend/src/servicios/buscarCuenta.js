@@ -90,7 +90,11 @@ async function listarCuentas({ texto = '', talleres, getUsuario }) {
                 const email = String(u.email || '').toLowerCase();
                 const nombre = String(u.nombre || '').toLowerCase();
                 if (buscado && !email.includes(buscado) && !nombre.includes(buscado)) continue;
-                cuentas.push({ taller: slug, email: u.email, ...resumen(u) });
+                // El `_id` va solo acá y no en `resumen`: lo necesita el panel para poder
+                // actuar sobre una cuenta (reenviar, revocar), y el script que solo informa
+                // no tiene nada que hacer con él. No es una credencial —es un identificador
+                // opaco— y las acciones que lo usan van igual detrás de PANEL_TOKEN.
+                cuentas.push({ id: String(u._id), taller: slug, email: u.email, ...resumen(u) });
             }
         } catch (error) {
             fallidos.push({ taller: slug, error: error.message });

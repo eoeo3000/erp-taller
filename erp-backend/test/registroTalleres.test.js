@@ -23,6 +23,10 @@ let SUELTOS = [];
 // Las cuentas de oficina de cada base, y las bases que no responden al listarlas.
 let CUENTAS = {};
 let SIN_CUENTAS = [];
+// Lo que dejan las acciones sobre una cuenta: correos enviados y sesiones cerradas.
+let CORREOS = [];
+let SESIONES_CERRADAS = [];
+let FALLA_CORREO = false;
 // Lo que devuelve el servicio de métricas para cada taller medible.
 let metricasFalsas = { baseResponde: true, ots: 10, solicitudes: 12, cuentas: 2, ultimaActividad: new Date('2026-10-18T10:00:00Z'), bytesBase: 8 * 1024 * 1024, error: null };
 function fabricaTaller() {
@@ -78,6 +82,22 @@ for (const [ruta, exports] of [
     }],
     ['../src/models/Usuario', (conn) => ({
         exists: async () => (yaInstalado ? { _id: 1 } : null),
+        findById: async (id) => {
+            const hallado = (CUENTAS[conn.name] || []).find((u) => String(u._id) === String(id));
+            if (!hallado) return null;
+            // `save()` escribe de vuelta en la lista, que es lo que la prueba después mira.
+            return Object.assign(hallado, { save: async () => hallado });
+        },
+        updateOne: async (filtro, cambios) => {
+            const u = (CUENTAS[conn.name] || []).find((x) => String(x._id) === String(filtro._id));
+            if (u) Object.assign(u, cambios);
+            return { acknowledged: true };
+        },
+        countDocuments: async (filtro) => (CUENTAS[conn.name] || []).filter((u) => {
+            if (filtro.estado && (u.estado || 'activo') !== filtro.estado) return false;
+            if (filtro.passwordHash) return !!u.passwordHash;
+            return true;
+        }).length,
         // La cadena que usa `listarCuentas`. El doble devuelve los documentos ENTEROS —con
         // passwordHash y token— a propósito: así la prueba verifica que lo que los esconde
         // sea el código y no la casualidad de que el doble no los tenga.
@@ -92,6 +112,16 @@ for (const [ruta, exports] of [
             }),
         }),
     })],
+    ['../src/models/SesionStaff', (conn) => ({
+        updateMany: async (filtro, cambios) => { SESIONES_CERRADAS.push({ base: conn.name, filtro, cambios }); return {}; },
+    })],
+    ['../src/config/mailer', {
+        sendMail: async (mensaje) => {
+            if (FALLA_CORREO) throw new Error('Brevo no responde');
+            CORREOS.push(mensaje);
+            return { messageId: 'x' };
+        },
+    }],
     ['../src/config/conexiones', {
         conexionDeControl: () => ({}),
         conexionDisponible: () => true,
@@ -144,6 +174,9 @@ test.beforeEach(() => {
     SUELTOS = [];
     CUENTAS = {};
     SIN_CUENTAS = [];
+    CORREOS = [];
+    SESIONES_CERRADAS = [];
+    FALLA_CORREO = false;
 });
 test.after(() => { delete process.env.PANEL_TOKEN; delete process.env.MONGO_URI_CONTROL; });
 
@@ -608,4 +641,116 @@ test('distingue quién puede entrar de quién tiene la invitación sin activar',
     assert.strictEqual(por['pendiente@erp.cl'].invitacionSinActivar, true);
     assert.strictEqual(por['fuera@erp.cl'].puedeEntrar, false);
     assert.strictEqual(por['fuera@erp.cl'].estado, 'revocado');
+});
+
+// --- Las tres acciones sobre una cuenta, desde el panel ---
+//
+// Existen porque quien arrienda el sistema NO tiene cuenta dentro de la app de sus clientes,
+// así que no podía ayudar a alguien que quedó con su invitación sin activar. Las tres son
+// reversibles, y eso es lo que decide cuáles están acá: borrar no está, y la prueba de abajo
+// cuida la condición de fondo que lo haría peligroso.
+
+const PENDIENTE = (id, email) => ({ _id: id, email, nombre: 'Pendiente', estado: 'activo' });
+const ACTIVA = (id, email) => ({ ...CUENTA(email, 'Activa'), _id: id });
+
+test('reenviar una invitación emite link nuevo y manda el correo', async () => {
+    CUENTAS['base-principal'] = [PENDIENTE('c1', 'nueva@erp.cl')];
+    const { estado, cuerpo } = await pedir('/api/talleres/principal/cuentas/c1/reenviar', { metodo: 'POST' });
+
+    assert.strictEqual(estado, 200);
+    assert.strictEqual(cuerpo.correoEnviado, true);
+    assert.strictEqual(CORREOS.length, 1);
+    assert.strictEqual(CORREOS[0].to, 'nueva@erp.cl');
+    // El taller TIENE que ir en el link: quien lo abre no tiene sesión, y sin eso la
+    // activación se busca en la base del taller por defecto, donde esa invitación no existe.
+    assert.match(CORREOS[0].text, /\/activar\?token=[^&]+&entorno=produccion&taller=principal/);
+    assert.ok(CUENTAS['base-principal'][0].resetHash, 'tiene que quedar el hash del token nuevo');
+});
+
+test('si el correo no sale, devuelve el link para entregarlo a mano', async () => {
+    // Dejar la cuenta inservible porque Brevo no respondió sería peor que entregarlo a mano.
+    CUENTAS['base-principal'] = [PENDIENTE('c1', 'nueva@erp.cl')];
+    FALLA_CORREO = true;
+    const { estado, cuerpo } = await pedir('/api/talleres/principal/cuentas/c1/reenviar', { metodo: 'POST' });
+
+    assert.strictEqual(estado, 200);
+    assert.strictEqual(cuerpo.correoEnviado, false);
+    assert.match(cuerpo.link, /\/activar\?token=/);
+});
+
+test('no se reenvía invitación a una cuenta que ya tiene clave', async () => {
+    // Ahí lo que corresponde es «Olvidé mi clave», no una invitación: reemitirla le pisaría
+    // el resetHash a alguien que quizás está en medio de recuperar la suya.
+    CUENTAS['base-principal'] = [ACTIVA('c1', 'activa@erp.cl')];
+    const { estado, cuerpo } = await pedir('/api/talleres/principal/cuentas/c1/reenviar', { metodo: 'POST' });
+    assert.strictEqual(estado, 409);
+    assert.match(cuerpo.error, /Olvidé mi clave/);
+    assert.strictEqual(CORREOS.length, 0);
+});
+
+test('revocar corta el acceso y cierra sus sesiones abiertas', async () => {
+    CUENTAS['base-principal'] = [ACTIVA('c1', 'uno@erp.cl'), ACTIVA('c2', 'dos@erp.cl')];
+    const { estado } = await pedir('/api/talleres/principal/cuentas/c1/revocar', { metodo: 'POST' });
+
+    assert.strictEqual(estado, 200);
+    assert.strictEqual(CUENTAS['base-principal'][0].estado, 'revocado');
+    // No se espera al próximo request suyo para echarla.
+    assert.strictEqual(SESIONES_CERRADAS.length, 1);
+    assert.deepStrictEqual(SESIONES_CERRADAS[0].cambios, { estado: 'cerrada' });
+});
+
+test('NO se puede revocar la única cuenta que puede entrar a un taller', async () => {
+    // El candado que hace que esto sea seguro desde el panel. En la app alcanzaba con «nadie
+    // puede revocarse a sí mismo», porque quien revoca es una de esas cuentas. Desde el panel
+    // no hay un «sí mismo»: quien aprieta no tiene cuenta en esa base, y dejar al cliente sin
+    // ninguna lo deja afuera de su propio sistema — recuperarlo exige entrar al servidor a
+    // correr scripts/crearAdmin.js.
+    CUENTAS['base-principal'] = [ACTIVA('c1', 'unica@erp.cl'), PENDIENTE('c2', 'pendiente@erp.cl')];
+    const { estado, cuerpo } = await pedir('/api/talleres/principal/cuentas/c1/revocar', { metodo: 'POST' });
+
+    assert.strictEqual(estado, 409);
+    assert.match(cuerpo.error, /única cuenta que puede entrar/);
+    assert.strictEqual(CUENTAS['base-principal'][0].estado, 'activo', 'no se tocó');
+    // Una invitación sin activar NO cuenta como cuenta que puede entrar: si contara, este
+    // candado se abriría solo invitando a alguien que nunca va a activar.
+    assert.strictEqual(SESIONES_CERRADAS.length, 0);
+});
+
+test('reactivar la devuelve con su misma clave', async () => {
+    // La vuelta atrás de revocar. Sin esto, revocar sería irreversible y no debería existir.
+    CUENTAS['base-principal'] = [{ ...ACTIVA('c1', 'uno@erp.cl'), estado: 'revocado' }];
+    const { estado } = await pedir('/api/talleres/principal/cuentas/c1/reactivar', { metodo: 'POST' });
+    assert.strictEqual(estado, 200);
+    assert.strictEqual(CUENTAS['base-principal'][0].estado, 'activo');
+    assert.ok(CUENTAS['base-principal'][0].passwordHash, 'la clave no se toca');
+});
+
+test('las tres acciones exigen la clave del panel', async () => {
+    CUENTAS['base-principal'] = [PENDIENTE('c1', 'nueva@erp.cl')];
+    for (const accion of ['reenviar', 'revocar', 'reactivar']) {
+        const { estado } = await pedir(`/api/talleres/principal/cuentas/c1/${accion}`, { metodo: 'POST', clave: null });
+        assert.strictEqual(estado, 401, `${accion} dejó pasar sin clave`);
+    }
+    assert.strictEqual(CORREOS.length, 0);
+});
+
+test('sobre un taller suspendido o inexistente, responde 404 y no toca nada', async () => {
+    filas.push({ slug: 'taller-123', nombre: 'Taller 123', estado: 'activo', mongoUri: 'mongodb://servidor/123', fechaAlta: new Date() });
+    SIN_BASE = ['taller-123'];
+    const { estado } = await pedir('/api/talleres/taller-123/cuentas/c1/revocar', { metodo: 'POST' });
+    assert.strictEqual(estado, 404);
+});
+
+test('no se reenvía invitación a una cuenta revocada: ese link nacería muerto', async () => {
+    // `POST /auth/restablecer` exige `estado: 'activo'`. Mandar el correo igual sería
+    // prometerle a esa persona un acceso que no va a funcionar, y el corte va en el backend
+    // y no solo en el botón: el panel no es el único que puede llamar a esto.
+    CUENTAS['base-principal'] = [
+        { ...PENDIENTE('c1', 'fuera@erp.cl'), estado: 'revocado' },
+        ACTIVA('c2', 'otra@erp.cl'),
+    ];
+    const { estado, cuerpo } = await pedir('/api/talleres/principal/cuentas/c1/reenviar', { metodo: 'POST' });
+    assert.strictEqual(estado, 409);
+    assert.match(cuerpo.error, /revocada/);
+    assert.strictEqual(CORREOS.length, 0);
 });
