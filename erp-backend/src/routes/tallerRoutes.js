@@ -19,6 +19,7 @@ router.patch('/:slug', ctrl.actualizar);
 router.post('/:slug/instalacion', ctrl.reemitirInstalacion);
 // Las tres acciones sobre una cuenta de un taller. Todas reversibles — borrar no está, y la
 // razón está escrita en el controlador.
+router.get('/:slug/cuentas/:id/bitacora', ctrl.bitacoraDeCuenta);
 router.post('/:slug/cuentas/:id/reenviar', ctrl.reenviarInvitacionDeCuenta);
 router.post('/:slug/cuentas/:id/revocar', ctrl.revocarCuentaDeTaller);
 router.post('/:slug/cuentas/:id/reactivar', ctrl.reactivarCuentaDeTaller);

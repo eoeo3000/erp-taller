@@ -219,6 +219,14 @@ const seguro = (v) => texto(v).replace(/[&<>"']/g, (c) => (
     { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
 ));
 
+// Con hora, para la bitácora: ahí «18-10-2026» no alcanza — la pregunta suele ser si dos
+// cosas pasaron una después de la otra el mismo día.
+function fechaHora(valor) {
+    if (!valor) return '—';
+    const d = new Date(valor);
+    return Number.isNaN(d.getTime()) ? '—' : d.toLocaleString('es-CL');
+}
+
 function fecha(valor) {
     if (!valor) return '—';
     const d = new Date(valor);
@@ -562,6 +570,7 @@ function filaCuenta(c) {
     // emite otro link y mata el anterior, revocar se deshace con reactivar. Borrar no está —
     // borrar la última cuenta de un taller reabre su ventana de instalación.
     const acciones = [
+        boton('bitacora', c, 'Historial'),
         // Reenviar solo si la cuenta está activa: `POST /auth/restablecer` exige
         // `estado: 'activo'`, así que una invitación a una cuenta revocada sale con un link
         // que no va a funcionar. Ofrecer un botón que va a fallar es peor que no ofrecerlo
@@ -576,7 +585,13 @@ function filaCuenta(c) {
         + `<td>${acciones}</td></tr>`;
 }
 
+// La última búsqueda, para que «Volver» desde el historial reponga la MISMA lista y no todas
+// las cuentas: se llega acá apretando «Cuentas» en la fila de un taller, y volver a la lista
+// entera obligaría a repetir el filtro que ya se había puesto.
+let ultimaBusqueda = { texto: '', taller: '' };
+
 async function buscarCuentas(busqueda, soloTaller = '') {
+    ultimaBusqueda = { texto: busqueda, taller: soloTaller };
     $('estadoCuentas').textContent = 'Buscando en cada taller…';
     $('tablaCuentas').innerHTML = '';
     $('btnCuentas').disabled = true;
@@ -618,6 +633,61 @@ $('formCuentas').addEventListener('submit', (e) => {
 // Qué se le avisa a quien aprieta, antes de apretar. Revocar corta el acceso en el acto —se
 // deshace, pero mientras tanto esa persona no entra— y reenviar mata el link anterior, que
 // puede estar ya en el buzón de alguien que lo iba a usar hoy.
+// Cómo se lee cada línea de la bitácora. El texto va acá y no en la base: la base guarda el
+// hecho (`revocada`), la pantalla decide cómo contarlo, y así cambiar la redacción no obliga
+// a reescribir lo ya registrado.
+const COMO_SE_LEE = {
+    'invitada': 'Invitada',
+    'invitacion-reenviada': 'Invitación reenviada',
+    'activada': 'Activó su cuenta y eligió su clave',
+    'ingreso': 'Entró',
+    'ingreso-bloqueado': 'Bloqueada por intentos fallidos',
+    'clave-cambiada': 'Cambió su clave',
+    'clave-restablecida': 'Repuso su clave olvidada',
+    'revocada': 'Revocada',
+    'reactivada': 'Reactivada',
+    'editada': 'Datos corregidos',
+};
+
+const DESDE_DONDE = { app: 'desde la app', panel: 'desde el panel', script: 'desde el servidor' };
+
+async function verBitacora(taller, id, correo) {
+    $('estadoCuentas').textContent = 'Buscando el historial…';
+    try {
+        const datos = await pedir(`/api/talleres/${encodeURIComponent(taller)}/cuentas/${encodeURIComponent(id)}/bitacora`);
+        // El historial reemplaza la lista, así que tiene que haber cómo volver: sin esto la
+        // única salida era buscar de nuevo, y quien había filtrado por un taller perdía el
+        // filtro. Se vio mirando la página, no en una prueba.
+        const volver = '<p><button class="secundario" type="button" data-volver>← Volver a la lista</button></p>';
+        if (!datos.lineas.length) {
+            $('tablaCuentas').innerHTML = volver + `<p class="nota">Sin historial para ${seguro(correo)}.
+                Es normal si esa cuenta no se tocó desde que esto existe: lo anterior no quedó registrado.</p>`;
+        } else {
+            $('tablaCuentas').innerHTML = volver + '<table><thead><tr><th>Cuándo</th><th>Qué pasó</th>'
+                + '<th>Quién</th><th>Desde dónde</th></tr></thead><tbody>'
+                + datos.lineas.map((l) => {
+                    // El nombre de quien lo hizo lo escribió la gente de ese taller, así que
+                    // va por `seguro()`; el `<span>` del caso «nadie lo hizo por ella» lo
+                    // escribí acá y NO se escapa. Escapar los dos juntos —que es como salió
+                    // la primera versión— pintaba el `<span class="nota">…</span>` crudo en
+                    // la celda. No lo vio ninguna prueba: las dos que hay miran que el texto
+                    // de la API salga escapado, y salía; lo que estaba de más era lo propio.
+                    const quien = l.porNombre || l.porEmail
+                        ? seguro(l.porNombre || l.porEmail)
+                        : '<span class="nota">la propia persona</span>';
+                    const donde = `${DESDE_DONDE[l.origen] || l.origen}${l.ip ? ` · ${seguro(l.ip)}` : ''}`;
+                    const detalle = l.detalle ? `<br><span class="nota">${seguro(l.detalle)}</span>` : '';
+                    return `<tr><td>${fechaHora(l.cuando)}</td>`
+                        + `<td>${seguro(COMO_SE_LEE[l.accion] || l.accion)}${detalle}</td>`
+                        + `<td>${quien}</td><td>${donde}</td></tr>`;
+                }).join('') + '</tbody></table>';
+        }
+        $('estadoCuentas').innerHTML = `Historial de ${seguro(correo)}`;
+    } catch (e) {
+        $('estadoCuentas').innerHTML = `<span class="aviso">${seguro(e.message)}</span>`;
+    }
+}
+
 const AVISO_ACCION = {
     revocar: (correo) => `${correo} va a dejar de entrar de inmediato y se le cierran las sesiones abiertas.`
         + ' Se deshace con Reactivar. ¿Seguir?',
@@ -629,9 +699,14 @@ const AVISO_ACCION = {
 // Los botones se escuchan en la tabla y no uno por uno: las filas se vuelven a pintar en cada
 // búsqueda y los listeners puestos sobre ellas morirían con ellas.
 $('tablaCuentas').addEventListener('click', async (e) => {
+    if (e.target.dataset?.volver !== undefined) {
+        return buscarCuentas(ultimaBusqueda.texto, ultimaBusqueda.taller);
+    }
     const accion = e.target.dataset?.cuentaAccion;
     if (!accion) return;
     const { cuentaId: id, cuentaTaller: taller, cuentaCorreo: correo } = e.target.dataset;
+    // Mirar el historial no cambia nada, así que no pregunta.
+    if (accion === 'bitacora') return verBitacora(taller, id, correo);
     if (!confirm(AVISO_ACCION[accion](correo))) return;
 
     e.target.disabled = true;

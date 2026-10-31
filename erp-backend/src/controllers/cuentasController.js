@@ -9,6 +9,7 @@
 const getUsuario = require('../models/Usuario');
 const getSesionStaff = require('../models/SesionStaff');
 const { tallerPorDefecto } = require('../config/talleres');
+const bitacora = require('../servicios/bitacoraCuentas');
 // Las tres acciones viven en el servicio porque ahora también las llama el panel, que opera
 // sobre la base de otro taller y sin sesión. Duplicarlas sería repetir el error de las tres
 // versiones de `fechasDeTrabajo`: la segunda copia no se arregla cuando se arregla la primera.
@@ -63,6 +64,8 @@ exports.invitar = async (req, res) => {
             correoEnviado = false;
         }
 
+        await bitacora.registrar(req.db, { accion: 'invitada', usuario, req,
+            detalle: correoEnviado ? '' : 'el correo no salió: el link se entregó a mano' });
         res.ok({ cuenta: cuentaPublica(usuario), correoEnviado, link: correoEnviado ? '' : link }, 201);
     } catch (error) {
         res.fail(500, error.message);
@@ -110,6 +113,12 @@ exports.actualizar = async (req, res) => {
 
         if (!Object.keys(cambios).length) return res.ok({ cuenta: cuentaPublica(usuario), sinCambios: true });
 
+        // El correo de antes, para la bitácora: hay que leerlo ANTES del `Object.assign` de
+        // abajo. Es el único cambio de esta pantalla que nadie puede reconstruir después —
+        // el campo queda pisado— y es justo el que alguien va a preguntar: la cuenta a la que
+        // se le invitó ya no es la que figura.
+        const emailAnterior = usuario.email;
+
         await Usuario.updateOne({ _id: usuario._id }, cambios);
         Object.assign(usuario, cambios);
 
@@ -129,6 +138,16 @@ exports.actualizar = async (req, res) => {
             }
         }
 
+        // Qué se corrigió. El correo completo va acá y no solo el dominio: esto vive en la
+        // base del taller y se ve en el panel, que ya muestra los correos de ese taller —la
+        // regla del dominio es para el log de Render, que lee cualquiera con acceso al panel
+        // de Render sin ser nadie de este sistema.
+        const quePaso = [
+            cambios.nombre ? `nombre: «${usuario.nombre}»` : '',
+            cambios.email ? `correo: ${emailAnterior} → ${usuario.email} (se reemitió la invitación y la anterior dejó de servir)` : '',
+        ].filter(Boolean).join('; ');
+        await bitacora.registrar(req.db, { accion: 'editada', usuario, req, detalle: quePaso });
+
         res.ok({ cuenta: cuentaPublica(usuario), correoEnviado, link: correoEnviado ? '' : link });
     } catch (error) {
         res.fail(500, error.message);
@@ -144,6 +163,8 @@ exports.reenviar = async (req, res) => {
             invitadoPor: req.usuario?.nombre || 'La oficina',
         });
         if (r.error) return res.fail(r.estado, r.error);
+        await bitacora.registrar(req.db, { accion: 'invitacion-reenviada', usuario: r.usuario, req,
+            detalle: r.correoEnviado ? '' : 'el correo no salió: el link se entregó a mano' });
         res.ok({ correoEnviado: r.correoEnviado, link: r.link });
     } catch (error) {
         res.fail(500, error.message);
@@ -164,6 +185,7 @@ exports.revocar = async (req, res) => {
             Usuario: getUsuario(req.db), SesionStaff: getSesionStaff(req.db), id: req.params.id,
         });
         if (r.error) return res.fail(r.estado, r.error);
+        await bitacora.registrar(req.db, { accion: 'revocada', usuario: r.usuario, req });
         res.ok({ cuenta: cuentaPublica(r.usuario) });
     } catch (error) {
         res.fail(500, error.message);
@@ -175,6 +197,7 @@ exports.reactivar = async (req, res) => {
     try {
         const r = await reactivarCuenta({ Usuario: getUsuario(req.db), id: req.params.id });
         if (r.error) return res.fail(r.estado, r.error);
+        await bitacora.registrar(req.db, { accion: 'reactivada', usuario: r.usuario, req });
         res.ok({ cuenta: cuentaPublica(r.usuario) });
     } catch (error) {
         res.fail(500, error.message);

@@ -13,6 +13,17 @@ const almacenamiento = require('./src/config/almacenamiento');
 const { avisarUrlsInvalidas } = require('./src/config/urls');
 const app = express();
 
+// Render pone UN proxy delante del servicio, así que sin esto `req.ip` devuelve la dirección
+// de ese proxy y no la de quien llama. Se estaba guardando así en `SesionStaff.ip` y en los
+// accesos del portal: todas las filas con la misma IP, que no es la de nadie. Una dirección
+// equivocada en un registro de accesos es peor que ninguna, porque se la cree.
+//
+// El valor es **1 y no `true`**: con `true` Express confía en la cadena entera de
+// `X-Forwarded-For`, que la escribe quien llama, y cualquiera podría anteponer la IP que
+// quisiera. Con 1 toma el último tramo, que es el que escribió el proxy de Render — el único
+// que no se puede falsificar desde afuera.
+app.set('trust proxy', 1);
+
 // Middlewares
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));

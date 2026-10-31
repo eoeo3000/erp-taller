@@ -73,10 +73,10 @@ async function reenviarInvitacion({ Usuario, id, entorno = 'produccion', taller,
     const link = await emitirInvitacion(Usuario, usuario, entorno, taller);
     try {
         await enviarCorreoInvitacion(usuario, link, invitadoPor);
-        return { correoEnviado: true, link: '' };
+        return { correoEnviado: true, link: '', usuario };
     } catch (eCorreo) {
         console.warn('[cuentas] no se pudo enviar la invitación:', eCorreo.message);
-        return { correoEnviado: false, link };
+        return { correoEnviado: false, link, usuario };
     }
 }
 
