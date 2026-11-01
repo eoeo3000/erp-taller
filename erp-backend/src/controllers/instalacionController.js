@@ -68,11 +68,25 @@ exports.claveInstalacionRequerida = claveInstalacionRequerida;
 //
 // El taller por defecto se devuelve como null a propósito: ese es el camino de siempre —la
 // instalación única, con SETUP_TOKEN— y no el de un cliente nuevo.
+// **La regla de "¿es el taller por defecto?" vale para LAS DOS fuentes.** Estaba solo en la
+// pista del navegador, y por eso un `taller: 'principal'` en el cuerpo entraba por el camino
+// de un cliente nuevo —el del enlace de un solo uso— cuando el principal nunca tuvo enlace:
+// se registró solo al encender la base de control. El resultado era «El enlace de instalación
+// no es válido o ya venció», y era un callejón sin salida, porque `GET /auth/yo` dice que
+// para el taller por defecto NO hace falta clave y entonces la pantalla no muestra el campo.
+// No había nada que escribir para arreglarlo. Pasó en producción, con el enlace del panel.
+//
+// Es el espejo del bug que esta misma función vino a arreglar: ahí `/auth/yo` miraba un
+// taller y la instalación otro; acá los dos miran el mismo taller pero **no aplican la misma
+// regla sobre él**. Las dos formas de no coincidir dan un error que describe otra cosa.
 function slugPedido(req) {
     const delCuerpo = String(req.body?.taller || '').trim().toLowerCase();
-    if (delCuerpo) return delCuerpo;
-    const { taller } = conexionPedida(req);
-    return taller && taller !== tallerPorDefecto() ? taller : '';
+    const slug = delCuerpo || conexionPedida(req).taller || '';
+    // El taller por defecto se devuelve vacío a propósito: ese es el camino de siempre —la
+    // instalación única, con SETUP_TOKEN si está— y no el de un cliente nuevo. Es exactamente
+    // la condición que `GET /auth/yo` usa para decidir si pedir la clave (`esOtroTaller`), y
+    // tienen que ser la misma o la pantalla y el envío vuelven a contradecirse.
+    return slug !== tallerPorDefecto() ? slug : '';
 }
 
 async function resolverTallerDelEnlace(req) {
