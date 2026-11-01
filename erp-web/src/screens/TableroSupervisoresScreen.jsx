@@ -23,6 +23,13 @@ export default function TableroSupervisoresScreen({ API }) {
             .then(({ data }) => setDatos(data)).catch(() => setDatos({ supervisores: [] }));
     }, [API, periodo]);
 
+    // La guarda que faltaba. `datos.supervisores.length` sobre una respuesta de otra forma
+    // tiraba abajo el árbol entero —pantalla, menú y guía— y dejaba la página en blanco.
+    // Ahora hay además un límite de error que lo contiene (components/LimiteDeError.jsx),
+    // pero el límite es la red, no el arreglo: una pantalla que sabe que puede no recibir
+    // lo que espera no tiene por qué romperse.
+    const supervisores = Array.isArray(datos?.supervisores) ? datos.supervisores : [];
+
     return (
         <div style={{ padding: '16px 20px', height: '100%', overflow: 'auto', boxSizing: 'border-box' }}>
             <h1 data-guia="tablero.titulo" style={{ fontSize: 18, fontWeight: 700, margin: '0 0 4px' }}>Tablero de supervisores</h1>
@@ -49,8 +56,8 @@ export default function TableroSupervisoresScreen({ API }) {
                         <span style={{ textAlign: 'center' }}>Completadas</span><span style={{ textAlign: 'center' }}>Inf. atrasados</span>
                         <span style={{ textAlign: 'right' }}>Carga</span>
                     </div>
-                    {datos.supervisores.length === 0 && <div style={{ padding: 16, fontSize: 12, color: t.textoAtenuado2 }}>Sin personal con puesto de supervisor.</div>}
-                    {datos.supervisores.map(s => {
+                    {supervisores.length === 0 && <div style={{ padding: 16, fontSize: 12, color: t.textoAtenuado2 }}>Sin personal con puesto de supervisor.</div>}
+                    {supervisores.map(s => {
                         const cargaTono = s.cargaPct > 100 ? t.rojo : s.cargaPct > 80 ? t.ambar : t.acento;
                         return (
                             <div key={s.recursoId} style={{ display: 'grid', gridTemplateColumns: GRID, alignItems: 'center', padding: '9px 12px', borderBottom: `1px solid ${t.hairline}` }}>

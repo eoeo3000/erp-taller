@@ -62,6 +62,7 @@ import BodegaTokensScreen from './screens/BodegaTokensScreen';
 import TableroSupervisoresScreen from './screens/TableroSupervisoresScreen';
 import useIsMobile from './hooks/useIsMobile';
 import LoginScreen from './screens/LoginScreen';
+import LimiteDePantalla from './components/LimiteDeError';
 import InstalacionScreen from './screens/InstalacionScreen';
 import RestablecerScreen from './screens/RestablecerScreen';
 import MarcaTaller from './components/MarcaTaller';
@@ -560,6 +561,10 @@ function App() {
 
         <main style={styles.main}>
           <BannerDemo entorno={entornoActivo} onVolver={volverAProduccion} />
+          {/* Envuelve SOLO las pantallas: el menú vive fuera de <main> y queda vivo, así que
+              una pantalla rota se arregla navegando a otra en vez de recargando. Ver
+              components/LimiteDeError.jsx. */}
+          <LimiteDePantalla>
           <Routes>
             <Route path="/reporte" element={<ReporteTerreno ots={ots} actualizarOtGlobal={actualizarOtGlobal} />} />
             <Route path="/" element={<IngresoScreen solicitudes={solicitudes} liberarSolicitudManual={liberarSolicitudManual} crearSolicitudGlobal={crearSolicitudGlobal} actualizarSolicitudGlobal={actualizarSolicitudGlobal} setSolicitudes={setSolicitudes} cargarDatos={cargarDatos} API={API} ots={ots} clientes={clientes} enviarPortalCliente={enviarPortalCliente} cargando={cargando} errorCarga={errorCarga} guardarDisposicionGlobal={guardarDisposicionGlobal} eliminarDisposicionGlobal={eliminarDisposicionGlobal} />} />
@@ -607,6 +612,7 @@ function App() {
             <Route path="/tokens" element={<BodegaTokensScreen API={API} />} />
             <Route path="/tablero-supervisores" element={<TableroSupervisoresScreen API={API} recursos={recursos} />} />
           </Routes>
+          </LimiteDePantalla>
         </main>
       </div>
     </Router>
