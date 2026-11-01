@@ -22,7 +22,7 @@ const { TALLER_PRINCIPAL } = require('../src/config/talleres');
 const getUsuario = require('../src/models/Usuario');
 const { hashPassword } = require('../src/utils/password');
 
-const LARGO_MINIMO_PASSWORD = 8;
+const { revisarClave } = require('../src/servicios/claves');
 
 function argumento(nombre) {
     const prefijo = `--${nombre}=`;
@@ -42,9 +42,17 @@ async function main() {
         console.error('Faltan datos. Uso:\n  ADMIN_EMAIL=alguien@taller.cl ADMIN_NOMBRE="Nombre Apellido" ADMIN_PASSWORD=... node scripts/crearAdmin.js');
         process.exit(1);
     }
-    if (password.length < LARGO_MINIMO_PASSWORD) {
-        console.error(`La clave debe tener al menos ${LARGO_MINIMO_PASSWORD} caracteres.`);
+    // La misma revisión que la app, y por el mismo motivo: este script es el salvavidas
+    // cuando se perdió el acceso, y una clave elegida con apuro en una terminal es
+    // justamente la que termina siendo «taller2026». Si no hay salida a internet, la
+    // revisión de claves filtradas se salta sola y queda el mínimo de largo.
+    const revision = await revisarClave(password);
+    if (!revision.ok) {
+        console.error(revision.error);
         process.exit(1);
+    }
+    if (revision.sinRevisar) {
+        console.warn('Aviso: no se pudo consultar la lista de claves filtradas. Se siguió igual.');
     }
 
     const uri = entorno === 'demo' ? process.env.MONGO_URI_DEMO : process.env.MONGO_URI;

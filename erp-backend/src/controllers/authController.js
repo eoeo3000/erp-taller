@@ -3,6 +3,7 @@
 const getUsuario = require('../models/Usuario');
 const getSesionStaff = require('../models/SesionStaff');
 const bitacora = require('../servicios/bitacoraCuentas');
+const { revisarClave } = require('../servicios/claves');
 const { hashPassword, verificarPassword } = require('../utils/password');
 const { generarToken, hashToken, conPrefijo } = require('../utils/tokens');
 const { tallerPorDefecto } = require('../config/talleres');
@@ -19,7 +20,6 @@ const { SPA_URL } = require('../config/urls');
 const MAX_INTENTOS = 5;
 const MINUTOS_BLOQUEO = 15;
 const MINUTOS_VALIDEZ_RESET = 60;
-const LARGO_MINIMO_PASSWORD = 8;
 
 // Mismo texto para "no existe ese correo" y "la clave está mala", a propósito: distinguirlos
 // convierte el login en un verificador de qué correos tienen cuenta.
@@ -191,9 +191,11 @@ exports.cambiarPassword = async (req, res) => {
 
         const passwordActual = String(req.body?.passwordActual || '');
         const passwordNueva = String(req.body?.passwordNueva || '');
-        if (passwordNueva.length < LARGO_MINIMO_PASSWORD) {
-            return res.status(400).json({ error: `La clave nueva debe tener al menos ${LARGO_MINIMO_PASSWORD} caracteres` });
-        }
+        // La revisión va ANTES de comprobar la clave actual a propósito: si fuera al revés,
+        // quien se equivoca en la actual y además eligió una clave filtrada tendría que
+        // descubrir los dos problemas de a uno, en dos intentos.
+        const revision = await revisarClave(passwordNueva);
+        if (!revision.ok) return res.status(400).json({ error: revision.error });
         if (!await verificarPassword(passwordActual, req.usuario.passwordHash)) {
             return res.status(401).json({ error: 'La clave actual no es correcta' });
         }
@@ -330,9 +332,8 @@ exports.restablecer = async (req, res) => {
         const token = String(req.body?.token || '');
         const password = String(req.body?.password || '');
         if (!token) return res.status(400).json({ error: 'Falta el token' });
-        if (password.length < LARGO_MINIMO_PASSWORD) {
-            return res.status(400).json({ error: `La clave debe tener al menos ${LARGO_MINIMO_PASSWORD} caracteres` });
-        }
+        const revision = await revisarClave(password);
+        if (!revision.ok) return res.status(400).json({ error: revision.error });
 
         const usuario = await Usuario.findOne({
             resetHash: hashToken(token),
