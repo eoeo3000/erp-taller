@@ -199,11 +199,34 @@ async function leerRespaldo(clave) {
 // que exista hoy y no esté en el respaldo se deja intacta. Restaurar no debería borrar algo
 // que el respaldo nunca supo que existía — quien restaura quiere recuperar lo que perdió, no
 // volver el mundo entero atrás.
-async function restaurar(conexion, contenido) {
+// Restaura el contenido de un respaldo sobre una base.
+//
+// `soloColecciones` restaura ESAS y deja el resto de la base como está. Nace de un caso real:
+// se borraron todos los `usuarios` de un taller (y con ellos, en cascada, sus `asignacions`)
+// y el único camino de vuelta era restaurar el archivo entero — que habría devuelto la
+// gente, sí, pero retrocediendo las OT y solicitudes del día a las de anoche. Recuperar una
+// colección no puede costar el trabajo de toda la jornada.
+//
+// **Un nombre que no está en el archivo es un error, no un cero.** Las colecciones se llaman
+// como las pluraliza Mongoose, y esa pluralización es ingenua: `Asignacion` queda
+// `asignacions`, sin la «e». Escribir `asignaciones` —que es lo que cualquiera escribiría—
+// no coincide con nada, y sin este corte el script diría «restauración completa: 0
+// documentos» y quien lo corrió se iría convencido de que recuperó su trabajo.
+async function restaurar(conexion, contenido, { soloColecciones = null } = {}) {
     const db = conexion.db;
     const resultado = {};
 
+    const todas = Object.keys(contenido.colecciones || {});
+    if (soloColecciones) {
+        const faltantes = soloColecciones.filter((n) => !todas.includes(n));
+        if (faltantes.length) {
+            throw new Error(`El respaldo no tiene la(s) colección(es): ${faltantes.join(', ')}.`
+                + ` Las que trae son: ${todas.join(', ')}`);
+        }
+    }
+
     for (const [nombre, documentos] of Object.entries(contenido.colecciones || {})) {
+        if (soloColecciones && !soloColecciones.includes(nombre)) continue;
         await db.collection(nombre).deleteMany({});
         if (documentos.length) {
             // ordered: false — un documento con problema no debe abortar los 3.000 que

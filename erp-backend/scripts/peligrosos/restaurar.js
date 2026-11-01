@@ -5,6 +5,14 @@
 //   node scripts/peligrosos/restaurar.js --clave=respaldos/produccion/principal/2026-09-23T14-05-09.json.gz
 //   node scripts/peligrosos/restaurar.js --ultimo --taller=rivas
 //   ... --entorno=demo     restaura sobre la base de demostración (y lee los respaldos de esa)
+//   ... --colecciones=usuarios,asignacions    SOLO esas; el resto de la base queda como está
+//
+// `--colecciones=` existe por un caso real: se borraron todos los `usuarios` de un taller y,
+// en cascada, sus `asignacions`. Sin esto, el único camino de vuelta era restaurar el
+// archivo entero — recuperando la gente, sí, pero retrocediendo las OT y solicitudes del día
+// a las de anoche. Recuperar una colección no puede costar el trabajo de toda la jornada.
+// OJO con los nombres: los pluraliza Mongoose y lo hace de forma ingenua, así que es
+// `asignacions` y no `asignaciones`. Un nombre que no esté en el archivo corta con error.
 //
 // Desde la etapa 5 hay un respaldo por taller, así que hay que decir SOBRE CUÁL se restaura
 // (`--taller=`, por omisión el principal). La conexión sale del registro y no del `.env`:
@@ -33,6 +41,8 @@ const argumento = (nombre) => {
 };
 
 const entorno = argumento('entorno') === 'demo' ? 'demo' : 'produccion';
+const soloColecciones = (argumento('colecciones') || '')
+    .split(',').map((n) => n.trim()).filter(Boolean);
 const taller = (argumento('taller') || TALLER_PRINCIPAL).trim().toLowerCase();
 
 const formatearTamano = (bytes) => (bytes > 1024 * 1024
@@ -76,12 +86,27 @@ async function main() {
         process.exit(1);
     }
 
-    const conteos = Object.entries(contenido.colecciones).map(([n, d]) => [n, d.length]);
+    // Con --colecciones, los conteos son SOLO de lo que se va a tocar: si mostrara el
+    // archivo entero, el resumen que se lee justo antes de confirmar diría una cosa y el
+    // script haría otra.
+    const elegidas = soloColecciones.length ? soloColecciones : Object.keys(contenido.colecciones);
+    const desconocidas = elegidas.filter((n) => !(n in contenido.colecciones));
+    if (desconocidas.length) {
+        console.error(`❌ El respaldo no tiene: ${desconocidas.join(', ')}`);
+        console.error(`   Trae: ${Object.keys(contenido.colecciones).join(', ')}`);
+        console.error('   (los nombres los pluraliza Mongoose: es "asignacions", no "asignaciones")');
+        process.exit(1);
+    }
+    const conteos = elegidas.map((n) => [n, contenido.colecciones[n].length]);
     const total = conteos.reduce((a, [, n]) => a + n, 0);
 
     console.log(`\nRespaldo del ${contenido.fecha}, tomado de la base "${contenido.base}":`);
     for (const [nombre, cantidad] of conteos) console.log(`  ${String(cantidad).padStart(7)}  ${nombre}`);
     console.log(`  ${String(total).padStart(7)}  TOTAL\n`);
+    if (soloColecciones.length) {
+        const intactas = Object.keys(contenido.colecciones).filter((n) => !elegidas.includes(n));
+        console.log(`Solo se tocan esas ${elegidas.length}. Quedan como están: ${intactas.join(', ') || '(ninguna otra)'}\n`);
+    }
 
     // El respaldo se tomó de una base y se puede estar restaurando sobre otra. No es
     // necesariamente un error (restaurar producción sobre la demo para probar es
@@ -101,7 +126,9 @@ async function main() {
     }
 
     await confirmarDestructivo(
-        `Vacía y vuelve a llenar ${conteos.length} colección(es) de "${conexion.db.databaseName}" (taller ${taller}) con el contenido de ${clave}.`,
+        `Vacía y vuelve a llenar ${conteos.length} colección(es) de "${conexion.db.databaseName}"`
+        + ` (taller ${taller}) con el contenido de ${clave}`
+        + `${soloColecciones.length ? `: ${elegidas.join(', ')}. El resto de la base NO se toca.` : '.'}`,
         null,
         conexion.db.databaseName,
     );
@@ -113,7 +140,9 @@ async function main() {
     }
 
     console.log('Restaurando…');
-    const resultado = await restaurar(conexion, contenido);
+    const resultado = await restaurar(conexion, contenido, {
+        soloColecciones: soloColecciones.length ? soloColecciones : null,
+    });
     for (const [nombre, cantidad] of Object.entries(resultado)) {
         const esperado = contenido.colecciones[nombre].length;
         const marca = cantidad === esperado ? '✅' : '⚠️ ';

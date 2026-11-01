@@ -112,10 +112,24 @@ exports.whoami = async (req, res) => {
 };
 
 // GET /api/usuarios — listado para el planificador (vía SPA)
+// Los accesos de TERRENO, que es lo que administra esta pantalla (Bodega de tokens).
+//
+// Antes era un `find()` pelado, o sea **todos** los `Usuario` — y como `Usuario` es la única
+// tabla de personas, ahí salían listadas también las cuentas de oficina, cada una con su
+// botón «Eliminar» apuntando a `DELETE /api/usuarios/:id`. Ese fue el camino por el que un
+// taller borró todas sus cuentas y quedó afuera de su propia app.
+//
+// El filtro es «no tiene correo» y no «tiene token», a propósito: una cuenta de oficina se
+// define por su correo (es con lo que entra), mientras que una persona de terreno podría
+// quedar sin token por un momento —entre revocar y reemitir— y desaparecer de la lista
+// justo cuando hay que arreglarla. En Mongo `{ email: null }` también hace match con los
+// documentos que NO tienen el campo, que es el caso de todas las de terreno.
+// Las cuentas de oficina se administran en su propia pestaña, contra /api/cuentas.
 exports.listar = async (req, res) => {
     const Usuario = getUsuario(req.db);
     try {
-        const usuarios = await Usuario.find().select('-token').sort({ createdAt: -1 });
+        const usuarios = await Usuario.find({ email: { $in: [null, ''] } })
+            .select('-token').sort({ createdAt: -1 });
         res.json(usuarios);
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -193,15 +207,59 @@ exports.reactivar = async (req, res) => {
 // no pierde el trabajo ya cargado: los hallazgos viven en OT.informeEvaluacion, no en la
 // Asignacion — esto solo libera la "reserva" de vuelta al pool compartido. Mismo criterio
 // que otController.eliminarOT limpiando Asignacion al borrar una OT.
+// Borrar el registro de una persona. **Irreversible**, al revés que revocar.
+//
+// Esto no tenía ninguna guarda y costó caro: desde la pestaña «Cuentas de oficina» de Bodega
+// de tokens se borraron todas las cuentas de un taller en producción. Consecuencias, las
+// tres en el mismo clic:
+//
+//   1. Como `Usuario` es la única tabla de personas, el borrado no distinguía una cuenta de
+//      oficina (correo + clave) de un token de terreno.
+//   2. Al irse la última cuenta con clave, `GET /auth/yo` volvió a responder
+//      `requiereInstalacion`: el taller quedó afuera de su propia app y con la ventana de
+//      instalación reabierta. Es exactamente el escenario por el que el panel no ofrece
+//      borrar (ver servicios/cuentasDeTaller.js).
+//   3. Se borraban en cascada las `Asignacion` de esa persona — o sea el registro de qué
+//      trabajo había hecho, que no estaba en ninguna otra parte.
+//
+// Las tres guardas de abajo cortan antes de tocar nada. Ninguna tiene «forzar»: para todos
+// esos casos la respuesta correcta es **revocar**, que deja a la persona sin entrar, se
+// deshace con reactivar y conserva su historial.
 exports.eliminar = async (req, res) => {
     const Usuario = getUsuario(req.db);
     const Recurso = getRecurso(req.db);
     const Asignacion = require('../models/Asignacion')(req.db);
     try {
-        const usuario = await Usuario.findByIdAndDelete(req.params.id);
+        const usuario = await Usuario.findById(req.params.id);
         if (!usuario) return res.status(404).json({ error: 'Usuario no encontrado' });
+
+        // 1. Una cuenta de oficina no se borra desde acá, y en realidad no se borra desde
+        //    ningún lado. Esta pantalla administra los accesos de terreno; que las dos cosas
+        //    vivan en la misma tabla es un detalle de implementación que no puede traducirse
+        //    en que un botón de una sirva para destruir la otra.
+        if (usuario.email) {
+            return res.status(409).json({
+                error: 'Esa es una cuenta de oficina (entra con correo y clave), no un acceso de terreno.'
+                    + ' Para quitarle el acceso usa Revocar en «Cuentas de oficina»: se deshace y conserva su historial.',
+            });
+        }
+
+        // 2. Si tiene trabajo registrado, borrarla se lleva ese trabajo. El número va en el
+        //    mensaje: «tiene asignaciones» no deja decidir, «tiene 34» sí.
+        const asignaciones = await Asignacion.countDocuments({ usuarioId: usuario._id });
+        if (asignaciones > 0) {
+            return res.status(409).json({
+                error: `${usuario.nombre || 'Esa persona'} tiene ${asignaciones} asignación(es) de trabajo registradas.`
+                    + ' Borrarla se las lleva también, y eso no se deshace. Usa Revocar: le quita el acceso al instante'
+                    + ' y el historial queda.',
+            });
+        }
+
+        await Usuario.deleteOne({ _id: usuario._id });
         if (usuario.recursoId) await Recurso.updateOne({ _id: usuario.recursoId }, { usuarioId: null });
-        await Asignacion.deleteMany({ usuarioId: usuario._id });
+        // Ya no hay `deleteMany` de asignaciones: con la guarda de arriba, acá no queda
+        // ninguna que borrar. Dejar la línea sería conservar el borrado en cascada esperando
+        // a que alguien saque la guarda.
         res.json({ ok: true });
     } catch (error) {
         res.status(500).json({ error: error.message });
