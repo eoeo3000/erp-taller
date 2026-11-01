@@ -244,3 +244,66 @@ test('un taller no se puede meter en la clave del respaldo de otro', async () =>
     assert.throws(() => respaldo.prefijoDe('produccion', '../otro'), /Taller inválido/);
     assert.throws(() => respaldo.prefijoDe('produccion', ''), /Taller inválido/);
 });
+
+// --- Restaurar SOLO algunas colecciones ---
+//
+// Nace de un caso real: se borraron todos los `usuarios` de un taller y, en cascada, sus
+// `asignacions`. El único camino de vuelta era restaurar el archivo entero, que habría
+// devuelto la gente retrocediendo las OT y solicitudes del día a las de anoche. Recuperar
+// una colección no puede costar el trabajo de toda la jornada.
+
+test('restaurar solo algunas colecciones deja el resto de la base intacto', async (t) => {
+    t.after(() => limpiarRespaldos());
+    const idPersona = new ObjectId();
+    const origen = baseFalsa({
+        usuarios: [{ _id: idPersona, nombre: 'Supervisor' }],
+        ots: [{ _id: new ObjectId(), numeroOT: 'OT-2026-0001' }],
+    });
+    const creado = await respaldo.crearRespaldo(conexionFalsa(origen), 'produccion');
+
+    // Después del respaldo: se borró la gente, y además se trabajó — hay una OT nueva.
+    const destino = baseFalsa({
+        usuarios: [],
+        ots: [{ _id: new ObjectId(), numeroOT: 'OT-2026-0001' }, { _id: new ObjectId(), numeroOT: 'OT-2026-0002' }],
+    });
+    const contenido = await respaldo.leerRespaldo(creado.clave);
+    const resultado = await respaldo.restaurar(conexionFalsa(destino), contenido, {
+        soloColecciones: ['usuarios'],
+    });
+
+    assert.deepStrictEqual(resultado, { usuarios: 1 }, 'solo informa lo que tocó');
+    assert.strictEqual(String(destino._datos.get('usuarios')[0]._id), String(idPersona), 'la persona volvió');
+    assert.strictEqual(destino._datos.get('ots').length, 2, 'la OT de hoy NO se perdió');
+});
+
+test('pedir una colección que el respaldo no tiene es un error, no un cero', async (t) => {
+    t.after(() => limpiarRespaldos());
+    // La trampa concreta: Mongoose pluraliza de forma ingenua y la colección se llama
+    // `asignacions`, sin la «e». Quien quiera recuperarla va a escribir `asignaciones`, que
+    // es lo que se escribiría en castellano. Sin este corte el script diría «restauración
+    // completa: 0 documentos» y esa persona se iría convencida de que recuperó su trabajo.
+    const creado = await respaldo.crearRespaldo(
+        conexionFalsa(baseFalsa({ asignacions: [{ _id: new ObjectId() }] })), 'produccion',
+    );
+    const destino = baseFalsa({ asignacions: [] });
+    const contenido = await respaldo.leerRespaldo(creado.clave);
+
+    await assert.rejects(
+        () => respaldo.restaurar(conexionFalsa(destino), contenido, { soloColecciones: ['asignaciones'] }),
+        /asignaciones/,
+        'tiene que decir cuál no encontró',
+    );
+    assert.strictEqual(destino._datos.get('asignacions').length, 0, 'y no tocar nada');
+});
+
+test('sin soloColecciones, restaurar sigue haciendo exactamente lo de antes', async (t) => {
+    t.after(() => limpiarRespaldos());
+    // La opción es nueva; el comportamiento de siempre no puede haber cambiado.
+    const creado = await respaldo.crearRespaldo(
+        conexionFalsa(baseFalsa({ ots: [{ _id: new ObjectId() }], recursos: [{ _id: new ObjectId() }] })),
+        'produccion',
+    );
+    const destino = baseFalsa({ ots: [], recursos: [] });
+    const resultado = await respaldo.restaurar(conexionFalsa(destino), await respaldo.leerRespaldo(creado.clave));
+    assert.deepStrictEqual(resultado, { ots: 1, recursos: 1 });
+});
