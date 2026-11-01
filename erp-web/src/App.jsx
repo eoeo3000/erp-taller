@@ -111,6 +111,10 @@ function App() {
   // sabe y `{nombre:'', logo:''}` cuando no puso ninguno: las dos cosas caen en el nombre de
   // fábrica, así que no hay un parpadeo de un nombre a otro al cargar.
   const [marca, setMarca] = useState(null);
+  // En qué base está mirando el SERVIDOR. No es `entornoActivo` (que es lo que este
+  // navegador CREE): lo que falla es justamente esa memoria, así que las pantallas de antes
+  // del login tienen que decirlo con el dato de quien abrió la base. Ver `exports.yo`.
+  const [entornoServidor, setEntornoServidor] = useState(null);
   // Se calcula una sola vez, del path con que se abrió la pestaña: dentro de la app ya
   // logueada, navegar a /portal sigue funcionando por la ruta de siempre.
   const [rutaPublica] = useState(() => RUTAS_PUBLICAS.some(r => window.location.pathname.startsWith(r)));
@@ -182,6 +186,7 @@ function App() {
     axios.get(`${API}/auth/yo`)
       .then(({ data }) => {
         setMarca(data.marca || null);
+        setEntornoServidor(data.entorno || null);
         if (rutaPublica) return;
         if (data.requiereInstalacion) {
           setRequiereClaveInstalacion(!!data.requiereClaveInstalacion);
@@ -196,6 +201,7 @@ function App() {
       // ve—, y un backend caído no trae nada y ahí se usa el nombre de fábrica.
       .catch((e) => {
         setMarca(e?.response?.data?.marca || null);
+        setEntornoServidor(e?.response?.data?.entorno || null);
         if (rutaPublica) return;
         setAcceso('requiere-login');
       });
@@ -487,9 +493,9 @@ function App() {
 
   if (acceso === 'verificando') return <div style={styles.esperando}>Cargando…</div>;
   if (acceso === 'instalacion') {
-    return <InstalacionScreen API={API} requiereClaveInstalacion={requiereClaveInstalacion} motivoClaveInstalacion={motivoClaveInstalacion} onListo={entrar} marca={marca} />;
+    return <InstalacionScreen API={API} requiereClaveInstalacion={requiereClaveInstalacion} motivoClaveInstalacion={motivoClaveInstalacion} onListo={entrar} marca={marca} entorno={entornoServidor} />;
   }
-  if (acceso === 'requiere-login') return <LoginScreen API={API} onIngreso={entrar} marca={marca} />;
+  if (acceso === 'requiere-login') return <LoginScreen API={API} onIngreso={entrar} marca={marca} entorno={entornoServidor} />;
 
   return (
     <Router>
