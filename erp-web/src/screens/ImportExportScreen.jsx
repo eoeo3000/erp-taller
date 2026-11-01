@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { headerEntorno, headerApiKey, obtenerEntorno, fijarEntorno } from '../utils/entorno';
+import { headerEntorno, headerApiKey, obtenerEntorno } from '../utils/entorno';
 import { headerSesion } from '../utils/sesion';
 
 // Paso 7 del rediseño (ver docs/rediseno/design_handoff_panel_control/README.md §9.1):
@@ -135,11 +135,14 @@ export default function ImportExportScreen({ API, cargarDatos }) {
     }, [API]);
     useEffect(() => { cargarCasosNoCubiertos(); }, [cargarCasosNoCubiertos]);
 
-    const cambiarEntorno = (valor) => {
-        if (valor === entorno) return;
-        fijarEntorno(valor);
-        window.location.reload();
-    };
+    // Antes esto cambiaba de base con un clic. Se sacó: la demo es la herramienta de quien
+    // ARRIENDA el sistema —para mostrarlo sin riesgo—, no de la gente del taller, que no
+    // tiene ningún motivo para ir ahí y sí muchas formas de llegar sin querer. Y la demo
+    // tiene su PROPIA base, así que llegar sin querer significaba que recuperar la clave
+    // buscara el correo donde no está, y que `GET /auth/yo` respondiera «todavía no hay
+    // ninguna cuenta» a un taller que lleva meses operando. Pasó en producción.
+    // Se entra con `?entorno=demo` en la dirección — algo que hay que escribir a propósito —
+    // y dura lo que dura la pestaña (ver utils/entorno.js).
 
     const cargarDemo = async () => {
         setAccionDemo('cargando');
@@ -285,7 +288,9 @@ export default function ImportExportScreen({ API, cargarDatos }) {
                         <div style={styles.bloqueHeader}>
                             <span style={styles.tituloSub}>Entorno de trabajo</span>
                         </div>
-                        <div style={styles.notaBloque}>Producción son los datos reales del taller. Demostración es una base separada, ficticia, pensada para mostrar el sistema sin riesgo.</div>
+                        <div style={styles.notaBloque}>Producción son los datos reales del taller. Demostración es una base separada, ficticia, pensada para mostrar el sistema sin riesgo. {entorno === 'demo'
+                            ? 'Esta pestaña está en demostración: nada de lo que hagas acá toca los datos reales, y al cerrarla vuelve sola a producción.'
+                            : 'Esta pestaña está en producción, que es donde se trabaja.'}</div>
 
                         <div style={styles.gridEntornos}>
                             {[
@@ -298,12 +303,10 @@ export default function ImportExportScreen({ API, cargarDatos }) {
                                 return (
                                     <div
                                         key={env.id}
-                                        onClick={() => disponible && cambiarEntorno(env.id)}
                                         style={{
                                             ...styles.tarjetaEntorno,
                                             borderLeft: activa ? '3px solid #1c1d1b' : `1px solid ${t.bordeZona}`,
                                             background: activa ? '#f0efeb' : t.superficie,
-                                            cursor: disponible ? 'pointer' : 'not-allowed',
                                             opacity: disponible ? 1 : .55,
                                         }}
                                     >

@@ -135,6 +135,17 @@ exports.logout = async (req, res) => {
 // Qué revela: el nombre que ese taller eligió mostrar, para un slug que hay que acertar. El
 // slug se deriva del nombre (servicios/baseDelTaller.js), así que acertarlo ya implica
 // conocerlo — esto no agrega una forma de averiguar qué clientes existen.
+// **El entorno viaja en LAS CUATRO respuestas, igual que la marca, y por un motivo parecido.**
+// Un taller tiene DOS bases —producción y demostración— y cuál se abre lo decide el
+// navegador. Las pantallas de antes del login no tenían forma de decir en cuál estaban
+// mirando: `BannerDemo` vive dentro del shell de la app, no en el login ni en la
+// instalación. Eso produjo el peor mensaje que este sistema haya mostrado — un navegador
+// que había quedado en demo recibía `requiereInstalacion` (la base de demostración no tiene
+// cuentas de escritorio) y la app le decía **«todavía no hay ninguna cuenta»** a un taller
+// que llevaba meses operando, ofreciéndole crear un administrador. Pasó en producción.
+//
+// El dato sale del SERVIDOR, que es quien de verdad abrió la base, y no de lo que el
+// navegador cree recordar: justamente lo que falla es esa memoria.
 exports.yo = async (req, res) => {
     if (req.usuario) {
         return res.json({
@@ -142,6 +153,7 @@ exports.yo = async (req, res) => {
             expira: req.sesion?.expira || null,
             authRequerida: authRequerida(),
             marca: marcaDeTaller(req.taller),
+            entorno: req.entorno,
         });
     }
 
@@ -171,6 +183,7 @@ exports.yo = async (req, res) => {
             motivoClaveInstalacion: esOtroTaller ? 'enlace' : 'setup',
             taller,
             marca,
+            entorno: req.entorno,
         });
     }
     // Sin sesión y con el gate todavía apagado, el SPA entra igual que antes de que
@@ -178,9 +191,9 @@ exports.yo = async (req, res) => {
     // DOS lados: si acá se respondiera 401 siempre, desplegar esta versión dejaría a la
     // oficina mirando una pantalla de acceso que nadie puede pasar todavía, porque las
     // cuentas con clave se crean después (scripts/crearAdmin.js).
-    if (!authRequerida()) return res.json({ usuario: null, authRequerida: false, marca });
+    if (!authRequerida()) return res.json({ usuario: null, authRequerida: false, marca, entorno: req.entorno });
 
-    res.status(401).json({ error: 'Sesión requerida', marca });
+    res.status(401).json({ error: 'Sesión requerida', marca, entorno: req.entorno });
 };
 
 // POST /api/auth/cambiar-password — { passwordActual, passwordNueva }

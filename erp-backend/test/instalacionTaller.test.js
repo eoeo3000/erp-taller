@@ -109,7 +109,18 @@ function levantar() {
     app.use(contratoRespuesta);
     // Como lo deja middlewares/entorno.js cuando NO hay sesión: el taller por defecto. Es
     // justamente la situación de quien va a instalar un taller nuevo.
-    app.use((req, res, siguiente) => { req.db = conexionDe('base-principal'); req.taller = 'principal'; siguiente(); });
+    app.use((req, res, siguiente) => {
+        // Un taller tiene DOS bases y la elige el navegador. La de demostración no tiene
+        // cuentas de escritorio, que es lo que hace aparecer la pantalla de instalación.
+        const enDemo = req.headers['x-entorno'] === 'demo';
+        req.db = conexionDe(enDemo ? 'base-demo' : 'base-principal');
+        req.taller = 'principal';
+        // Como lo deja `resolverEntorno`: el entorno sale del navegador (X-Entorno). Que lo
+        // elija el cliente es inofensivo entre la producción y la demo del mismo dueño, y es
+        // justamente lo que hace falta poder VER en la respuesta.
+        req.entorno = enDemo ? 'demo' : 'produccion';
+        siguiente();
+    });
     app.post('/api/instalacion', instalacionController.instalar);
     app.get('/api/auth/yo', authController.yo);
     return new Promise((listo) => {
@@ -407,4 +418,22 @@ test('el aviso dice cómo deshacerlo, porque la cuenta ya existe', async () => {
         null,
         'sin destinatario no hay mensaje que armar',
     );
+});
+
+
+test('/auth/yo dice EN QUÉ BASE está mirando, también al pedir la instalación', async () => {
+    // El peor mensaje que este sistema mostró: un navegador había quedado en modo
+    // demostración, la base de demostración no tiene cuentas de escritorio, y la app le dijo
+    // «todavía no hay ninguna cuenta» —ofreciéndole crear un administrador— a un taller que
+    // llevaba meses operando. Pasó en producción.
+    //
+    // El dato siempre estuvo: el servidor sabe qué base abrió. Lo que faltaba era decirlo.
+    // Tiene que venir del SERVIDOR y no del navegador, porque lo que falla es exactamente la
+    // memoria del navegador.
+    const enDemo = await preguntarYo({ 'X-Entorno': 'demo' });
+    assert.strictEqual(enDemo.cuerpo.requiereInstalacion, true, 'la demo no tiene cuentas de escritorio');
+    assert.strictEqual(enDemo.cuerpo.entorno, 'demo', 'sin esto la pantalla no puede avisar');
+
+    const enProduccion = await preguntarYo();
+    assert.strictEqual(enProduccion.cuerpo.entorno, 'produccion');
 });

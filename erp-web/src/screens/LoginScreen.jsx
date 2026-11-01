@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import axios from 'axios';
 import { fijarSesion } from '../utils/sesion';
 import MarcaTaller from '../components/MarcaTaller';
+import AvisoDemo from '../components/AvisoDemo';
 import { obtenerTaller, olvidarTaller } from '../utils/taller';
 
 // Pantalla de acceso de la app de escritorio. Hasta que existió, se entraba con solo la URL
@@ -23,7 +24,7 @@ const t = {
     fontUi: '"Helvetica Neue", Helvetica, Arial, sans-serif',
 };
 
-export default function LoginScreen({ API, onIngreso, marca = null }) {
+export default function LoginScreen({ API, onIngreso, marca = null , entorno = null }) {
     // 'acceso' | 'recuperar' | 'cambiar' (clave inicial que hay que reemplazar sí o sí)
     const [vista, setVista] = useState('acceso');
     const [email, setEmail] = useState('');
@@ -114,6 +115,7 @@ export default function LoginScreen({ API, onIngreso, marca = null }) {
         <div style={styles.raiz}>
             <div style={styles.tarjeta}>
                 <MarcaTaller marca={marca} estilo={styles.marca} />
+                <AvisoDemo entorno={entorno} />
 
                 {vista === 'acceso' && (
                     <form onSubmit={entrar} style={styles.form}>

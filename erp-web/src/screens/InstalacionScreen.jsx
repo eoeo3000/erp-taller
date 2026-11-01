@@ -3,6 +3,7 @@ import axios from 'axios';
 import { fijarSesion } from '../utils/sesion';
 import { obtenerTaller } from '../utils/taller';
 import MarcaTaller from '../components/MarcaTaller';
+import AvisoDemo from '../components/AvisoDemo';
 
 // El enlace de instalación de un taller nuevo trae los dos datos: `?taller=` (que
 // utils/taller.js ya recordó y manda en cada llamada) y `?clave=`, la de un solo uso.
@@ -67,7 +68,7 @@ const t = {
     fontUi: '"Helvetica Neue", Helvetica, Arial, sans-serif',
 };
 
-export default function InstalacionScreen({ API, requiereClaveInstalacion, motivoClaveInstalacion = 'setup', onListo, marca = null }) {
+export default function InstalacionScreen({ API, requiereClaveInstalacion, motivoClaveInstalacion = 'setup', onListo, marca = null , entorno = null }) {
     const [nombre, setNombre] = useState('');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
@@ -114,6 +115,7 @@ export default function InstalacionScreen({ API, requiereClaveInstalacion, motiv
         <div style={styles.raiz}>
             <div style={styles.tarjeta}>
                 <MarcaTaller marca={marca} estilo={styles.marca} />
+                <AvisoDemo entorno={entorno} />
                 <form onSubmit={instalar} style={styles.form}>
                     <div style={styles.titulo}>Primera puesta en marcha</div>
                     <div style={styles.ayuda}>
