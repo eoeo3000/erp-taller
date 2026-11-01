@@ -437,3 +437,57 @@ test('/auth/yo dice EN QUÉ BASE está mirando, también al pedir la instalació
     const enProduccion = await preguntarYo();
     assert.strictEqual(enProduccion.cuerpo.entorno, 'produccion');
 });
+
+test('EL BUG 2: `taller: principal` en el cuerpo no puede pedir un enlace que nunca existió', async () => {
+    // Pasó en producción, con el enlace del panel. La secuencia:
+    //
+    //   1. El taller borró todas sus cuentas, así que /auth/yo responde `requiereInstalacion`.
+    //   2. Se abre `SPA_URL/instalar?taller=principal` — el slug que el panel pone en sus
+    //      enlaces. `utils/taller.js` lo recuerda y `InstalacionScreen` lo manda en el cuerpo.
+    //   3. El backend ve un `taller` en el cuerpo y entra por el camino del cliente NUEVO:
+    //      el del enlace de un solo uso. Pero el principal nunca tuvo enlace —se registró
+    //      solo al encender la base de control— así que su `instalacionHash` está vacío.
+    //   4. «El enlace de instalación no es válido o ya venció.»
+    //
+    // Y era un callejón sin salida: `/auth/yo` dice que para el taller por defecto NO hace
+    // falta clave, así que la pantalla no muestra el campo. No había nada que escribir.
+    //
+    // La regla de «¿es el taller por defecto?» tiene que valer para las DOS fuentes del slug,
+    // el cuerpo y la pista del navegador, y ser la MISMA que usa /auth/yo para decidir si
+    // pedir la clave. Si no, la pantalla y el envío se contradicen — igual que en EL BUG de
+    // más arriba, pero por el otro lado.
+    usuariosPorBase['base-principal'] = [];
+
+    const { estado, cuerpo } = await instalar({ ...DATOS, taller: 'principal' });
+
+    assert.strictEqual(estado, 201, `respondió ${estado}: ${JSON.stringify(cuerpo)}`);
+    assert.strictEqual(usuariosPorBase['base-principal'].length, 1, 'la cuenta va a la base del principal');
+    assert.strictEqual(usuariosPorBase['base-principal'][0].tallerId, 'principal');
+});
+
+test('decir el taller por defecto en el cuerpo da lo mismo que no decirlo', async () => {
+    // Las dos formas tienen que llevar al MISMO camino, el de siempre. Si una pidiera clave
+    // y la otra no, el enlace que se comparta decidiría si la instalación funciona.
+    usuariosPorBase['base-principal'] = [];
+    const sinSlug = await instalar({ ...DATOS });
+    usuariosPorBase['base-principal'] = [];
+    const conSlug = await instalar({ ...DATOS, taller: 'principal' });
+    assert.strictEqual(sinSlug.estado, conSlug.estado);
+});
+
+test('y el taller por defecto sigue respetando SETUP_TOKEN', async () => {
+    // Lo que NO puede pasar con el arreglo: que mandar `taller: principal` se convierta en
+    // una forma de saltarse la clave del servidor cuando está configurada.
+    process.env.SETUP_TOKEN = 'clave-del-servidor';
+    try {
+        usuariosPorBase['base-principal'] = [];
+        assert.strictEqual((await instalar({ ...DATOS, taller: 'principal' })).estado, 403, 'sin la clave');
+        usuariosPorBase['base-principal'] = [];
+        assert.strictEqual(
+            (await instalar({ ...DATOS, taller: 'principal', claveInstalacion: 'clave-del-servidor' })).estado,
+            201, 'con la clave',
+        );
+    } finally {
+        delete process.env.SETUP_TOKEN;
+    }
+});
