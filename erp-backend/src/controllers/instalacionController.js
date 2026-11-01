@@ -23,7 +23,7 @@ const getTaller = require('../models/Taller');
 const transporter = require('../config/mailer');
 const { armarAviso } = require('../servicios/avisoInstalacion');
 
-const LARGO_MINIMO_PASSWORD = 8;
+const { revisarClave } = require('../servicios/claves');
 
 // Qué cuenta como "ya instalado": existe al menos una cuenta que puede entrar por el login.
 // Un Usuario de la PWA (token, sin clave) no cuenta — con eso nadie puede entrar al
@@ -167,9 +167,8 @@ exports.instalar = async (req, res) => {
 
         if (!nombre || !email) return res.fail(400, 'Nombre y correo son requeridos');
         if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.fail(400, 'El correo no parece válido');
-        if (password.length < LARGO_MINIMO_PASSWORD) {
-            return res.fail(400, `La clave debe tener al menos ${LARGO_MINIMO_PASSWORD} caracteres`);
-        }
+        const revision = await revisarClave(password);
+        if (!revision.ok) return res.fail(400, revision.error);
 
         // Sin debeCambiarPassword: la clave la eligió quien va a usar la cuenta, acá mismo.
         // No hay motivo para hacerlo cambiarla otra vez, a diferencia de crearAdmin.js, donde
