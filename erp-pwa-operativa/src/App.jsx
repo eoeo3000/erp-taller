@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { setSesion, haySesion, accionOT, whoami, subirDataURL } from './api.js';
+import { setSesion, haySesion, accionOT, whoami, subirDataURL, tokenRechazado } from './api.js';
 import { reintentarCola } from './db.js';
 import ConfirmHost from './screens/ConfirmHost.jsx';
 import FranjaDemo from './FranjaDemo.jsx';
@@ -37,7 +37,21 @@ export default function App() {
             setPila([{ pantalla: 'sin-acceso' }]);
             return;
         }
-        whoami().then(setPersona).catch(() => {});
+        // **Un token muerto tiene que decirlo.** Antes este `catch` estaba vacío, así que
+        // `persona` quedaba en null y la app seguía adelante: O1 mostraba la ficha en blanco
+        // y «Entrar» caía al valor por omisión del ternario de abajo —Mi día, la pantalla de
+        // operario— aunque quien entrara fuera un supervisor. Lo que se veía era una pantalla
+        // vacía que parecía decir «no tienes trabajo hoy», cuando lo que pasaba era que ese
+        // acceso ya no existe. Pasó de verdad, después de que se borraran los Usuario de un
+        // taller: la app de un supervisor aterrizaba en Mi día sin una palabra.
+        //
+        // **Solo si el servidor lo rechazó** (ver `tokenRechazado`). Sin señal se sigue
+        // adelante con lo que haya: esta app está hecha para trabajar sin conexión, y echar
+        // a alguien de terreno por una llamada que no salió sería mucho peor que el problema
+        // que esto arregla.
+        whoami()
+            .then(setPersona)
+            .catch((error) => { if (tokenRechazado(error)) setPila([{ pantalla: 'sin-acceso' }]); });
         setPila([{ pantalla: 'o1' }]);
     }, []);
 
@@ -80,8 +94,13 @@ function renderPantalla(actual, nav, persona, reemplazar) {
             return null;
         case 'sin-acceso':
             return (
+                // Se llega acá por dos caminos —nunca hubo token, o el servidor lo
+                // rechazó— y los dos se arreglan igual: pedir que te reenvíen el acceso. Por
+                // eso un solo texto; distinguirlos no le daría a quien lo lee nada más que
+                // hacer, y «revocado» suena a reto cuando casi siempre es una cuenta que se
+                // rehízo.
                 <div style={{ padding: 24, fontSize: 15 }}>
-                    Este link no es válido. Pide a la oficina que te reenvíe tu acceso.
+                    Este acceso ya no es válido. Pide a la oficina que te reenvíe el tuyo.
                 </div>
             );
         case 'o1':

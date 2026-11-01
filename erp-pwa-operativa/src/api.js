@@ -59,8 +59,30 @@ async function pedir(path, opts = {}) {
         headers: { 'Content-Type': 'application/json', ...headerApiKey(), ...(opts.headers || {}) },
     });
     const data = await resp.json().catch(() => ({}));
-    if (!resp.ok) throw new Error(data.error || `Error ${resp.status}`);
+    if (!resp.ok) {
+        const error = new Error(data.error || `Error ${resp.status}`);
+        // **El código se conserva.** Antes el estado se perdía dentro del texto, y quien
+        // atrapaba el error no podía distinguir «el servidor dice que tu token no sirve» de
+        // «no hay señal». En una app de terreno esas dos cosas se tratan al revés: la
+        // primera tiene que sacarte, la segunda jamás.
+        error.estado = resp.status;
+        throw error;
+    }
     return data;
+}
+
+// ¿El servidor rechazó la credencial? Solo eso: un 403 de `whoami` («Token inválido o
+// revocado») o un 401 del gate de identidad.
+//
+// **Un fallo de red NO entra acá, y esa es toda la razón de que esta función exista.**
+// `fetch` lanza un TypeError sin `estado` cuando no hay conexión, y un supervisor en terreno
+// sin señal tiene un token perfectamente válido. Tratar los dos casos igual lo echaría de la
+// app justo cuando menos puede hacer algo al respecto — y la app está hecha para funcionar
+// sin señal: tiene cola de reintento y service worker para eso.
+//
+// Un 500 tampoco: es un problema del servidor, no de quién eres.
+export function tokenRechazado(error) {
+    return error?.estado === 401 || error?.estado === 403;
 }
 
 export function whoami() {
