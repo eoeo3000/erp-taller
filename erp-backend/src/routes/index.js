@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { identificar, requiereSesion } = require('../middlewares/sesion');
 const { requiereIdentidad } = require('../middlewares/identidad');
+const { requiereAdministrador } = require('../middlewares/rol');
 
 // Importar todas las rutas individuales
 const authRoutes = require('./authRoutes');
@@ -54,6 +55,12 @@ router.use('/talleres', tallerRoutes);
 
 // --- Rutas de la app de escritorio: exigen sesión ---
 // (mientras AUTH_REQUERIDA no esté en 'true' solo avisan por consola, ver sesion.js)
+//
+// Cuatro de ellas exigen además ser de administración (`requiereAdministrador`, criterio en
+// config/roles.js): la plata —finanzas, contabilidad— y lo masivo —importar y la base de
+// demostración—. Finanzas y Contabilidad ya estaban fuera del menú «por decisión del
+// cliente», pero eso no protegía nada: respondían a cualquiera con sesión que escribiera la
+// URL. Esconder no es cerrar.
 router.use('/data', requiereSesion, dataRoutes);
 router.use('/recursos', requiereSesion, personalRoutes);
 router.use('/equipos', requiereSesion, equipoRoutes);
@@ -61,13 +68,13 @@ router.use('/suministros', requiereSesion, suministroRoutes);
 router.use('/calendarios', requiereSesion, calendarioRoutes);
 router.use('/puestos', requiereSesion, puestosRoutes);
 router.use('/plantillas', requiereSesion, plantillaRoutes);
-router.use('/finanzas', requiereSesion, finanzasRoutes);
-router.use('/contabilidad', requiereSesion, contabilidadRoutes);
-router.use('/import', requiereSesion, importExportRoutes);
+router.use('/finanzas', requiereSesion, requiereAdministrador, finanzasRoutes);
+router.use('/contabilidad', requiereSesion, requiereAdministrador, contabilidadRoutes);
+router.use('/import', requiereSesion, requiereAdministrador, importExportRoutes);
 router.use('/proveedores', requiereSesion, proveedorRoutes);
 router.use('/ordenes-compra', requiereSesion, ordenCompraRoutes);
 router.use('/disposiciones', requiereSesion, disposicionRoutes);
-router.use('/demo', requiereSesion, demoRoutes);
+router.use('/demo', requiereSesion, requiereAdministrador, demoRoutes);
 router.use('/clientes', requiereSesion, clienteRoutes);
 
 // --- Rutas compartidas con las PWAs ---

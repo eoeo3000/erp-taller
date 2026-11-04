@@ -63,6 +63,8 @@ import TableroSupervisoresScreen from './screens/TableroSupervisoresScreen';
 import useIsMobile from './hooks/useIsMobile';
 import LoginScreen from './screens/LoginScreen';
 import LimiteDePantalla from './components/LimiteDeError';
+import SoloAdministracion from './components/SoloAdministracion';
+import { puedeVer } from './utils/roles';
 import InstalacionScreen from './screens/InstalacionScreen';
 import RestablecerScreen from './screens/RestablecerScreen';
 import MarcaTaller from './components/MarcaTaller';
@@ -466,12 +468,17 @@ function App() {
     { to: '/gantt', label: 'Programación', count: otsProgramables },
     { to: '/tablero-supervisores', label: 'Tablero de supervisores', count: null },
   ];
+  // Filtrado por rol (utils/roles.js). Esconder del menú no protege nada —el backend responde
+  // 403 igual—: es para no ofrecerle a nadie una entrada que lo lleva a un error.
   const navAdmin = [
     { to: '/recursos', label: 'Recursos' },
     { to: '/clientes', label: 'Clientes' },
     { to: '/tokens', label: 'Bodega de tokens' },
     { to: '/importexport', label: 'Importar / exportar' },
-  ];
+  ].filter((item) => puedeVer(usuario, item.to));
+  // Las pantallas de administración, envueltas: por URL directa alguien de operación ve un
+  // mensaje que dice que es un permiso, no el error propio de cada pantalla al recibir 403.
+  const soloAdmin = (ruta, elemento) => (puedeVer(usuario, ruta) ? elemento : <SoloAdministracion />);
   // Fuera del nav por decisión del cliente (siguen existiendo y accesibles por URL directa):
   // Compras (/compras), Finanzas (/finanzas), Contabilidad (/contabilidad).
 
@@ -611,11 +618,11 @@ function App() {
               />
             } />
             <Route path="/compras" element={<ComprasScreen ots={ots} suministros={suministros} />} />
-            <Route path="/finanzas" element={<FinanzasScreen recursos={recursos} API={API} />} />
-            <Route path="/contabilidad" element={<ContabilidadScreen API={API} />} />
-            <Route path="/importexport" element={<ImportExportScreen API={API} cargarDatos={cargarDatos} />} />
+            <Route path="/finanzas" element={soloAdmin('/finanzas', <FinanzasScreen recursos={recursos} API={API} />)} />
+            <Route path="/contabilidad" element={soloAdmin('/contabilidad', <ContabilidadScreen API={API} />)} />
+            <Route path="/importexport" element={soloAdmin('/importexport', <ImportExportScreen API={API} cargarDatos={cargarDatos} />)} />
             <Route path="/clientes" element={<ClientesScreen API={API} />} />
-            <Route path="/tokens" element={<BodegaTokensScreen API={API} />} />
+            <Route path="/tokens" element={soloAdmin('/tokens', <BodegaTokensScreen API={API} />)} />
             <Route path="/tablero-supervisores" element={<TableroSupervisoresScreen API={API} recursos={recursos} />} />
           </Routes>
           </LimiteDePantalla>

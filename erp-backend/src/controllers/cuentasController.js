@@ -16,7 +16,9 @@ const bitacora = require('../servicios/bitacoraCuentas');
 const {
     reenviarInvitacion, revocarCuenta, reactivarCuenta,
     emitirInvitacion, enviarCorreoInvitacion, DIAS_VALIDEZ_INVITACION,
+    revisarCambioDeRol,
 } = require('../servicios/cuentasDeTaller');
+const { ROLES_DE_OFICINA, ROL_AL_INVITAR_POR_OMISION, ETIQUETAS } = require('../config/roles');
 
 function cuentaPublica(usuario) {
     return {
@@ -40,6 +42,13 @@ exports.invitar = async (req, res) => {
         const nombre = String(req.body?.nombre || '').trim();
         const email = String(req.body?.email || '').trim().toLowerCase();
         if (!nombre || !email) return res.fail(400, 'Nombre y correo son requeridos');
+        // Antes no había elección: `rol: 'administrador'` estaba escrito a mano y toda cuenta
+        // invitada veía todo. Sin rol en el cuerpo se usa el de MENOR privilegio (ver
+        // config/roles.js): es lo que manda un SPA desplegado antes que este backend.
+        const rol = req.body?.rol === undefined || req.body?.rol === ''
+            ? ROL_AL_INVITAR_POR_OMISION
+            : String(req.body.rol);
+        if (!ROLES_DE_OFICINA.includes(rol)) return res.fail(400, `Rol desconocido: «${rol}».`);
         if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.fail(400, 'El correo no parece válido');
 
         const yaExiste = await Usuario.findOne({ email });
@@ -51,7 +60,7 @@ exports.invitar = async (req, res) => {
 
         // Sin passwordHash: la cuenta existe pero no sirve para entrar hasta que la persona
         // elija su clave desde el link. Nadie, ni quien invita, conoce una clave suya.
-        const usuario = await Usuario.create({ nombre, email, rol: 'administrador', tallerId: req.taller || tallerPorDefecto() });
+        const usuario = await Usuario.create({ nombre, email, rol, tallerId: req.taller || tallerPorDefecto() });
 
         const link = await emitirInvitacion(Usuario, usuario, req.entorno, req.taller || tallerPorDefecto());
         let correoEnviado = true;
@@ -65,7 +74,8 @@ exports.invitar = async (req, res) => {
         }
 
         await bitacora.registrar(req.db, { accion: 'invitada', usuario, req,
-            detalle: correoEnviado ? '' : 'el correo no salió: el link se entregó a mano' });
+            detalle: [`como ${ETIQUETAS[rol]}`, correoEnviado ? '' : 'el correo no salió: el link se entregó a mano']
+                .filter(Boolean).join('; ') });
         res.ok({ cuenta: cuentaPublica(usuario), correoEnviado, link: correoEnviado ? '' : link }, 201);
     } catch (error) {
         res.fail(500, error.message);
@@ -111,6 +121,15 @@ exports.actualizar = async (req, res) => {
             cambios.email = email;
         }
 
+        // El rol se revisa en el servicio (el mismo que usaría el panel) y se escribe acá,
+        // junto con lo demás: una sola escritura y una sola línea de bitácora por Editar.
+        const rol = req.body?.rol === undefined ? '' : String(req.body.rol);
+        if (rol && rol !== usuario.rol) {
+            const problema = await revisarCambioDeRol({ Usuario, usuario, rolNuevo: rol, quien: req.usuario });
+            if (problema) return res.fail(problema.estado, problema.error);
+            cambios.rol = rol;
+        }
+
         if (!Object.keys(cambios).length) return res.ok({ cuenta: cuentaPublica(usuario), sinCambios: true });
 
         // El correo de antes, para la bitácora: hay que leerlo ANTES del `Object.assign` de
@@ -118,6 +137,7 @@ exports.actualizar = async (req, res) => {
         // el campo queda pisado— y es justo el que alguien va a preguntar: la cuenta a la que
         // se le invitó ya no es la que figura.
         const emailAnterior = usuario.email;
+        const rolAnterior = usuario.rol;
 
         await Usuario.updateOne({ _id: usuario._id }, cambios);
         Object.assign(usuario, cambios);
@@ -145,6 +165,7 @@ exports.actualizar = async (req, res) => {
         const quePaso = [
             cambios.nombre ? `nombre: «${usuario.nombre}»` : '',
             cambios.email ? `correo: ${emailAnterior} → ${usuario.email} (se reemitió la invitación y la anterior dejó de servir)` : '',
+            cambios.rol ? `rol: ${ETIQUETAS[rolAnterior] || rolAnterior} → ${ETIQUETAS[cambios.rol]}` : '',
         ].filter(Boolean).join('; ');
         await bitacora.registrar(req.db, { accion: 'editada', usuario, req, detalle: quePaso });
 

@@ -13,6 +13,7 @@
 // Duplicarlas habría sido el mismo error que ya costó caro dos veces en este proyecto
 // (`fechasDeTrabajo` con tres versiones que se contradecían, `resolverTaller` con una copia
 // congelada): la segunda copia no se arregla cuando se arregla la primera.
+const { ROLES_DE_OFICINA } = require('../config/roles');
 const { generarToken, hashToken } = require('../utils/tokens');
 const { SPA_URL } = require('../config/urls');
 const transporter = require('../config/mailer');
@@ -99,15 +100,72 @@ async function cuentasQuePuedenEntrar(Usuario) {
 // entrar al servidor a correr scripts/crearAdmin.js. Por eso el candado se generaliza acá:
 // en el camino de la app no cambia nada —quien revoca siempre es una cuenta más— y en el del
 // panel es lo único que lo hace seguro.
+// Cuántas cuentas de ADMINISTRACIÓN pueden entrar hoy. Misma definición que la de arriba más
+// el rol, y por el mismo motivo: una invitación sin activar no cuenta, o el candado se
+// abriría solo invitando a alguien que nunca va a activar.
+//
+// Existe porque con roles aparece una forma nueva de dejar a un taller sin salida que la
+// anterior no ve: quedan cuentas que pueden entrar —de operación— pero ninguna que pueda
+// invitar, revocar o dar acceso a nadie. Desde adentro de la app no hay cómo arreglarlo;
+// hay que entrar al servidor a correr `crearAdmin.js`.
+async function administradoresQuePuedenEntrar(Usuario) {
+    return Usuario.countDocuments({
+        estado: 'activo',
+        rol: 'administrador',
+        passwordHash: { $exists: true, $ne: '' },
+    });
+}
+
+function puedeEntrar(usuario) {
+    return !!usuario.passwordHash && (usuario.estado || 'activo') === 'activo';
+}
+
+// ¿Se le puede cambiar el rol a esta cuenta? Devuelve el error, o null si se puede. La
+// escritura la hace quien llama, junto con el resto de lo que esté corrigiendo: así Editar
+// sigue siendo UNA sola escritura y una sola línea de bitácora.
+//
+// `quien` es la cuenta que está haciendo el cambio (null desde el panel, que no es una cuenta
+// de este taller). Nadie se cambia el rol a sí mismo, mismo criterio que «nadie se revoca a sí
+// mismo»: un administrador que se baja a operación por error ya no puede deshacerlo.
+async function revisarCambioDeRol({ Usuario, usuario, rolNuevo, quien = null }) {
+    if (!ROLES_DE_OFICINA.includes(rolNuevo)) {
+        return { error: `Rol desconocido: «${rolNuevo}».`, estado: 400 };
+    }
+    if (!usuario.email) {
+        return { error: 'Esa es un acceso de terreno: su rol se decide en Bodega de tokens.', estado: 409 };
+    }
+    if (quien && String(quien._id) === String(usuario._id)) {
+        return { error: 'No puedes cambiarte el rol a ti mismo: pídeselo a otra cuenta de administración.', estado: 409 };
+    }
+    const bajaDeAdministracion = usuario.rol === 'administrador' && rolNuevo !== 'administrador';
+    if (bajaDeAdministracion && puedeEntrar(usuario) && await administradoresQuePuedenEntrar(Usuario) <= 1) {
+        return {
+            error: 'Es la única cuenta de administración que puede entrar: sin ella nadie podría invitar,'
+                + ' revocar ni dar acceso. Haz administración a otra cuenta antes.',
+            estado: 409,
+        };
+    }
+    return null;
+}
+
 async function revocarCuenta({ Usuario, SesionStaff, id }) {
     const usuario = await Usuario.findById(id);
     if (!usuario) return { error: 'Cuenta no encontrada', estado: 404 };
 
-    const puedeEntrar = !!usuario.passwordHash && (usuario.estado || 'activo') === 'activo';
-    if (puedeEntrar && await cuentasQuePuedenEntrar(Usuario) <= 1) {
+    if (puedeEntrar(usuario) && await cuentasQuePuedenEntrar(Usuario) <= 1) {
         return {
             error: 'Es la única cuenta que puede entrar a este taller: revocarla lo dejaría afuera de su'
                 + ' propio sistema. Crea o activa otra antes.',
+            estado: 409,
+        };
+    }
+    // El candado de arriba no alcanza cuando hay roles: con una cuenta de administración y
+    // otra de operación, revocar la primera deja al taller con alguien que entra pero que no
+    // puede dar ni quitar acceso a nadie.
+    if (usuario.rol === 'administrador' && puedeEntrar(usuario) && await administradoresQuePuedenEntrar(Usuario) <= 1) {
+        return {
+            error: 'Es la única cuenta de administración que puede entrar: revocarla dejaría al taller sin'
+                + ' nadie que pueda invitar ni dar acceso. Haz administración a otra cuenta antes.',
             estado: 409,
         };
     }
@@ -133,5 +191,6 @@ async function reactivarCuenta({ Usuario, id }) {
 module.exports = {
     reenviarInvitacion, revocarCuenta, reactivarCuenta,
     emitirInvitacion, enviarCorreoInvitacion, cuentasQuePuedenEntrar,
+    administradoresQuePuedenEntrar, revisarCambioDeRol,
     DIAS_VALIDEZ_INVITACION,
 };
