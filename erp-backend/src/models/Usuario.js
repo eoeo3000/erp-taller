@@ -14,7 +14,9 @@ const mongoose = require('mongoose');
 const UsuarioSchema = new mongoose.Schema({
     nombre: { type: String, required: true, trim: true },
     puesto: { type: String, default: '' },
-    rol: { type: String, enum: ['supervisor', 'ejecutor', 'administrador'], required: true },
+    // `supervisor` y `ejecutor` son de terreno (PWA Operativa); `administrador` y `operacion`
+    // son de escritorio. Qué puede hacer cada uno se decide en config/roles.js, no acá.
+    rol: { type: String, enum: ['supervisor', 'ejecutor', 'administrador', 'operacion'], required: true },
     recursoId: { type: mongoose.Schema.Types.ObjectId, ref: 'Recurso' },
     // Opcional desde que existe el login de escritorio: una cuenta de oficina no tiene PWA.
     // OJO al consultar por este campo: `findOne({ token })` con token undefined viaja a

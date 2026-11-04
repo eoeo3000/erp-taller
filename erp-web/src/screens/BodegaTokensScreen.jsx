@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import axios from 'axios';
 import { headerEntorno, headerApiKey } from '../utils/entorno';
 import { confirmar } from '../utils/notificar';
+import { ROLES_DE_OFICINA, nombreDelRol } from '../utils/roles';
 
 // Mejora v3 #2 — "Bodega de tokens". Administración de accesos: tokens Cliente
 // (SesionPortal, emitidos desde acá) y Operativo (Usuario, emitidos desde la ficha de
@@ -253,6 +254,10 @@ function CuentasOficina({ API }) {
     const [cuentas, setCuentas] = useState([]);
     const [nombre, setNombre] = useState('');
     const [email, setEmail] = useState('');
+    // Antes no había elección: toda invitación salía como administración y veía todo. Arranca
+    // en operación —el menor privilegio— para que dar administración sea una decisión que se
+    // toma y no algo que pasa por no haber mirado el selector.
+    const [rol, setRol] = useState('operacion');
     const [aviso, setAviso] = useState(null);
     const [linkAMano, setLinkAMano] = useState('');
     const [enviando, setEnviando] = useState(false);
@@ -260,7 +265,7 @@ function CuentasOficina({ API }) {
     // Edición en la propia fila: la lista es de tres o cuatro personas y el cambio es de un
     // campo, así que un diálogo aparte sería más pantalla para menos trabajo.
     const [editando, setEditando] = useState(null);
-    const [borrador, setBorrador] = useState({ nombre: '', email: '' });
+    const [borrador, setBorrador] = useState({ nombre: '', email: '', rol: 'operacion' });
     const cabeceras = { headers: { ...headerEntorno(), ...headerApiKey() } };
 
     const cargar = () => axios.get(`${API}/cuentas`, cabeceras)
@@ -280,15 +285,15 @@ function CuentasOficina({ API }) {
         if (!nombre.trim() || !email.trim()) return setAviso({ tipo: 'error', texto: 'Escribe el nombre y el correo.' });
         setEnviando(true); setAviso(null); setLinkAMano('');
         try {
-            const { data } = await axios.post(`${API}/cuentas/invitar`, { nombre, email }, cabeceras);
+            const { data } = await axios.post(`${API}/cuentas/invitar`, { nombre, email, rol }, cabeceras);
             setAviso({
                 tipo: 'ok',
                 texto: data.correoEnviado
-                    ? `Invitación enviada a ${email}. La cuenta queda pendiente hasta que elija su clave.`
+                    ? `Invitación enviada a ${email} como ${nombreDelRol(rol)}. La cuenta queda pendiente hasta que elija su clave.`
                     : 'Cuenta creada, pero no se pudo enviar el correo — copia el link de abajo y mándaselo a mano.',
             });
             if (!data.correoEnviado && data.link) setLinkAMano(data.link);
-            setNombre(''); setEmail('');
+            setNombre(''); setEmail(''); setRol('operacion');
             await cargar();
         } catch (e) {
             setAviso({ tipo: 'error', texto: e.response?.data?.error || 'No se pudo invitar.' });
@@ -299,7 +304,7 @@ function CuentasOficina({ API }) {
 
     const abrirEdicion = (cuenta) => {
         setEditando(cuenta._id);
-        setBorrador({ nombre: cuenta.nombre, email: cuenta.email });
+        setBorrador({ nombre: cuenta.nombre, email: cuenta.email, rol: cuenta.rol });
         setAviso(null); setLinkAMano('');
     };
 
@@ -367,6 +372,14 @@ function CuentasOficina({ API }) {
                     <input value={nombre} onChange={e => setNombre(e.target.value)} placeholder="Nombre y apellido" style={campoStyle} />
                     <span style={{ fontSize: 11, color: t.textoAtenuado1 }}>Correo</span>
                     <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="persona@taller.cl" style={campoStyle} />
+                    <span style={{ fontSize: 11, color: t.textoAtenuado1 }}>Rol</span>
+                    <select value={rol} onChange={e => setRol(e.target.value)} style={campoStyle}>
+                        {ROLES_DE_OFICINA.map(r => <option key={r.id} value={r.id}>{r.nombre}</option>)}
+                    </select>
+                    <span />
+                    <span style={{ fontSize: 10.5, color: t.textoAtenuado2, lineHeight: 1.45 }}>
+                        {ROLES_DE_OFICINA.find(r => r.id === rol)?.detalle}
+                    </span>
                 </div>
                 <div style={{ padding: '0 12px 12px', display: 'flex', alignItems: 'center', gap: 10 }}>
                     <button onClick={invitar} disabled={enviando} style={{ flex: 'none', whiteSpace: 'nowrap', height: 27, padding: '0 12px', background: t.acento, border: `1px solid ${t.acento}`, fontSize: 11.5, fontWeight: 700, color: '#fff', cursor: enviando ? 'default' : 'pointer', borderRadius: 2, opacity: enviando ? .6 : 1, fontFamily: t.fontUi }}>
@@ -412,11 +425,17 @@ function CuentasOficina({ API }) {
                                         title={c.activada ? 'Esta cuenta ya está activa y su correo es con lo que entra. Invita al correo correcto y revoca esta.' : 'Solo mientras la invitación está pendiente'}
                                         style={{ ...campoStyle, height: 23, fontSize: 11, background: c.activada ? '#f2f0eb' : '#fff', color: c.activada ? t.textoAtenuado2 : t.textoPrincipal, cursor: c.activada ? 'not-allowed' : 'text' }}
                                     />
+                                    {/* El backend rechaza cambiarse el rol a uno mismo y bajar a la
+                                        última administración que puede entrar; el motivo llega en
+                                        el aviso de error, que ya se muestra arriba. */}
+                                    <select value={borrador.rol} onChange={e => setBorrador({ ...borrador, rol: e.target.value })} style={{ ...campoStyle, height: 23, fontSize: 11 }}>
+                                        {ROLES_DE_OFICINA.map(r => <option key={r.id} value={r.id}>{r.nombre}</option>)}
+                                    </select>
                                 </div>
                             ) : (
                                 <div style={{ minWidth: 0 }}>
                                     <div style={{ fontSize: 12, color: t.textoPrincipal, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.nombre}</div>
-                                    <div style={{ fontSize: 10.5, color: t.textoAtenuado2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.email}</div>
+                                    <div style={{ fontSize: 10.5, color: t.textoAtenuado2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.email} · {nombreDelRol(c.rol)}</div>
                                 </div>
                             )}
                             <span title={est.ayuda || ''} style={{ justifySelf: 'start', fontSize: 10, fontWeight: 700, letterSpacing: '.05em', textTransform: 'uppercase', padding: '2px 7px', borderRadius: 2, background: est.fondo, color: est.tono }}>{est.texto}</span>

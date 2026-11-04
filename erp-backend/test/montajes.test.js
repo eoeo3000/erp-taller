@@ -57,7 +57,7 @@ const ABIERTOS = {
     '/talleres': 'el panel de quien arrienda, con PANEL_TOKEN; no es de ningún taller',
     '/ots': 'requiereIdentidad ruta por ruta: conviven rutas de oficina y de la PWA',
     '/solicitudes': 'igual que /ots, y por eso GET / es requiereSesion y GET /:id no',
-    '/portal': 'el cliente, con su propia SesionPortal',
+    '/portal': 'el cliente entra con su propia SesionPortal; la ADMINISTRACIÓN de esos accesos se cierra ruta por ruta (ver roles.test.js)',
     '/asignaciones': 'la PWA, que comprueba el token dentro de cada controlador',
     '/tipos-trabajo': 'catálogo que no es de nadie en particular',
     '/catalogos-transversales': 'ídem',
