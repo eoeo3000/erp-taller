@@ -21,9 +21,10 @@ usa es la única forma de bajar esa cuenta sin cambiar de plan.
 > la hora y puede llamar a la API de Render directamente. La clave de Render pasaría a
 > vivir como secreto del Worker en vez de en GitHub.
 >
-> Lo mismo afecta al **respaldo diario**: no corre a las 05:00 de Chile como dice su
-> comentario, sino en plena jornada, entre las 09:30 y las 15:00. Funciona —todos esos
-> respaldos salieron bien—, pero toma el estado de media mañana y no el cierre del día.
+> Lo mismo afectaba al **respaldo diario**: no corría a las 05:00 de Chile sino en plena
+> jornada, entre las 09:30 y las 15:00. Ese ya pasó a un Cron Trigger de Cloudflare
+> ([`reloj-cloudflare/`](../reloj-cloudflare/README.md)); el mismo Worker podría encargarse
+> del apagado si algún día vale la pena.
 
 ## Cómo funciona
 

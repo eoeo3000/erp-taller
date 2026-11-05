@@ -1,0 +1,9 @@
+{
+  "name": "erp-taller-reloj",
+  "private": true,
+  "type": "module",
+  "description": "Cron Trigger de Cloudflare Workers que dispara el respaldo diario a la hora. Sin dependencias. Ver README.md.",
+  "scripts": {
+    "test": "node --test worker.test.mjs"
+  }
+}
