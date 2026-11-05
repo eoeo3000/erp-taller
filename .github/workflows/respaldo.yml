@@ -31,6 +31,24 @@ jobs:
   respaldar:
     runs-on: ubuntu-latest
     steps:
+      # Con el apagado nocturno activo (horario-servidor.yml) el servidor puede seguir
+      # suspendido a esta hora si GitHub atrasó su encendido. Un servicio suspendido no
+      # despierta con una llamada, como el plan gratis: sin esto el respaldo fallaría.
+      - uses: actions/checkout@v4
+        if: vars.APAGADO_NOCTURNO == 'true'
+        with:
+          sparse-checkout: .github/scripts
+
+      - name: Asegurar que el servidor esté encendido
+        if: vars.APAGADO_NOCTURNO == 'true'
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          RENDER_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
+          RESPALDO_URL: ${{ secrets.RESPALDO_URL }}
+        run: |
+          export BACKEND_URL="${RESPALDO_URL%/respaldos}"
+          .github/scripts/servidor-render.sh encender
+
       - name: Pedir el respaldo al backend
         run: |
           if [ -z "${{ secrets.RESPALDO_URL }}" ] || [ -z "${{ secrets.RESPALDO_TOKEN }}" ]; then
