@@ -1,0 +1,107 @@
+# Apaga el backend de noche y lo enciende antes de la jornada, para no pagar las horas en
+# que nadie lo usa. Ver docs/horario-servidor.md.
+#
+# APAGADO POR OMISIÓN: no hace nada mientras la variable APAGADO_NOCTURNO no sea 'true'
+# (Settings → Secrets and variables → Actions → Variables). Así este archivo puede llegar
+# a main antes de que existan los secretos, y apagar el horario es cambiar una variable,
+# sin tocar código.
+#
+# Secretos (Settings → Secrets and variables → Actions → Secrets):
+#   RENDER_API_KEY     clave de la API de Render (Account Settings → API Keys). Controla
+#                      TODA la cuenta de Render, no solo este servicio: no se pega en
+#                      ningún otro lado.
+#   RENDER_SERVICE_ID  id del servicio erp-taller-backend (srv-…, sale en su URL en Render)
+#   RESPALDO_URL       el que ya usa respaldo.yml; de ahí se saca la dirección del backend
+#                      para comprobar que de verdad volvió.
+#
+# Encender a mano a cualquier hora: Actions → Horario del servidor → Run workflow → encender.
+# Esa es la vuelta atrás, y funciona aunque APAGADO_NOCTURNO esté apagada.
+name: Horario del servidor
+
+on:
+  schedule:
+    # GitHub solo entiende UTC. Chile continental es UTC-3 en verano y UTC-4 en invierno,
+    # así que en invierno todo corre una hora antes en reloj chileno.
+    - cron: '0 2 * * *'    # apagar:   23:00 Chile verano · 22:00 invierno
+    - cron: '30 7 * * *'   # encender: 04:30 Chile verano · 03:30 invierno
+    # El respaldo diario corre a las 08:00 UTC (respaldo.yml) y también enciende el
+    # servidor antes de pedirlo, por si GitHub atrasó este encendido.
+  workflow_dispatch:
+    inputs:
+      accion:
+        description: 'Qué hacer con el servidor'
+        type: choice
+        options: [encender, apagar]
+        default: encender
+
+# Un apagado y un encendido a la vez dejarían el servidor en el estado del que termine
+# último, que es azar. Uno espera al otro.
+concurrency:
+  group: servidor-render
+  cancel-in-progress: false
+
+env:
+  # Si cambias los cron de arriba, cambia esto también: es la ventana en que un apagado
+  # programado todavía tiene sentido (ver «Decidir qué hacer»).
+  APAGAR_DESDE_UTC: 2
+  APAGAR_HASTA_UTC: 7
+
+jobs:
+  horario:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Decidir qué hacer
+        id: decidir
+        env:
+          EVENTO: ${{ github.event_name }}
+          CRON: ${{ github.event.schedule }}
+          MANUAL: ${{ inputs.accion }}
+          ACTIVO: ${{ vars.APAGADO_NOCTURNO }}
+          HAY_CLAVES: ${{ secrets.RENDER_API_KEY != '' && secrets.RENDER_SERVICE_ID != '' }}
+        run: |
+          if [ "$EVENTO" = "workflow_dispatch" ]; then
+            accion="$MANUAL"
+          elif [ "$CRON" != "0 2 * * *" ]; then
+            # El encendido corre AUNQUE la variable esté apagada. Si alguien la desactiva
+            # de noche, con el servidor ya suspendido, saltarse el encendido lo dejaría
+            # apagado todo el día siguiente. Encender un servidor encendido no hace nada.
+            # Solo se salta si nunca se configuraron las claves, para no fallar a diario
+            # en un repositorio que no usa esto.
+            if [ "$HAY_CLAVES" = "true" ] || [ "$ACTIVO" = "true" ]; then
+              accion=encender
+            else
+              accion=ninguna
+            fi
+          elif [ "$ACTIVO" != "true" ]; then
+            echo "::notice::El apagado nocturno no está activo (variable APAGADO_NOCTURNO). No se hace nada."
+            accion=ninguna
+          else
+            # GitHub atrasa las tareas programadas cuando está cargado, a veces más de una
+            # hora. Un apagado que saliera atrasado hasta la mañana dejaría el servidor
+            # apagado TODO EL DÍA, hasta el encendido de mañana. Encender atrasado no
+            # daña a nadie; apagar atrasado sí, así que solo se revisa este.
+            hora=$((10#$(date -u +%H)))
+            if [ "$hora" -ge "$APAGAR_DESDE_UTC" ] && [ "$hora" -lt "$APAGAR_HASTA_UTC" ]; then
+              accion=apagar
+            else
+              echo "::warning::El apagado salió atrasado (${hora}:00 UTC, fuera de la noche). No se apaga hoy."
+              accion=ninguna
+            fi
+          fi
+          echo "accion=$accion" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v4
+        if: steps.decidir.outputs.accion != 'ninguna'
+        with:
+          sparse-checkout: .github/scripts
+
+      - name: Ejecutar
+        if: steps.decidir.outputs.accion != 'ninguna'
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          RENDER_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
+          RESPALDO_URL: ${{ secrets.RESPALDO_URL }}
+        run: |
+          # RESPALDO_URL termina en /respaldos; la base de la API es lo de antes.
+          export BACKEND_URL="${RESPALDO_URL%/respaldos}"
+          .github/scripts/servidor-render.sh "${{ steps.decidir.outputs.accion }}"
