@@ -19,13 +19,17 @@
 name: Horario del servidor
 
 on:
-  schedule:
-    # GitHub solo entiende UTC. Chile continental es UTC-3 en verano y UTC-4 en invierno,
-    # así que en invierno todo corre una hora antes en reloj chileno.
-    - cron: '0 2 * * *'    # apagar:   23:00 Chile verano · 22:00 invierno
-    - cron: '30 7 * * *'   # encender: 04:30 Chile verano · 03:30 invierno
-    # El respaldo diario corre a las 08:00 UTC (respaldo.yml) y también enciende el
-    # servidor antes de pedirlo, por si GitHub atrasó este encendido.
+  # SIN HORARIO, a propósito. El plan era apagar a las 02:00 UTC y encender a las 07:30,
+  # pero el historial de respaldo.yml mostró que en este repositorio GitHub corre las
+  # tareas programadas entre 4,5 y 10 HORAS tarde: el respaldo de las 08:00 UTC salió
+  # entre las 12:35 y las 18:08 durante dos semanas seguidas. Con esos atrasos, un
+  # apagado que cayera dentro de la noche y un encendido atrasado ocho horas dejarían el
+  # servidor apagado toda la mañana. Encender y apagar a la hora necesita un reloj que
+  # cumpla (ver docs/horario-servidor.md); mientras no lo haya, esto queda solo a mano.
+  #
+  # schedule:
+  #   - cron: '0 2 * * *'    # apagar
+  #   - cron: '30 7 * * *'   # encender
   workflow_dispatch:
     inputs:
       accion:

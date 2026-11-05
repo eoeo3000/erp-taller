@@ -4,8 +4,26 @@ Render cobra el plan Starter **por hora encendido**, no por cuánto trabaja el s
 un mes entero son ~670 horas a $0,0094, unos $6,30. Apagarlo en las horas en que nadie lo
 usa es la única forma de bajar esa cuenta sin cambiar de plan.
 
-**Cuánto se ahorra con el horario que viene puesto:** 5,5 horas por noche, unos **$1,50 al
-mes**. No es mucho; antes de activarlo, leer «Qué se pierde».
+**Cuánto se ahorraría:** 5,5 horas por noche, unos **$1,50 al mes**.
+
+> **El horario está desconectado.** Al revisar el historial de `respaldo.yml` se vio que
+> en este repositorio GitHub corre las tareas programadas **entre 4,5 y 10 horas tarde**:
+> el respaldo programado a las 08:00 UTC salió entre las 12:35 y las 18:08 UTC todos los
+> días de dos semanas seguidas (21 de octubre a 4 de noviembre de 2026). El diseño
+> suponía «a veces una hora tarde». Con atrasos de ocho horas, la protección contra un
+> apagado atrasado (punto 2 abajo) lo descartaría casi siempre, pero el día que cayera
+> dentro de la noche el **encendido** llegaría a media tarde, y nada lo cubre: el
+> servidor quedaría apagado toda la mañana. Por eso `horario-servidor.yml` ya no tiene
+> `schedule`; solo queda el botón manual, que sí sirve tal como está.
+>
+> Para volver a tener horario hace falta un reloj que cumpla. El candidato es un
+> **Cron Trigger de Cloudflare Workers**: la cuenta de Cloudflare ya existe (R2), corre a
+> la hora y puede llamar a la API de Render directamente. La clave de Render pasaría a
+> vivir como secreto del Worker en vez de en GitHub.
+>
+> Lo mismo afecta al **respaldo diario**: no corre a las 05:00 de Chile como dice su
+> comentario, sino en plena jornada, entre las 09:30 y las 15:00. Funciona —todos esos
+> respaldos salieron bien—, pero toma el estado de media mañana y no el cierre del día.
 
 ## Cómo funciona
 
