@@ -13,10 +13,18 @@ ahí se perdían archivos, acá se perderían los datos.
 
 ```
 Diario 08:00 UTC              El backend                         Bucket R2
-GitHub Actions ──POST /api/respaldos──> para CADA taller      ──> respaldos/produccion/
+Reloj (Cloudflare o GitHub) ──POST /api/respaldos──> para CADA taller ──> respaldos/produccion/
   (RESPALDO_TOKEN)                       activo, lee todas          principal/2026-09-23T08-00-01.json.gz
                                          sus colecciones            maestranza-rivas/2026-09-23T08-00-04.json.gz
 ```
+
+**Quién lo dispara.** Primero fue GitHub Actions, pero en este repositorio GitHub corre
+las tareas programadas entre 4,5 y 10 horas tarde y el respaldo de las 05:00 salía en plena
+jornada. Ahora lo dispara un Cron Trigger de Cloudflare Workers, que corre a la hora
+([`reloj-cloudflare/`](../reloj-cloudflare/README.md)), y GitHub pasa a **vigilar**: con la
+variable `RESPALDO_POR_CLOUDFLARE='true'` revisa que cada taller tenga un respaldo de menos
+de 30 horas y termina en rojo —con correo— si falta alguno. Sin la variable, GitHub
+respalda como antes. El botón manual de GitHub respalda siempre.
 
 **Un respaldo por taller** (etapa 5 de [multi-taller.md](multi-taller.md)). La lista de
 talleres sale del registro, no de este archivo ni del workflow: cuando entre un cliente
@@ -154,8 +162,9 @@ conviene hacerla pronto.
 
 ## Pendiente
 
-- **Avisar si el respaldo deja de correr.** Hoy, si el workflow falla, GitHub manda un correo
-  al dueño del repositorio; si alguien lo desactiva, no avisa nada. `GET /api/respaldos`
-  devuelve `masReciente` justamente para poder vigilarlo desde afuera.
+- **Avisar si el respaldo deja de correr.** Con el reloj de Cloudflare, esto ya está:
+  `respaldo.yml` vigila `masReciente` de `GET /api/respaldos` y termina en rojo si un taller
+  lleva más de 30 horas sin respaldo. Lo que sigue sin avisar es que alguien desactive la
+  propia acción de GitHub.
 - **Un respaldo lee todas las colecciones enteras a memoria.** A la escala de un taller son
   unos pocos MB. Cuando deje de serlo, habrá que exportar por colección y en streaming.

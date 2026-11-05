@@ -19,12 +19,21 @@ name: Respaldo diario
 
 on:
   schedule:
-    # 08:00 UTC = 05:00 en Chile continental (UTC-3). Temprano, antes de la jornada del
-    # taller, para que el respaldo tome el cierre del día anterior. GitHub puede atrasar
-    # las tareas programadas cuando sus runners están cargados; para un respaldo diario da
-    # lo mismo que salga una hora después.
+    # Programado a las 08:00 UTC (05:00 en Chile), pero en este repositorio GitHub lo
+    # corre entre 4,5 y 10 HORAS tarde: salía entre las 12:35 y las 18:08 UTC, en plena
+    # jornada. Por eso el respaldo pasa al reloj de Cloudflare (reloj-cloudflare/), que
+    # corre a la hora, y esta acción cambia de papel según la variable
+    # RESPALDO_POR_CLOUDFLARE:
+    #   - sin ella: respalda, como siempre;
+    #   - con 'true': NO respalda, VIGILA que el de Cloudflare haya salido. A una
+    #     revisión no le importa el atraso, y si encuentra un taller sin respaldo
+    #     reciente termina en rojo, que es lo que le manda un correo al dueño del
+    #     repositorio. Un Worker que falla no le avisa a nadie.
+    # La variable se pone recién después de ver el primer respaldo de Cloudflare en R2:
+    # ponerla antes dejaría una noche sin respaldo.
     - cron: '0 8 * * *'
-  # Permite dispararlo a mano desde la pestaña Actions, antes de tocar algo delicado.
+  # A mano SIEMPRE respalda, con o sin la variable: es el botón para antes de tocar algo
+  # delicado, y ahí lo que se quiere es un respaldo ahora, no una revisión.
   workflow_dispatch:
 
 jobs:
@@ -35,12 +44,18 @@ jobs:
       # suspendido a esta hora si GitHub atrasó su encendido. Un servicio suspendido no
       # despierta con una llamada, como el plan gratis: sin esto el respaldo fallaría.
       - uses: actions/checkout@v4
-        if: vars.APAGADO_NOCTURNO == 'true'
         with:
           sparse-checkout: .github/scripts
 
+      - name: Vigilar el respaldo del reloj de Cloudflare
+        if: github.event_name == 'schedule' && vars.RESPALDO_POR_CLOUDFLARE == 'true'
+        env:
+          RESPALDO_URL: ${{ secrets.RESPALDO_URL }}
+          RESPALDO_TOKEN: ${{ secrets.RESPALDO_TOKEN }}
+        run: .github/scripts/vigilar-respaldo.sh
+
       - name: Asegurar que el servidor esté encendido
-        if: vars.APAGADO_NOCTURNO == 'true'
+        if: vars.APAGADO_NOCTURNO == 'true' && (github.event_name == 'workflow_dispatch' || vars.RESPALDO_POR_CLOUDFLARE != 'true')
         env:
           RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
           RENDER_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
@@ -50,6 +65,7 @@ jobs:
           .github/scripts/servidor-render.sh encender
 
       - name: Pedir el respaldo al backend
+        if: github.event_name == 'workflow_dispatch' || vars.RESPALDO_POR_CLOUDFLARE != 'true'
         run: |
           if [ -z "${{ secrets.RESPALDO_URL }}" ] || [ -z "${{ secrets.RESPALDO_TOKEN }}" ]; then
             echo "::error::Faltan los secretos RESPALDO_URL o RESPALDO_TOKEN en este repositorio."
